@@ -223,17 +223,50 @@ export interface Contract {
 }
 
 // Payments
+export type TransferStage = 'deposit' | 'interim1' | 'interim2' | 'balance' | 'other'
+export type TransferMethod = 'bank_transfer' | 'card' | 'other'
+
+export const TRANSFER_STAGE_LABELS: Record<TransferStage, string> = {
+  deposit: '계약금',
+  interim1: '중도금 1',
+  interim2: '중도금 2',
+  balance: '잔금',
+  other: '기타',
+}
+
+export const TRANSFER_METHOD_LABELS: Record<TransferMethod, string> = {
+  bank_transfer: '계좌이체',
+  card: '카드',
+  other: '기타',
+}
+
+export interface PaymentTransfer {
+  id: string
+  paymentId: string
+  stage: TransferStage
+  amount: number
+  transferredAt: string
+  confirmedAt: string
+  senderName?: string
+  transferMethod: TransferMethod
+  memo?: string
+  confirmedBy?: string
+  createdAt: string
+}
+
 export interface Payment {
   id: string
   contractId: string
+  // 예정 납기일 및 금액 (계약서 기준)
   depositAmount: number
-  depositDate?: string
+  depositDate?: string      // 계약금 납기 예정일
   interim1Amount: number
-  interim1Date?: string
+  interim1Date?: string     // 중도금1 납기 예정일
   interim2Amount: number
-  interim2Date?: string
+  interim2Date?: string     // 중도금2 납기 예정일
   balanceAmount: number
-  balanceDate?: string
+  balanceDate?: string      // 잔금 납기 예정일
+  // 수금 현황
   totalAmount: number
   paidAmount: number
   outstandingAmount: number
@@ -242,6 +275,7 @@ export interface Payment {
   createdAt: string
   updatedAt: string
   contract?: Contract
+  transfers?: PaymentTransfer[]
 }
 
 // Video Projects

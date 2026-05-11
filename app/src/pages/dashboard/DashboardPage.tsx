@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import {
   Users, FileSignature,
-  ArrowUpRight, AlertCircle, Calendar, CheckCircle2, Loader2,
+  ArrowUpRight, AlertCircle, Calendar, CheckCircle2, Loader2, CreditCard,
 } from 'lucide-react'
 import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
@@ -75,6 +75,75 @@ function useMonthlyLeadCount() {
   })
 }
 
+type UpcomingPaymentItem = {
+  paymentId: string
+  contractorName: string
+  studentName: string
+  stage: string
+  stageLabel: string
+  amount: number
+  dueDate: string
+  currency: 'KRW' | 'USD'
+  isOverdue: boolean
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  deposit: '계약금', interim1: '중도금 1', interim2: '중도금 2', balance: '잔금',
+}
+
+function useUpcomingPayments() {
+  const today = todayKST()
+  const in14 = new Date(today)
+  in14.setDate(in14.getDate() + 14)
+  const in14Str = in14.toISOString().slice(0, 10)
+
+  return useQuery({
+    queryKey: ['dashboard-upcoming-payments', today],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('id, deposit_amount, deposit_date, interim1_amount, interim1_date, interim2_amount, interim2_date, balance_amount, balance_date, currency, outstanding_amount, payment_transfers(*), contracts(contractor_name, student_name)')
+        .gt('outstanding_amount', 0)
+      if (error) throw error
+
+      const items: UpcomingPaymentItem[] = []
+      for (const p of data || []) {
+        const contract = p.contracts as unknown as { contractor_name: string; student_name: string } | null
+        const paidByStage: Record<string, number> = {}
+        for (const t of (p.payment_transfers as { stage: string; amount: number }[] || [])) {
+          paidByStage[t.stage] = (paidByStage[t.stage] || 0) + t.amount
+        }
+        const stages = [
+          { key: 'deposit', amount: p.deposit_amount, date: p.deposit_date },
+          { key: 'interim1', amount: p.interim1_amount, date: p.interim1_date },
+          { key: 'interim2', amount: p.interim2_amount, date: p.interim2_date },
+          { key: 'balance', amount: p.balance_amount, date: p.balance_date },
+        ]
+        for (const s of stages) {
+          if (!s.amount || !s.date) continue
+          const paid = paidByStage[s.key] || 0
+          if (paid >= s.amount) continue
+          if (s.date <= in14Str) {
+            items.push({
+              paymentId: p.id,
+              contractorName: contract?.contractor_name || '–',
+              studentName: contract?.student_name || '–',
+              stage: s.key,
+              stageLabel: STAGE_LABELS[s.key] || s.key,
+              amount: s.amount - paid,
+              dueDate: s.date,
+              currency: (p.currency as 'KRW' | 'USD') || 'KRW',
+              isOverdue: s.date < today,
+            })
+          }
+        }
+      }
+      items.sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+      return items
+    },
+  })
+}
+
 function useContractStats() {
   return useQuery({
     queryKey: ['dashboard-contracts'],
@@ -139,6 +208,7 @@ export function DashboardPage() {
   const { data: pipelineLeads = [], isLoading: pipelineLoading } = usePipelineStats()
   const { data: monthlyLeads = [], isLoading: leadsLoading } = useMonthlyLeadCount()
   const { data: contractStats, isLoading: contractsLoading } = useContractStats()
+  const { data: upcomingPayments = [], isLoading: upcomingLoading } = useUpcomingPayments()
 
   // Pipeline counts
   const pipelineData = useMemo(() => {
@@ -267,6 +337,53 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Upcoming / Overdue Payments Widget */}
+      {(upcomingLoading || upcomingPayments.length > 0) && (
+        <Card className="border-yellow-200 bg-yellow-50/60 dark:bg-yellow-950/20 dark:border-yellow-900">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2 text-yellow-800 dark:text-yellow-300">
+              <CreditCard className="size-4" />
+              납기 임박 / 연체 이체 현황
+              {!upcomingLoading && (
+                <Badge variant="outline" className="ml-auto text-xs bg-yellow-100 border-yellow-300 text-yellow-700">
+                  {upcomingPayments.filter(p => p.isOverdue).length}건 연체 · {upcomingPayments.filter(p => !p.isOverdue).length}건 14일 이내
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {upcomingLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {upcomingPayments.map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${item.isOverdue ? 'bg-destructive' : 'bg-yellow-500'}`} />
+                    <span className={`text-xs font-mono shrink-0 ${item.isOverdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
+                      {item.dueDate}
+                    </span>
+                    <span className="flex-1 truncate">
+                      {item.contractorName} / {item.studentName}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] px-1.5 shrink-0">
+                      {item.stageLabel}
+                    </Badge>
+                    <span className={`font-semibold tabular-nums shrink-0 ${item.isOverdue ? 'text-destructive' : ''}`}>
+                      {item.currency === 'KRW'
+                        ? `₩${item.amount.toLocaleString()}`
+                        : `$${item.amount.toLocaleString()}`}
+                    </span>
+                    {item.isOverdue && <Badge variant="destructive" className="text-[10px] px-1.5 shrink-0">연체</Badge>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
