@@ -79,9 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null
     }
 
-    // Add timeout to prevent hanging
-    const timeoutPromise = new Promise<User | null>((_, reject) =>
-      setTimeout(() => reject(new Error('Profile fetch timeout (4s)')), 4000)
+    // Add timeout to prevent hanging — resolve with null instead of rejecting
+    const timeoutPromise = new Promise<User | null>((resolve) =>
+      setTimeout(() => {
+        console.warn('Profile fetch timeout (10s) — continuing with fallback user')
+        resolve(null)
+      }, 10000)
     )
 
     profileFetchInProgress.current = doFetch()
@@ -95,13 +98,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true
 
-    // Safety timeout — if auth takes longer than 5s, stop loading
+    // Safety timeout — if auth takes longer than 12s, stop loading
     const safetyTimer = setTimeout(() => {
       if (isMounted) {
-        console.warn('Auth loading safety timeout reached (5s)')
+        console.warn('Auth loading safety timeout reached (12s)')
         setLoading(false)
       }
-    }, 5000)
+    }, 12000)
+
+    // Helper: build a fallback user from Supabase auth session (when profile fetch fails)
+    function fallbackUser(s: Session): User {
+      return {
+        id: s.user.id,
+        email: s.user.email || '',
+        name: s.user.user_metadata?.full_name || s.user.user_metadata?.name || s.user.email?.split('@')[0] || 'User',
+        role: 'viewer' as UserRole,
+        isExternal: false,
+        createdAt: s.user.created_at,
+      }
+    }
 
     // Use onAuthStateChange as the single source of truth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -111,7 +126,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const fullName = s.user.user_metadata?.full_name || s.user.user_metadata?.name
             const profile = await fetchProfile(s.user.id, s.user.email || '', fullName)
             if (isMounted) {
-              setUser(profile)
+              // Even if profile is null, keep user logged in with fallback
+              setUser(profile || fallbackUser(s))
               setSession(s)
             }
           } else if (isMounted) {
@@ -120,7 +136,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           console.error('Auth state change error:', err)
-          if (isMounted) {
+          // CRITICAL: if session exists, keep user logged in with fallback
+          if (isMounted && s?.user) {
+            setUser(fallbackUser(s))
+            setSession(s)
+          } else if (isMounted) {
             setUser(null)
             setSession(null)
           }
@@ -140,12 +160,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const fullName = s.user.user_metadata?.full_name || s.user.user_metadata?.name
           const profile = await fetchProfile(s.user.id, s.user.email || '', fullName)
           if (isMounted) {
-            setUser(profile)
+            setUser(profile || fallbackUser(s))
             setSession(s)
           }
         }
       } catch (err) {
         console.error('Get session error:', err)
+        // Keep user logged in with fallback if session exists
+        if (isMounted && s?.user) {
+          setUser(fallbackUser(s))
+          setSession(s)
+        }
       } finally {
         if (isMounted) {
           clearTimeout(safetyTimer)
