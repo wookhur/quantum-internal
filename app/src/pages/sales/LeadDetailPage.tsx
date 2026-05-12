@@ -172,7 +172,7 @@ export function LeadDetailPage() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-medium">{a.title}</p>
                     {a.activityType === 'consultation' && syncStatus?.[a.id] && (
-                      <SyncBadge status={syncStatus[a.id].status} updatedStart={syncStatus[a.id].updatedStart} />
+                      <SyncBadge status={syncStatus[a.id].status} />
                     )}
                   </div>
                   {a.content && <p className="text-xs text-muted-foreground mt-0.5">{a.content}</p>}
@@ -218,7 +218,7 @@ export function LeadDetailPage() {
 
 // ─── Sync Badge ─────────────────────────────────────────────────────────────
 
-function SyncBadge({ status, updatedStart }: { status: CalendarSyncStatus; updatedStart?: string }) {
+function SyncBadge({ status }: { status: CalendarSyncStatus }) {
   switch (status) {
     case 'synced':
       return (
