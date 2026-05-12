@@ -18,7 +18,7 @@ import {
 } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { X, ChevronLeft, ChevronRight, User, Phone, GraduationCap, Clock, Check } from 'lucide-react'
-import { useGoogleCalendarEvents, useCreateGoogleCalendarEvent } from '@/hooks/useGoogleCalendar'
+import { useGoogleCalendars, useGoogleCalendarEvents, useCreateGoogleCalendarEvent } from '@/hooks/useGoogleCalendar'
 import { useUpdateLead, useCreateActivity } from '@/hooks/useLeads'
 import type { PipelineStage, ConsultationMethod } from '@/types'
 
@@ -118,9 +118,29 @@ export default function ConsultationBookingDialog({
 
   // ─── Google Calendar integration (graceful) ─────────────────────────────────
 
-  const calendarId = typeof window !== 'undefined'
-    ? localStorage.getItem('googleCalendarId') || 'primary'
-    : 'primary'
+  // Default to CEO's calendar (samhan), fallback to stored or primary
+  const DEFAULT_CALENDAR_ID = 'samhan@quantumadmissions.com'
+  const { data: calendars } = useGoogleCalendars()
+  const [calendarId, setCalendarId] = useState(() =>
+    typeof window !== 'undefined'
+      ? localStorage.getItem('googleCalendarId') || DEFAULT_CALENDAR_ID
+      : DEFAULT_CALENDAR_ID
+  )
+
+  // Filter to only show team calendars (owner/writer access, not holiday calendars)
+  const teamCalendars = useMemo(() => {
+    if (!calendars) return []
+    return calendars.filter(c =>
+      (c.accessRole === 'owner' || c.accessRole === 'writer') &&
+      !c.id.includes('#holiday@') && !c.id.includes('#contacts@')
+    )
+  }, [calendars])
+
+  const handleCalendarChange = (newId: string) => {
+    setCalendarId(newId)
+    localStorage.setItem('googleCalendarId', newId)
+    setSelectedSlot(null) // reset slot when calendar changes
+  }
 
   const calendarRangeStart = selectedDate
     ? format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "yyyy-MM-dd'T'00:00:00XXX")
@@ -376,6 +396,24 @@ export default function ConsultationBookingDialog({
               <InfoChip icon={<GraduationCap className="h-3.5 w-3.5" />} label={lead.grade} />
             )}
           </div>
+
+          {/* ── Calendar selector ─────────────────────────────────────────── */}
+          {teamCalendars.length > 1 && (
+            <div>
+              <SectionLabel>캘린더 선택</SectionLabel>
+              <select
+                value={calendarId}
+                onChange={(e) => handleCalendarChange(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              >
+                {teamCalendars.map((cal) => (
+                  <option key={cal.id} value={cal.id}>
+                    {cal.summary}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* ── Calendar (date picker) ─────────────────────────────────────── */}
           <div>
