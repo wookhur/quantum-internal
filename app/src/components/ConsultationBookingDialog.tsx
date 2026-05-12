@@ -267,6 +267,7 @@ export default function ConsultationBookingDialog({
 
       // 1. Create Google Calendar event (skip if no token / fails)
       let googleMeetLink: string | undefined
+      let googleEventId: string | undefined
       try {
         const event = await createEvent.mutateAsync({
           calendarId,
@@ -287,6 +288,7 @@ export default function ConsultationBookingDialog({
           attendeeEmail: lead.email,
         })
         googleMeetLink = event.hangoutLink ?? undefined
+        googleEventId = event.id
       } catch {
         // Google Calendar not set up — continue without event
         console.warn('Google Calendar event creation skipped (no token or error)')
@@ -302,7 +304,7 @@ export default function ConsultationBookingDialog({
         },
       })
 
-      // 3. Create activity record
+      // 3. Create activity record (store Google event ID for sync)
       await createActivity.mutateAsync({
         leadId: lead.id,
         activityType: 'consultation',
@@ -312,6 +314,9 @@ export default function ConsultationBookingDialog({
         consultationMethod,
         meetingDate: startISO,
         googleMeetLink,
+        metadata: googleEventId
+          ? { googleEventId, googleCalendarId: calendarId }
+          : undefined,
       })
 
       // 4. Show success

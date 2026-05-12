@@ -1,7 +1,9 @@
 import { useParams, Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Loader2, Phone, Mail, MapPin, School, GraduationCap, Calendar, MessageSquare, Edit, Clock, CheckCircle2, Video, CalendarPlus } from 'lucide-react'
+import { ArrowLeft, Loader2, Phone, Mail, MapPin, School, GraduationCap, Calendar, MessageSquare, Edit, Clock, CheckCircle2, Video, CalendarPlus, AlertTriangle, XCircle, RefreshCw } from 'lucide-react'
 import { useLead, useLeadActivities, useCreateActivity } from '@/hooks/useLeads'
+import { useConsultationCalendarSync } from '@/hooks/useGoogleCalendar'
+import type { CalendarSyncStatus } from '@/hooks/useGoogleCalendar'
 import { getStageConfig } from '@/types'
 import type { LeadActivity } from '@/types'
 import { useState } from 'react'
@@ -11,6 +13,7 @@ export function LeadDetailPage() {
   const { id } = useParams()
   const { data: lead, isLoading, error } = useLead(id || '')
   const { data: activities } = useLeadActivities(id || '')
+  const { data: syncStatus } = useConsultationCalendarSync(activities)
   const createActivity = useCreateActivity()
   const [noteText, setNoteText] = useState('')
   const [bookingOpen, setBookingOpen] = useState(false)
@@ -166,8 +169,19 @@ export function LeadDetailPage() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{a.title}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium">{a.title}</p>
+                    {a.activityType === 'consultation' && syncStatus?.[a.id] && (
+                      <SyncBadge status={syncStatus[a.id].status} updatedStart={syncStatus[a.id].updatedStart} />
+                    )}
+                  </div>
                   {a.content && <p className="text-xs text-muted-foreground mt-0.5">{a.content}</p>}
+                  {a.activityType === 'consultation' && syncStatus?.[a.id]?.status === 'time_changed' && syncStatus[a.id].updatedStart && (
+                    <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
+                      <RefreshCw className="size-3" />
+                      변경된 시간: {new Date(syncStatus[a.id].updatedStart!).toLocaleString('ko-KR')}
+                    </p>
+                  )}
                   <p className="text-xs text-gray-400 mt-1">
                     {new Date(a.createdAt).toLocaleString('ko-KR')}
                     {a.createdByUser && ` · ${a.createdByUser.name}`}
@@ -199,4 +213,37 @@ export function LeadDetailPage() {
       />
     </div>
   )
+}
+
+// ─── Sync Badge ─────────────────────────────────────────────────────────────
+
+function SyncBadge({ status, updatedStart }: { status: CalendarSyncStatus; updatedStart?: string }) {
+  switch (status) {
+    case 'synced':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-600">
+          <CheckCircle2 className="size-3" />
+          동기화됨
+        </span>
+      )
+    case 'time_changed':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-600">
+          <AlertTriangle className="size-3" />
+          시간 변경됨
+        </span>
+      )
+    case 'cancelled':
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
+          <XCircle className="size-3" />
+          캘린더 삭제됨
+        </span>
+      )
+    case 'no_event_id':
+    case 'error':
+    case 'loading':
+    default:
+      return null
+  }
 }

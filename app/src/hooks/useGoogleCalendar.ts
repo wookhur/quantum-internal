@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import type { LeadActivity } from '@/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -174,5 +175,116 @@ export function useCreateGoogleCalendarEvent() {
         queryKey: ['google-calendar-events', variables.calendarId],
       })
     },
+  })
+}
+
+// ─── Calendar Sync Types ────────────────────────────────────────────────────
+
+export type CalendarSyncStatus = 'synced' | 'time_changed' | 'cancelled' | 'no_event_id' | 'loading' | 'error'
+
+export interface CalendarSyncInfo {
+  status: CalendarSyncStatus
+  /** Updated start time from Google Calendar (if time_changed) */
+  updatedStart?: string
+  /** Updated end time from Google Calendar (if time_changed) */
+  updatedEnd?: string
+}
+
+/**
+ * Check Google Calendar sync status for consultation activities.
+ * Compares DB activity records with actual Google Calendar events.
+ * Only checks activities that have a googleEventId in metadata.
+ */
+export function useConsultationCalendarSync(activities: LeadActivity[] | undefined) {
+  // Extract consultation activities with Google event IDs
+  const consultationActivities = (activities ?? []).filter(
+    (a) => a.activityType === 'consultation' && a.metadata?.googleEventId
+  )
+
+  // Build a stable query key from activity IDs
+  const activityIds = consultationActivities.map((a) => a.id).sort().join(',')
+
+  return useQuery<Record<string, CalendarSyncInfo>>({
+    queryKey: ['calendar-sync', activityIds],
+    queryFn: async () => {
+      if (consultationActivities.length === 0) return {}
+
+      let token: string
+      try {
+        token = await getGoogleAccessToken()
+      } catch {
+        // No Google token — return error status for all
+        const result: Record<string, CalendarSyncInfo> = {}
+        for (const a of consultationActivities) {
+          result[a.id] = { status: 'error' }
+        }
+        return result
+      }
+
+      const result: Record<string, CalendarSyncInfo> = {}
+
+      await Promise.all(
+        consultationActivities.map(async (activity) => {
+          const eventId = activity.metadata!.googleEventId as string
+          const calId = (activity.metadata!.googleCalendarId as string) || 'primary'
+
+          try {
+            const res = await fetch(
+              `${CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(eventId)}`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              }
+            )
+
+            if (res.status === 404 || res.status === 410) {
+              // Event deleted
+              result[activity.id] = { status: 'cancelled' }
+              return
+            }
+
+            if (!res.ok) {
+              result[activity.id] = { status: 'error' }
+              return
+            }
+
+            const event = (await res.json()) as GoogleCalendarEvent & { status?: string }
+
+            // Check if event was cancelled
+            if (event.status === 'cancelled') {
+              result[activity.id] = { status: 'cancelled' }
+              return
+            }
+
+            // Check if time changed
+            const dbMeetingDate = activity.meetingDate
+            const gcalStart = event.start?.dateTime
+
+            if (dbMeetingDate && gcalStart) {
+              const dbTime = new Date(dbMeetingDate).getTime()
+              const gcalTime = new Date(gcalStart).getTime()
+
+              if (Math.abs(dbTime - gcalTime) > 60000) {
+                // More than 1 minute difference → time changed
+                result[activity.id] = {
+                  status: 'time_changed',
+                  updatedStart: event.start.dateTime,
+                  updatedEnd: event.end?.dateTime,
+                }
+                return
+              }
+            }
+
+            result[activity.id] = { status: 'synced' }
+          } catch {
+            result[activity.id] = { status: 'error' }
+          }
+        })
+      )
+
+      return result
+    },
+    enabled: consultationActivities.length > 0,
+    staleTime: 3 * 60 * 1000, // 3 minutes
+    refetchOnWindowFocus: true,
   })
 }
