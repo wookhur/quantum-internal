@@ -8,6 +8,7 @@ import { getStageConfig } from '@/types'
 import type { LeadActivity } from '@/types'
 import { useState } from 'react'
 import ConsultationBookingDialog from '@/components/ConsultationBookingDialog'
+import LeadEditDialog from '@/components/LeadEditDialog'
 
 export function LeadDetailPage() {
   const { id } = useParams()
@@ -19,6 +20,7 @@ export function LeadDetailPage() {
   const deleteActivity = useDeleteActivity()
   const [noteText, setNoteText] = useState('')
   const [bookingOpen, setBookingOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
@@ -88,7 +90,7 @@ export function LeadDetailPage() {
           <Button size="sm" className="gap-1.5 bg-[#0073EA] hover:bg-[#0060C2]" onClick={() => setBookingOpen(true)}>
             <CalendarPlus className="size-3.5" /> 상담 예약
           </Button>
-          <Button variant="outline" size="sm" className="gap-1.5">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
             <Edit className="size-3.5" /> 수정
           </Button>
         </div>
@@ -272,6 +274,9 @@ export function LeadDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Lead Edit Dialog */}
+      <LeadEditDialog open={editOpen} onClose={() => setEditOpen(false)} lead={lead} />
 
       {/* Consultation Booking Dialog */}
       <ConsultationBookingDialog
