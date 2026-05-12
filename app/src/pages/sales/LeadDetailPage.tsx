@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Loader2, Phone, Mail, MapPin, School, GraduationCap, Calendar, MessageSquare, Edit, Clock, CheckCircle2, Video, CalendarPlus, AlertTriangle, XCircle, RefreshCw } from 'lucide-react'
-import { useLead, useLeadActivities, useCreateActivity } from '@/hooks/useLeads'
+import { ArrowLeft, Loader2, Phone, Mail, MapPin, School, GraduationCap, Calendar, MessageSquare, Edit, Clock, CheckCircle2, Video, CalendarPlus, AlertTriangle, XCircle, RefreshCw, Pencil, Trash2, Save, X } from 'lucide-react'
+import { useLead, useLeadActivities, useCreateActivity, useUpdateActivity, useDeleteActivity } from '@/hooks/useLeads'
 import { useConsultationCalendarSync } from '@/hooks/useGoogleCalendar'
 import type { CalendarSyncStatus } from '@/hooks/useGoogleCalendar'
 import { getStageConfig } from '@/types'
@@ -15,8 +15,32 @@ export function LeadDetailPage() {
   const { data: activities } = useLeadActivities(id || '')
   const { data: syncStatus } = useConsultationCalendarSync(activities)
   const createActivity = useCreateActivity()
+  const updateActivity = useUpdateActivity()
+  const deleteActivity = useDeleteActivity()
   const [noteText, setNoteText] = useState('')
   const [bookingOpen, setBookingOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editContent, setEditContent] = useState('')
+
+  const handleEditStart = (a: LeadActivity) => {
+    setEditingId(a.id)
+    setEditTitle(a.title)
+    setEditContent(a.content || '')
+  }
+
+  const handleEditSave = () => {
+    if (!editingId || !id) return
+    updateActivity.mutate(
+      { id: editingId, leadId: id, data: { title: editTitle, content: editContent || null } },
+      { onSuccess: () => setEditingId(null) },
+    )
+  }
+
+  const handleDelete = (activityId: string) => {
+    if (!id || !confirm('이 활동 기록을 삭제하시겠습니까?')) return
+    deleteActivity.mutate({ id: activityId, leadId: id })
+  }
 
   if (isLoading) {
     return (
@@ -158,7 +182,7 @@ export function LeadDetailPage() {
         <div className="space-y-3">
           {activities && activities.length > 0 ? (
             activities.map((a: LeadActivity) => (
-              <div key={a.id} className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-0">
+              <div key={a.id} className="group flex items-start gap-3 py-2 border-b border-gray-100 last:border-0">
                 <div className="mt-0.5">
                   {a.activityType === 'consultation' ? (
                     <Video className="size-4 text-green-500" />
@@ -168,25 +192,79 @@ export function LeadDetailPage() {
                     <Clock className="size-4 text-gray-400" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">{a.title}</p>
-                    {a.activityType === 'consultation' && syncStatus?.[a.id] && (
-                      <SyncBadge status={syncStatus[a.id].status} />
-                    )}
+
+                {editingId === a.id ? (
+                  /* ── Edit mode ─────────────────────────── */
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <input
+                      value={editTitle}
+                      onChange={e => setEditTitle(e.target.value)}
+                      className="w-full px-2 py-1 text-sm font-medium border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0073EA]/20 focus:border-[#0073EA]"
+                    />
+                    <textarea
+                      value={editContent}
+                      onChange={e => setEditContent(e.target.value)}
+                      placeholder="내용 (선택)"
+                      rows={2}
+                      className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-[#0073EA]/20 focus:border-[#0073EA]"
+                    />
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={handleEditSave}
+                        disabled={!editTitle.trim() || updateActivity.isPending}
+                        className="inline-flex items-center gap-1 rounded-md bg-[#0073EA] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#0060C2] disabled:opacity-40"
+                      >
+                        <Save className="size-3" /> 저장
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        <X className="size-3" /> 취소
+                      </button>
+                    </div>
                   </div>
-                  {a.content && <p className="text-xs text-muted-foreground mt-0.5">{a.content}</p>}
-                  {a.activityType === 'consultation' && syncStatus?.[a.id]?.status === 'time_changed' && syncStatus[a.id].updatedStart && (
-                    <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
-                      <RefreshCw className="size-3" />
-                      변경된 시간: {new Date(syncStatus[a.id].updatedStart!).toLocaleString('ko-KR')}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-400 mt-1">
-                    {new Date(a.createdAt).toLocaleString('ko-KR')}
-                    {a.createdByUser && ` · ${a.createdByUser.name}`}
-                  </p>
-                </div>
+                ) : (
+                  /* ── View mode ─────────────────────────── */
+                  <>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{a.title}</p>
+                        {a.activityType === 'consultation' && syncStatus?.[a.id] && (
+                          <SyncBadge status={syncStatus[a.id].status} />
+                        )}
+                      </div>
+                      {a.content && <p className="text-xs text-muted-foreground mt-0.5">{a.content}</p>}
+                      {a.activityType === 'consultation' && syncStatus?.[a.id]?.status === 'time_changed' && syncStatus[a.id].updatedStart && (
+                        <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
+                          <RefreshCw className="size-3" />
+                          변경된 시간: {new Date(syncStatus[a.id].updatedStart!).toLocaleString('ko-KR')}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-1">
+                        {new Date(a.createdAt).toLocaleString('ko-KR')}
+                        {a.createdByUser && ` · ${a.createdByUser.name}`}
+                      </p>
+                    </div>
+                    {/* Edit/Delete buttons — visible on hover */}
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <button
+                        onClick={() => handleEditStart(a)}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+                        title="수정"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(a.id)}
+                        className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+                        title="삭제"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             ))
           ) : (

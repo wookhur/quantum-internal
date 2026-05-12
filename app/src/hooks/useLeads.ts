@@ -379,6 +379,56 @@ export function useCreateActivity() {
   })
 }
 
+export function useUpdateActivity() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, data }: {
+      id: string
+      leadId: string
+      data: {
+        title?: string
+        content?: string | null
+        meetingDate?: string | null
+      }
+    }) => {
+      const row: Record<string, unknown> = {}
+      if (data.title !== undefined) row.title = data.title
+      if (data.content !== undefined) row.content = data.content
+      if (data.meetingDate !== undefined) row.meeting_date = data.meetingDate
+
+      const { data: updated, error } = await supabase
+        .from('lead_activities')
+        .update(row)
+        .eq('id', id)
+        .select('*, profiles!lead_activities_created_by_fkey(id, name, email)')
+        .single()
+      if (error) throw error
+      return mapActivity(updated as Record<string, unknown>)
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['lead-activities', variables.leadId] })
+    },
+  })
+}
+
+export function useDeleteActivity() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; leadId: string }) => {
+      const { error } = await supabase
+        .from('lead_activities')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['lead-activities', variables.leadId] })
+    },
+  })
+}
+
 /**
  * Aggregate stats for the leads dashboard.
  * Returns: total, byStage, bySource, thisMonth, conversionRate.
