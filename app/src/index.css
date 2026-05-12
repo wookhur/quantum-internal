@@ -1,66 +1,86 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-heading: var(--font-sans);
 
-  /* Core Colors - CRM Professional Blue */
-  --color-background: #F8FAFC;
-  --color-foreground: #0F172A;
+  /* Core Colors - Monday.com Inspired */
+  --color-background: #F6F7FB;
+  --color-foreground: #323338;
   --color-card: #FFFFFF;
-  --color-card-foreground: #0F172A;
+  --color-card-foreground: #323338;
   --color-popover: #FFFFFF;
-  --color-popover-foreground: #0F172A;
-  --color-primary: #2563EB;
+  --color-popover-foreground: #323338;
+  --color-primary: #0073EA;
   --color-primary-foreground: #FFFFFF;
-  --color-secondary: #F1F5FD;
-  --color-secondary-foreground: #1E293B;
-  --color-muted: #F1F5FD;
-  --color-muted-foreground: #64748B;
-  --color-accent: #059669;
+  --color-secondary: #F0F3FF;
+  --color-secondary-foreground: #323338;
+  --color-muted: #F5F6F8;
+  --color-muted-foreground: #676879;
+  --color-accent: #00C875;
   --color-accent-foreground: #FFFFFF;
-  --color-destructive: #DC2626;
+  --color-destructive: #E2445C;
   --color-destructive-foreground: #FFFFFF;
-  --color-border: #E4ECFC;
-  --color-input: #E4ECFC;
-  --color-ring: #2563EB;
+  --color-border: #E6E9EF;
+  --color-input: #E6E9EF;
+  --color-ring: #0073EA;
 
-  /* Sidebar - Dark Navy */
-  --color-sidebar: #0F172A;
-  --color-sidebar-foreground: #CBD5E1;
-  --color-sidebar-primary: #3B82F6;
+  /* Sidebar - Light Monday.com Style */
+  --color-sidebar: #FFFFFF;
+  --color-sidebar-foreground: #323338;
+  --color-sidebar-primary: #0073EA;
   --color-sidebar-primary-foreground: #FFFFFF;
-  --color-sidebar-accent: #1E293B;
-  --color-sidebar-accent-foreground: #FFFFFF;
-  --color-sidebar-border: #1E293B;
-  --color-sidebar-ring: #3B82F6;
-  --color-sidebar-muted: #334155;
-  --color-sidebar-muted-foreground: #94A3B8;
+  --color-sidebar-accent: #F0F3FF;
+  --color-sidebar-accent-foreground: #0073EA;
+  --color-sidebar-border: #E6E9EF;
+  --color-sidebar-ring: #0073EA;
+  --color-sidebar-muted: #F5F6F8;
+  --color-sidebar-muted-foreground: #676879;
 
-  /* Pipeline Stage Colors */
-  --color-stage-new: #EAB308;
-  --color-stage-contacted: #F97316;
-  --color-stage-consulting: #3B82F6;
-  --color-stage-review: #8B5CF6;
-  --color-stage-contracted: #059669;
-  --color-stage-lost: #94A3B8;
+  /* Pipeline Stage Colors - Bright & Distinct */
+  --color-stage-new-lead: #FDAB3D;
+  --color-stage-contact-attempted: #FFCB00;
+  --color-stage-consultation-scheduled: #00C875;
+  --color-stage-first-consultation: #0073EA;
+  --color-stage-second-consultation: #A25DDC;
+  --color-stage-third-consultation: #784BD1;
+  --color-stage-contract-review: #FF158A;
+  --color-stage-contracted: #00C875;
+  --color-stage-on-hold: #FDAB3D;
+  --color-stage-no-response: #C4C4C4;
+  --color-stage-rejected: #E2445C;
+  --color-stage-lost: #C4C4C4;
+
+  /* Legacy stage aliases for backward compatibility */
+  --color-stage-new: #FDAB3D;
+  --color-stage-contacted: #FFCB00;
+  --color-stage-consulting: #0073EA;
+  --color-stage-review: #FF158A;
+  --color-stage-contracted-legacy: #00C875;
+  --color-stage-lost-legacy: #C4C4C4;
+
+  /* Priority Colors */
+  --color-priority-high: #E2445C;
+  --color-priority-medium: #FDAB3D;
+  --color-priority-low: #0073EA;
 
   /* Status Colors */
-  --color-success: #059669;
-  --color-warning: #EAB308;
-  --color-danger: #DC2626;
-  --color-info: #0EA5E9;
+  --color-success: #00C875;
+  --color-warning: #FDAB3D;
+  --color-danger: #E2445C;
+  --color-info: #579BFC;
 
-  /* Chart Colors */
-  --color-chart-1: #2563EB;
-  --color-chart-2: #059669;
-  --color-chart-3: #F97316;
-  --color-chart-4: #8B5CF6;
-  --color-chart-5: #EAB308;
+  /* Chart Colors - Monday.com Bright Palette */
+  --color-chart-1: #0073EA;
+  --color-chart-2: #00C875;
+  --color-chart-3: #FDAB3D;
+  --color-chart-4: #A25DDC;
+  --color-chart-5: #FF158A;
 
   --radius: 0.5rem;
   --radius-sm: 0.25rem;
@@ -80,9 +100,115 @@
     @apply bg-background text-foreground font-sans;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* ============================================
+   Monday.com Inspired Utility Classes
+   ============================================ */
+
+/* Monday Card - Clean white card with subtle shadow */
+.monday-card {
+  background: #FFFFFF;
+  border: 1px solid #E6E9EF;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s ease;
+}
+
+.monday-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Monday Table - Clean table with hover rows */
+.monday-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #FFFFFF;
+  border: 1px solid #E6E9EF;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.monday-table thead th {
+  background: #F6F7FB;
+  color: #676879;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #E6E9EF;
+  text-align: left;
+}
+
+.monday-table tbody td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #F5F6F8;
+  color: #323338;
+  font-size: 0.875rem;
+}
+
+.monday-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.monday-table tbody tr:hover {
+  background-color: #F0F3FF;
+}
+
+.monday-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Status Pill - Rounded pill for statuses/stages */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: #FFFFFF;
+  min-width: 5rem;
+  text-align: center;
+}
+
+/* Stage pill variants */
+.status-pill--new-lead { background-color: #FDAB3D; }
+.status-pill--contact-attempted { background-color: #FFCB00; color: #323338; }
+.status-pill--consultation-scheduled { background-color: #00C875; }
+.status-pill--first-consultation { background-color: #0073EA; }
+.status-pill--second-consultation { background-color: #A25DDC; }
+.status-pill--third-consultation { background-color: #784BD1; }
+.status-pill--contract-review { background-color: #FF158A; }
+.status-pill--contracted { background-color: #00C875; }
+.status-pill--on-hold { background-color: #FDAB3D; }
+.status-pill--no-response { background-color: #C4C4C4; }
+.status-pill--rejected { background-color: #E2445C; }
+.status-pill--lost { background-color: #C4C4C4; }
+
+/* Priority pill variants */
+.status-pill--priority-high { background-color: #E2445C; }
+.status-pill--priority-medium { background-color: #FDAB3D; }
+.status-pill--priority-low { background-color: #0073EA; }
+
+/* Status feedback variants */
+.status-pill--success { background-color: #00C875; }
+.status-pill--warning { background-color: #FDAB3D; color: #323338; }
+.status-pill--danger { background-color: #E2445C; }
+.status-pill--info { background-color: #579BFC; }
+
+/* Sidebar left accent border */
+.sidebar-accent {
+  border-left: 3px solid #0073EA;
 }

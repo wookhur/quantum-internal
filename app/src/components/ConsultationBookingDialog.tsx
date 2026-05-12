@@ -1,0 +1,640 @@
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import {
+  format,
+  addMonths,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  eachDayOfInterval,
+  isSameDay,
+  isSameMonth,
+  isBefore,
+  startOfDay,
+  addMinutes,
+  setHours,
+  setMinutes,
+} from 'date-fns'
+import { ko } from 'date-fns/locale'
+import { X, ChevronLeft, ChevronRight, User, Phone, GraduationCap, Clock, Check } from 'lucide-react'
+import { useGoogleCalendarEvents, useCreateGoogleCalendarEvent } from '@/hooks/useGoogleCalendar'
+import { useUpdateLead, useCreateActivity } from '@/hooks/useLeads'
+import type { PipelineStage, ConsultationMethod } from '@/types'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ConsultationBookingDialogProps {
+  open: boolean
+  onClose: () => void
+  lead: {
+    id: string
+    parentName: string
+    studentName?: string
+    email?: string
+    phone: string
+    grade?: string
+  }
+  onBooked: () => void
+}
+
+interface TimeSlot {
+  hour: number
+  minute: number
+  label: string
+}
+
+type ConsultationNumber = 1 | 2 | 3
+type DurationMinutes = 30 | 60 | 90
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PRIMARY = '#0073EA'
+
+const WEEKDAY_HEADERS = ['월', '화', '수', '목', '금', '토', '일']
+
+const DURATION_OPTIONS: { value: DurationMinutes; label: string }[] = [
+  { value: 30, label: '30분' },
+  { value: 60, label: '1시간' },
+  { value: 90, label: '1시간 30분' },
+]
+
+const CONSULTATION_NUMBER_OPTIONS: { value: ConsultationNumber; label: string }[] = [
+  { value: 1, label: '1차' },
+  { value: 2, label: '2차' },
+  { value: 3, label: '3차' },
+]
+
+const CONSULTATION_METHOD_OPTIONS: { value: ConsultationMethod; label: string }[] = [
+  { value: 'zoom', label: 'Zoom' },
+  { value: 'in_person', label: '대면' },
+  { value: 'phone', label: '전화' },
+  { value: 'katalk', label: '카카오톡' },
+]
+
+const PIPELINE_STAGE_MAP: Record<ConsultationNumber, PipelineStage> = {
+  1: 'first_consultation',
+  2: 'second_consultation',
+  3: 'third_consultation',
+}
+
+/** Generate 30-minute time slots from 09:00 to 21:00 */
+function generateTimeSlots(): TimeSlot[] {
+  const slots: TimeSlot[] = []
+  for (let hour = 9; hour < 21; hour++) {
+    for (const minute of [0, 30]) {
+      slots.push({
+        hour,
+        minute,
+        label: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+      })
+    }
+  }
+  return slots
+}
+
+const TIME_SLOTS = generateTimeSlots()
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function ConsultationBookingDialog({
+  open,
+  onClose,
+  lead,
+  onBooked,
+}: ConsultationBookingDialogProps) {
+  // ─── State ──────────────────────────────────────────────────────────────────
+
+  const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()))
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
+  const [duration, setDuration] = useState<DurationMinutes>(60)
+  const [consultationNumber, setConsultationNumber] = useState<ConsultationNumber>(1)
+  const [consultationMethod, setConsultationMethod] = useState<ConsultationMethod>('zoom')
+  const [memo, setMemo] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSuccess, setIsSuccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // ─── Google Calendar integration (graceful) ─────────────────────────────────
+
+  const calendarId = typeof window !== 'undefined'
+    ? localStorage.getItem('googleCalendarId') || 'primary'
+    : 'primary'
+
+  const calendarRangeStart = selectedDate
+    ? format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "yyyy-MM-dd'T'00:00:00XXX")
+    : undefined
+  const calendarRangeEnd = selectedDate
+    ? format(endOfWeek(selectedDate, { weekStartsOn: 1 }), "yyyy-MM-dd'T'23:59:59XXX")
+    : undefined
+
+  const {
+    data: calendarEvents,
+    isError: calendarError,
+  } = useGoogleCalendarEvents(calendarId, calendarRangeStart, calendarRangeEnd)
+
+  const createEvent = useCreateGoogleCalendarEvent()
+  const updateLead = useUpdateLead()
+  const createActivity = useCreateActivity()
+
+  // ─── Reset state when dialog opens ──────────────────────────────────────────
+
+  useEffect(() => {
+    if (open) {
+      setCurrentMonth(startOfMonth(new Date()))
+      setSelectedDate(null)
+      setSelectedSlot(null)
+      setDuration(60)
+      setConsultationNumber(1)
+      setConsultationMethod('zoom')
+      setMemo('')
+      setIsSubmitting(false)
+      setIsSuccess(false)
+      setError(null)
+    }
+  }, [open])
+
+  // ─── Calendar grid ──────────────────────────────────────────────────────────
+
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(currentMonth)
+    const monthEnd = endOfMonth(currentMonth)
+    const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 })
+    const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 })
+    return eachDayOfInterval({ start: gridStart, end: gridEnd })
+  }, [currentMonth])
+
+  const today = useMemo(() => startOfDay(new Date()), [])
+
+  // ─── Busy time detection ────────────────────────────────────────────────────
+
+  const busySlots = useMemo(() => {
+    if (!calendarEvents || calendarError) return new Set<string>()
+
+    const busy = new Set<string>()
+    for (const event of calendarEvents) {
+      const eventStart = event.start?.dateTime ? new Date(event.start.dateTime) : null
+      const eventEnd = event.end?.dateTime ? new Date(event.end.dateTime) : null
+      if (!eventStart || !eventEnd) continue
+
+      // Mark every 30-minute slot that overlaps with this event
+      for (const slot of TIME_SLOTS) {
+        if (!selectedDate) continue
+        const slotStart = setMinutes(setHours(selectedDate, slot.hour), slot.minute)
+        const slotEnd = addMinutes(slotStart, 30)
+
+        if (slotStart < eventEnd && slotEnd > eventStart) {
+          busy.add(slot.label)
+        }
+      }
+    }
+    return busy
+  }, [calendarEvents, calendarError, selectedDate])
+
+  // ─── Check if the selected slot + duration conflicts ────────────────────────
+
+  const isSlotRangeAvailable = useCallback(
+    (slot: TimeSlot, dur: DurationMinutes): boolean => {
+      if (!selectedDate || !calendarEvents || calendarError) return true
+
+      const slotStart = setMinutes(setHours(selectedDate, slot.hour), slot.minute)
+      const slotEnd = addMinutes(slotStart, dur)
+
+      for (const event of calendarEvents) {
+        const eventStart = event.start?.dateTime ? new Date(event.start.dateTime) : null
+        const eventEnd = event.end?.dateTime ? new Date(event.end.dateTime) : null
+        if (!eventStart || !eventEnd) continue
+        if (slotStart < eventEnd && slotEnd > eventStart) return false
+      }
+      return true
+    },
+    [calendarEvents, calendarError, selectedDate],
+  )
+
+  // ─── Handlers ───────────────────────────────────────────────────────────────
+
+  const handlePrevMonth = () => setCurrentMonth((m) => subMonths(m, 1))
+  const handleNextMonth = () => setCurrentMonth((m) => addMonths(m, 1))
+
+  const handleDateSelect = (day: Date) => {
+    if (isBefore(day, today)) return
+    setSelectedDate(day)
+    setSelectedSlot(null) // reset slot when date changes
+  }
+
+  const handleSlotSelect = (slot: TimeSlot) => {
+    if (busySlots.has(slot.label)) return
+    setSelectedSlot(slot)
+  }
+
+  const handleSubmit = async () => {
+    if (!selectedDate || !selectedSlot) return
+
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      const startTime = setMinutes(
+        setHours(selectedDate, selectedSlot.hour),
+        selectedSlot.minute,
+      )
+      const endTime = addMinutes(startTime, duration)
+      const startISO = format(startTime, "yyyy-MM-dd'T'HH:mm:ssXXX")
+      const endISO = format(endTime, "yyyy-MM-dd'T'HH:mm:ssXXX")
+
+      const eventTitle = `[QA상담] ${lead.parentName}${lead.studentName ? ' / ' + lead.studentName : ''}`
+
+      // 1. Create Google Calendar event (skip if no token / fails)
+      let googleMeetLink: string | undefined
+      try {
+        const event = await createEvent.mutateAsync({
+          calendarId,
+          title: eventTitle,
+          description: [
+            `학부모: ${lead.parentName}`,
+            lead.studentName ? `학생: ${lead.studentName}` : '',
+            `연락처: ${lead.phone}`,
+            lead.grade ? `학년: ${lead.grade}` : '',
+            `상담 차수: ${consultationNumber}차`,
+            `상담 방식: ${CONSULTATION_METHOD_OPTIONS.find((o) => o.value === consultationMethod)?.label}`,
+            memo ? `메모: ${memo}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+          startTime: startISO,
+          endTime: endISO,
+          attendeeEmail: lead.email,
+        })
+        googleMeetLink = event.hangoutLink ?? undefined
+      } catch {
+        // Google Calendar not set up — continue without event
+        console.warn('Google Calendar event creation skipped (no token or error)')
+      }
+
+      // 2. Update lead pipeline stage
+      const pipelineStage = PIPELINE_STAGE_MAP[consultationNumber]
+      await updateLead.mutateAsync({
+        id: lead.id,
+        data: {
+          pipelineStage,
+          ...(googleMeetLink ? { googleMeetLink } : {}),
+        },
+      })
+
+      // 3. Create activity record
+      await createActivity.mutateAsync({
+        leadId: lead.id,
+        activityType: 'consultation',
+        title: `${consultationNumber}차 상담 예약 - ${format(startTime, 'M월 d일 (EEE) HH:mm', { locale: ko })}`,
+        content: memo || undefined,
+        consultationNumber,
+        consultationMethod,
+        meetingDate: startISO,
+        googleMeetLink,
+      })
+
+      // 4. Show success
+      setIsSuccess(true)
+
+      // 5. Callback after short delay so the user sees the success state
+      setTimeout(() => {
+        onBooked()
+        onClose()
+      }, 1200)
+    } catch (err) {
+      console.error('Booking failed:', err)
+      setError(err instanceof Error ? err.message : '예약 중 오류가 발생했습니다.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // ─── Early return ───────────────────────────────────────────────────────────
+
+  if (!open) return null
+
+  // ─── Success state ──────────────────────────────────────────────────────────
+
+  if (isSuccess) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="mx-4 flex w-full max-w-lg flex-col items-center gap-4 rounded-2xl bg-white p-10 shadow-2xl">
+          <div
+            className="flex h-16 w-16 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${PRIMARY}15` }}
+          >
+            <Check className="h-8 w-8" style={{ color: PRIMARY }} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">예약이 완료되었습니다</h2>
+          <p className="text-sm text-gray-500">
+            {selectedDate && selectedSlot && (
+              <>
+                {format(selectedDate, 'yyyy년 M월 d일 (EEE)', { locale: ko })}{' '}
+                {selectedSlot.label} · {DURATION_OPTIONS.find((o) => o.value === duration)?.label}
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  const canSubmit = selectedDate && selectedSlot && !isSubmitting
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col overflow-y-auto rounded-2xl bg-white shadow-2xl">
+        {/* ── Header ───────────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <h2 className="text-lg font-bold text-gray-900">상담 예약</h2>
+          <button
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            aria-label="닫기"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-6 px-6 py-5">
+          {/* ── Lead info summary ──────────────────────────────────────────── */}
+          <div className="flex flex-wrap gap-x-5 gap-y-2 rounded-xl bg-gray-50 px-4 py-3">
+            <InfoChip icon={<User className="h-3.5 w-3.5" />} label={lead.parentName} />
+            {lead.studentName && (
+              <InfoChip icon={<GraduationCap className="h-3.5 w-3.5" />} label={lead.studentName} />
+            )}
+            <InfoChip icon={<Phone className="h-3.5 w-3.5" />} label={lead.phone} />
+            {lead.grade && (
+              <InfoChip icon={<GraduationCap className="h-3.5 w-3.5" />} label={lead.grade} />
+            )}
+          </div>
+
+          {/* ── Calendar (date picker) ─────────────────────────────────────── */}
+          <div>
+            <SectionLabel>날짜 선택</SectionLabel>
+            <div className="rounded-xl border border-gray-200 p-3">
+              {/* Month navigation */}
+              <div className="mb-2 flex items-center justify-between">
+                <button
+                  onClick={handlePrevMonth}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
+                  aria-label="이전 달"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm font-semibold text-gray-800">
+                  {format(currentMonth, 'yyyy년 M월', { locale: ko })}
+                </span>
+                <button
+                  onClick={handleNextMonth}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
+                  aria-label="다음 달"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Weekday headers */}
+              <div className="mb-1 grid grid-cols-7 text-center">
+                {WEEKDAY_HEADERS.map((d) => (
+                  <div key={d} className="py-1 text-xs font-medium text-gray-400">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              {/* Day cells */}
+              <div className="grid grid-cols-7">
+                {calendarDays.map((day) => {
+                  const isPast = isBefore(day, today)
+                  const isToday = isSameDay(day, today)
+                  const isSelected = selectedDate ? isSameDay(day, selectedDate) : false
+                  const isOutsideMonth = !isSameMonth(day, currentMonth)
+
+                  return (
+                    <button
+                      key={day.toISOString()}
+                      onClick={() => handleDateSelect(day)}
+                      disabled={isPast || isOutsideMonth}
+                      className={`
+                        relative mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-sm transition-all
+                        ${isOutsideMonth ? 'text-gray-200' : ''}
+                        ${isPast && !isOutsideMonth ? 'cursor-not-allowed text-gray-300' : ''}
+                        ${!isPast && !isOutsideMonth && !isSelected ? 'cursor-pointer text-gray-700 hover:bg-gray-100' : ''}
+                        ${isSelected ? 'font-semibold text-white' : ''}
+                      `}
+                      style={isSelected ? { backgroundColor: PRIMARY } : undefined}
+                    >
+                      {format(day, 'd')}
+                      {isToday && !isSelected && (
+                        <span
+                          className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full"
+                          style={{ backgroundColor: PRIMARY }}
+                        />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Time slot picker ────────────────────────────────────────────── */}
+          {selectedDate && (
+            <div>
+              <SectionLabel>
+                시간 선택
+                <span className="ml-2 text-xs font-normal text-gray-400">
+                  {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })}
+                </span>
+              </SectionLabel>
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                {TIME_SLOTS.map((slot) => {
+                  const isBusy = busySlots.has(slot.label)
+                  const isSelected = selectedSlot?.label === slot.label
+                  const isAvailable = !isBusy
+
+                  return (
+                    <button
+                      key={slot.label}
+                      onClick={() => handleSlotSelect(slot)}
+                      disabled={isBusy}
+                      className={`
+                        rounded-lg border px-2 py-2 text-xs font-medium transition-all
+                        ${isBusy ? 'cursor-not-allowed border-red-100 bg-red-50 text-red-300 line-through' : ''}
+                        ${isAvailable && !isSelected ? 'cursor-pointer border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50' : ''}
+                        ${isSelected ? 'border-transparent font-semibold text-white' : ''}
+                      `}
+                      style={isSelected ? { backgroundColor: PRIMARY } : undefined}
+                    >
+                      {slot.label}
+                    </button>
+                  )
+                })}
+              </div>
+              {!calendarError && calendarEvents && calendarEvents.length > 0 && (
+                <p className="mt-2 flex items-center gap-1 text-xs text-gray-400">
+                  <Clock className="h-3 w-3" />
+                  빨간색 슬롯은 기존 일정이 있는 시간입니다
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── Duration ───────────────────────────────────────────────────── */}
+          <div>
+            <SectionLabel>상담 시간</SectionLabel>
+            <div className="flex gap-2">
+              {DURATION_OPTIONS.map((opt) => {
+                const isSelected = duration === opt.value
+                const conflict =
+                  selectedSlot && !isSlotRangeAvailable(selectedSlot, opt.value)
+
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setDuration(opt.value)}
+                    disabled={!!conflict}
+                    className={`
+                      rounded-lg border px-4 py-2 text-sm font-medium transition-all
+                      ${conflict ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-300' : ''}
+                      ${!conflict && !isSelected ? 'cursor-pointer border-gray-200 text-gray-600 hover:border-blue-300' : ''}
+                      ${isSelected && !conflict ? 'border-transparent text-white' : ''}
+                    `}
+                    style={isSelected && !conflict ? { backgroundColor: PRIMARY } : undefined}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* ── Consultation number + method row ───────────────────────────── */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <SectionLabel>상담 차수</SectionLabel>
+              <select
+                value={consultationNumber}
+                onChange={(e) => setConsultationNumber(Number(e.target.value) as ConsultationNumber)}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              >
+                {CONSULTATION_NUMBER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <SectionLabel>상담 방식</SectionLabel>
+              <select
+                value={consultationMethod}
+                onChange={(e) => setConsultationMethod(e.target.value as ConsultationMethod)}
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              >
+                {CONSULTATION_METHOD_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* ── Memo ───────────────────────────────────────────────────────── */}
+          <div>
+            <SectionLabel>메모</SectionLabel>
+            <textarea
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder="상담 관련 메모를 입력하세요..."
+              rows={3}
+              className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+
+          {/* ── Error ──────────────────────────────────────────────────────── */}
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* ── Footer ─────────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-end gap-3 border-t border-gray-100 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-200 px-5 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+          >
+            취소
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ backgroundColor: PRIMARY }}
+          >
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <Spinner />
+                예약 중...
+              </span>
+            ) : (
+              '예약 확정'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="mb-2 text-sm font-semibold text-gray-700">{children}</p>
+}
+
+function InfoChip({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5 text-sm text-gray-600">
+      <span className="text-gray-400">{icon}</span>
+      {label}
+    </span>
+  )
+}
+
+function Spinner() {
+  return (
+    <svg
+      className="h-4 w-4 animate-spin"
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      />
+    </svg>
+  )
+}

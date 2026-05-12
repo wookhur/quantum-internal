@@ -12,53 +12,71 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { LogOut } from 'lucide-react'
+import {
+  LogOut,
+  LayoutDashboard,
+  Calendar,
+  CheckSquare,
+  Users,
+  BarChart3,
+  ClipboardList,
+  TrendingUp,
+  BarChart2,
+  Megaphone,
+  CalendarDays,
+  Video,
+  FileText,
+  CreditCard,
+  Gamepad2,
+  type LucideIcon,
+} from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface NavItemDef {
   label: string
   to: string
+  icon: LucideIcon
 }
 
 const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
   {
     title: '공통',
     items: [
-      { label: '대시보드', to: '/dashboard' },
-      { label: '캘린더', to: '/calendar' },
-      { label: '할일 목록', to: '/todos' },
+      { label: '대시보드', to: '/dashboard', icon: LayoutDashboard },
+      { label: '캘린더', to: '/calendar', icon: Calendar },
+      { label: '할일', to: '/todos', icon: CheckSquare },
     ],
   },
   {
     title: '세일즈',
     items: [
-      { label: '리드 관리', to: '/sales/leads' },
-      { label: '파이프라인', to: '/sales/pipeline' },
-      { label: '영업 현황', to: '/sales/performance' },
-      { label: '미팅 기록', to: '/sales/meetings' },
+      { label: '리드 관리', to: '/sales/leads', icon: Users },
+      { label: '파이프라인', to: '/sales/pipeline', icon: BarChart3 },
+      { label: '미팅 기록', to: '/sales/meetings', icon: ClipboardList },
+      { label: '영업 현황', to: '/sales/performance', icon: TrendingUp },
     ],
   },
   {
     title: '마케팅',
     items: [
-      { label: '마케팅 지표', to: '/marketing/metrics' },
-      { label: '광고 성과', to: '/marketing/ads' },
-      { label: '이벤트 관리', to: '/marketing/events' },
-      { label: '영상 콘텐츠', to: '/marketing/videos' },
+      { label: '마케팅 지표', to: '/marketing/metrics', icon: BarChart2 },
+      { label: '광고 성과', to: '/marketing/ads', icon: Megaphone },
+      { label: '이벤트 관리', to: '/marketing/events', icon: CalendarDays },
+      { label: '영상 콘텐츠', to: '/marketing/videos', icon: Video },
     ],
   },
   {
-    title: '컨설팅',
+    title: '재무',
     items: [
-      { label: '계약 고객', to: '/consulting/clients' },
-      { label: '결제 관리', to: '/consulting/payments' },
+      { label: '계약 관리', to: '/consulting/clients', icon: FileText },
+      { label: '결제 관리', to: '/consulting/payments', icon: CreditCard },
     ],
   },
   {
     title: '쉬는 시간',
     items: [
-      { label: '🦖 T-Rex 러너', to: '/game' },
+      { label: 'T-Rex 러너', to: '/game', icon: Gamepad2 },
     ],
   },
 ]
@@ -66,62 +84,102 @@ const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
 export function AppSidebar() {
   const location = useLocation()
   const { user, signOut } = useAuth()
-  const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/')
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(path + '/')
 
   return (
-    <Sidebar className="border-r-0">
-      <SidebarHeader className="p-4">
+    <Sidebar className="border-r border-gray-200/80 bg-white">
+      {/* Logo area */}
+      <SidebarHeader className="px-5 py-4">
         <Link to="/dashboard" className="flex items-center gap-3">
-          <img src="/logo.png" alt="Quantum Admissions" className="h-8 w-auto" />
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-sidebar-accent-foreground">Quantum</span>
-            <span className="text-xs text-sidebar-foreground/60">Internal System</span>
+          <img
+            src="/logo.png"
+            alt="Quantum Admissions"
+            className="h-8 w-auto"
+          />
+          <div className="flex items-center gap-2">
+            <span className="text-[15px] font-bold text-gray-900 tracking-tight">
+              Quantum
+            </span>
+            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 uppercase tracking-wider">
+              Internal
+            </span>
           </div>
         </Link>
       </SidebarHeader>
 
-      <SidebarSeparator />
-
-      <SidebarContent>
+      <SidebarContent className="px-2">
         {NAV_SECTIONS.map((section, sIdx) => (
-          <div key={section.title}>
-            {sIdx > 0 && <SidebarSeparator />}
-            <SidebarGroup>
-              <SidebarGroupLabel>{section.title}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {section.items.map((item) => (
+          <SidebarGroup key={section.title} className="py-1">
+            {sIdx > 0 && (
+              <SidebarSeparator className="mx-3 my-1 bg-gray-100" />
+            )}
+            <SidebarGroupLabel className="px-3 mb-0.5 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
+              {section.title}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {section.items.map((item) => {
+                  const active = isActive(item.to)
+                  const Icon = item.icon
+                  return (
                     <SidebarMenuItem key={item.to}>
-                      <SidebarMenuButton render={<Link to={item.to} />} isActive={isActive(item.to)}>
-                        <span>{item.label}</span>
+                      <SidebarMenuButton
+                        render={<Link to={item.to} />}
+                        isActive={active}
+                        className={`
+                          relative rounded-md mx-1 h-9 px-3 gap-3
+                          transition-all duration-150 ease-in-out
+                          ${
+                            active
+                              ? 'bg-[#E6F0FF] text-blue-600 font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-r-full before:bg-blue-500'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }
+                        `}
+                      >
+                        <Icon
+                          className={`shrink-0 ${
+                            active ? 'text-blue-500' : 'text-gray-400'
+                          }`}
+                          size={18}
+                          strokeWidth={active ? 2 : 1.75}
+                        />
+                        <span className="truncate text-[13px]">
+                          {item.label}
+                        </span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </div>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="p-3">
-        <SidebarSeparator className="mb-3" />
-        <div className="flex items-center gap-3 px-1">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
+      {/* User area */}
+      <SidebarFooter className="px-3 pb-4 pt-2">
+        <SidebarSeparator className="mx-1 mb-3 bg-gray-100" />
+        <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50 transition-colors">
+          <Avatar className="h-8 w-8 ring-2 ring-blue-100">
+            <AvatarFallback className="bg-blue-50 text-blue-600 text-xs font-semibold">
               {user?.name?.charAt(0) || '?'}
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col flex-1 min-w-0">
-            <span className="text-sm font-medium text-sidebar-accent-foreground truncate">{user?.name || 'User'}</span>
-            <span className="text-xs text-sidebar-foreground/50 truncate">{user?.role || ''}</span>
+            <span className="text-[13px] font-medium text-gray-900 truncate">
+              {user?.name || 'User'}
+            </span>
+            <span className="text-[11px] text-gray-400 truncate">
+              {user?.role || ''}
+            </span>
           </div>
           <button
             onClick={signOut}
-            className="text-sidebar-foreground/50 hover:text-sidebar-foreground transition-colors"
+            className="rounded-md p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
             title="로그아웃"
           >
-            <LogOut className="size-4" />
+            <LogOut size={16} />
           </button>
         </div>
       </SidebarFooter>

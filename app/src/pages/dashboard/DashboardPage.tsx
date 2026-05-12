@@ -95,12 +95,14 @@ function useContractStats() {
 // --- Constants ---
 
 const PIPELINE_STAGES: { key: PipelineStage; name: string; color: string }[] = [
-  { key: 'new_lead', name: '신규 리드', color: '#EAB308' },
-  { key: 'katalk_sent', name: '카톡 발송', color: '#F97316' },
-  { key: 'first_consultation', name: '1차 상담', color: '#3B82F6' },
-  { key: 'second_consultation', name: '2차 상담', color: '#8B5CF6' },
-  { key: 'contract_review', name: '계약 검토', color: '#A855F7' },
-  { key: 'contracted', name: '계약 완료', color: '#059669' },
+  { key: 'new_lead', name: '신규 리드', color: '#FDAB3D' },
+  { key: 'contact_attempted', name: '컨택 시도', color: '#FFCB00' },
+  { key: 'consultation_scheduled', name: '상담 예약', color: '#00C875' },
+  { key: 'first_consultation', name: '1차 상담', color: '#0073EA' },
+  { key: 'second_consultation', name: '2차 상담', color: '#A25DDC' },
+  { key: 'third_consultation', name: '3차 상담', color: '#784BD1' },
+  { key: 'contract_review', name: '계약 검토', color: '#FF158A' },
+  { key: 'contracted', name: '계약 완료', color: '#00C875' },
 ]
 
 const CHANNEL_COLORS: Record<string, string> = {

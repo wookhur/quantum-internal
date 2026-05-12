@@ -1,266 +1,743 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, Search, Download, Loader2 } from 'lucide-react'
-import { useLeads, useCreateLead } from '@/hooks/useLeads'
-import type { PipelineStage } from '@/types'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Search,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  MoreHorizontal,
+  Pencil,
+  X,
+  Loader2,
+  Users,
+  TrendingUp,
+  CalendarDays,
+  BarChart3,
+} from 'lucide-react'
+import { useLeads, useCreateLead, useLeadStats } from '@/hooks/useLeads'
+import type { Lead, PipelineStage } from '@/types'
+import {
+  PIPELINE_STAGES,
+  SOURCE_CHANNELS,
+  INTEREST_AREAS,
+  REGIONS,
+  GRADES,
+  getStageConfig,
+} from '@/types'
 
-const STAGE_BADGE: Record<PipelineStage, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }> = {
-  new_lead: { label: '신규 리드', variant: 'outline', className: 'border-stage-new text-stage-new' },
-  katalk_sent: { label: '카톡 발송', variant: 'outline', className: 'border-stage-contacted text-stage-contacted' },
-  first_consultation: { label: '1차 상담', variant: 'outline', className: 'border-stage-consulting text-stage-consulting' },
-  second_consultation: { label: '2차 상담', variant: 'outline', className: 'border-stage-review text-stage-review' },
-  contract_review: { label: '계약 검토', variant: 'outline', className: 'border-stage-review text-stage-review' },
-  contracted: { label: '계약 완료', variant: 'default', className: 'bg-stage-contracted text-white' },
-  lost: { label: '이탈', variant: 'secondary', className: 'bg-stage-lost text-white' },
-}
+// ============ Constants ============
 
-const INITIAL_LEAD_FORM = {
+const ROWS_PER_PAGE = 25
+
+const INITIAL_FORM = {
   parentName: '',
   studentName: '',
   phone: '',
   email: '',
+  currentSchool: '',
+  grade: '',
+  region: '',
+  interestArea: '',
   sourceChannel: '',
-  pipelineStage: 'new_lead' as PipelineStage,
   memo: '',
 }
 
+// ============ Helpers ============
+
+/** CSS class for a pipeline stage pill */
+function stagePillClass(stage: PipelineStage): string {
+  return `status-pill status-pill--${stage.replace(/_/g, '-')}`
+}
+
+/** Format a date string to a shorter Korean-friendly format */
+function formatDate(dateStr: string | undefined): string {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return dateStr
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  return `${m}/${day}`
+}
+
+/** Get initials for avatar circle */
+function getInitials(name: string | undefined): string {
+  if (!name) return '?'
+  return name.charAt(0)
+}
+
+// ============ Sub-components ============
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+  label: string
+  value: string | number
+  accent?: string
+}) {
+  return (
+    <div className="monday-card flex items-center gap-3 px-4 py-3 min-w-0">
+      <div
+        className="flex items-center justify-center size-9 rounded-lg shrink-0"
+        style={{ backgroundColor: accent ? `${accent}18` : '#F0F3FF' }}
+      >
+        <Icon
+          className="size-4"
+          style={{ color: accent || '#0073EA' }}
+        />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-muted-foreground truncate">{label}</p>
+        <p className="text-lg font-bold text-foreground leading-tight">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+function StagePill({ stage }: { stage: PipelineStage }) {
+  const config = getStageConfig(stage)
+  return <span className={stagePillClass(stage)}>{config.label}</span>
+}
+
+function AssignedAvatar({ user }: { user: Lead['assignedUser'] }) {
+  if (!user) return <span className="text-muted-foreground text-xs">-</span>
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="size-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+        {getInitials(user.name)}
+      </div>
+      <span className="text-sm truncate">{user.name}</span>
+    </div>
+  )
+}
+
+// ============ Main component ============
+
 export function LeadsPage() {
+  // -- Filter state
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<string>('all')
-  const [channelFilter, setChannelFilter] = useState<string>('all')
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [form, setForm] = useState(INITIAL_LEAD_FORM)
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [assignedFilter, setAssignedFilter] = useState<string>('all')
 
+  // -- Pagination state
+  const [page, setPage] = useState(1)
+
+  // -- Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [form, setForm] = useState(INITIAL_FORM)
+
+  // -- Data hooks
+  const {
+    data: allLeads = [],
+    isLoading,
+    error,
+  } = useLeads({
+    stage: stageFilter !== 'all' ? (stageFilter as PipelineStage) : undefined,
+    source: sourceFilter !== 'all' ? sourceFilter : undefined,
+    assignedTo: assignedFilter !== 'all' ? assignedFilter : undefined,
+    search: search || undefined,
+  })
+
+  const { data: stats } = useLeadStats()
   const createLead = useCreateLead()
 
+  // -- Compute unique assigned users for the filter dropdown
+  const assignedUsers = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    for (const lead of allLeads) {
+      if (lead.assignedTo && lead.assignedUser) {
+        map.set(lead.assignedTo, {
+          id: lead.assignedTo,
+          name: lead.assignedUser.name,
+        })
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [allLeads])
+
+  // -- Active filter count (excluding defaults)
+  const activeFilterCount = [
+    stageFilter !== 'all',
+    sourceFilter !== 'all',
+    assignedFilter !== 'all',
+    !!search,
+  ].filter(Boolean).length
+
+  // -- Client-side pagination
+  const totalCount = allLeads.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / ROWS_PER_PAGE))
+  const safePage = Math.min(page, totalPages)
+  const startIdx = (safePage - 1) * ROWS_PER_PAGE
+  const endIdx = startIdx + ROWS_PER_PAGE
+  const paginatedLeads = allLeads.slice(startIdx, endIdx)
+
+  // -- Active leads count (not contracted/lost/rejected)
+  const activeLeadCount = useMemo(() => {
+    if (!stats) return 0
+    const inactiveStages: PipelineStage[] = ['contracted', 'lost', 'rejected']
+    let count = 0
+    for (const s of PIPELINE_STAGES) {
+      if (!inactiveStages.includes(s.key)) {
+        count += stats.byStage[s.key] || 0
+      }
+    }
+    return count
+  }, [stats])
+
+  // -- Reset page when filters change
+  const resetPage = () => setPage(1)
+
+  // -- Filter reset
+  const resetFilters = () => {
+    setSearch('')
+    setStageFilter('all')
+    setSourceFilter('all')
+    setAssignedFilter('all')
+    resetPage()
+  }
+
+  // -- Form handlers
+  const updateForm = <K extends keyof typeof INITIAL_FORM>(
+    key: K,
+    value: (typeof INITIAL_FORM)[K],
+  ) => {
+    setForm((f) => ({ ...f, [key]: value }))
+  }
+
   const handleCreateLead = () => {
+    if (!form.parentName.trim() || !form.phone.trim() || !form.sourceChannel) return
     createLead.mutate(
       {
         ...form,
         leadDate: new Date().toISOString().slice(0, 10),
+        pipelineStage: 'new_lead',
       },
       {
         onSuccess: () => {
           setDialogOpen(false)
-          setForm(INITIAL_LEAD_FORM)
+          setForm(INITIAL_FORM)
         },
       },
     )
   }
 
-  const { data: leads = [], isLoading, error } = useLeads({
-    stage: stageFilter !== 'all' ? stageFilter as PipelineStage : undefined,
-    channel: channelFilter !== 'all' ? channelFilter : undefined,
-    search: search || undefined,
-  })
+  const handleDialogClose = (open: boolean) => {
+    setDialogOpen(open)
+    if (!open) setForm(INITIAL_FORM)
+  }
+
+  const canSubmit =
+    form.parentName.trim() !== '' &&
+    form.phone.trim() !== '' &&
+    form.sourceChannel !== '' &&
+    !createLead.isPending
+
+  // ============ Render ============
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">리드 관리</h1>
-          <p className="text-muted-foreground">
-            {isLoading ? '로딩 중...' : `총 ${leads.length}명의 리드`}
-          </p>
+    <div className="space-y-5">
+      {/* ---- Page Header ---- */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">리드 관리</h1>
+              {!isLoading && (
+                <Badge variant="secondary" className="text-xs font-semibold">
+                  {totalCount}
+                </Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              세일즈 파이프라인 리드 목록
+            </p>
+          </div>
         </div>
-        <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-          <Plus className="size-4" /> 리드 추가
+        <Button className="gap-1.5" onClick={() => setDialogOpen(true)}>
+          <Plus className="size-4" />
+          새 리드
         </Button>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="py-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                placeholder="이름, 학교, 연락처 검색..."
-                className="pl-9 h-9"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
-            <Select value={stageFilter} onValueChange={(v) => setStageFilter(v || 'all')}>
-              <SelectTrigger className="w-[150px] h-9">
-                <SelectValue placeholder="파이프라인" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
-                <SelectItem value="new_lead">신규 리드</SelectItem>
-                <SelectItem value="katalk_sent">카톡 발송</SelectItem>
-                <SelectItem value="first_consultation">1차 상담</SelectItem>
-                <SelectItem value="second_consultation">2차 상담</SelectItem>
-                <SelectItem value="contract_review">계약 검토</SelectItem>
-                <SelectItem value="contracted">계약 완료</SelectItem>
-                <SelectItem value="lost">이탈</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={channelFilter} onValueChange={(v) => setChannelFilter(v || 'all')}>
-              <SelectTrigger className="w-[150px] h-9">
-                <SelectValue placeholder="유입 채널" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
-                <SelectItem value="Instagram">Instagram</SelectItem>
-                <SelectItem value="세미나">세미나</SelectItem>
-                <SelectItem value="카카오톡">카카오톡</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Download className="size-3.5" /> 내보내기
-            </Button>
+      {/* ---- Filter Bar ---- */}
+      <div className="monday-card px-4 py-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="이름, 연락처, 학교 검색..."
+              className="pl-8 h-8"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                resetPage()
+              }}
+            />
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : error ? (
-            <div className="text-center py-20 text-destructive text-sm">
-              데이터를 불러오는 중 오류가 발생했습니다.
-            </div>
-          ) : leads.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground text-sm">
-              리드가 없습니다. 새 리드를 추가하세요.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[90px]">유입일</TableHead>
-                  <TableHead>학부모</TableHead>
-                  <TableHead>학생</TableHead>
-                  <TableHead>학교</TableHead>
-                  <TableHead className="w-[60px]">학년</TableHead>
-                  <TableHead>지역</TableHead>
-                  <TableHead>유입 채널</TableHead>
-                  <TableHead>단계</TableHead>
-                  <TableHead>Required Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {leads.map((lead) => {
-                  const stage = STAGE_BADGE[lead.pipelineStage]
-                  return (
-                    <TableRow key={lead.id} className="cursor-pointer hover:bg-muted/50">
-                      <TableCell className="text-xs text-muted-foreground font-mono">
-                        <Link to={`/sales/leads/${lead.id}`} className="block">
-                          {lead.leadDate?.replace('2026-', '').replace('2025-', '')}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <Link to={`/sales/leads/${lead.id}`}>{lead.parentName}</Link>
-                      </TableCell>
-                      <TableCell>{lead.studentName || '-'}</TableCell>
-                      <TableCell className="text-sm">{lead.currentSchool}</TableCell>
-                      <TableCell className="text-sm">{lead.grade}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{lead.region}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs font-normal">{lead.sourceChannel}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={stage.variant} className={stage.className + ' text-xs'}>
-                          {stage.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm max-w-[150px] truncate">
-                        {lead.requiredAction && (
-                          <span className={lead.pipelineStage === 'contracted' ? 'text-success font-medium' : 'text-warning font-medium'}>
-                            {lead.requiredAction}
-                          </span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+          {/* Stage filter */}
+          <Select
+            value={stageFilter}
+            onValueChange={(v) => {
+              v && setStageFilter(v)
+              resetPage()
+            }}
+          >
+            <SelectTrigger className="w-[140px]" size="sm">
+              <SelectValue placeholder="파이프라인" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 단계</SelectItem>
+              {PIPELINE_STAGES.map((s) => (
+                <SelectItem key={s.key} value={s.key}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Source filter */}
+          <Select
+            value={sourceFilter}
+            onValueChange={(v) => {
+              v && setSourceFilter(v)
+              resetPage()
+            }}
+          >
+            <SelectTrigger className="w-[140px]" size="sm">
+              <SelectValue placeholder="유입채널" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 채널</SelectItem>
+              {SOURCE_CHANNELS.map((ch) => (
+                <SelectItem key={ch} value={ch}>
+                  {ch}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Assigned to filter */}
+          <Select
+            value={assignedFilter}
+            onValueChange={(v) => {
+              v && setAssignedFilter(v)
+              resetPage()
+            }}
+          >
+            <SelectTrigger className="w-[130px]" size="sm">
+              <SelectValue placeholder="담당자" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 담당자</SelectItem>
+              {assignedUsers.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Active filter count + Reset */}
+          {activeFilterCount > 0 && (
+            <>
+              <Badge variant="secondary" className="text-xs gap-1">
+                {activeFilterCount}개 필터
+              </Badge>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground hover:text-foreground gap-1"
+                onClick={resetFilters}
+              >
+                <X className="size-3" />
+                필터 초기화
+              </Button>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Create Lead Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>새 리드 추가</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>학부모 이름 *</Label>
-                <Input value={form.parentName} onChange={e => setForm(f => ({ ...f, parentName: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>학생 이름</Label>
-                <Input value={form.studentName} onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))} />
-              </div>
+      {/* ---- Stats Summary ---- */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard
+          icon={Users}
+          label="전체 리드"
+          value={stats?.total ?? '-'}
+          accent="#0073EA"
+        />
+        <StatCard
+          icon={CalendarDays}
+          label="이번 달"
+          value={stats?.thisMonth ?? '-'}
+          accent="#A25DDC"
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="활성 리드"
+          value={activeLeadCount}
+          accent="#00C875"
+        />
+        <StatCard
+          icon={BarChart3}
+          label="전환율"
+          value={stats ? `${stats.conversionRate}%` : '-'}
+          accent="#FF158A"
+        />
+      </div>
+
+      {/* ---- Main Table ---- */}
+      <div className="monday-card overflow-hidden">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
+            <Loader2 className="size-7 animate-spin text-primary/40" />
+            <p className="text-sm text-muted-foreground">리드를 불러오고 있습니다...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-2">
+            <p className="text-sm text-destructive font-medium">
+              데이터를 불러오는 중 오류가 발생했습니다
+            </p>
+            <p className="text-xs text-muted-foreground">잠시 후 다시 시도해 주세요.</p>
+          </div>
+        ) : totalCount === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
+            <div className="size-16 rounded-full bg-muted flex items-center justify-center">
+              <Users className="size-7 text-muted-foreground/50" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>연락처</Label>
-                <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="010-0000-0000" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>이메일</Label>
-                <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-foreground">리드가 없습니다</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {activeFilterCount > 0
+                  ? '필터 조건에 맞는 리드가 없습니다. 필터를 변경해 보세요.'
+                  : '새 리드를 추가하여 파이프라인을 시작하세요.'}
+              </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>유입 채널 *</Label>
-                <Select value={form.sourceChannel} onValueChange={v => v && setForm(f => ({ ...f, sourceChannel: v }))}>
-                  <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="instagram">Instagram</SelectItem>
-                    <SelectItem value="seminar">세미나</SelectItem>
-                    <SelectItem value="kakao">카카오톡</SelectItem>
-                    <SelectItem value="referral">추천</SelectItem>
-                    <SelectItem value="website">웹사이트</SelectItem>
-                    <SelectItem value="other">기타</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>파이프라인 단계</Label>
-                <Select value={form.pipelineStage} onValueChange={v => v && setForm(f => ({ ...f, pipelineStage: v as PipelineStage }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new_lead">신규 리드</SelectItem>
-                    <SelectItem value="katalk_sent">카톡 발송</SelectItem>
-                    <SelectItem value="first_consultation">1차 상담</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>메모</Label>
-              <Textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} rows={3} />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
-              <Button onClick={handleCreateLead} disabled={!form.parentName || !form.sourceChannel || createLead.isPending}>
-                {createLead.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
-                추가
+            {activeFilterCount === 0 && (
+              <Button size="sm" className="gap-1.5 mt-1" onClick={() => setDialogOpen(true)}>
+                <Plus className="size-3.5" />
+                새 리드 추가
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="monday-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 110 }}>상태</th>
+                  <th style={{ width: 80 }}>리드일자</th>
+                  <th>부모님</th>
+                  <th>학생</th>
+                  <th className="hidden md:table-cell">학교</th>
+                  <th className="hidden lg:table-cell" style={{ width: 60 }}>학년</th>
+                  <th className="hidden lg:table-cell">지역</th>
+                  <th>관심분야</th>
+                  <th>유입채널</th>
+                  <th>담당자</th>
+                  <th className="hidden xl:table-cell" style={{ maxWidth: 200 }}>메모</th>
+                  <th style={{ width: 70 }}>액션</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedLeads.map((lead) => (
+                  <tr key={lead.id} className="group">
+                    <td>
+                      <StagePill stage={lead.pipelineStage} />
+                    </td>
+                    <td className="text-xs text-muted-foreground font-mono whitespace-nowrap">
+                      {formatDate(lead.leadDate)}
+                    </td>
+                    <td className="font-medium">
+                      <Link
+                        to={`/sales/leads/${lead.id}`}
+                        className="hover:text-primary transition-colors"
+                      >
+                        {lead.parentName}
+                      </Link>
+                    </td>
+                    <td className="text-sm">{lead.studentName || '-'}</td>
+                    <td className="hidden md:table-cell text-sm text-muted-foreground">
+                      {lead.currentSchool || '-'}
+                    </td>
+                    <td className="hidden lg:table-cell text-sm">{lead.grade || '-'}</td>
+                    <td className="hidden lg:table-cell text-sm text-muted-foreground">
+                      {lead.region || '-'}
+                    </td>
+                    <td className="text-sm">
+                      {lead.interestArea ? (
+                        <span className="text-xs text-muted-foreground truncate block max-w-[140px]">
+                          {lead.interestArea.replace(/\s*\(.*?\)\s*/g, '')}
+                        </span>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                    <td>
+                      {lead.sourceChannel ? (
+                        <Badge variant="outline" className="text-xs font-normal whitespace-nowrap">
+                          {lead.sourceChannel}
+                        </Badge>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
+                    <td>
+                      <AssignedAvatar user={lead.assignedUser} />
+                    </td>
+                    <td className="hidden xl:table-cell">
+                      <span
+                        className="text-xs text-muted-foreground block truncate"
+                        style={{ maxWidth: 200 }}
+                        title={lead.memo}
+                      >
+                        {lead.memo || '-'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Link to={`/sales/leads/${lead.id}`}>
+                          <Button variant="ghost" size="icon-xs">
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </Link>
+                        <Button variant="ghost" size="icon-xs">
+                          <MoreHorizontal className="size-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ---- Pagination ---- */}
+        {totalCount > ROWS_PER_PAGE && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <p className="text-xs text-muted-foreground">
+              {totalCount}개 중 {startIdx + 1}-{Math.min(endIdx, totalCount)}
+            </p>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground px-2">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                <ChevronRight className="size-4" />
               </Button>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* ---- New Lead Dialog ---- */}
+      <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>새 리드 추가</DialogTitle>
+            <DialogDescription>새로운 리드 정보를 입력해 주세요.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Row 1: parent name + student name */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">
+                  부모님 성함 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.parentName}
+                  onChange={(e) => updateForm('parentName', e.target.value)}
+                  placeholder="홍길동"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">학생 이름</Label>
+                <Input
+                  value={form.studentName}
+                  onChange={(e) => updateForm('studentName', e.target.value)}
+                  placeholder="홍길순"
+                />
+              </div>
+            </div>
+
+            {/* Row 2: phone + email */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">
+                  연락처 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  value={form.phone}
+                  onChange={(e) => updateForm('phone', e.target.value)}
+                  placeholder="010-0000-0000"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">이메일</Label>
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => updateForm('email', e.target.value)}
+                  placeholder="email@example.com"
+                />
+              </div>
+            </div>
+
+            {/* Row 3: school + grade */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">재학 학교</Label>
+                <Input
+                  value={form.currentSchool}
+                  onChange={(e) => updateForm('currentSchool', e.target.value)}
+                  placeholder="학교명"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">학년</Label>
+                <Select
+                  value={form.grade}
+                  onValueChange={(v) => v && updateForm('grade', v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GRADES.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Row 4: region + interest area */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">지역</Label>
+                <Select
+                  value={form.region}
+                  onValueChange={(v) => v && updateForm('region', v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REGIONS.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">관심분야</Label>
+                <Select
+                  value={form.interestArea}
+                  onValueChange={(v) => v && updateForm('interestArea', v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INTEREST_AREAS.map((a) => (
+                      <SelectItem key={a} value={a}>
+                        {a}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Row 5: source channel */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">
+                유입 채널 <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={form.sourceChannel}
+                onValueChange={(v) => v && updateForm('sourceChannel', v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="유입 채널을 선택해 주세요" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOURCE_CHANNELS.map((ch) => (
+                    <SelectItem key={ch} value={ch}>
+                      {ch}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Row 6: memo */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">메모</Label>
+              <Textarea
+                value={form.memo}
+                onChange={(e) => updateForm('memo', e.target.value)}
+                rows={3}
+                placeholder="특이사항이나 메모를 입력하세요..."
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => handleDialogClose(false)}>
+              취소
+            </Button>
+            <Button onClick={handleCreateLead} disabled={!canSubmit}>
+              {createLead.isPending && (
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+              )}
+              리드 추가
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -20,6 +20,9 @@ function toUser(data: Record<string, unknown>, fallbackEmail: string): User {
     email: (data.email as string) || fallbackEmail,
     name: data.name as string,
     role: data.role as UserRole,
+    department: (data.department as User['department']) || undefined,
+    position: data.position as string | undefined,
+    isExternal: (data.is_external as boolean) || false,
     avatarUrl: data.avatar_url as string | undefined,
     createdAt: data.created_at as string,
   }
@@ -76,15 +79,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null
     }
 
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise<User | null>((_, reject) =>
+      setTimeout(() => reject(new Error('Profile fetch timeout (4s)')), 4000)
+    )
+
     profileFetchInProgress.current = doFetch()
     try {
-      return await profileFetchInProgress.current
+      return await Promise.race([profileFetchInProgress.current, timeoutPromise])
     } finally {
       profileFetchInProgress.current = null
     }
   }, [])
 
   useEffect(() => {
+    let isMounted = true
+
+    // Safety timeout — if auth takes longer than 5s, stop loading
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        console.warn('Auth loading safety timeout reached (5s)')
+        setLoading(false)
+      }
+    }, 5000)
+
     // Use onAuthStateChange as the single source of truth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, s) => {
@@ -92,18 +110,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (s?.user) {
             const fullName = s.user.user_metadata?.full_name || s.user.user_metadata?.name
             const profile = await fetchProfile(s.user.id, s.user.email || '', fullName)
-            setUser(profile)
-            setSession(s)
-          } else {
+            if (isMounted) {
+              setUser(profile)
+              setSession(s)
+            }
+          } else if (isMounted) {
             setUser(null)
             setSession(null)
           }
         } catch (err) {
           console.error('Auth state change error:', err)
-          setUser(null)
-          setSession(null)
+          if (isMounted) {
+            setUser(null)
+            setSession(null)
+          }
         } finally {
-          setLoading(false)
+          if (isMounted) {
+            clearTimeout(safetyTimer)
+            setLoading(false)
+          }
         }
       }
     )
@@ -114,17 +139,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (s?.user) {
           const fullName = s.user.user_metadata?.full_name || s.user.user_metadata?.name
           const profile = await fetchProfile(s.user.id, s.user.email || '', fullName)
-          setUser(profile)
-          setSession(s)
+          if (isMounted) {
+            setUser(profile)
+            setSession(s)
+          }
         }
       } catch (err) {
         console.error('Get session error:', err)
       } finally {
-        setLoading(false)
+        if (isMounted) {
+          clearTimeout(safetyTimer)
+          setLoading(false)
+        }
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isMounted = false
+      clearTimeout(safetyTimer)
+      subscription.unsubscribe()
+    }
   }, [fetchProfile])
 
   const signInWithGoogle = async () => {
@@ -133,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: {
         redirectTo: `${window.location.origin}/dashboard`,
         queryParams: { hd: 'quantumadmissions.com' },
+        scopes: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly',
       },
     })
     return { error }
@@ -144,9 +179,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setSession(null)
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.error('Sign out error (clearing local state anyway):', err)
+    } finally {
+      setUser(null)
+      setSession(null)
+      setLoading(false)
+    }
   }
 
   return (

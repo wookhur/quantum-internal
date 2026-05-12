@@ -1,29 +1,19 @@
 import { useParams, Link } from 'react-router-dom'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  ArrowLeft, Phone, Mail, MapPin, School, GraduationCap,
-  Calendar, MessageSquare, Edit, Clock, CheckCircle2, Loader2,
-} from 'lucide-react'
-import { useLead } from '@/hooks/useLeads'
-import type { PipelineStage } from '@/types'
-
-const STAGE_LABELS: Record<PipelineStage, { label: string; color: string }> = {
-  new_lead: { label: '신규 리드', color: 'bg-stage-new' },
-  katalk_sent: { label: '카톡 발송', color: 'bg-stage-contacted' },
-  first_consultation: { label: '1차 상담', color: 'bg-stage-consulting' },
-  second_consultation: { label: '2차 상담', color: 'bg-stage-review' },
-  contract_review: { label: '계약 검토', color: 'bg-stage-review' },
-  contracted: { label: '계약 완료', color: 'bg-stage-contracted' },
-  lost: { label: '이탈', color: 'bg-stage-lost' },
-}
+import { ArrowLeft, Loader2, Phone, Mail, MapPin, School, GraduationCap, Calendar, MessageSquare, Edit, Clock, CheckCircle2, Video, CalendarPlus } from 'lucide-react'
+import { useLead, useLeadActivities, useCreateActivity } from '@/hooks/useLeads'
+import { getStageConfig } from '@/types'
+import type { LeadActivity } from '@/types'
+import { useState } from 'react'
+import ConsultationBookingDialog from '@/components/ConsultationBookingDialog'
 
 export function LeadDetailPage() {
   const { id } = useParams()
   const { data: lead, isLoading, error } = useLead(id || '')
+  const { data: activities } = useLeadActivities(id || '')
+  const createActivity = useCreateActivity()
+  const [noteText, setNoteText] = useState('')
+  const [bookingOpen, setBookingOpen] = useState(false)
 
   if (isLoading) {
     return (
@@ -46,7 +36,19 @@ export function LeadDetailPage() {
     )
   }
 
-  const stage = STAGE_LABELS[lead.pipelineStage]
+  const stage = getStageConfig(lead.pipelineStage)
+
+  const handleAddNote = () => {
+    if (!noteText.trim() || !id) return
+    createActivity.mutate({
+      leadId: id,
+      activityType: 'note',
+      title: '메모 추가',
+      content: noteText,
+    }, {
+      onSuccess: () => setNoteText(''),
+    })
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -56,139 +58,145 @@ export function LeadDetailPage() {
           <ArrowLeft className="size-4" /> 리드 목록
         </Link>
         <div className="flex gap-2">
+          <Button size="sm" className="gap-1.5 bg-[#0073EA] hover:bg-[#0060C2]" onClick={() => setBookingOpen(true)}>
+            <CalendarPlus className="size-3.5" /> 상담 예약
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5">
             <Edit className="size-3.5" /> 수정
           </Button>
-          <Button size="sm">미팅 예약</Button>
         </div>
       </div>
 
       {/* Header Card */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-xl font-bold">
-                  {lead.studentName || lead.parentName}
-                </h1>
-                <Badge className={`${stage.color} text-white text-xs`}>{stage.label}</Badge>
-              </div>
-              {lead.studentName && (
-                <p className="text-sm text-muted-foreground">{lead.parentName} (학부모)</p>
-              )}
+      <div className="monday-card p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-xl font-bold">{lead.studentName || lead.parentName}</h1>
+              <span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>{stage.label}</span>
             </div>
-            {lead.requiredAction && (
-              <Badge variant="outline" className="border-warning text-warning font-medium">
-                {lead.requiredAction}
-              </Badge>
+            {lead.studentName && (
+              <p className="text-sm text-muted-foreground">{lead.parentName} (학부모)</p>
             )}
           </div>
+          {lead.requiredAction && (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+              {lead.requiredAction}
+            </span>
+          )}
+        </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="flex items-center gap-2 text-sm">
-              <Phone className="size-4 text-muted-foreground" />
-              <span>{lead.phone}</span>
-            </div>
-            {lead.email && (
-              <div className="flex items-center gap-2 text-sm">
-                <Mail className="size-4 text-muted-foreground" />
-                <span>{lead.email}</span>
-              </div>
-            )}
-            {lead.currentSchool && (
-              <div className="flex items-center gap-2 text-sm">
-                <School className="size-4 text-muted-foreground" />
-                <span>{lead.currentSchool}</span>
-              </div>
-            )}
-            {lead.grade && (
-              <div className="flex items-center gap-2 text-sm">
-                <GraduationCap className="size-4 text-muted-foreground" />
-                <span>G{lead.grade}</span>
-              </div>
-            )}
-            {lead.region && (
-              <div className="flex items-center gap-2 text-sm">
-                <MapPin className="size-4 text-muted-foreground" />
-                <span>{lead.region}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2 text-sm">
-              <Calendar className="size-4 text-muted-foreground" />
-              <span>유입: {lead.leadDate}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <MessageSquare className="size-4 text-muted-foreground" />
-              <span>{lead.sourceChannel}</span>
-            </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="flex items-center gap-2 text-sm">
+            <Phone className="size-4 text-muted-foreground" />
+            <span>{lead.phone}</span>
           </div>
-        </CardContent>
-      </Card>
+          {lead.email && (
+            <div className="flex items-center gap-2 text-sm">
+              <Mail className="size-4 text-muted-foreground" />
+              <span>{lead.email}</span>
+            </div>
+          )}
+          {lead.currentSchool && (
+            <div className="flex items-center gap-2 text-sm">
+              <School className="size-4 text-muted-foreground" />
+              <span>{lead.currentSchool}</span>
+            </div>
+          )}
+          {lead.grade && (
+            <div className="flex items-center gap-2 text-sm">
+              <GraduationCap className="size-4 text-muted-foreground" />
+              <span>{lead.grade}</span>
+            </div>
+          )}
+          {lead.region && (
+            <div className="flex items-center gap-2 text-sm">
+              <MapPin className="size-4 text-muted-foreground" />
+              <span>{lead.region}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-sm">
+            <Calendar className="size-4 text-muted-foreground" />
+            <span>유입: {lead.leadDate}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <MessageSquare className="size-4 text-muted-foreground" />
+            <span>{lead.sourceChannel}</span>
+          </div>
+        </div>
+      </div>
 
-      {/* Consultation Progress */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">상담 진행 현황</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4">
-            {[
-              { label: '1차 상담', data: lead.consultations?.first },
-              { label: '2차 상담', data: lead.consultations?.second },
-              { label: '3차 상담', data: lead.consultations?.third },
-            ].map((c, i) => (
-              <div key={i} className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  {c.data?.status === 'completed' ? (
-                    <CheckCircle2 className="size-5 text-success" />
+      {/* Memo */}
+      {lead.memo && (
+        <div className="monday-card p-6">
+          <h3 className="text-sm font-semibold mb-2">메모</h3>
+          <p className="text-sm leading-relaxed text-muted-foreground">{lead.memo}</p>
+        </div>
+      )}
+
+      {/* Activity Timeline */}
+      <div className="monday-card p-6">
+        <h3 className="text-sm font-semibold mb-4">활동 기록</h3>
+
+        {/* Add note */}
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            placeholder="메모를 입력하세요..."
+            value={noteText}
+            onChange={e => setNoteText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAddNote()}
+            className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0073EA]/20 focus:border-[#0073EA]"
+          />
+          <Button size="sm" onClick={handleAddNote} disabled={!noteText.trim()}>추가</Button>
+        </div>
+
+        {/* Activity list */}
+        <div className="space-y-3">
+          {activities && activities.length > 0 ? (
+            activities.map((a: LeadActivity) => (
+              <div key={a.id} className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-0">
+                <div className="mt-0.5">
+                  {a.activityType === 'consultation' ? (
+                    <Video className="size-4 text-green-500" />
+                  ) : a.activityType === 'stage_change' ? (
+                    <CheckCircle2 className="size-4 text-blue-500" />
                   ) : (
-                    <Clock className="size-5 text-muted-foreground/30" />
+                    <Clock className="size-4 text-gray-400" />
                   )}
-                  <span className={`text-sm font-medium ${c.data?.status === 'completed' ? '' : 'text-muted-foreground'}`}>
-                    {c.label}
-                  </span>
                 </div>
-                {c.data?.status === 'completed' && (
-                  <div className="ml-7 text-xs text-muted-foreground space-y-0.5">
-                    {c.data.date && <p>{c.data.date}</p>}
-                    {c.data.method && <p>{c.data.method}</p>}
-                  </div>
-                )}
-                {i < 2 && <Separator className="mt-3" />}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{a.title}</p>
+                  {a.content && <p className="text-xs text-muted-foreground mt-0.5">{a.content}</p>}
+                  <p className="text-xs text-gray-400 mt-1">
+                    {new Date(a.createdAt).toLocaleString('ko-KR')}
+                    {a.createdByUser && ` · ${a.createdByUser.name}`}
+                  </p>
+                </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">활동 기록이 없습니다.</p>
+          )}
+        </div>
+      </div>
 
-      {/* Tabs: Timeline / Notes / Files */}
-      <Tabs defaultValue="notes">
-        <TabsList>
-          <TabsTrigger value="notes">메모</TabsTrigger>
-          <TabsTrigger value="files">파일</TabsTrigger>
-        </TabsList>
-        <TabsContent value="notes" className="mt-4">
-          <Card>
-            <CardContent className="pt-6">
-              {lead.memo ? (
-                <p className="text-sm leading-relaxed">{lead.memo}</p>
-              ) : (
-                <p className="text-center text-muted-foreground text-sm py-6">
-                  메모가 없습니다. 메모를 추가하세요.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="files" className="mt-4">
-          <Card>
-            <CardContent className="pt-6 text-center text-muted-foreground text-sm py-12">
-              첨부된 파일이 없습니다.
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Consultation Booking Dialog */}
+      <ConsultationBookingDialog
+        open={bookingOpen}
+        onClose={() => setBookingOpen(false)}
+        lead={{
+          id: lead.id,
+          parentName: lead.parentName,
+          studentName: lead.studentName,
+          email: lead.email,
+          phone: lead.phone,
+          grade: lead.grade,
+        }}
+        onBooked={() => {
+          setBookingOpen(false)
+        }}
+      />
     </div>
   )
 }

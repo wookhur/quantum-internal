@@ -1,6 +1,28 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Payment, Contract } from '@/types'
+import type { Contract } from '@/types'
+
+// Legacy Payment type for backward compat (will be replaced with PaymentInstallment)
+interface Payment {
+  id: string
+  contractId: string
+  depositAmount: number
+  depositDate?: string
+  interim1Amount: number
+  interim1Date?: string
+  interim2Amount: number
+  interim2Date?: string
+  balanceAmount: number
+  balanceDate?: string
+  totalAmount: number
+  paidAmount: number
+  outstandingAmount: number
+  paymentProgress: number
+  currency: 'KRW' | 'USD'
+  createdAt: string
+  updatedAt: string
+  contract?: Partial<Contract>
+}
 
 function mapPayment(row: Record<string, unknown>): Payment {
   const contract = row.contracts as Record<string, unknown> | null
