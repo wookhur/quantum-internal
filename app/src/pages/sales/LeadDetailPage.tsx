@@ -206,6 +206,7 @@ export function LeadDetailPage() {
           email: lead.email,
           phone: lead.phone,
           grade: lead.grade,
+          currentSchool: lead.currentSchool,
         }}
         onBooked={() => {
           setBookingOpen(false)

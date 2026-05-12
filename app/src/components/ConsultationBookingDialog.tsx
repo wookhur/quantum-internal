@@ -34,6 +34,7 @@ interface ConsultationBookingDialogProps {
     email?: string
     phone: string
     grade?: string
+    currentSchool?: string
   }
   onBooked: () => void
 }
@@ -76,6 +77,14 @@ const PIPELINE_STAGE_MAP: Record<ConsultationNumber, PipelineStage> = {
   1: 'first_consultation',
   2: 'second_consultation',
   3: 'third_consultation',
+}
+
+/** Short method label for Google Calendar event title */
+const METHOD_SHORT_LABEL: Record<ConsultationMethod, string> = {
+  zoom: '줌',
+  in_person: '방문',
+  phone: '전화',
+  katalk: '카톡',
 }
 
 /** Generate 30-minute time slots from 09:00 to 21:00 */
@@ -263,7 +272,13 @@ export default function ConsultationBookingDialog({
       const startISO = format(startTime, "yyyy-MM-dd'T'HH:mm:ssXXX")
       const endISO = format(endTime, "yyyy-MM-dd'T'HH:mm:ssXXX")
 
-      const eventTitle = `[QA상담] ${lead.parentName}${lead.studentName ? ' / ' + lead.studentName : ''}`
+      // Format: "줌/방문/전화) 세일즈n차 학교 학년 학생이름(학부모이름)"
+      const methodLabel = METHOD_SHORT_LABEL[consultationMethod]
+      const schoolPart = lead.currentSchool ? ` ${lead.currentSchool}` : ''
+      const gradePart = lead.grade ? ` ${lead.grade}` : ''
+      const studentPart = lead.studentName || ''
+      const parentPart = lead.parentName
+      const eventTitle = `${methodLabel}) 세일즈${consultationNumber}차${schoolPart}${gradePart} ${studentPart}(${parentPart})`
 
       // 1. Create Google Calendar event (skip if no token / fails)
       let googleMeetLink: string | undefined
