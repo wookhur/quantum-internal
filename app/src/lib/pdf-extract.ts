@@ -41,8 +41,8 @@ export async function extractTextFromPdf(file: File): Promise<string> {
  */
 export async function renderPdfPagesToImages(
   file: File,
-  maxPages = 5,
-  scale = 1.5,
+  maxPages = 3,
+  scale = 1.0,
 ): Promise<string[]> {
   const arrayBuffer = await file.arrayBuffer()
 
@@ -66,8 +66,8 @@ export async function renderPdfPagesToImages(
 
     await page.render({ canvasContext: ctx, viewport, canvas } as never).promise
 
-    // Convert to JPEG base64 (smaller than PNG)
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    // Convert to JPEG base64 (lower quality to keep payload small for Edge Function)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.6)
     const base64 = dataUrl.replace(/^data:image\/jpeg;base64,/, '')
     images.push(base64)
 

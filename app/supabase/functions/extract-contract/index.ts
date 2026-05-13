@@ -53,16 +53,18 @@ Deno.serve(async (req) => {
     let userContent: unknown[]
 
     if (images && Array.isArray(images) && images.length > 0) {
-      // Image-based extraction (scanned PDFs)
+      // Image-based extraction (scanned PDFs) — limit to 3 pages
+      const limitedImages = images.slice(0, 3)
+      console.log(`Processing ${limitedImages.length} images (of ${images.length} provided)`)
       userContent = []
 
-      for (let i = 0; i < images.length; i++) {
+      for (let i = 0; i < limitedImages.length; i++) {
         userContent.push({
           type: 'image',
           source: {
             type: 'base64',
             media_type: 'image/jpeg',
-            data: images[i],
+            data: limitedImages[i],
           },
         })
       }
@@ -87,6 +89,20 @@ Deno.serve(async (req) => {
       )
     }
 
+    const apiBody = JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: userContent,
+        },
+      ],
+    })
+
+    console.log(`Calling Claude API with model claude-sonnet-4-20250514, payload size: ${apiBody.length}`)
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -94,21 +110,12 @@ Deno.serve(async (req) => {
         'x-api-key': ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: userContent,
-          },
-        ],
-      }),
+      body: apiBody,
     })
 
     if (!response.ok) {
       const errorText = await response.text()
+      console.error(`Claude API error: ${response.status} - ${errorText}`)
       return new Response(
         JSON.stringify({ error: `Claude API error: ${response.status}`, details: errorText }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -117,6 +124,7 @@ Deno.serve(async (req) => {
 
     const result = await response.json()
     const content = result.content?.[0]?.text || '{}'
+    console.log(`Claude response content: ${content.substring(0, 200)}`)
 
     // Parse the JSON from Claude's response
     // Claude might wrap it in ```json ... ``` so we strip that
@@ -125,7 +133,16 @@ Deno.serve(async (req) => {
       jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
     }
 
-    const extracted = JSON.parse(jsonStr)
+    let extracted
+    try {
+      extracted = JSON.parse(jsonStr)
+    } catch (parseErr) {
+      console.error(`JSON parse failed. Raw content: ${content}`)
+      return new Response(
+        JSON.stringify({ error: 'Failed to parse Claude response as JSON', raw: content.substring(0, 500) }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
 
     return new Response(
       JSON.stringify(extracted),

@@ -81,7 +81,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
       } else {
         // Scanned/image PDF — render pages to images and use Vision API
         setExtractStatus('스캔된 PDF 감지 — 이미지 변환 중...')
-        const images = await renderPdfPagesToImages(file, 5, 1.5)
+        const images = await renderPdfPagesToImages(file, 3, 1.0)
 
         setExtractStatus('AI Vision으로 계약 정보 분석 중...')
         extracted = await extractContractFieldsFromImages(images)
