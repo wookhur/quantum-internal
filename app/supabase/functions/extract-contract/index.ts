@@ -138,10 +138,22 @@ Deno.serve(async (req) => {
       extracted = JSON.parse(jsonStr)
     } catch (parseErr) {
       console.error(`JSON parse failed. Raw content: ${content}`)
-      return new Response(
-        JSON.stringify({ error: 'Failed to parse Claude response as JSON', raw: content.substring(0, 500) }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      )
+      // If Claude couldn't parse the contract, return partial result with the raw text as notes
+      // instead of failing with 500
+      extracted = {
+        contractorName: null,
+        studentName: null,
+        schoolName: null,
+        gradeAtContract: null,
+        contractDate: null,
+        expiryDate: null,
+        address: null,
+        phone: null,
+        totalAmount: null,
+        currency: null,
+        paymentAccount: null,
+        notes: `AI 분석 결과 (수동 입력 필요): ${content.substring(0, 300)}`,
+      }
     }
 
     return new Response(
