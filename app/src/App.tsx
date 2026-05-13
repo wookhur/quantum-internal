@@ -20,6 +20,7 @@ import { MarketingMetricsPage } from '@/pages/marketing/MarketingMetricsPage'
 import { AdCampaignsPage } from '@/pages/marketing/AdCampaignsPage'
 import { EventsPage } from '@/pages/marketing/EventsPage'
 import { PlanningOverviewPage } from '@/pages/planning/PlanningOverviewPage'
+import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -68,6 +69,7 @@ export default function App() {
                 <Route path="/consulting/payments" element={<PaymentsPage />} />
 
                 <Route path="/planning/overview" element={<PlanningOverviewPage />} />
+                <Route path="/planning/projection" element={<RevenueProjectionPage />} />
 
                 <Route path="/game" element={<GamePage />} />
               </Route>

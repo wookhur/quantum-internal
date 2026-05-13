@@ -30,6 +30,7 @@ import {
   Gamepad2,
   Briefcase,
   PhoneCall,
+  LineChart,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -80,6 +81,7 @@ const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
     title: '경영기획',
     items: [
       { label: '경영 현황', to: '/planning/overview', icon: Briefcase },
+      { label: '매출 Projection', to: '/planning/projection', icon: LineChart },
     ],
   },
   {
@@ -96,14 +98,15 @@ export function AppSidebar() {
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
 
-  const currentDept = (() => {
-    const p = location.pathname
-    if (p.startsWith('/sales')) return { label: 'Sales', color: 'bg-blue-100 text-blue-700' }
-    if (p.startsWith('/marketing')) return { label: 'Marketing', color: 'bg-purple-100 text-purple-700' }
-    if (p.startsWith('/consulting')) return { label: 'Service', color: 'bg-emerald-100 text-emerald-700' }
-    if (p.startsWith('/planning')) return { label: 'Planning', color: 'bg-amber-100 text-amber-700' }
-    return { label: 'Quantum', color: 'bg-gray-900 text-white' }
-  })()
+  const DEPT_CONFIG: Record<string, { label: string; color: string }> = {
+    sales: { label: 'Sales', color: 'bg-blue-100 text-blue-700' },
+    marketing: { label: 'Marketing', color: 'bg-purple-100 text-purple-700' },
+    service: { label: 'Service', color: 'bg-emerald-100 text-emerald-700' },
+    finance: { label: 'Finance', color: 'bg-orange-100 text-orange-700' },
+    management: { label: 'Management', color: 'bg-amber-100 text-amber-700' },
+  }
+  const currentDept = (user?.department && DEPT_CONFIG[user.department])
+    || { label: 'Quantum', color: 'bg-gray-900 text-white' }
 
   return (
     <Sidebar className="border-r border-gray-200/80 bg-white">
