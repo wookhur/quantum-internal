@@ -96,6 +96,15 @@ export function AppSidebar() {
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
 
+  const currentDept = (() => {
+    const p = location.pathname
+    if (p.startsWith('/sales')) return { label: 'Sales', color: 'bg-blue-100 text-blue-700' }
+    if (p.startsWith('/marketing')) return { label: 'Marketing', color: 'bg-purple-100 text-purple-700' }
+    if (p.startsWith('/consulting')) return { label: 'Service', color: 'bg-emerald-100 text-emerald-700' }
+    if (p.startsWith('/planning')) return { label: 'Planning', color: 'bg-amber-100 text-amber-700' }
+    return { label: 'Quantum', color: 'bg-gray-900 text-white' }
+  })()
+
   return (
     <Sidebar className="border-r border-gray-200/80 bg-white">
       {/* Logo area */}
@@ -106,11 +115,11 @@ export function AppSidebar() {
             alt="Quantum Admissions"
             className="h-8 w-auto"
           />
-          <div className="flex items-center gap-2">
-            <span className="text-[15px] font-bold text-gray-900 tracking-tight">
-              Quantum
+          <div className="flex items-center gap-1.5">
+            <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${currentDept.color}`}>
+              {currentDept.label}
             </span>
-            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 uppercase tracking-wider">
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
               Internal
             </span>
           </div>
