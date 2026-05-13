@@ -7,10 +7,13 @@ import type { CalendarSyncStatus } from '@/hooks/useGoogleCalendar'
 import { getStageConfig } from '@/types'
 import type { LeadActivity } from '@/types'
 import { useState } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
 import ConsultationBookingDialog from '@/components/ConsultationBookingDialog'
 import LeadEditDialog from '@/components/LeadEditDialog'
 
 export function LeadDetailPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const { id } = useParams()
   const { data: lead, isLoading, error } = useLead(id || '')
   const { data: activities } = useLeadActivities(id || '')
@@ -257,13 +260,15 @@ export function LeadDetailPage() {
                       >
                         <Pencil className="size-3.5" />
                       </button>
-                      <button
-                        onClick={() => handleDelete(a.id)}
-                        className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
-                        title="삭제"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDelete(a.id)}
+                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+                          title="삭제"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
