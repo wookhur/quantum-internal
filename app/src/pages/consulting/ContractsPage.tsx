@@ -42,7 +42,7 @@ function InstallmentBadge({ installment }: { installment: PaymentInstallment }) 
 }
 
 /** Compact installment summary for the list row */
-function InstallmentSummaryCell({ installments, currency }: { installments: PaymentInstallment[]; currency: 'KRW' | 'USD' }) {
+function InstallmentSummaryCell({ installments }: { installments: PaymentInstallment[] }) {
   if (installments.length === 0) {
     return <span className="text-xs text-muted-foreground">납입일정 없음</span>
   }
@@ -310,7 +310,6 @@ export function ContractsPage() {
                       <TableCell>
                         <InstallmentSummaryCell
                           installments={contract.installments || []}
-                          currency={contract.currency}
                         />
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">

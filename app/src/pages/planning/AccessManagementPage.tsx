@@ -157,7 +157,7 @@ function UserEditDialog({
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">부서</Label>
-                <Select value={department || '_none'} onValueChange={(v) => setDepartment(v === '_none' ? '' : v)}>
+                <Select value={department || '_none'} onValueChange={(v) => setDepartment(!v || v === '_none' ? '' : v)}>
                   <SelectTrigger className="h-9">
                     <SelectValue placeholder="선택" />
                   </SelectTrigger>
@@ -436,7 +436,7 @@ export function AccessManagementPage() {
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v || 'all')}>
               <SelectTrigger className="w-[160px] h-9">
                 <SelectValue placeholder="역할" />
               </SelectTrigger>

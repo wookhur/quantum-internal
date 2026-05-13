@@ -410,7 +410,7 @@ export function ContractDetailPage() {
             </div>
             <div className="space-y-2">
               <Label>결제 수단</Label>
-              <Select value={payForm.paymentMethod} onValueChange={(v) => setPayForm(f => ({ ...f, paymentMethod: v }))}>
+              <Select value={payForm.paymentMethod} onValueChange={(v) => setPayForm(f => ({ ...f, paymentMethod: v || 'bank_transfer' }))}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
