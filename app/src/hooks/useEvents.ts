@@ -61,6 +61,33 @@ export function useCreateEvent() {
   })
 }
 
+const FIELD_TO_COLUMN: Record<string, string> = {
+  speakerConfirmed: 'speaker_confirmed',
+  venueConfirmed: 'venue_confirmed',
+  copyWritten: 'copy_written',
+  designCompleted: 'design_completed',
+  pptCompleted: 'ppt_completed',
+  uploaded: 'uploaded',
+}
+
+export function useUpdateEvent() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, field, value }: { id: string; field: string; value: boolean }) => {
+      const column = FIELD_TO_COLUMN[field]
+      if (!column) throw new Error(`Unknown field: ${field}`)
+      const { error } = await supabase
+        .from('events')
+        .update({ [column]: value })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+    },
+  })
+}
+
 export function useEvents(filters?: { month?: string }) {
   return useQuery({
     queryKey: ['events', filters],

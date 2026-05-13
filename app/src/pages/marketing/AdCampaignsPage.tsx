@@ -38,6 +38,7 @@ const INITIAL_CAMPAIGN_FORM = {
 
 export function AdCampaignsPage() {
   const [platformFilter, setPlatformFilter] = useState<string>('all')
+  const [monthFilter, setMonthFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_CAMPAIGN_FORM)
   const createCampaign = useCreateAdCampaign()
@@ -66,9 +67,10 @@ export function AdCampaignsPage() {
     )
   }
 
-  const { data: campaigns = [], isLoading, error } = useAdCampaigns(
-    platformFilter !== 'all' ? { platform: platformFilter as AdPlatform } : undefined
-  )
+  const { data: campaigns = [], isLoading, error } = useAdCampaigns({
+    platform: platformFilter !== 'all' ? platformFilter as AdPlatform : undefined,
+    month: monthFilter !== 'all' ? monthFilter : undefined,
+  })
 
   // Summary stats
   const summary = useMemo(() => {
@@ -87,7 +89,7 @@ export function AdCampaignsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">광고 성과</h1>
           <p className="text-muted-foreground">
-            {isLoading ? '로딩 중...' : `총 ${campaigns.length}개 캠페인`}
+            {isLoading ? '로딩 중...' : `총 ${campaigns.length}개 캠페인${monthFilter !== 'all' ? ` · ${monthFilter.split('-')[0]}년 ${Number(monthFilter.split('-')[1])}월` : ''}`}
           </p>
         </div>
         <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}>
@@ -242,6 +244,24 @@ export function AdCampaignsPage() {
                 <SelectItem value="all">전체</SelectItem>
                 <SelectItem value="meta">Meta</SelectItem>
                 <SelectItem value="kakao">Kakao</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={monthFilter} onValueChange={v => setMonthFilter(v || 'all')}>
+              <SelectTrigger className="w-[150px] h-9">
+                <SelectValue placeholder="월" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 월</SelectItem>
+                {Array.from({ length: 24 }, (_, i) => {
+                  const year = 2025 + Math.floor(i / 12)
+                  const month = (i % 12) + 1
+                  const value = `${year}-${String(month).padStart(2, '0')}`
+                  return (
+                    <SelectItem key={value} value={value}>
+                      {year}년 {month}월
+                    </SelectItem>
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>

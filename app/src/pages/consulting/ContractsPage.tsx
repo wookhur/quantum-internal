@@ -234,6 +234,7 @@ export function ContractsPage() {
                   <TableHead>학생</TableHead>
                   <TableHead>학교</TableHead>
                   <TableHead className="w-[60px]">학년</TableHead>
+                  <TableHead>연락처</TableHead>
                   <TableHead className="w-[100px]">계약일</TableHead>
                   <TableHead className="w-[100px]">만료일</TableHead>
                   <TableHead className="w-[90px]">상태</TableHead>
@@ -248,6 +249,7 @@ export function ContractsPage() {
                       <TableCell>{contract.studentName}</TableCell>
                       <TableCell className="text-sm">{contract.schoolName}</TableCell>
                       <TableCell className="text-sm">{contract.gradeAtContract || '-'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{contract.phone || '-'}</TableCell>
                       <TableCell className="text-xs text-muted-foreground font-mono">
                         {contract.contractDate?.slice(0, 10)}
                       </TableCell>

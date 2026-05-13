@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Loader2, Calendar, MapPin, Users, CheckCircle2, Circle, Plus } from 'lucide-react'
-import { useEvents, useCreateEvent } from '@/hooks/useEvents'
+import { useEvents, useCreateEvent, useUpdateEvent } from '@/hooks/useEvents'
 import { formatDatetimeKST } from '@/lib/date'
 import type { Event } from '@/types'
 
@@ -52,6 +52,7 @@ export function EventsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_EVENT_FORM)
   const createEvent = useCreateEvent()
+  const updateEvent = useUpdateEvent()
 
   const { data: events = [], isLoading, error } = useEvents(
     monthFilter !== 'all' ? { month: monthFilter } : undefined
@@ -264,9 +265,17 @@ export function EventsPage() {
                     {CHECKLIST_ITEMS.map(item => {
                       const checked = event[item.key] === true
                       return (
-                        <div
+                        <button
                           key={item.key}
-                          className={`flex items-center gap-1.5 text-xs rounded px-1.5 py-1 ${checked ? 'text-green-700 bg-green-50' : 'text-muted-foreground'}`}
+                          type="button"
+                          onClick={() =>
+                            updateEvent.mutate({
+                              id: event.id,
+                              field: item.key,
+                              value: !checked,
+                            })
+                          }
+                          className={`flex items-center gap-1.5 text-xs rounded px-1.5 py-1 cursor-pointer transition-colors hover:bg-muted/50 ${checked ? 'text-green-700 bg-green-50 hover:bg-green-100' : 'text-muted-foreground'}`}
                         >
                           {checked ? (
                             <CheckCircle2 className="size-3.5 text-green-600 shrink-0" />
@@ -274,7 +283,7 @@ export function EventsPage() {
                             <Circle className="size-3.5 text-muted-foreground/40 shrink-0" />
                           )}
                           <span className={checked ? 'line-through' : ''}>{item.label}</span>
-                        </div>
+                        </button>
                       )
                     })}
                   </div>

@@ -10,6 +10,8 @@ function mapContract(row: Record<string, unknown>): Contract {
     studentName: row.student_name as string,
     schoolName: row.school_name as string,
     gradeAtContract: row.grade_at_contract as string,
+    address: (row.address as string) || undefined,
+    phone: (row.phone as string) || undefined,
     contractDate: row.contract_date as string,
     expiryDate: row.expiry_date as string,
     totalAmount: (row.total_amount as number) || 0,

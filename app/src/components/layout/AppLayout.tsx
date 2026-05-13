@@ -1,11 +1,11 @@
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
 import { Outlet } from 'react-router-dom'
-import { Bell, Search } from 'lucide-react'
-import { Input } from '@/components/ui/input'
+import { Bell } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useAuth } from '@/contexts/AuthContext'
+import { GlobalSearchBar } from './GlobalSearchBar'
 
 export function AppLayout() {
   const { user } = useAuth()
@@ -22,13 +22,7 @@ export function AppLayout() {
           <div className="h-5 w-px bg-gray-200" />
 
           {/* Center: search */}
-          <div className="relative flex-1 max-w-md mx-auto">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-            <Input
-              placeholder="검색..."
-              className="pl-9 h-9 rounded-full bg-[#F6F7FB] border-0 text-sm text-gray-700 placeholder:text-gray-400 focus-visible:ring-1 focus-visible:ring-blue-200 focus-visible:bg-white transition-colors"
-            />
-          </div>
+          <GlobalSearchBar />
 
           <div className="flex-1" />
 

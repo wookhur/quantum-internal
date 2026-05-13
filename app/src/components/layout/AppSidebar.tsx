@@ -28,6 +28,7 @@ import {
   FileText,
   CreditCard,
   Gamepad2,
+  Briefcase,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -71,6 +72,12 @@ const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
     items: [
       { label: '계약 관리', to: '/consulting/clients', icon: FileText },
       { label: '결제 관리', to: '/consulting/payments', icon: CreditCard },
+    ],
+  },
+  {
+    title: '경영기획',
+    items: [
+      { label: '경영 현황', to: '/planning/overview', icon: Briefcase },
     ],
   },
   {

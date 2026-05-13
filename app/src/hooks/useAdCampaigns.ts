@@ -63,7 +63,7 @@ export function useCreateAdCampaign() {
   })
 }
 
-export function useAdCampaigns(filters?: { platform?: AdPlatform }) {
+export function useAdCampaigns(filters?: { platform?: AdPlatform; month?: string }) {
   return useQuery({
     queryKey: ['ad_campaigns', filters],
     queryFn: async () => {
@@ -73,6 +73,13 @@ export function useAdCampaigns(filters?: { platform?: AdPlatform }) {
         .order('created_at', { ascending: false })
 
       if (filters?.platform) query = query.eq('platform', filters.platform)
+
+      if (filters?.month) {
+        const [year, mon] = filters.month.split('-').map(Number)
+        const startDate = `${filters.month}-01`
+        const nextMonth = mon === 12 ? `${year + 1}-01-01` : `${year}-${String(mon + 1).padStart(2, '0')}-01`
+        query = query.gte('created_at', startDate).lt('created_at', nextMonth)
+      }
 
       const { data, error } = await query
       if (error) throw error
