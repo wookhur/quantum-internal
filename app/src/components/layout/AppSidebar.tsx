@@ -29,6 +29,7 @@ import {
   CreditCard,
   Gamepad2,
   Briefcase,
+  PhoneCall,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -52,6 +53,7 @@ const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
   {
     title: '세일즈',
     items: [
+      { label: '콜드콜', to: '/sales/cold-call', icon: PhoneCall },
       { label: '리드 관리', to: '/sales/leads', icon: Users },
       { label: '파이프라인', to: '/sales/pipeline', icon: BarChart3 },
       { label: '미팅 기록', to: '/sales/meetings', icon: ClipboardList },

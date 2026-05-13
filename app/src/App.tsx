@@ -10,6 +10,7 @@ import { LeadDetailPage } from '@/pages/sales/LeadDetailPage'
 import { PipelinePage } from '@/pages/sales/PipelinePage'
 import { SalesPerformancePage } from '@/pages/sales/SalesPerformancePage'
 import { MeetingsPage } from '@/pages/sales/MeetingsPage'
+import { ColdCallPage } from '@/pages/sales/ColdCallPage'
 import { TodosPage } from '@/pages/common/TodosPage'
 import { CalendarPage } from '@/pages/common/CalendarPage'
 import { GamePage } from '@/pages/common/GamePage'
@@ -56,6 +57,7 @@ export default function App() {
                 <Route path="/sales/pipeline" element={<PipelinePage />} />
                 <Route path="/sales/performance" element={<SalesPerformancePage />} />
                 <Route path="/sales/meetings" element={<MeetingsPage />} />
+                <Route path="/sales/cold-call" element={<ColdCallPage />} />
 
                 <Route path="/marketing/metrics" element={<MarketingMetricsPage />} />
                 <Route path="/marketing/ads" element={<AdCampaignsPage />} />
