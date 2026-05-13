@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
-import { extractTextFromPdf } from '@/lib/pdf-extract'
-import { extractContractFields, type ExtractedContractData } from '@/lib/extract-contract-ai'
+import { extractTextFromPdf, renderPdfPagesToImages } from '@/lib/pdf-extract'
+import { extractContractFields, extractContractFieldsFromImages, type ExtractedContractData } from '@/lib/extract-contract-ai'
 import { useCreateContractFull } from '@/hooks/useContracts'
 
 type Step = 'upload' | 'extracting' | 'review' | 'saving' | 'done' | 'error'
@@ -68,17 +68,24 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
     setStep('extracting')
 
     try {
-      // Step 1: Extract text from PDF
+      // Step 1: Try text extraction first
       setExtractStatus('PDF에서 텍스트 추출 중...')
       const text = await extractTextFromPdf(file)
 
-      if (text.trim().length < 30) {
-        throw new Error('PDF에서 텍스트를 추출할 수 없습니다. 스캔된 이미지 PDF일 수 있습니다.')
-      }
+      let extracted: ExtractedContractData
 
-      // Step 2: AI extraction
-      setExtractStatus('AI로 계약 정보 분석 중...')
-      const extracted = await extractContractFields(text)
+      if (text.trim().length >= 30) {
+        // Text-based PDF — use text extraction
+        setExtractStatus('AI로 계약 정보 분석 중...')
+        extracted = await extractContractFields(text)
+      } else {
+        // Scanned/image PDF — render pages to images and use Vision API
+        setExtractStatus('스캔된 PDF 감지 — 이미지 변환 중...')
+        const images = await renderPdfPagesToImages(file, 5, 1.5)
+
+        setExtractStatus('AI Vision으로 계약 정보 분석 중...')
+        extracted = await extractContractFieldsFromImages(images)
+      }
 
       setForm(extracted)
       setStep('review')

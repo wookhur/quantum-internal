@@ -1,5 +1,5 @@
 // Supabase Edge Function: extract-contract
-// Receives PDF text, calls Claude API to extract structured contract data
+// Receives PDF text OR page images, calls Claude API to extract structured contract data
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 
@@ -46,17 +46,46 @@ Deno.serve(async (req) => {
       )
     }
 
-    const { text } = await req.json()
+    const body = await req.json()
+    const { text, images } = body
 
-    if (!text || typeof text !== 'string') {
+    // Build the user message content
+    let userContent: unknown[]
+
+    if (images && Array.isArray(images) && images.length > 0) {
+      // Image-based extraction (scanned PDFs)
+      userContent = []
+
+      for (let i = 0; i < images.length; i++) {
+        userContent.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: 'image/jpeg',
+            data: images[i],
+          },
+        })
+      }
+
+      userContent.push({
+        type: 'text',
+        text: '위 계약서 이미지에서 정보를 추출해주세요. 한국어 텍스트를 정확히 읽어주세요.',
+      })
+    } else if (text && typeof text === 'string') {
+      // Text-based extraction
+      const truncated = text.slice(0, 15000)
+      userContent = [
+        {
+          type: 'text',
+          text: `다음 계약서 텍스트에서 정보를 추출해주세요:\n\n${truncated}`,
+        },
+      ]
+    } else {
       return new Response(
-        JSON.stringify({ error: 'Missing "text" field in request body' }),
+        JSON.stringify({ error: 'Missing "text" or "images" field in request body' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
-
-    // Truncate to avoid exceeding token limits
-    const truncated = text.slice(0, 15000)
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -72,7 +101,7 @@ Deno.serve(async (req) => {
         messages: [
           {
             role: 'user',
-            content: `다음 계약서 텍스트에서 정보를 추출해주세요:\n\n${truncated}`,
+            content: userContent,
           },
         ],
       }),

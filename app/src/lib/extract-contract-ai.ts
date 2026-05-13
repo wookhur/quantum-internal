@@ -39,7 +39,7 @@ export async function extractContractFields(
 ): Promise<ExtractedContractData> {
   if (!pdfText || pdfText.trim().length < 30) {
     throw new Error(
-      'PDF에서 충분한 텍스트를 추출할 수 없습니다. 스캔된 이미지 PDF일 수 있습니다.',
+      'PDF에서 충분한 텍스트를 추출할 수 없습니다.',
     )
   }
 
@@ -52,5 +52,28 @@ export async function extractContractFields(
   }
 
   // Merge with empty result to ensure all fields exist
+  return { ...EMPTY_RESULT, ...data }
+}
+
+/**
+ * Send PDF page images to the Supabase Edge Function
+ * which calls Claude Vision to extract structured contract data.
+ * Used for scanned/image PDFs where text extraction fails.
+ */
+export async function extractContractFieldsFromImages(
+  images: string[],
+): Promise<ExtractedContractData> {
+  if (!images || images.length === 0) {
+    throw new Error('PDF 이미지를 생성할 수 없습니다.')
+  }
+
+  const { data, error } = await supabase.functions.invoke('extract-contract', {
+    body: { images },
+  })
+
+  if (error) {
+    throw new Error(`계약서 분석 실패: ${error.message}`)
+  }
+
   return { ...EMPTY_RESULT, ...data }
 }
