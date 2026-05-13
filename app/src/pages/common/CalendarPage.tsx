@@ -2,10 +2,10 @@ import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot, FileWarning } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot, FileWarning, Globe } from 'lucide-react'
 import { useCalendarEvents, type ContractCalendarItem } from '@/hooks/useCalendarEvents'
 import { todayKST, currentYearKST, currentMonthKST, formatTimeKST } from '@/lib/date'
-import type { Meeting, Event, Todo } from '@/types'
+import type { Meeting, Event, Todo, GoogleCalendarEvent } from '@/types'
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
@@ -17,6 +17,7 @@ interface DayData {
   events: Event[]
   todos: Todo[]
   contractExpiries: ContractCalendarItem[]
+  googleEvents: GoogleCalendarEvent[]
 }
 
 function buildCalendarGrid(
@@ -26,6 +27,7 @@ function buildCalendarGrid(
   events: Event[],
   todos: Todo[],
   contractExpiries: ContractCalendarItem[],
+  googleEvents: GoogleCalendarEvent[],
 ): DayData[][] {
   const firstDay = new Date(year, month - 1, 1)
   const lastDay = new Date(year, month, 0)
@@ -57,6 +59,12 @@ function buildCalendarGrid(
     if (d) contractsByDate.set(d, [...(contractsByDate.get(d) || []), c])
   })
 
+  const googleEventsByDate = new Map<string, GoogleCalendarEvent[]>()
+  googleEvents.forEach(g => {
+    const d = g.startTime?.slice(0, 10)
+    if (d) googleEventsByDate.set(d, [...(googleEventsByDate.get(d) || []), g])
+  })
+
   const weeks: DayData[][] = []
   let currentWeek: DayData[] = []
 
@@ -67,7 +75,7 @@ function buildCalendarGrid(
     const m = month - 1 === 0 ? 12 : month - 1
     const y = month - 1 === 0 ? year - 1 : year
     const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(date).padStart(2, '0')}`
-    currentWeek.push({ date, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [] })
+    currentWeek.push({ date, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [], googleEvents: [] })
   }
 
   // Current month days
@@ -81,6 +89,7 @@ function buildCalendarGrid(
       events: eventsByDate.get(dateStr) || [],
       todos: todosByDate.get(dateStr) || [],
       contractExpiries: contractsByDate.get(dateStr) || [],
+      googleEvents: googleEventsByDate.get(dateStr) || [],
     })
 
     if (currentWeek.length === 7) {
@@ -96,7 +105,7 @@ function buildCalendarGrid(
       const m = month + 1 > 12 ? 1 : month + 1
       const y = month + 1 > 12 ? year + 1 : year
       const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(nextDate).padStart(2, '0')}`
-      currentWeek.push({ date: nextDate, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [] })
+      currentWeek.push({ date: nextDate, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [], googleEvents: [] })
       nextDate++
     }
     weeks.push(currentWeek)
@@ -116,7 +125,7 @@ function DayCell({
   isSelected: boolean
   onClick: () => void
 }) {
-  const totalItems = day.meetings.length + day.events.length + day.todos.length + day.contractExpiries.length
+  const totalItems = day.meetings.length + day.events.length + day.todos.length + day.contractExpiries.length + day.googleEvents.length
   const hasItems = totalItems > 0
 
   return (
@@ -152,6 +161,12 @@ function DayCell({
             <span className="text-[10px] text-emerald-700 truncate">{e.eventName}</span>
           </div>
         ))}
+        {day.googleEvents.slice(0, 2).map(g => (
+          <div key={g.id} className="flex items-center gap-0.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+            <span className="text-[10px] text-violet-700 truncate">{g.summary}</span>
+          </div>
+        ))}
         {day.contractExpiries.slice(0, 1).map(c => (
           <div key={c.id} className="flex items-center gap-0.5">
             <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
@@ -184,10 +199,11 @@ export function CalendarPage() {
   const events = data?.events || []
   const todos = data?.todos || []
   const contractExpiries = data?.contractExpiries || []
+  const googleEvents = data?.googleEvents || []
 
   const weeks = useMemo(
-    () => buildCalendarGrid(year, month, meetings, events, todos, contractExpiries),
-    [year, month, meetings, events, todos, contractExpiries]
+    () => buildCalendarGrid(year, month, meetings, events, todos, contractExpiries, googleEvents),
+    [year, month, meetings, events, todos, contractExpiries, googleEvents]
   )
 
   const todayStr = todayKST()
@@ -240,6 +256,7 @@ export function CalendarPage() {
           <div className="flex items-center gap-2 mr-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> 미팅</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> 이벤트</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 inline-block" /> 구글 캘린더</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> 계약 만료</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> 할일</span>
           </div>
@@ -322,7 +339,7 @@ export function CalendarPage() {
               <div className="text-center py-12 text-muted-foreground text-sm">
                 캘린더에서 날짜를 클릭하면<br />상세 일정을 확인할 수 있습니다.
               </div>
-            ) : selectedDay.meetings.length + selectedDay.events.length + selectedDay.todos.length + selectedDay.contractExpiries.length === 0 ? (
+            ) : selectedDay.meetings.length + selectedDay.events.length + selectedDay.todos.length + selectedDay.contractExpiries.length + selectedDay.googleEvents.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
                 이 날에는 일정이 없습니다.
               </div>
@@ -386,6 +403,46 @@ export function CalendarPage() {
                           <div className="flex gap-1 mt-1.5 flex-wrap">
                             {e.speakerConfirmed && <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 border-emerald-300">연사 확정</Badge>}
                             {e.venueConfirmed && <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 border-emerald-300">장소 확정</Badge>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Google Calendar Events */}
+                {selectedDay.googleEvents.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Globe className="size-3.5 text-violet-500" />
+                      <h3 className="text-xs font-semibold text-violet-700">구글 캘린더 ({selectedDay.googleEvents.length})</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {selectedDay.googleEvents.map(g => (
+                        <div key={g.id} className="p-2.5 rounded-lg border border-violet-200 bg-violet-50/50">
+                          <div className="text-sm font-medium">{g.summary}</div>
+                          {g.location && (
+                            <div className="text-xs text-muted-foreground">장소: {g.location}</div>
+                          )}
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            {g.isAllDay ? '종일' : `${formatTimeKST(g.startTime)} - ${formatTimeKST(g.endTime)}`}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            {g.calendarId && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-violet-300 text-violet-600">
+                                {g.calendarId.split('@')[0]}
+                              </Badge>
+                            )}
+                            {g.conferenceUrl && (
+                              <a
+                                href={g.conferenceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-violet-600 hover:underline"
+                              >
+                                화상회의 참가
+                              </a>
+                            )}
                           </div>
                         </div>
                       ))}

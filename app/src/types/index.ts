@@ -347,6 +347,23 @@ export interface Meeting {
   createdAt: string
 }
 
+// ============ GOOGLE CALENDAR ============
+export interface GoogleCalendarEvent {
+  id: string
+  googleEventId: string
+  calendarId: string
+  summary: string
+  description?: string
+  startTime: string
+  endTime: string
+  isAllDay: boolean
+  location?: string
+  creatorEmail?: string
+  status: string
+  conferenceUrl?: string
+  syncedAt: string
+}
+
 // ============ NAVIGATION ============
 export interface NavItem {
   title: string

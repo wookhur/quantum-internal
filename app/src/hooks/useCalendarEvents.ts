@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Meeting, Event, Todo } from '@/types'
+import type { Meeting, Event, Todo, GoogleCalendarEvent } from '@/types'
 
 function mapMeeting(row: Record<string, unknown>): Meeting {
   return {
@@ -45,6 +45,24 @@ function mapEvent(row: Record<string, unknown>): Event {
   }
 }
 
+function mapGoogleCalendarEvent(row: Record<string, unknown>): GoogleCalendarEvent {
+  return {
+    id: row.id as string,
+    googleEventId: row.google_event_id as string,
+    calendarId: row.calendar_id as string,
+    summary: row.summary as string,
+    description: row.description as string | undefined,
+    startTime: row.start_time as string,
+    endTime: row.end_time as string,
+    isAllDay: (row.is_all_day as boolean) || false,
+    location: row.location as string | undefined,
+    creatorEmail: row.creator_email as string | undefined,
+    status: row.status as string,
+    conferenceUrl: row.conference_url as string | undefined,
+    syncedAt: row.synced_at as string,
+  }
+}
+
 function mapTodo(row: Record<string, unknown>): Todo {
   return {
     id: row.id as string,
@@ -76,6 +94,7 @@ export interface CalendarData {
   events: Event[]
   todos: Todo[]
   contractExpiries: ContractCalendarItem[]
+  googleEvents: GoogleCalendarEvent[]
 }
 
 export function useCalendarEvents(year: number, month: number) {
@@ -86,7 +105,7 @@ export function useCalendarEvents(year: number, month: number) {
       const endDate = new Date(year, month, 0) // last day of month
       const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
 
-      const [meetingsRes, eventsRes, todosRes, contractsRes] = await Promise.all([
+      const [meetingsRes, eventsRes, todosRes, contractsRes, googleEventsRes] = await Promise.all([
         supabase
           .from('meetings')
           .select('*')
@@ -113,6 +132,14 @@ export function useCalendarEvents(year: number, month: number) {
           .gte('expiry_date', startDate)
           .lte('expiry_date', endDateStr)
           .order('expiry_date', { ascending: true }),
+        // Fetch Google Calendar events for this month
+        supabase
+          .from('google_calendar_events')
+          .select('*')
+          .gte('start_time', startDate)
+          .lte('start_time', endDateStr + 'T23:59:59')
+          .eq('status', 'confirmed')
+          .order('start_time', { ascending: true }),
       ])
 
       if (meetingsRes.error) throw meetingsRes.error
@@ -133,6 +160,7 @@ export function useCalendarEvents(year: number, month: number) {
         events: (eventsRes.data || []).map(mapEvent),
         todos: (todosRes.data || []).map(mapTodo),
         contractExpiries,
+        googleEvents: (googleEventsRes.data || []).map(mapGoogleCalendarEvent),
       }
     },
   })
