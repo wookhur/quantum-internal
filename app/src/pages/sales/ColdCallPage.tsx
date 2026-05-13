@@ -44,16 +44,123 @@ import { Link } from 'react-router-dom'
 
 // ============ Priority scoring ============
 
-/** Grade priority: higher grades are more urgent for college admissions */
+/**
+ * Grade priority: G10/G11 are the prime consulting window.
+ * G12 is slightly lower because college apps are already underway.
+ */
 const GRADE_PRIORITY: Record<string, number> = {
-  'G12': 100, '고3': 100, 'Y13': 100,
-  'G11': 90, '고2': 90, 'Y12': 90,
-  'G10': 75, '고1': 75, 'Y11': 75,
-  'G9': 60, '중3': 60, 'Y10': 60,
-  'G8': 40, '중2': 40, 'Y9': 40,
-  'G7': 30, '중1': 30, 'Y8': 30,
-  'Y7': 20,
-  '대학생': 50,
+  'G11': 50, '고2': 50, 'Y12': 50,
+  'G10': 48, '고1': 48, 'Y11': 48,
+  'G12': 38, '고3': 38, 'Y13': 38,
+  'G9': 30, '중3': 30, 'Y10': 30,
+  'G8': 18, '중2': 18, 'Y9': 18,
+  'G7': 12, '중1': 12, 'Y8': 12,
+  'Y7': 8,
+  '대학생': 20,
+}
+
+/**
+ * School tier scoring — higher tier = higher likelihood of contracting.
+ *
+ * Tier 1 (40 pts): 제주 인가 국제학교 + 미국 탑 보딩스쿨
+ * Tier 1.5 (30 pts): 기타 지역 한국 인가 국제학교 + 미국 탑 사립학교
+ * Tier 2 (20 pts): 미인가 국제학교 + 명문 고등학교
+ */
+const SCHOOL_TIERS: { tier: number; score: number; patterns: RegExp[] }[] = [
+  {
+    tier: 1,
+    score: 40,
+    patterns: [
+      // 제주 인가 국제학교
+      /kis\s*jeju/i, /korea\s*international\s*school\s*jeju/i,
+      /nlcs\s*jeju/i, /north\s*london\s*collegiate/i,
+      /bha/i, /branksome\s*hall\s*asia/i,
+      /sja\s*jeju/i, /st\.?\s*johnsbury/i,
+      /제주국제/i, /한국국제학교\s*제주/i,
+      // 미국 탑 보딩스쿨
+      /phillips\s*(exeter|academy)/i, /andover/i,
+      /deerfield/i, /lawrenceville/i,
+      /hotchkiss/i, /choate/i, /choate\s*rosemary/i,
+      /st\.?\s*paul/i, /groton/i,
+      /middlesex/i, /milton\s*academy/i,
+      /peddie/i, /loomis/i, /taft/i,
+      /kent\s*school/i, /westminster/i,
+      /concord\s*academy/i, /thacher/i,
+      /cate\s*school/i, /webb\s*school/i,
+      /hill\s*school/i, /governor/i,
+      /noble/i, /greenough/i,
+      /episcopal\s*high/i,
+    ],
+  },
+  {
+    tier: 1.5,
+    score: 30,
+    patterns: [
+      // 한국 기타 지역 인가 국제학교
+      /chadwick/i, /채드윅/i,
+      /sfs/i, /seoul\s*foreign/i, /서울외국인/i,
+      /yiss/i, /yongsan/i, /용산국제/i,
+      /dulwich/i, /덜위치/i,
+      /kis\s*(seoul|pangyo|분당)/i,
+      /dwight/i,
+      /global\s*christian/i,
+      /cheongna\s*dalton/i, /청라달튼/i,
+      /송도\s*국제/i,
+      // 미국 탑 사립 (day school)
+      /harvard[\s-]*westlake/i,
+      /lakeside\s*school/i,
+      /horace\s*mann/i,
+      /dalton/i,
+      /trinity\s*school/i,
+      /collegiate\s*school/i,
+      /sidwell/i,
+      /national\s*cathedral/i,
+      /winsor/i,
+      /brearley/i,
+      /spence/i,
+      /poly\s*prep/i,
+      /hackley/i,
+      /riverdale/i,
+      /fieldston/i,
+    ],
+  },
+  {
+    tier: 2,
+    score: 20,
+    patterns: [
+      // 미인가 국제학교
+      /sais/i, /서울\s*아카데미/i,
+      /gpa/i, /글로벌\s*선진/i,
+      /isak/i,
+      /asia\s*pacific/i, /apsi/i,
+      /tais/i,
+      /yongsan\s*academy/i,
+      /인터내셔널/i, /international\s*(christian|school)/i,
+      /채드윅\s*송도/i,
+      /외국인학교/i,
+      // 명문 고등학교
+      /대원외고/i, /한영외고/i, /명덕외고/i,
+      /용인외고/i, /대일외고/i,
+      /민사고/i, /민족사관/i,
+      /상산고/i, /하나고/i, /세화고/i,
+      /외대부고/i, /현대청운/i,
+      /과학고/i, /영재학교/i,
+      /자사고/i, /자율형사립/i,
+      /포항공과/i, /경기과학/i, /서울과학/i,
+      /세종과학/i, /대전과학/i, /한성과학/i,
+    ],
+  },
+]
+
+/** Match school name to tier score. Returns 0 if no match. */
+function getSchoolTierScore(school: string): number {
+  if (!school) return 0
+  for (const tier of SCHOOL_TIERS) {
+    if (tier.patterns.some((p) => p.test(school))) {
+      return tier.score
+    }
+  }
+  return 0
 }
 
 /** Stages eligible for cold calling */
@@ -64,19 +171,23 @@ const COLD_CALL_STAGES: PipelineStage[] = [
 ]
 
 function getLeadPriority(lead: Lead): number {
-  let score = GRADE_PRIORITY[lead.grade] || 10
+  // Grade score (max ~50)
+  let score = GRADE_PRIORITY[lead.grade] || 5
 
-  // Boost for recent leads
+  // School tier score (max 40)
+  score += getSchoolTierScore(lead.currentSchool)
+
+  // Boost for recent leads (max +10)
   const daysSince = Math.floor(
     (Date.now() - new Date(lead.leadDate).getTime()) / (1000 * 60 * 60 * 24),
   )
-  if (daysSince <= 3) score += 20
-  else if (daysSince <= 7) score += 10
-  else if (daysSince > 30) score -= 10
+  if (daysSince <= 3) score += 10
+  else if (daysSince <= 7) score += 5
+  else if (daysSince > 30) score -= 5
 
   // Stage-based adjustments
-  if (lead.pipelineStage === 'new_lead') score += 15
-  if (lead.pipelineStage === 'no_response') score -= 5
+  if (lead.pipelineStage === 'new_lead') score += 5
+  if (lead.pipelineStage === 'no_response') score -= 3
 
   return Math.max(0, Math.min(100, score))
 }
