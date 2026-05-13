@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Meeting, Event, Todo, Contract } from '@/types'
+import type { Meeting, Event, Todo } from '@/types'
 
 function mapMeeting(row: Record<string, unknown>): Meeting {
   return {
