@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Meeting, Event, Todo } from '@/types'
+import type { Meeting, Event, Todo, Contract } from '@/types'
 
 function mapMeeting(row: Record<string, unknown>): Meeting {
   return {
@@ -62,10 +62,20 @@ function mapTodo(row: Record<string, unknown>): Todo {
   }
 }
 
+export interface ContractCalendarItem {
+  id: string
+  contractorName: string
+  studentName: string
+  schoolName: string
+  expiryDate: string
+  status: string
+}
+
 export interface CalendarData {
   meetings: Meeting[]
   events: Event[]
   todos: Todo[]
+  contractExpiries: ContractCalendarItem[]
 }
 
 export function useCalendarEvents(year: number, month: number) {
@@ -76,7 +86,7 @@ export function useCalendarEvents(year: number, month: number) {
       const endDate = new Date(year, month, 0) // last day of month
       const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
 
-      const [meetingsRes, eventsRes, todosRes] = await Promise.all([
+      const [meetingsRes, eventsRes, todosRes, contractsRes] = await Promise.all([
         supabase
           .from('meetings')
           .select('*')
@@ -96,16 +106,33 @@ export function useCalendarEvents(year: number, month: number) {
           .lte('due_date', endDateStr)
           .neq('status', 'done')
           .order('due_date', { ascending: true }),
+        // Fetch contracts whose expiry_date falls within this month
+        supabase
+          .from('contracts')
+          .select('id, contractor_name, student_name, school_name, expiry_date, status')
+          .gte('expiry_date', startDate)
+          .lte('expiry_date', endDateStr)
+          .order('expiry_date', { ascending: true }),
       ])
 
       if (meetingsRes.error) throw meetingsRes.error
       if (eventsRes.error) throw eventsRes.error
       if (todosRes.error) throw todosRes.error
+      // Don't throw on contracts error — it's supplementary
+      const contractExpiries: ContractCalendarItem[] = (contractsRes.data || []).map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        contractorName: row.contractor_name as string,
+        studentName: row.student_name as string,
+        schoolName: row.school_name as string,
+        expiryDate: row.expiry_date as string,
+        status: row.status as string,
+      }))
 
       return {
         meetings: (meetingsRes.data || []).map(mapMeeting),
         events: (eventsRes.data || []).map(mapEvent),
         todos: (todosRes.data || []).map(mapTodo),
+        contractExpiries,
       }
     },
   })

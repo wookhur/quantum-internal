@@ -2,8 +2,8 @@ import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot } from 'lucide-react'
-import { useCalendarEvents } from '@/hooks/useCalendarEvents'
+import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot, FileWarning } from 'lucide-react'
+import { useCalendarEvents, type ContractCalendarItem } from '@/hooks/useCalendarEvents'
 import { todayKST, currentYearKST, currentMonthKST, formatTimeKST } from '@/lib/date'
 import type { Meeting, Event, Todo } from '@/types'
 
@@ -16,15 +16,23 @@ interface DayData {
   meetings: Meeting[]
   events: Event[]
   todos: Todo[]
+  contractExpiries: ContractCalendarItem[]
 }
 
-function buildCalendarGrid(year: number, month: number, meetings: Meeting[], events: Event[], todos: Todo[]): DayData[][] {
+function buildCalendarGrid(
+  year: number,
+  month: number,
+  meetings: Meeting[],
+  events: Event[],
+  todos: Todo[],
+  contractExpiries: ContractCalendarItem[],
+): DayData[][] {
   const firstDay = new Date(year, month - 1, 1)
   const lastDay = new Date(year, month, 0)
   const startDayOfWeek = firstDay.getDay()
   const totalDays = lastDay.getDate()
 
-  // Build meeting/event/todo maps by date string
+  // Build meeting/event/todo/contract maps by date string
   const meetingsByDate = new Map<string, Meeting[]>()
   meetings.forEach(m => {
     const d = m.meetingDate?.slice(0, 10)
@@ -43,6 +51,12 @@ function buildCalendarGrid(year: number, month: number, meetings: Meeting[], eve
     if (d) todosByDate.set(d, [...(todosByDate.get(d) || []), t])
   })
 
+  const contractsByDate = new Map<string, ContractCalendarItem[]>()
+  contractExpiries.forEach(c => {
+    const d = c.expiryDate?.slice(0, 10)
+    if (d) contractsByDate.set(d, [...(contractsByDate.get(d) || []), c])
+  })
+
   const weeks: DayData[][] = []
   let currentWeek: DayData[] = []
 
@@ -53,7 +67,7 @@ function buildCalendarGrid(year: number, month: number, meetings: Meeting[], eve
     const m = month - 1 === 0 ? 12 : month - 1
     const y = month - 1 === 0 ? year - 1 : year
     const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(date).padStart(2, '0')}`
-    currentWeek.push({ date, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [] })
+    currentWeek.push({ date, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [] })
   }
 
   // Current month days
@@ -66,6 +80,7 @@ function buildCalendarGrid(year: number, month: number, meetings: Meeting[], eve
       meetings: meetingsByDate.get(dateStr) || [],
       events: eventsByDate.get(dateStr) || [],
       todos: todosByDate.get(dateStr) || [],
+      contractExpiries: contractsByDate.get(dateStr) || [],
     })
 
     if (currentWeek.length === 7) {
@@ -81,7 +96,7 @@ function buildCalendarGrid(year: number, month: number, meetings: Meeting[], eve
       const m = month + 1 > 12 ? 1 : month + 1
       const y = month + 1 > 12 ? year + 1 : year
       const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(nextDate).padStart(2, '0')}`
-      currentWeek.push({ date: nextDate, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [] })
+      currentWeek.push({ date: nextDate, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [] })
       nextDate++
     }
     weeks.push(currentWeek)
@@ -101,7 +116,8 @@ function DayCell({
   isSelected: boolean
   onClick: () => void
 }) {
-  const hasItems = day.meetings.length + day.events.length + day.todos.length > 0
+  const totalItems = day.meetings.length + day.events.length + day.todos.length + day.contractExpiries.length
+  const hasItems = totalItems > 0
 
   return (
     <button
@@ -136,15 +152,21 @@ function DayCell({
             <span className="text-[10px] text-emerald-700 truncate">{e.eventName}</span>
           </div>
         ))}
+        {day.contractExpiries.slice(0, 1).map(c => (
+          <div key={c.id} className="flex items-center gap-0.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+            <span className="text-[10px] text-orange-700 truncate">{c.studentName} 만료</span>
+          </div>
+        ))}
         {day.todos.slice(0, 1).map(t => (
           <div key={t.id} className="flex items-center gap-0.5">
             <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
             <span className="text-[10px] text-red-700 truncate">{t.title}</span>
           </div>
         ))}
-        {(day.meetings.length + day.events.length + day.todos.length) > 3 && (
+        {totalItems > 3 && (
           <div className="text-[10px] text-muted-foreground">
-            +{day.meetings.length + day.events.length + day.todos.length - 3}
+            +{totalItems - 3}
           </div>
         )}
       </div>
@@ -161,10 +183,11 @@ export function CalendarPage() {
   const meetings = data?.meetings || []
   const events = data?.events || []
   const todos = data?.todos || []
+  const contractExpiries = data?.contractExpiries || []
 
   const weeks = useMemo(
-    () => buildCalendarGrid(year, month, meetings, events, todos),
-    [year, month, meetings, events, todos]
+    () => buildCalendarGrid(year, month, meetings, events, todos, contractExpiries),
+    [year, month, meetings, events, todos, contractExpiries]
   )
 
   const todayStr = todayKST()
@@ -211,12 +234,13 @@ export function CalendarPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">캘린더</h1>
-          <p className="text-muted-foreground">미팅, 이벤트, 할일을 한눈에 확인하세요</p>
+          <p className="text-muted-foreground">미팅, 이벤트, 계약 만료일을 한눈에 확인하세요</p>
         </div>
         <div className="flex items-center gap-1">
           <div className="flex items-center gap-2 mr-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> 미팅</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> 이벤트</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> 계약 만료</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> 할일</span>
           </div>
         </div>
@@ -298,7 +322,7 @@ export function CalendarPage() {
               <div className="text-center py-12 text-muted-foreground text-sm">
                 캘린더에서 날짜를 클릭하면<br />상세 일정을 확인할 수 있습니다.
               </div>
-            ) : selectedDay.meetings.length + selectedDay.events.length + selectedDay.todos.length === 0 ? (
+            ) : selectedDay.meetings.length + selectedDay.events.length + selectedDay.todos.length + selectedDay.contractExpiries.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
                 이 날에는 일정이 없습니다.
               </div>
@@ -363,6 +387,33 @@ export function CalendarPage() {
                             {e.speakerConfirmed && <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 border-emerald-300">연사 확정</Badge>}
                             {e.venueConfirmed && <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 border-emerald-300">장소 확정</Badge>}
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Contract Expiries */}
+                {selectedDay.contractExpiries.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <FileWarning className="size-3.5 text-orange-500" />
+                      <h3 className="text-xs font-semibold text-orange-700">계약 만료 ({selectedDay.contractExpiries.length})</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {selectedDay.contractExpiries.map(c => (
+                        <div key={c.id} className="p-2.5 rounded-lg border border-orange-200 bg-orange-50/50">
+                          <div className="text-sm font-medium">{c.studentName}</div>
+                          <div className="text-xs text-muted-foreground">계약자: {c.contractorName}</div>
+                          {c.schoolName && (
+                            <div className="text-xs text-muted-foreground">학교: {c.schoolName}</div>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] px-1.5 py-0 mt-1 border-orange-400 text-orange-600"
+                          >
+                            계약 만료일
+                          </Badge>
                         </div>
                       ))}
                     </div>
