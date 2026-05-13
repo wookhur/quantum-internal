@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Search, Download, Plus, Loader2, FileText, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
+import { Search, Download, Plus, Loader2, FileText, CheckCircle2, AlertTriangle, XCircle, Upload } from 'lucide-react'
 import { useContracts, useCreateContract } from '@/hooks/useContracts'
+import { ContractPdfUploadDialog } from '@/components/ContractPdfUploadDialog'
 import type { ContractStatus } from '@/types'
 
 const STATUS_CONFIG: Record<ContractStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className: string }> = {
@@ -30,6 +31,7 @@ export function ContractsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_CONTRACT_FORM)
   const createContract = useCreateContract()
 
@@ -64,6 +66,9 @@ export function ContractsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setPdfDialogOpen(true)}>
+            <Upload className="size-4" /> PDF 업로드
+          </Button>
           <Button className="gap-2" onClick={() => setDialogOpen(true)}>
             <Plus className="size-4" /> 계약 추가
           </Button>
@@ -140,6 +145,7 @@ export function ContractsPage() {
           <Button variant="outline" className="gap-2">
             <Download className="size-4" /> 내보내기
           </Button>
+          <ContractPdfUploadDialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen} />
         </div>
       </div>
 

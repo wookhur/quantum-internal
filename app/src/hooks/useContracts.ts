@@ -70,3 +70,49 @@ export function useCreateContract() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contracts'] }),
   })
 }
+
+/** Extended mutation that accepts all contract fields (used by PDF extraction) */
+export function useCreateContractFull() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (contract: {
+      contractorName: string
+      studentName: string
+      schoolName: string
+      gradeAtContract?: string
+      contractDate: string
+      expiryDate: string
+      address?: string
+      phone?: string
+      totalAmount?: number
+      currency?: 'KRW' | 'USD'
+      paymentAccount?: 'KR' | 'US'
+      notes?: string
+    }) => {
+      const row: Record<string, unknown> = {
+        contractor_name: contract.contractorName,
+        student_name: contract.studentName,
+        school_name: contract.schoolName,
+        grade_at_contract: contract.gradeAtContract || null,
+        contract_date: contract.contractDate,
+        expiry_date: contract.expiryDate,
+        status: 'active',
+      }
+      if (contract.address) row.address = contract.address
+      if (contract.phone) row.phone = contract.phone
+      if (contract.totalAmount) row.total_amount = contract.totalAmount
+      if (contract.currency) row.currency = contract.currency
+      if (contract.paymentAccount) row.payment_account = contract.paymentAccount
+      if (contract.notes) row.notes = contract.notes
+
+      const { data, error } = await supabase
+        .from('contracts')
+        .insert(row)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contracts'] }),
+  })
+}
