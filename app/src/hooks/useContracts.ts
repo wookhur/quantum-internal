@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Contract, ContractStatus } from '@/types'
+import type { Contract, ContractStatus, PaymentInstallment } from '@/types'
 
 function mapContract(row: Record<string, unknown>): Contract {
   return {
@@ -114,5 +114,167 @@ export function useCreateContractFull() {
       return data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contracts'] }),
+  })
+}
+
+/** Fetch a single contract by ID with installments */
+export function useContract(id: string | undefined) {
+  return useQuery({
+    queryKey: ['contracts', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('id', id!)
+        .single()
+      if (error) throw error
+
+      const contract = mapContract(data as Record<string, unknown>)
+
+      // Fetch installments for this contract
+      const { data: installmentRows, error: instError } = await supabase
+        .from('payment_installments')
+        .select('*')
+        .eq('contract_id', id!)
+        .order('installment_order', { ascending: true })
+      if (instError) throw instError
+
+      const installments: PaymentInstallment[] = (installmentRows || []).map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        contractId: r.contract_id as string,
+        installmentOrder: r.installment_order as number,
+        label: r.label as string,
+        amount: (r.amount as number) || 0,
+        dueDate: r.due_date as string | undefined,
+        paidDate: r.paid_date as string | undefined,
+        paidAmount: (r.paid_amount as number) || 0,
+        status: r.status as PaymentInstallment['status'],
+        currency: (r.currency as 'KRW' | 'USD') || 'KRW',
+        paymentMethod: r.payment_method as PaymentInstallment['paymentMethod'],
+        notes: r.notes as string | undefined,
+        createdAt: r.created_at as string,
+        updatedAt: r.updated_at as string,
+      }))
+
+      const paidAmount = installments.reduce((s, i) => s + i.paidAmount, 0)
+      const totalInstallmentAmount = installments.reduce((s, i) => s + i.amount, 0)
+
+      return {
+        ...contract,
+        installments,
+        paidAmount,
+        outstandingAmount: totalInstallmentAmount - paidAmount,
+        paymentProgress: totalInstallmentAmount > 0 ? Math.round((paidAmount / totalInstallmentAmount) * 100) : 0,
+      }
+    },
+    enabled: !!id,
+  })
+}
+
+/** Cancel a contract — sets status to 'cancelled' and marks pending installments */
+export function useCancelContract() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ contractId, reason }: { contractId: string; reason?: string }) => {
+      // Update contract status
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .update({
+          status: 'cancelled',
+          notes: reason || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', contractId)
+      if (contractError) throw contractError
+
+      // Cancel all pending/overdue installments (don't touch already paid ones)
+      const { error: installError } = await supabase
+        .from('payment_installments')
+        .update({
+          status: 'pending',
+          notes: '계약 취소',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('contract_id', contractId)
+        .in('status', ['pending', 'overdue'])
+      if (installError) throw installError
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
+      qc.invalidateQueries({ queryKey: ['installments'] })
+      qc.invalidateQueries({ queryKey: ['revenue-projection'] })
+    },
+  })
+}
+
+/** Fetch all contracts with their installment summaries (for list view) */
+export function useContractsWithInstallments(filters?: { status?: ContractStatus; search?: string }) {
+  return useQuery({
+    queryKey: ['contracts-with-installments', filters],
+    queryFn: async () => {
+      // Fetch contracts
+      let query = supabase
+        .from('contracts')
+        .select('*')
+        .order('contract_date', { ascending: false })
+
+      if (filters?.status) query = query.eq('status', filters.status)
+      if (filters?.search) {
+        query = query.or(`contractor_name.ilike.%${filters.search}%,student_name.ilike.%${filters.search}%`)
+      }
+
+      const { data: contractRows, error: cErr } = await query
+      if (cErr) throw cErr
+
+      const contracts = (contractRows || []).map((r: Record<string, unknown>) => mapContract(r))
+      if (contracts.length === 0) return []
+
+      // Fetch all installments for these contracts in one query
+      const contractIds = contracts.map(c => c.id)
+      const { data: installmentRows, error: iErr } = await supabase
+        .from('payment_installments')
+        .select('*')
+        .in('contract_id', contractIds)
+        .order('installment_order', { ascending: true })
+      if (iErr) throw iErr
+
+      // Group installments by contract_id
+      const installmentMap = new Map<string, PaymentInstallment[]>()
+      for (const r of (installmentRows || []) as Record<string, unknown>[]) {
+        const cid = r.contract_id as string
+        if (!installmentMap.has(cid)) installmentMap.set(cid, [])
+        installmentMap.get(cid)!.push({
+          id: r.id as string,
+          contractId: cid,
+          installmentOrder: r.installment_order as number,
+          label: r.label as string,
+          amount: (r.amount as number) || 0,
+          dueDate: r.due_date as string | undefined,
+          paidDate: r.paid_date as string | undefined,
+          paidAmount: (r.paid_amount as number) || 0,
+          status: r.status as PaymentInstallment['status'],
+          currency: (r.currency as 'KRW' | 'USD') || 'KRW',
+          paymentMethod: r.payment_method as PaymentInstallment['paymentMethod'],
+          notes: r.notes as string | undefined,
+          createdAt: r.created_at as string,
+          updatedAt: r.updated_at as string,
+        })
+      }
+
+      // Merge
+      return contracts.map(c => {
+        const installments = installmentMap.get(c.id) || []
+        const paidAmount = installments.reduce((s, i) => s + i.paidAmount, 0)
+        const totalInstAmount = installments.reduce((s, i) => s + i.amount, 0)
+        return {
+          ...c,
+          installments,
+          paidAmount,
+          outstandingAmount: totalInstAmount - paidAmount,
+          paymentProgress: totalInstAmount > 0 ? Math.round((paidAmount / totalInstAmount) * 100) : 0,
+        }
+      })
+    },
   })
 }

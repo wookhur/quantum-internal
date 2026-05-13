@@ -70,6 +70,44 @@ export function useContractInstallments(contractId: string | undefined) {
   })
 }
 
+/** Update an installment (mark paid, change amount, etc.) */
+export function useUpdateInstallment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: {
+      id: string
+      status?: InstallmentStatus
+      paidAmount?: number
+      paidDate?: string
+      paymentMethod?: string
+      notes?: string
+    }) => {
+      const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (updates.status !== undefined) row.status = updates.status
+      if (updates.paidAmount !== undefined) row.paid_amount = updates.paidAmount
+      if (updates.paidDate !== undefined) row.paid_date = updates.paidDate
+      if (updates.paymentMethod !== undefined) row.payment_method = updates.paymentMethod
+      if (updates.notes !== undefined) row.notes = updates.notes
+
+      const { data, error } = await supabase
+        .from('payment_installments')
+        .update(row)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['installments'] })
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
+      qc.invalidateQueries({ queryKey: ['revenue-projection'] })
+      qc.invalidateQueries({ queryKey: ['payments'] })
+    },
+  })
+}
+
 /** Create installments for a contract (batch insert) */
 export function useCreateInstallments() {
   const qc = useQueryClient()

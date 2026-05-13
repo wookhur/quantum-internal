@@ -31,10 +31,12 @@ import {
   Briefcase,
   PhoneCall,
   LineChart,
+  Shield,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useFeatureAccess, getEffectiveModules, type FeatureModule } from '@/hooks/useProfiles'
 
 interface NavItemDef {
   label: string
@@ -42,9 +44,11 @@ interface NavItemDef {
   icon: LucideIcon
 }
 
-const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
+/** Each nav section maps to a feature module for access control */
+const NAV_SECTIONS: { title: string; module: FeatureModule; items: NavItemDef[] }[] = [
   {
     title: '공통',
+    module: 'dashboard',
     items: [
       { label: '대시보드', to: '/dashboard', icon: LayoutDashboard },
       { label: '캘린더', to: '/calendar', icon: Calendar },
@@ -53,6 +57,7 @@ const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
   },
   {
     title: '세일즈',
+    module: 'sales',
     items: [
       { label: '콜드콜', to: '/sales/cold-call', icon: PhoneCall },
       { label: '리드 관리', to: '/sales/leads', icon: Users },
@@ -63,6 +68,7 @@ const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
   },
   {
     title: '마케팅',
+    module: 'marketing',
     items: [
       { label: '마케팅 지표', to: '/marketing/metrics', icon: BarChart2 },
       { label: '광고 성과', to: '/marketing/ads', icon: Megaphone },
@@ -72,6 +78,7 @@ const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
   },
   {
     title: '재무',
+    module: 'finance',
     items: [
       { label: '계약 관리', to: '/consulting/clients', icon: FileText },
       { label: '결제 관리', to: '/consulting/payments', icon: CreditCard },
@@ -79,13 +86,16 @@ const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
   },
   {
     title: '경영기획',
+    module: 'planning',
     items: [
       { label: '경영 현황', to: '/planning/overview', icon: Briefcase },
       { label: '매출 Projection', to: '/planning/projection', icon: LineChart },
+      { label: '접근 권한 관리', to: '/planning/access', icon: Shield },
     ],
   },
   {
     title: '쉬는 시간',
+    module: 'game',
     items: [
       { label: 'T-Rex 러너', to: '/game', icon: Gamepad2 },
     ],
@@ -95,8 +105,13 @@ const NAV_SECTIONS: { title: string; items: NavItemDef[] }[] = [
 export function AppSidebar() {
   const location = useLocation()
   const { user, signOut } = useAuth()
+  const { data: featureAccess = [] } = useFeatureAccess()
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
+
+  // Determine which modules this user can see
+  const enabledModules = user ? getEffectiveModules(user, featureAccess) : []
+  const visibleSections = NAV_SECTIONS.filter(s => enabledModules.includes(s.module))
 
   const DEPT_CONFIG: Record<string, { label: string; color: string }> = {
     sales: { label: 'Sales', color: 'bg-blue-100 text-blue-700' },
@@ -130,7 +145,7 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="px-2">
-        {NAV_SECTIONS.map((section, sIdx) => (
+        {visibleSections.map((section, sIdx) => (
           <SidebarGroup key={section.title} className="py-1">
             {sIdx > 0 && (
               <SidebarSeparator className="mx-3 my-1 bg-gray-100" />

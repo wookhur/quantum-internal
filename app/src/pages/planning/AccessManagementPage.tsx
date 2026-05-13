@@ -1,0 +1,572 @@
+import { useState, useMemo, useCallback } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Loader2, Shield, Search, UserCog, Save,
+  CheckCircle2, Users, ShieldCheck, Eye, Briefcase, UserX,
+} from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import {
+  useProfiles, useUpdateProfile,
+  useFeatureAccess, useUpdateFeatureAccess,
+  FEATURE_MODULES, ROLE_DEFAULT_ACCESS, getEffectiveModules,
+  type FeatureModule, type FeatureAccessRecord,
+} from '@/hooks/useProfiles'
+import type { User, UserRole, Department } from '@/types'
+
+const ROLE_CONFIG: Record<UserRole, { label: string; className: string; icon: typeof Shield }> = {
+  admin: { label: 'Admin', className: 'bg-red-50 text-red-700 border-red-200', icon: Shield },
+  manager: { label: 'Manager', className: 'bg-blue-50 text-blue-700 border-blue-200', icon: ShieldCheck },
+  staff: { label: 'Staff', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: Users },
+  freelancer: { label: 'Freelancer', className: 'bg-purple-50 text-purple-700 border-purple-200', icon: Briefcase },
+  viewer: { label: 'Viewer', className: 'bg-gray-50 text-gray-600 border-gray-200', icon: Eye },
+}
+
+const DEPT_OPTIONS: { value: Department; label: string }[] = [
+  { value: 'management', label: '경영기획' },
+  { value: 'sales', label: '세일즈' },
+  { value: 'marketing', label: '마케팅' },
+  { value: 'finance', label: '재무' },
+  { value: 'service', label: '서비스' },
+]
+
+const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: 'admin', label: 'Admin (전체 관리자)' },
+  { value: 'manager', label: 'Manager (매니저)' },
+  { value: 'staff', label: 'Staff (직원)' },
+  { value: 'freelancer', label: 'Freelancer (외부)' },
+  { value: 'viewer', label: 'Viewer (열람자)' },
+]
+
+function UserEditDialog({
+  user,
+  featureAccess,
+  open,
+  onOpenChange,
+}: {
+  user: User
+  featureAccess: FeatureAccessRecord[]
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const updateProfile = useUpdateProfile()
+  const updateFeatureAccess = useUpdateFeatureAccess()
+  const { user: currentUser } = useAuth()
+
+  const effectiveModules = getEffectiveModules(user, featureAccess)
+  const [role, setRole] = useState<UserRole>(user.role)
+  const [department, setDepartment] = useState<string>(user.department || '')
+  const [position, setPosition] = useState<string>(user.position || '')
+  const [isExternal, setIsExternal] = useState(user.isExternal)
+  const [enabledModules, setEnabledModules] = useState<FeatureModule[]>(effectiveModules)
+  const [useCustomAccess, setUseCustomAccess] = useState(
+    featureAccess.some(r => r.userId === user.id)
+  )
+  const [saving, setSaving] = useState(false)
+
+  const isSelf = currentUser?.id === user.id
+
+  const handleRoleChange = (newRole: UserRole) => {
+    setRole(newRole)
+    // When role changes and not using custom access, update module list to match new role defaults
+    if (!useCustomAccess) {
+      setEnabledModules(ROLE_DEFAULT_ACCESS[newRole] || [])
+    }
+  }
+
+  const toggleModule = (mod: FeatureModule) => {
+    setEnabledModules(prev =>
+      prev.includes(mod) ? prev.filter(m => m !== mod) : [...prev, mod]
+    )
+  }
+
+  const handleToggleCustomAccess = (checked: boolean) => {
+    setUseCustomAccess(checked)
+    if (!checked) {
+      // Reset to role defaults
+      setEnabledModules(ROLE_DEFAULT_ACCESS[role] || [])
+    }
+  }
+
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    try {
+      // 1. Update profile
+      await updateProfile.mutateAsync({
+        id: user.id,
+        role,
+        department: department ? (department as Department) : null,
+        position: position || null,
+        isExternal,
+      })
+
+      // 2. Update feature access if using custom
+      if (useCustomAccess) {
+        await updateFeatureAccess.mutateAsync({
+          userId: user.id,
+          enabledModules,
+        })
+      }
+
+      onOpenChange(false)
+    } catch (err) {
+      console.error('Failed to save:', err)
+    } finally {
+      setSaving(false)
+    }
+  }, [user.id, role, department, position, isExternal, useCustomAccess, enabledModules, updateProfile, updateFeatureAccess, onOpenChange])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserCog className="size-5" />
+            {user.name} 접근 권한 설정
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5 max-h-[65vh] overflow-y-auto pr-1">
+          {/* Basic Info */}
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+              {user.email}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">역할</Label>
+                <Select value={role} onValueChange={(v) => handleRoleChange(v as UserRole)}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">부서</Label>
+                <Select value={department || '_none'} onValueChange={(v) => setDepartment(v === '_none' ? '' : v)}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">미지정</SelectItem>
+                    {DEPT_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">직책</Label>
+                <Input
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  placeholder="예: 팀장, 이사"
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">외부 인력</Label>
+                <div className="flex items-center gap-2 h-9">
+                  <Switch checked={isExternal} onCheckedChange={setIsExternal} />
+                  <span className="text-xs text-muted-foreground">
+                    {isExternal ? '외부 (프리랜서 등)' : '내부 직원'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature Access */}
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">기능 접근 권한</h3>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={useCustomAccess}
+                  onCheckedChange={handleToggleCustomAccess}
+                  id="custom-access"
+                />
+                <Label htmlFor="custom-access" className="text-xs text-muted-foreground cursor-pointer">
+                  커스텀 설정
+                </Label>
+              </div>
+            </div>
+
+            {!useCustomAccess && (
+              <div className="text-xs text-muted-foreground bg-blue-50 text-blue-700 rounded p-2">
+                현재 역할({ROLE_CONFIG[role]?.label})의 기본 접근 권한이 적용됩니다. 커스텀 설정을 켜면 개별 모듈을 조정할 수 있습니다.
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {FEATURE_MODULES.map(mod => {
+                const isEnabled = enabledModules.includes(mod.key)
+                const isDefault = ROLE_DEFAULT_ACCESS[role]?.includes(mod.key)
+                return (
+                  <div
+                    key={mod.key}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border ${
+                      isEnabled ? 'bg-white border-gray-200' : 'bg-gray-50/50 border-gray-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                      <div>
+                        <div className="text-sm font-medium">{mod.label}</div>
+                        <div className="text-[11px] text-muted-foreground">{mod.description}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!useCustomAccess && isDefault && (
+                        <Badge variant="outline" className="text-[10px] h-4 bg-blue-50 text-blue-600 border-blue-200">
+                          기본
+                        </Badge>
+                      )}
+                      <Switch
+                        checked={isEnabled}
+                        onCheckedChange={() => toggleModule(mod.key)}
+                        disabled={!useCustomAccess}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {isSelf && (
+            <div className="text-xs text-amber-600 bg-amber-50 rounded p-2">
+              본인 계정의 권한 변경 시 페이지를 새로고침해야 반영됩니다.
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            취소
+          </Button>
+          <Button onClick={handleSave} disabled={saving} className="gap-1.5">
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+            {saving ? '저장 중...' : '저장'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function AccessManagementPage() {
+  const { user: currentUser } = useAuth()
+  const { data: profiles = [], isLoading: profilesLoading } = useProfiles()
+  const { data: featureAccess = [], isLoading: accessLoading } = useFeatureAccess()
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [editUser, setEditUser] = useState<User | null>(null)
+
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'manager'
+  const isLoading = profilesLoading || accessLoading
+
+  const filteredProfiles = useMemo(() => {
+    let list = profiles
+    if (roleFilter !== 'all') {
+      list = list.filter(p => p.role === roleFilter)
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      list = list.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.email.toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [profiles, roleFilter, search])
+
+  // Stats
+  const stats = useMemo(() => {
+    const byRole: Record<string, number> = {}
+    for (const p of profiles) {
+      byRole[p.role] = (byRole[p.role] || 0) + 1
+    }
+    return {
+      total: profiles.length,
+      admins: byRole.admin || 0,
+      managers: byRole.manager || 0,
+      staff: byRole.staff || 0,
+      external: profiles.filter(p => p.isExternal).length,
+    }
+  }, [profiles])
+
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
+        <UserX className="size-12 text-muted-foreground" />
+        <p className="text-muted-foreground">접근 권한이 없습니다.</p>
+        <p className="text-xs text-muted-foreground">Admin 또는 Manager 권한이 필요합니다.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">접근 권한 관리</h1>
+        <p className="text-muted-foreground text-sm">
+          직원별 역할 및 기능 접근 권한을 관리합니다
+        </p>
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-5 gap-3">
+        <Card>
+          <CardContent className="py-3 flex items-center gap-3">
+            <Users className="size-5 text-primary" />
+            <div>
+              <div className="text-lg font-bold">{stats.total}</div>
+              <div className="text-xs text-muted-foreground">전체 사용자</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3 flex items-center gap-3">
+            <Shield className="size-5 text-red-500" />
+            <div>
+              <div className="text-lg font-bold">{stats.admins}</div>
+              <div className="text-xs text-muted-foreground">Admin</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3 flex items-center gap-3">
+            <ShieldCheck className="size-5 text-blue-500" />
+            <div>
+              <div className="text-lg font-bold">{stats.managers}</div>
+              <div className="text-xs text-muted-foreground">Manager</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3 flex items-center gap-3">
+            <CheckCircle2 className="size-5 text-emerald-500" />
+            <div>
+              <div className="text-lg font-bold">{stats.staff}</div>
+              <div className="text-xs text-muted-foreground">Staff</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3 flex items-center gap-3">
+            <Briefcase className="size-5 text-purple-500" />
+            <div>
+              <div className="text-lg font-bold">{stats.external}</div>
+              <div className="text-xs text-muted-foreground">외부 인력</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Role Default Access Matrix */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Shield className="size-4" />
+            역할별 기본 접근 권한
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[120px]">역할</TableHead>
+                {FEATURE_MODULES.map(m => (
+                  <TableHead key={m.key} className="text-center text-xs w-20">{m.label}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {ROLE_OPTIONS.map(opt => (
+                <TableRow key={opt.value}>
+                  <TableCell>
+                    <Badge variant="outline" className={`text-xs ${ROLE_CONFIG[opt.value]?.className}`}>
+                      {opt.label.split(' ')[0]}
+                    </Badge>
+                  </TableCell>
+                  {FEATURE_MODULES.map(m => {
+                    const has = ROLE_DEFAULT_ACCESS[opt.value]?.includes(m.key)
+                    return (
+                      <TableCell key={m.key} className="text-center">
+                        <div className={`mx-auto w-3 h-3 rounded-full ${has ? 'bg-emerald-500' : 'bg-gray-200'}`} />
+                      </TableCell>
+                    )
+                  })}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="py-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="이름, 이메일 검색..."
+                className="pl-9 h-9"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="역할" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 역할</SelectItem>
+                {ROLE_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label.split(' ')[0]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* User List */}
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredProfiles.length === 0 ? (
+            <div className="text-center py-20 text-muted-foreground text-sm">
+              사용자가 없습니다.
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[250px]">사용자</TableHead>
+                  <TableHead className="w-[100px]">역할</TableHead>
+                  <TableHead className="w-[100px]">부서</TableHead>
+                  <TableHead className="w-[90px]">직책</TableHead>
+                  <TableHead>접근 가능 기능</TableHead>
+                  <TableHead className="w-[80px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProfiles.map((profile) => {
+                  const roleCfg = ROLE_CONFIG[profile.role] || ROLE_CONFIG.viewer
+                  const modules = getEffectiveModules(profile, featureAccess)
+                  const hasCustom = featureAccess.some(r => r.userId === profile.id)
+                  const isSelf = currentUser?.id === profile.id
+                  const deptLabel = DEPT_OPTIONS.find(d => d.value === profile.department)?.label
+
+                  return (
+                    <TableRow key={profile.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-blue-50 text-blue-600 text-xs font-semibold">
+                              {profile.name?.charAt(0) || '?'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="text-sm font-medium flex items-center gap-1.5">
+                              {profile.name}
+                              {isSelf && (
+                                <Badge variant="outline" className="text-[10px] h-4 bg-blue-50 text-blue-600 border-blue-200">
+                                  나
+                                </Badge>
+                              )}
+                              {profile.isExternal && (
+                                <Badge variant="outline" className="text-[10px] h-4 bg-purple-50 text-purple-600 border-purple-200">
+                                  외부
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{profile.email}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-xs ${roleCfg.className}`}>
+                          {roleCfg.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {deptLabel || <span className="text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {profile.position || <span className="text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {modules.map(mod => (
+                            <Badge
+                              key={mod}
+                              variant="outline"
+                              className="text-[10px] h-4 px-1.5 font-normal"
+                            >
+                              {FEATURE_MODULES.find(m => m.key === mod)?.label || mod}
+                            </Badge>
+                          ))}
+                          {hasCustom && (
+                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-normal bg-amber-50 text-amber-600 border-amber-200">
+                              커스텀
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setEditUser(profile)}
+                        >
+                          <UserCog className="size-3.5 mr-1" />
+                          편집
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Edit Dialog */}
+      {editUser && (
+        <UserEditDialog
+          user={editUser}
+          featureAccess={featureAccess}
+          open={!!editUser}
+          onOpenChange={(open) => { if (!open) setEditUser(null) }}
+        />
+      )}
+    </div>
+  )
+}

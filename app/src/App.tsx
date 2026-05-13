@@ -15,12 +15,14 @@ import { TodosPage } from '@/pages/common/TodosPage'
 import { CalendarPage } from '@/pages/common/CalendarPage'
 import { GamePage } from '@/pages/common/GamePage'
 import { ContractsPage } from '@/pages/consulting/ContractsPage'
+import { ContractDetailPage } from '@/pages/consulting/ContractDetailPage'
 import { PaymentsPage } from '@/pages/consulting/PaymentsPage'
 import { MarketingMetricsPage } from '@/pages/marketing/MarketingMetricsPage'
 import { AdCampaignsPage } from '@/pages/marketing/AdCampaignsPage'
 import { EventsPage } from '@/pages/marketing/EventsPage'
 import { PlanningOverviewPage } from '@/pages/planning/PlanningOverviewPage'
 import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
+import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,10 +68,12 @@ export default function App() {
                 <Route path="/marketing/videos" element={<PlaceholderPage title="영상 콘텐츠" />} />
 
                 <Route path="/consulting/clients" element={<ContractsPage />} />
+                <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />
                 <Route path="/consulting/payments" element={<PaymentsPage />} />
 
                 <Route path="/planning/overview" element={<PlanningOverviewPage />} />
                 <Route path="/planning/projection" element={<RevenueProjectionPage />} />
+                <Route path="/planning/access" element={<AccessManagementPage />} />
 
                 <Route path="/game" element={<GamePage />} />
               </Route>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -7,15 +8,52 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Search, Download, Plus, Loader2, FileText, CheckCircle2, AlertTriangle, XCircle, Upload } from 'lucide-react'
-import { useContracts, useCreateContract } from '@/hooks/useContracts'
+import {
+  Search, Plus, Loader2, DollarSign, CheckCircle2, AlertTriangle, Clock,
+  Upload, Ban, ChevronRight,
+} from 'lucide-react'
+import { useContractsWithInstallments, useCreateContract } from '@/hooks/useContracts'
 import { ContractPdfUploadDialog } from '@/components/ContractPdfUploadDialog'
-import type { ContractStatus } from '@/types'
+import { formatCurrency } from '@/types'
+import type { ContractStatus, PaymentInstallment } from '@/types'
 
-const STATUS_CONFIG: Record<ContractStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className: string }> = {
-  active: { label: '활성', variant: 'default', className: 'bg-emerald-500 text-white' },
-  expiring_soon: { label: '만료 임박', variant: 'outline', className: 'border-yellow-500 text-yellow-600 bg-yellow-50' },
-  expired: { label: '만료', variant: 'destructive', className: 'bg-red-500 text-white' },
+function InstallmentBadge({ installment }: { installment: PaymentInstallment }) {
+  const statusStyles: Record<string, string> = {
+    paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    pending: 'bg-gray-50 text-gray-600 border-gray-200',
+    overdue: 'bg-red-50 text-red-600 border-red-200',
+    partial: 'bg-amber-50 text-amber-700 border-amber-200',
+  }
+  const statusLabel: Record<string, string> = {
+    paid: '완납',
+    pending: '예정',
+    overdue: '연체',
+    partial: '일부',
+  }
+
+  return (
+    <Badge
+      variant="outline"
+      className={`text-[10px] h-5 px-1.5 font-normal ${statusStyles[installment.status] || ''}`}
+    >
+      {installment.label} {statusLabel[installment.status] || installment.status}
+    </Badge>
+  )
+}
+
+/** Compact installment summary for the list row */
+function InstallmentSummaryCell({ installments, currency }: { installments: PaymentInstallment[]; currency: 'KRW' | 'USD' }) {
+  if (installments.length === 0) {
+    return <span className="text-xs text-muted-foreground">납입일정 없음</span>
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {installments.map((inst) => (
+        <InstallmentBadge key={inst.id} installment={inst} />
+      ))}
+    </div>
+  )
 }
 
 const INITIAL_CONTRACT_FORM = {
@@ -28,6 +66,7 @@ const INITIAL_CONTRACT_FORM = {
 }
 
 export function ContractsPage() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -45,32 +84,36 @@ export function ContractsPage() {
     })
   }
 
-  const { data: contracts = [], isLoading, error } = useContracts({
+  const { data: contracts = [], isLoading, error } = useContractsWithInstallments({
     status: statusFilter !== 'all' ? statusFilter as ContractStatus : undefined,
     search: search || undefined,
   })
 
+  // Summary stats
   const total = contracts.length
-  const activeCount = contracts.filter(c => c.status === 'active').length
-  const expiringCount = contracts.filter(c => c.status === 'expiring_soon').length
-  const expiredCount = contracts.filter(c => c.status === 'expired').length
+  const totalPaid = contracts.reduce((s, c) => s + (c.paidAmount || 0), 0)
+  const totalOutstanding = contracts.reduce((s, c) => s + (c.outstandingAmount || 0), 0)
+  const overdueContracts = contracts.filter(c =>
+    c.installments?.some(i => i.status === 'overdue')
+  ).length
+  const cancelledCount = contracts.filter(c => c.status === 'cancelled').length
 
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">계약 고객</h1>
-          <p className="text-muted-foreground">
-            {isLoading ? '로딩 중...' : `총 ${total}건의 계약`}
+          <h1 className="text-2xl font-bold tracking-tight">계약 관리</h1>
+          <p className="text-muted-foreground text-sm">
+            {isLoading ? '로딩 중...' : `총 ${total}건 | 수금 완료 ${formatCurrency(totalPaid)} | 미수금 ${formatCurrency(totalOutstanding)}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => setPdfDialogOpen(true)}>
-            <Upload className="size-4" /> PDF 업로드
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPdfDialogOpen(true)}>
+            <Upload className="size-3.5" /> PDF 업로드
           </Button>
-          <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-            <Plus className="size-4" /> 계약 추가
+          <Button size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
+            <Plus className="size-3.5" /> 계약 추가
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent>
@@ -142,9 +185,6 @@ export function ContractsPage() {
               </div>
             </DialogContent>
           </Dialog>
-          <Button variant="outline" className="gap-2">
-            <Download className="size-4" /> 내보내기
-          </Button>
           <ContractPdfUploadDialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen} />
         </div>
       </div>
@@ -153,37 +193,37 @@ export function ContractsPage() {
       <div className="grid grid-cols-4 gap-3">
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <FileText className="size-5 text-primary" />
-            <div>
-              <div className="text-lg font-bold">{total}</div>
-              <div className="text-xs text-muted-foreground">전체 계약</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
             <CheckCircle2 className="size-5 text-emerald-500" />
             <div>
-              <div className="text-lg font-bold">{activeCount}</div>
-              <div className="text-xs text-muted-foreground">활성</div>
+              <div className="text-lg font-bold">{formatCurrency(totalPaid)}</div>
+              <div className="text-xs text-muted-foreground">수금 완료</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className="size-5 text-yellow-500" />
+            <Clock className="size-5 text-blue-500" />
             <div>
-              <div className="text-lg font-bold">{expiringCount}</div>
-              <div className="text-xs text-muted-foreground">만료 임박</div>
+              <div className="text-lg font-bold">{formatCurrency(totalOutstanding)}</div>
+              <div className="text-xs text-muted-foreground">미수금</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <XCircle className="size-5 text-destructive" />
+            <AlertTriangle className="size-5 text-red-500" />
             <div>
-              <div className="text-lg font-bold">{expiredCount}</div>
-              <div className="text-xs text-muted-foreground">만료</div>
+              <div className="text-lg font-bold">{overdueContracts}</div>
+              <div className="text-xs text-muted-foreground">연체 계약</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3 flex items-center gap-3">
+            <Ban className="size-5 text-gray-400" />
+            <div>
+              <div className="text-lg font-bold">{cancelledCount}</div>
+              <div className="text-xs text-muted-foreground">취소/이탈</div>
             </div>
           </CardContent>
         </Card>
@@ -211,6 +251,7 @@ export function ContractsPage() {
                 <SelectItem value="active">활성</SelectItem>
                 <SelectItem value="expiring_soon">만료 임박</SelectItem>
                 <SelectItem value="expired">만료</SelectItem>
+                <SelectItem value="cancelled">취소</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -230,42 +271,59 @@ export function ContractsPage() {
             </div>
           ) : contracts.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground text-sm">
-              계약이 없습니다.
+              <DollarSign className="size-10 mx-auto mb-3 opacity-30" />
+              <p>계약이 없습니다.</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>계약자</TableHead>
-                  <TableHead>학생</TableHead>
-                  <TableHead>학교</TableHead>
-                  <TableHead className="w-[60px]">학년</TableHead>
-                  <TableHead>연락처</TableHead>
-                  <TableHead className="w-[100px]">계약일</TableHead>
-                  <TableHead className="w-[100px]">만료일</TableHead>
-                  <TableHead className="w-[90px]">상태</TableHead>
+                  <TableHead className="w-[140px]">계약자</TableHead>
+                  <TableHead className="w-[100px]">학생</TableHead>
+                  <TableHead>납입 현황</TableHead>
+                  <TableHead className="text-right w-[130px]">계약 금액</TableHead>
+                  <TableHead className="text-right w-[130px]">수금액</TableHead>
+                  <TableHead className="text-right w-[130px]">잔액</TableHead>
+                  <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {contracts.map((contract) => {
-                  const status = STATUS_CONFIG[contract.status]
+                  const isCancelled = contract.status === 'cancelled'
                   return (
-                    <TableRow key={contract.id} className="hover:bg-muted/50">
-                      <TableCell className="font-medium">{contract.contractorName}</TableCell>
-                      <TableCell>{contract.studentName}</TableCell>
-                      <TableCell className="text-sm">{contract.schoolName}</TableCell>
-                      <TableCell className="text-sm">{contract.gradeAtContract || '-'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{contract.phone || '-'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-mono">
-                        {contract.contractDate?.slice(0, 10)}
+                    <TableRow
+                      key={contract.id}
+                      className={`cursor-pointer hover:bg-muted/50 ${isCancelled ? 'opacity-50' : ''}`}
+                      onClick={() => navigate(`/consulting/clients/${contract.id}`)}
+                    >
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1.5">
+                          {contract.contractorName}
+                          {isCancelled && (
+                            <Badge variant="outline" className="text-[10px] h-4 bg-gray-100 text-gray-500 border-gray-300">
+                              취소
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-mono">
-                        {contract.expiryDate?.slice(0, 10)}
+                      <TableCell className="text-sm">{contract.studentName}</TableCell>
+                      <TableCell>
+                        <InstallmentSummaryCell
+                          installments={contract.installments || []}
+                          currency={contract.currency}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {contract.totalAmount > 0 ? formatCurrency(contract.totalAmount, contract.currency) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm text-emerald-600">
+                        {(contract.paidAmount || 0) > 0 ? formatCurrency(contract.paidAmount!, contract.currency) : '-'}
+                      </TableCell>
+                      <TableCell className={`text-right font-mono text-sm ${(contract.outstandingAmount || 0) > 0 ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+                        {(contract.outstandingAmount || 0) > 0 ? formatCurrency(contract.outstandingAmount!, contract.currency) : '-'}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={status.variant} className={status.className + ' text-xs'}>
-                          {status.label}
-                        </Badge>
+                        <ChevronRight className="size-4 text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   )
