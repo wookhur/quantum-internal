@@ -26,7 +26,6 @@ import {
   CalendarDays,
   Video,
   FileText,
-  CreditCard,
   Gamepad2,
   Briefcase,
   PhoneCall,
@@ -81,7 +80,6 @@ const NAV_SECTIONS: { title: string; module: FeatureModule; items: NavItemDef[] 
     module: 'finance',
     items: [
       { label: '계약 관리', to: '/consulting/clients', icon: FileText },
-      { label: '수금 현황', to: '/consulting/payments', icon: CreditCard },
       { label: '월별 수금', to: '/consulting/collections', icon: CalendarDays },
     ],
   },

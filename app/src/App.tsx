@@ -16,7 +16,6 @@ import { CalendarPage } from '@/pages/common/CalendarPage'
 import { GamePage } from '@/pages/common/GamePage'
 import { ContractsPage } from '@/pages/consulting/ContractsPage'
 import { ContractDetailPage } from '@/pages/consulting/ContractDetailPage'
-import { PaymentsPage } from '@/pages/consulting/PaymentsPage'
 import { MonthlyCollectionPage } from '@/pages/consulting/MonthlyCollectionPage'
 import { MarketingMetricsPage } from '@/pages/marketing/MarketingMetricsPage'
 import { AdCampaignsPage } from '@/pages/marketing/AdCampaignsPage'
@@ -70,7 +69,6 @@ export default function App() {
 
                 <Route path="/consulting/clients" element={<ContractsPage />} />
                 <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />
-                <Route path="/consulting/payments" element={<PaymentsPage />} />
                 <Route path="/consulting/collections" element={<MonthlyCollectionPage />} />
 
                 <Route path="/planning/overview" element={<PlanningOverviewPage />} />
