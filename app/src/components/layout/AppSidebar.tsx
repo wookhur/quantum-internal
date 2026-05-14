@@ -110,7 +110,7 @@ export function AppSidebar() {
   const location = useLocation()
   const { user, signOut } = useAuth()
   const { data: featureAccess = [] } = useFeatureAccess()
-  const { language, setLanguage, t } = useLanguage()
+  const { t } = useLanguage()
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
 
@@ -201,29 +201,6 @@ export function AppSidebar() {
       {/* User area */}
       <SidebarFooter className="px-3 pb-4 pt-2">
         <SidebarSeparator className="mx-1 mb-3 bg-gray-100" />
-        {/* Language toggle */}
-        <div className="flex items-center justify-center gap-1 mb-2 mx-1">
-          <button
-            onClick={() => setLanguage('ko')}
-            className={`flex-1 text-[11px] font-medium py-1 rounded-md transition-colors ${
-              language === 'ko'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            한국어
-          </button>
-          <button
-            onClick={() => setLanguage('en')}
-            className={`flex-1 text-[11px] font-medium py-1 rounded-md transition-colors ${
-              language === 'en'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            English
-          </button>
-        </div>
         <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50 transition-colors">
           <Avatar className="h-8 w-8 ring-2 ring-blue-100">
             <AvatarFallback className="bg-blue-50 text-blue-600 text-xs font-semibold">

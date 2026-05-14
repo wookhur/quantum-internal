@@ -1,14 +1,16 @@
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
 import { Outlet } from 'react-router-dom'
-import { Bell } from 'lucide-react'
+import { Bell, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLanguage } from '@/i18n/LanguageContext'
 import { GlobalSearchBar } from './GlobalSearchBar'
 
 export function AppLayout() {
   const { user } = useAuth()
+  const { language, setLanguage } = useLanguage()
 
   return (
     <SidebarProvider>
@@ -26,8 +28,17 @@ export function AppLayout() {
 
           <div className="flex-1" />
 
-          {/* Right: notification + avatar */}
+          {/* Right: language toggle + notification + avatar */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLanguage(language === 'ko' ? 'en' : 'ko')}
+              className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title="Language"
+            >
+              <Globe size={14} strokeWidth={1.75} />
+              <span>{language === 'ko' ? 'EN' : 'KO'}</span>
+            </button>
+
             <Button
               variant="ghost"
               size="icon"
