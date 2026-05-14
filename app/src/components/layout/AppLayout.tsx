@@ -56,7 +56,7 @@ export function AppLayout() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 bg-[#F6F7FB] p-6">
+        <main className="flex-1 bg-[#F6F7FB] p-3 md:p-6 overflow-x-hidden min-w-0">
           <Outlet />
         </main>
       </SidebarInset>

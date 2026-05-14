@@ -294,9 +294,9 @@ export function ColdCallPage() {
   const filteredCount = coldCallLeads.length
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden -m-6">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-3.5rem)] overflow-hidden -m-3 md:-m-6">
       {/* Left Panel: Cold Call List */}
-      <div className="flex flex-col w-[460px] min-w-[400px] border-r bg-background">
+      <div className="flex flex-col w-full md:w-[460px] md:min-w-[340px] border-b md:border-b-0 md:border-r bg-background max-h-[45vh] md:max-h-none">
         {/* Header */}
         <div className="p-4 border-b space-y-3">
           <div className="flex items-center justify-between">
@@ -457,7 +457,7 @@ export function ColdCallPage() {
       </div>
 
       {/* Right Panel: Lead Detail */}
-      <div className="flex-1 overflow-y-auto bg-muted/30">
+      <div className="flex-1 overflow-y-auto bg-muted/30 min-w-0">
         {selectedLead ? (
           <ColdCallDetail lead={selectedLead} onClose={() => setSelectedLeadId(null)} />
         ) : (

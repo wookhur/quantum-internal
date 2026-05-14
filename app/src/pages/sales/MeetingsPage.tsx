@@ -182,16 +182,16 @@ export function MeetingsPage() {
                     <TableHead className="w-[60px]">{t('meetings.col.meetingNumber')}</TableHead>
                     <TableHead>{t('meetings.col.parent')}</TableHead>
                     <TableHead>{t('meetings.col.student')}</TableHead>
-                    <TableHead>{t('common.phone')}</TableHead>
-                    <TableHead>{t('common.school')}</TableHead>
-                    <TableHead className="w-[50px]">{t('common.grade')}</TableHead>
-                    <TableHead>{t('common.region')}</TableHead>
-                    <TableHead>{t('meetings.col.interestArea')}</TableHead>
-                    <TableHead>{t('meetings.col.sourceChannel')}</TableHead>
-                    <TableHead className="max-w-[150px]">{t('common.memo')}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t('common.phone')}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t('common.school')}</TableHead>
+                    <TableHead className="hidden lg:table-cell w-[50px]">{t('common.grade')}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t('common.region')}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t('meetings.col.interestArea')}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t('meetings.col.sourceChannel')}</TableHead>
+                    <TableHead className="hidden lg:table-cell max-w-[150px]">{t('common.memo')}</TableHead>
                     <TableHead className="w-[60px] text-center">{t('meetings.col.note')}</TableHead>
-                    <TableHead className="w-[90px]">{t('meetings.col.nextMeeting')}</TableHead>
-                    <TableHead className="max-w-[120px]">{t('meetings.col.requiredAction')}</TableHead>
+                    <TableHead className="hidden lg:table-cell w-[90px]">{t('meetings.col.nextMeeting')}</TableHead>
+                    <TableHead className="hidden xl:table-cell max-w-[120px]">{t('meetings.col.requiredAction')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -209,17 +209,17 @@ export function MeetingsPage() {
                         </TableCell>
                         <TableCell className="font-medium text-sm">{meeting.parentName}</TableCell>
                         <TableCell className="text-sm">{meeting.studentName || '-'}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground font-mono">{meeting.phone || '-'}</TableCell>
-                        <TableCell className="text-sm">{meeting.currentSchool || '-'}</TableCell>
-                        <TableCell className="text-sm">{meeting.grade || '-'}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{meeting.region || '-'}</TableCell>
-                        <TableCell className="text-sm max-w-[120px] truncate">{meeting.interestArea || '-'}</TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell text-xs text-muted-foreground font-mono">{meeting.phone || '-'}</TableCell>
+                        <TableCell className="hidden md:table-cell text-sm">{meeting.currentSchool || '-'}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-sm">{meeting.grade || '-'}</TableCell>
+                        <TableCell className="hidden xl:table-cell text-sm text-muted-foreground">{meeting.region || '-'}</TableCell>
+                        <TableCell className="hidden xl:table-cell text-sm max-w-[120px] truncate">{meeting.interestArea || '-'}</TableCell>
+                        <TableCell className="hidden xl:table-cell">
                           {meeting.sourceChannel ? (
                             <Badge variant="outline" className="text-xs font-normal">{meeting.sourceChannel}</Badge>
                           ) : '-'}
                         </TableCell>
-                        <TableCell className="text-xs max-w-[150px] truncate text-muted-foreground">
+                        <TableCell className="hidden lg:table-cell text-xs max-w-[150px] truncate text-muted-foreground">
                           {meeting.memo || '-'}
                         </TableCell>
                         <TableCell className="text-center">
@@ -238,10 +238,10 @@ export function MeetingsPage() {
                             )}
                           </button>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground font-mono">
+                        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground font-mono">
                           {meeting.nextMeetingDate?.replace('2026-', '').replace('2025-', '') || '-'}
                         </TableCell>
-                        <TableCell className="text-sm max-w-[120px] truncate">
+                        <TableCell className="hidden xl:table-cell text-sm max-w-[120px] truncate">
                           {meeting.requiredAction ? (
                             <span className="text-warning font-medium">{meeting.requiredAction}</span>
                           ) : '-'}
@@ -300,7 +300,7 @@ export function MeetingsPage() {
                 <Input value={form.currentSchool} onChange={e => setForm(f => ({ ...f, currentSchool: e.target.value }))} />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>{t('common.grade')}</Label>
                 <Input value={form.grade} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} />
