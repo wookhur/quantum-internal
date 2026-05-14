@@ -105,21 +105,125 @@ const PIPELINE_STAGES: { key: PipelineStage; name: string; color: string }[] = [
   { key: 'contracted', name: '계약 완료', color: '#00C875' },
 ]
 
+/**
+ * Normalize free-text source_channel values into canonical keys.
+ * Handles typos, abbreviations, and language variations.
+ */
+const CHANNEL_NORMALIZE_MAP: { key: string; patterns: RegExp[] }[] = [
+  {
+    key: 'instagram',
+    patterns: [
+      /인스타/i, /instagram/i, /insta/i, /ig/i, /릴스/i, /reels/i,
+    ],
+  },
+  {
+    key: 'youtube',
+    patterns: [
+      /유튜브/i, /youtube/i, /yt/i, /유투브/i, /유튭/i,
+    ],
+  },
+  {
+    key: 'kakao',
+    patterns: [
+      /카카오/i, /kakao/i, /카톡/i, /katalk/i, /오픈채팅/i, /openchat/i,
+    ],
+  },
+  {
+    key: 'naver',
+    patterns: [
+      /네이버/i, /naver/i, /블로그/i, /blog/i, /카페/i, /cafe/i,
+    ],
+  },
+  {
+    key: 'referral',
+    patterns: [
+      /소개/i, /추천/i, /지인/i, /referral/i, /refer/i, /입소문/i, /word/i,
+    ],
+  },
+  {
+    key: 'seminar',
+    patterns: [
+      /세미나/i, /seminar/i, /설명회/i, /강연/i, /웨비나/i, /webinar/i,
+    ],
+  },
+  {
+    key: 'website',
+    patterns: [
+      /웹사이트/i, /website/i, /홈페이지/i, /homepage/i, /web/i, /사이트/i,
+    ],
+  },
+  {
+    key: 'facebook',
+    patterns: [
+      /페이스북/i, /facebook/i, /fb/i, /페북/i, /메타/i,
+    ],
+  },
+  {
+    key: 'tiktok',
+    patterns: [
+      /틱톡/i, /tiktok/i, /tik\s*tok/i,
+    ],
+  },
+  {
+    key: 'ad',
+    patterns: [
+      /광고/i, /ad\b/i, /ads/i, /구글\s*광고/i, /google\s*ad/i, /paid/i, /퍼포먼스/i,
+    ],
+  },
+  {
+    key: 'event',
+    patterns: [
+      /이벤트/i, /event/i, /박람회/i, /fair/i, /전시/i, /expo/i,
+    ],
+  },
+  {
+    key: 'phone',
+    patterns: [
+      /전화/i, /phone/i, /콜/i, /call/i, /인바운드/i, /inbound/i,
+    ],
+  },
+]
+
+function normalizeChannel(raw: string): string {
+  if (!raw) return 'other'
+  const trimmed = raw.trim().toLowerCase()
+  for (const entry of CHANNEL_NORMALIZE_MAP) {
+    if (entry.patterns.some((p) => p.test(trimmed))) {
+      return entry.key
+    }
+  }
+  return 'other'
+}
+
 const CHANNEL_COLORS: Record<string, string> = {
-  instagram: '#E1306C',
-  seminar: '#3B82F6',
-  kakao: '#FEE500',
-  referral: '#059669',
-  website: '#6366F1',
-  other: '#9CA3AF',
+  instagram: '#C026D3',  // purple/magenta
+  youtube: '#EF4444',    // red
+  kakao: '#F59E0B',      // amber/yellow
+  naver: '#16A34A',      // green
+  referral: '#0D9488',   // teal
+  seminar: '#3B82F6',    // blue
+  website: '#6366F1',    // indigo
+  facebook: '#2563EB',   // dark blue
+  tiktok: '#0F172A',     // near-black
+  ad: '#F97316',         // orange
+  event: '#EC4899',      // pink
+  phone: '#64748B',      // slate
+  other: '#9CA3AF',      // gray
 }
 
 const CHANNEL_LABELS: Record<string, string> = {
-  instagram: 'Instagram',
-  seminar: '세미나',
+  instagram: '인스타그램',
+  youtube: '유튜브',
   kakao: '카카오톡',
+  naver: '네이버/블로그',
   referral: '소개/추천',
+  seminar: '세미나/설명회',
   website: '웹사이트',
+  facebook: '페이스북',
+  tiktok: '틱톡',
+  ad: '광고',
+  event: '이벤트/박람회',
+  phone: '전화 인바운드',
   other: '기타',
 }
 
@@ -151,11 +255,11 @@ export function DashboardPage() {
     return PIPELINE_STAGES.map(s => ({ ...s, count: counts[s.key] || 0 }))
   }, [pipelineLeads])
 
-  // Channel distribution
+  // Channel distribution (normalized to merge typos/variations)
   const channelData = useMemo(() => {
     const counts: Record<string, number> = {}
     monthlyLeads.forEach((l: { source_channel: string }) => {
-      const ch = l.source_channel || 'other'
+      const ch = normalizeChannel(l.source_channel)
       counts[ch] = (counts[ch] || 0) + 1
     })
     return Object.entries(counts)
