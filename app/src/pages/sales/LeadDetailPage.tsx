@@ -9,6 +9,7 @@ import {
   FileText, Users, PhoneCall, Briefcase, User,
 } from 'lucide-react'
 import { useLead, useLeadActivities, useCreateActivity, useUpdateActivity, useDeleteActivity } from '@/hooks/useLeads'
+import { useT } from '@/i18n/LanguageContext'
 import { useConsultationCalendarSync } from '@/hooks/useGoogleCalendar'
 import type { CalendarSyncStatus } from '@/hooks/useGoogleCalendar'
 import { getStageConfig, formatCurrency } from '@/types'
@@ -99,21 +100,12 @@ function ActivityIcon({ type }: { type: string }) {
   }
 }
 
-const ACTIVITY_TYPE_LABELS: Record<string, string> = {
-  note: '메모',
-  call: '콜',
-  katalk: '카톡',
-  email: '이메일',
-  meeting: '미팅',
-  consultation: '상담',
-  stage_change: '단계 변경',
-  assignment_change: '담당자 변경',
-  system: '시스템',
-}
+// Activity type labels are now resolved via t() inside the component
 
 // ─── Page ─────────────────────────────────────────────────────────────────
 
 export function LeadDetailPage() {
+  const t = useT()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
   const { id } = useParams()
@@ -146,8 +138,20 @@ export function LeadDetailPage() {
     )
   }
 
+  const ACTIVITY_TYPE_LABELS: Record<string, string> = {
+    note: t('common.memo'),
+    call: t('leadDetail.call'),
+    katalk: t('leadDetail.katalk'),
+    email: t('common.email'),
+    meeting: t('leadDetail.meetings'),
+    consultation: t('leadDetail.consultations'),
+    stage_change: t('leadDetail.stageChange'),
+    assignment_change: t('leadDetail.assignmentChange'),
+    system: t('leadDetail.system'),
+  }
+
   const handleDelete = (activityId: string) => {
-    if (!id || !confirm('이 활동 기록을 삭제하시겠습니까?')) return
+    if (!id || !confirm(t('leadDetail.deleteActivityConfirm'))) return
     deleteActivity.mutate({ id: activityId, leadId: id })
   }
 
@@ -163,10 +167,10 @@ export function LeadDetailPage() {
     return (
       <div className="space-y-4 max-w-5xl">
         <Link to="/sales/leads" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="size-4" /> 리드 목록
+          <ArrowLeft className="size-4" /> {t('leadDetail.leadList')}
         </Link>
         <div className="text-center py-20 text-muted-foreground">
-          리드를 찾을 수 없습니다.
+          {t('leadDetail.leadNotFound')}
         </div>
       </div>
     )
@@ -179,7 +183,7 @@ export function LeadDetailPage() {
     createActivity.mutate({
       leadId: id,
       activityType: 'note',
-      title: '메모 추가',
+      title: t('leadDetail.addMemo'),
       content: noteText,
     }, {
       onSuccess: () => setNoteText(''),
@@ -232,9 +236,9 @@ export function LeadDetailPage() {
       date: (m.meeting_date as string) || (m.created_at as string),
       category: 'meeting',
       icon: <Video className="size-4 text-green-500" />,
-      badge: `${m.meeting_number || ''}차 미팅`,
+      badge: t('meetings.nthMeeting').replace('{n}', String(m.meeting_number || '')),
       badgeColor: 'bg-green-100 text-green-700',
-      title: `${m.parent_name}${m.student_name ? ` / ${m.student_name}` : ''} 미팅`,
+      title: `${m.parent_name}${m.student_name ? ` / ${m.student_name}` : ''} ${t('leadDetail.meetings')}`,
       description: m.memo as string | undefined,
       person: profiles?.name,
     })
@@ -248,9 +252,9 @@ export function LeadDetailPage() {
       date: (c.contract_date as string) || (c.created_at as string),
       category: 'contract',
       icon: <FileText className="size-4 text-emerald-500" />,
-      badge: '계약',
+      badge: t('leadDetail.contracts'),
       badgeColor: 'bg-emerald-100 text-emerald-700',
-      title: `계약 체결 — ${c.student_name}`,
+      title: `${t('leadDetail.contractSigned')} — ${c.student_name}`,
       description: `${formatCurrency(Number(c.total_amount) || 0, (c.currency as 'KRW' | 'USD') || 'KRW')} · ${c.school_name || ''}`,
       person: salesP?.name,
     })
@@ -270,14 +274,14 @@ export function LeadDetailPage() {
       {/* Back + Actions */}
       <div className="flex items-center justify-between">
         <Link to="/sales/leads" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="size-4" /> 리드 목록
+          <ArrowLeft className="size-4" /> {t('leadDetail.leadList')}
         </Link>
         <div className="flex gap-2">
           <Button size="sm" className="gap-1.5 bg-[#0073EA] hover:bg-[#0060C2]" onClick={() => setBookingOpen(true)}>
-            <CalendarPlus className="size-3.5" /> 상담 예약
+            <CalendarPlus className="size-3.5" /> {t('leadDetail.bookConsultation')}
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
-            <Edit className="size-3.5" /> 수정
+            <Edit className="size-3.5" /> {t('common.edit')}
           </Button>
         </div>
       </div>
@@ -291,7 +295,7 @@ export function LeadDetailPage() {
               <span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>{stage.label}</span>
             </div>
             {lead.studentName && (
-              <p className="text-sm text-muted-foreground">{lead.parentName} (학부모)</p>
+              <p className="text-sm text-muted-foreground">{lead.parentName} ({t('leadDetail.parent')})</p>
             )}
           </div>
           {lead.requiredAction && (
@@ -332,7 +336,7 @@ export function LeadDetailPage() {
           )}
           <div className="flex items-center gap-2 text-sm">
             <Calendar className="size-4 text-muted-foreground" />
-            <span>유입: {lead.leadDate}</span>
+            <span>{t('leadDetail.leadDateLabel')}: {lead.leadDate}</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <MessageSquare className="size-4 text-muted-foreground" />
@@ -341,7 +345,7 @@ export function LeadDetailPage() {
           {lead.assignedUser && (
             <div className="flex items-center gap-2 text-sm">
               <User className="size-4 text-muted-foreground" />
-              <span>담당: {lead.assignedUser.name}</span>
+              <span>{t('leadDetail.assignee')}: {lead.assignedUser.name}</span>
             </div>
           )}
         </div>
@@ -355,8 +359,8 @@ export function LeadDetailPage() {
               <PhoneCall className="size-4 text-orange-500" />
             </div>
             <div>
-              <p className="text-[11px] text-gray-500 font-medium">콜드콜</p>
-              <p className="text-lg font-bold text-gray-900">{callCount}회</p>
+              <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.coldCalls')}</p>
+              <p className="text-lg font-bold text-gray-900">{callCount}{t('leadDetail.times')}</p>
             </div>
           </CardContent>
         </Card>
@@ -366,8 +370,8 @@ export function LeadDetailPage() {
               <Video className="size-4 text-green-500" />
             </div>
             <div>
-              <p className="text-[11px] text-gray-500 font-medium">상담</p>
-              <p className="text-lg font-bold text-gray-900">{consultationCount}회</p>
+              <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.consultations')}</p>
+              <p className="text-lg font-bold text-gray-900">{consultationCount}{t('leadDetail.times')}</p>
             </div>
           </CardContent>
         </Card>
@@ -377,8 +381,8 @@ export function LeadDetailPage() {
               <Users className="size-4 text-violet-500" />
             </div>
             <div>
-              <p className="text-[11px] text-gray-500 font-medium">미팅</p>
-              <p className="text-lg font-bold text-gray-900">{meetingCount}회</p>
+              <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.meetings')}</p>
+              <p className="text-lg font-bold text-gray-900">{meetingCount}{t('leadDetail.times')}</p>
             </div>
           </CardContent>
         </Card>
@@ -388,8 +392,8 @@ export function LeadDetailPage() {
               <FileText className="size-4 text-emerald-500" />
             </div>
             <div>
-              <p className="text-[11px] text-gray-500 font-medium">계약</p>
-              <p className="text-lg font-bold text-gray-900">{contractCount}건</p>
+              <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.contracts')}</p>
+              <p className="text-lg font-bold text-gray-900">{contractCount}{t('common.count')}</p>
             </div>
           </CardContent>
         </Card>
@@ -400,17 +404,17 @@ export function LeadDetailPage() {
         <div className="monday-card p-6">
           <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
             <FileText className="size-4 text-emerald-500" />
-            계약 정보
+            {t('leadDetail.contractInfo')}
           </h3>
           <div className="space-y-3">
             {linkedContracts.map((c) => {
               const salesP = c.sales_profiles as { id: string; name: string } | null
               const serviceP = c.service_profiles as { id: string; name: string } | null
               const statusLabels: Record<string, { label: string; color: string }> = {
-                active: { label: '진행 중', color: 'bg-blue-100 text-blue-700' },
-                expiring_soon: { label: '만료 임박', color: 'bg-amber-100 text-amber-700' },
-                expired: { label: '만료', color: 'bg-gray-100 text-gray-600' },
-                cancelled: { label: '취소', color: 'bg-red-100 text-red-600' },
+                active: { label: t('contracts.active'), color: 'bg-blue-100 text-blue-700' },
+                expiring_soon: { label: t('contracts.expiringSoon'), color: 'bg-amber-100 text-amber-700' },
+                expired: { label: t('contracts.expired'), color: 'bg-gray-100 text-gray-600' },
+                cancelled: { label: t('contracts.cancelled'), color: 'bg-red-100 text-red-600' },
               }
               const st = statusLabels[(c.status as string)] || { label: c.status as string, color: 'bg-gray-100 text-gray-600' }
 
@@ -433,10 +437,10 @@ export function LeadDetailPage() {
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                     {c.school_name ? <span>{String(c.school_name)}</span> : null}
-                    <span>계약일: {String(c.contract_date)}</span>
-                    <span>만료일: {String(c.expiry_date)}</span>
-                    {salesP && <span>영업 담당: {salesP.name}</span>}
-                    {serviceP && <span>서비스 담당: {serviceP.name}</span>}
+                    <span>{t('leadDetail.contractDate')}: {String(c.contract_date)}</span>
+                    <span>{t('leadDetail.expiryDate')}: {String(c.expiry_date)}</span>
+                    {salesP && <span>{t('leadDetail.salesRep')}: {salesP.name}</span>}
+                    {serviceP && <span>{t('leadDetail.serviceRep')}: {serviceP.name}</span>}
                   </div>
                 </Link>
               )
@@ -448,7 +452,7 @@ export function LeadDetailPage() {
       {/* Memo */}
       {lead.memo && (
         <div className="monday-card p-6">
-          <h3 className="text-sm font-semibold mb-2">메모</h3>
+          <h3 className="text-sm font-semibold mb-2">{t('common.memo')}</h3>
           <p className="text-sm leading-relaxed text-muted-foreground">{lead.memo}</p>
         </div>
       )}
@@ -457,20 +461,20 @@ export function LeadDetailPage() {
       <div className="monday-card p-6">
         <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
           <Clock className="size-4 text-gray-500" />
-          고객 여정 타임라인
+          {t('leadDetail.journeyTimeline')}
         </h3>
 
         {/* Add note */}
         <div className="flex gap-2 mb-4">
           <input
             type="text"
-            placeholder="메모를 입력하세요..."
+            placeholder={t('leadDetail.memoPlaceholder')}
             value={noteText}
             onChange={e => setNoteText(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddNote()}
             className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0073EA]/20 focus:border-[#0073EA]"
           />
-          <Button size="sm" onClick={handleAddNote} disabled={!noteText.trim()}>추가</Button>
+          <Button size="sm" onClick={handleAddNote} disabled={!noteText.trim()}>{t('common.add')}</Button>
         </div>
 
         {/* Timeline list */}
@@ -507,7 +511,7 @@ export function LeadDetailPage() {
                         <textarea
                           value={editContent}
                           onChange={e => setEditContent(e.target.value)}
-                          placeholder="내용 (선택)"
+                          placeholder={t('leadDetail.contentOptional')}
                           rows={2}
                           className="w-full px-2 py-1 text-xs border border-gray-200 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-[#0073EA]/20 focus:border-[#0073EA]"
                         />
@@ -517,13 +521,13 @@ export function LeadDetailPage() {
                             disabled={!editTitle.trim() || updateActivity.isPending}
                             className="inline-flex items-center gap-1 rounded-md bg-[#0073EA] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#0060C2] disabled:opacity-40"
                           >
-                            <Save className="size-3" /> 저장
+                            <Save className="size-3" /> {t('common.save')}
                           </button>
                           <button
                             onClick={() => setEditingId(null)}
                             className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
                           >
-                            <X className="size-3" /> 취소
+                            <X className="size-3" /> {t('common.cancel')}
                           </button>
                         </div>
                       </div>
@@ -548,7 +552,7 @@ export function LeadDetailPage() {
                           {isActivity && a && a.activityType === 'consultation' && syncStatus?.[a.id]?.status === 'time_changed' && syncStatus[a.id].updatedStart && (
                             <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
                               <RefreshCw className="size-3" />
-                              변경된 시간: {new Date(syncStatus[a.id].updatedStart!).toLocaleString('ko-KR')}
+                              {t('leadDetail.changedTime')}: {new Date(syncStatus[a.id].updatedStart!).toLocaleString('ko-KR')}
                             </p>
                           )}
                           <p className="text-xs text-gray-400 mt-1">
@@ -563,7 +567,7 @@ export function LeadDetailPage() {
                             <button
                               onClick={() => handleEditStart(a)}
                               className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-                              title="수정"
+                              title={t('common.edit')}
                             >
                               <Pencil className="size-3.5" />
                             </button>
@@ -571,7 +575,7 @@ export function LeadDetailPage() {
                               <button
                                 onClick={() => handleDelete(a.id)}
                                 className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
-                                title="삭제"
+                                title={t('common.delete')}
                               >
                                 <Trash2 className="size-3.5" />
                               </button>
@@ -584,7 +588,7 @@ export function LeadDetailPage() {
                 )
               })
             ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">활동 기록이 없습니다.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">{t('leadDetail.noActivities')}</p>
             )}
           </div>
         </div>
@@ -617,26 +621,27 @@ export function LeadDetailPage() {
 // ─── Sync Badge ─────────────────────────────────────────────────────────────
 
 function SyncBadge({ status }: { status: CalendarSyncStatus }) {
+  const t = useT()
   switch (status) {
     case 'synced':
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-600">
           <CheckCircle2 className="size-3" />
-          동기화됨
+          {t('leadDetail.synced')}
         </span>
       )
     case 'time_changed':
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-600">
           <AlertTriangle className="size-3" />
-          시간 변경됨
+          {t('leadDetail.timeChanged')}
         </span>
       )
     case 'cancelled':
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600">
           <XCircle className="size-3" />
-          캘린더 삭제됨
+          {t('leadDetail.calendarDeleted')}
         </span>
       )
     case 'no_event_id':

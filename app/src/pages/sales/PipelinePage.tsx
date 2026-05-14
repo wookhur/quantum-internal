@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { useNavigate } from 'react-router-dom'
 import {
   DndContext,
@@ -21,7 +22,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useLeads, useUpdateLead } from '@/hooks/useLeads'
 import {
   PIPELINE_STAGES,
-  getStageConfig,
+
   type Lead,
   type PipelineStage,
 } from '@/types'
@@ -58,33 +59,33 @@ const STAGE_COLOR_MAP: Record<string, string> = {
 // timeAgo helper
 // ---------------------------------------------------------------------------
 
-function timeAgo(dateString: string | undefined): string {
+function timeAgo(dateString: string | undefined, t: ReturnType<typeof useT>): string {
   if (!dateString) return ''
   const now = new Date()
   const date = new Date(dateString)
   const diffMs = now.getTime() - date.getTime()
-  if (diffMs < 0) return '방금'
+  if (diffMs < 0) return t('common.justNow')
 
   const seconds = Math.floor(diffMs / 1000)
-  if (seconds < 60) return '방금'
+  if (seconds < 60) return t('common.justNow')
 
   const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}분 전`
+  if (minutes < 60) return t('common.minutesAgo', { n: minutes })
 
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}시간 전`
+  if (hours < 24) return t('common.hoursAgo', { n: hours })
 
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}일 전`
+  if (days < 7) return t('common.daysAgo', { n: days })
 
   const weeks = Math.floor(days / 7)
-  if (weeks < 5) return `${weeks}주 전`
+  if (weeks < 5) return t('common.weeksAgo', { n: weeks })
 
   const months = Math.floor(days / 30)
-  if (months < 12) return `${months}개월 전`
+  if (months < 12) return t('common.monthsAgo', { n: months })
 
   const years = Math.floor(days / 365)
-  return `${years}년 전`
+  return t('common.yearsAgo', { n: years })
 }
 
 // ---------------------------------------------------------------------------
@@ -110,9 +111,10 @@ interface LeadCardProps {
   stageColor: string
   onClick: () => void
   isDragOverlay?: boolean
+  t: ReturnType<typeof useT>
 }
 
-function LeadCardContent({ lead, stageColor, onClick, isDragOverlay }: LeadCardProps) {
+function LeadCardContent({ lead, stageColor, onClick, isDragOverlay, t }: LeadCardProps) {
   return (
     <div
       onClick={onClick}
@@ -127,7 +129,7 @@ function LeadCardContent({ lead, stageColor, onClick, isDragOverlay }: LeadCardP
         {/* Parent name */}
         <p className="text-sm font-semibold text-foreground truncate">
           {lead.parentName}
-          {lead.parentName && <span className="text-muted-foreground font-normal"> (부모)</span>}
+          {lead.parentName && <span className="text-muted-foreground font-normal"> ({t('pipeline.parent')})</span>}
         </p>
 
         {/* Student + grade */}
@@ -175,14 +177,14 @@ function LeadCardContent({ lead, stageColor, onClick, isDragOverlay }: LeadCardP
 
         {/* Relative time */}
         <p className="text-[11px] text-muted-foreground/60">
-          {timeAgo(lead.updatedAt || lead.createdAt)}
+          {timeAgo(lead.updatedAt || lead.createdAt, t)}
         </p>
       </div>
     </div>
   )
 }
 
-function SortableLeadCard({ lead, stageColor, onClick }: LeadCardProps) {
+function SortableLeadCard({ lead, stageColor, onClick, t }: LeadCardProps) {
   const {
     attributes,
     listeners,
@@ -200,7 +202,7 @@ function SortableLeadCard({ lead, stageColor, onClick }: LeadCardProps) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <LeadCardContent lead={lead} stageColor={stageColor} onClick={onClick} />
+      <LeadCardContent lead={lead} stageColor={stageColor} onClick={onClick} t={t} />
     </div>
   )
 }
@@ -213,9 +215,10 @@ interface KanbanColumnProps {
   stage: (typeof PIPELINE_STAGES)[number]
   leads: Lead[]
   onCardClick: (id: string) => void
+  t: ReturnType<typeof useT>
 }
 
-function KanbanColumn({ stage, leads, onCardClick }: KanbanColumnProps) {
+function KanbanColumn({ stage, leads, onCardClick, t }: KanbanColumnProps) {
   const stageColor = STAGE_COLOR_MAP[stage.key] || '#C4C4C4'
 
   return (
@@ -226,7 +229,7 @@ function KanbanColumn({ stage, leads, onCardClick }: KanbanColumnProps) {
         style={{ borderTop: `4px solid ${stageColor}` }}
       >
         <div className="flex items-center justify-between px-3 py-2.5">
-          <h3 className="text-sm font-semibold text-foreground">{stage.label}</h3>
+          <h3 className="text-sm font-semibold text-foreground">{t('stage.' + stage.key)}</h3>
           <Badge
             variant="secondary"
             className="text-xs font-mono tabular-nums px-2 py-0.5"
@@ -251,13 +254,14 @@ function KanbanColumn({ stage, leads, onCardClick }: KanbanColumnProps) {
               lead={lead}
               stageColor={stageColor}
               onClick={() => onCardClick(lead.id)}
+              t={t}
             />
           ))}
         </SortableContext>
 
         {leads.length === 0 && (
           <div className="flex items-center justify-center h-24 text-xs text-muted-foreground">
-            리드 없음
+            {t('pipeline.noLeads')}
           </div>
         )}
       </div>
@@ -299,27 +303,28 @@ function SkeletonColumns() {
 
 const INACTIVE_DROP_CONFIG: {
   key: PipelineStage
-  label: string
+  labelKey: string
   icon: typeof Pause
   color: string
   bgColor: string
   hoverBg: string
-  description: string
+  descriptionKey: string
 }[] = [
-  { key: 'on_hold', label: '보류', icon: Pause, color: 'text-amber-600', bgColor: 'bg-amber-50', hoverBg: 'bg-amber-100', description: '나중에 다시 연락' },
-  { key: 'no_response', label: '응답없음', icon: PhoneOff, color: 'text-gray-500', bgColor: 'bg-gray-50', hoverBg: 'bg-gray-100', description: '연락이 안 됨' },
-  { key: 'rejected', label: '거절', icon: XCircle, color: 'text-red-500', bgColor: 'bg-red-50', hoverBg: 'bg-red-100', description: '서비스 거절' },
-  { key: 'lost', label: '이탈', icon: UserX, color: 'text-gray-400', bgColor: 'bg-gray-50', hoverBg: 'bg-gray-100', description: '더 이상 진행 불가' },
+  { key: 'on_hold', labelKey: 'stage.on_hold', icon: Pause, color: 'text-amber-600', bgColor: 'bg-amber-50', hoverBg: 'bg-amber-100', descriptionKey: 'pipeline.onHoldDesc' },
+  { key: 'no_response', labelKey: 'stage.no_response', icon: PhoneOff, color: 'text-gray-500', bgColor: 'bg-gray-50', hoverBg: 'bg-gray-100', descriptionKey: 'pipeline.noResponseDesc' },
+  { key: 'rejected', labelKey: 'stage.rejected', icon: XCircle, color: 'text-red-500', bgColor: 'bg-red-50', hoverBg: 'bg-red-100', descriptionKey: 'pipeline.rejectedDesc' },
+  { key: 'lost', labelKey: 'stage.lost', icon: UserX, color: 'text-gray-400', bgColor: 'bg-gray-50', hoverBg: 'bg-gray-100', descriptionKey: 'pipeline.lostDesc' },
 ]
 
-function InactiveDropZoneItem({ stageKey, label, icon: Icon, color, bgColor, hoverBg, description }: {
+function InactiveDropZoneItem({ stageKey, labelKey, icon: Icon, color, bgColor, hoverBg, descriptionKey, t }: {
   stageKey: PipelineStage
-  label: string
+  labelKey: string
   icon: typeof Pause
   color: string
   bgColor: string
   hoverBg: string
-  description: string
+  descriptionKey: string
+  t: ReturnType<typeof useT>
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: stageKey })
 
@@ -337,14 +342,14 @@ function InactiveDropZoneItem({ stageKey, label, icon: Icon, color, bgColor, hov
     >
       <Icon className={`size-5 ${color} ${isOver ? 'animate-pulse' : ''}`} />
       <div className="text-left">
-        <p className={`text-sm font-semibold ${color}`}>{label}</p>
-        <p className="text-[11px] text-muted-foreground">{description}</p>
+        <p className={`text-sm font-semibold ${color}`}>{t(labelKey)}</p>
+        <p className="text-[11px] text-muted-foreground">{t(descriptionKey)}</p>
       </div>
     </div>
   )
 }
 
-function InactiveDropZones({ isDragging }: { isDragging: boolean }) {
+function InactiveDropZones({ isDragging, t }: { isDragging: boolean; t: ReturnType<typeof useT> }) {
   if (!isDragging) return null
 
   return (
@@ -353,12 +358,13 @@ function InactiveDropZones({ isDragging }: { isDragging: boolean }) {
         <InactiveDropZoneItem
           key={config.key}
           stageKey={config.key}
-          label={config.label}
+          labelKey={config.labelKey}
           icon={config.icon}
           color={config.color}
           bgColor={config.bgColor}
           hoverBg={config.hoverBg}
-          description={config.description}
+          descriptionKey={config.descriptionKey}
+          t={t}
         />
       ))}
     </div>
@@ -372,9 +378,10 @@ function InactiveDropZones({ isDragging }: { isDragging: boolean }) {
 interface InactiveSectionProps {
   leads: Lead[]
   onReactivate: (lead: Lead) => void
+  t: ReturnType<typeof useT>
 }
 
-function InactiveLeadsSection({ leads, onReactivate }: InactiveSectionProps) {
+function InactiveLeadsSection({ leads, onReactivate, t }: InactiveSectionProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   if (leads.length === 0) return null
@@ -392,7 +399,7 @@ function InactiveLeadsSection({ leads, onReactivate }: InactiveSectionProps) {
             <ChevronRight className="size-4 text-muted-foreground" />
           )}
           <span className="text-sm font-semibold text-foreground">
-            비활성 리드 (보류/응답없음/거절/이탈)
+            {t('pipeline.inactiveLeads')}
           </span>
           <Badge variant="secondary" className="text-xs font-mono">
             {leads.length}
@@ -405,18 +412,17 @@ function InactiveLeadsSection({ leads, onReactivate }: InactiveSectionProps) {
           <table className="monday-table">
             <thead>
               <tr>
-                <th>이름</th>
-                <th>학생</th>
-                <th>상태</th>
-                <th>채널</th>
-                <th>담당자</th>
-                <th>업데이트</th>
+                <th>{t('leads.col.parent')}</th>
+                <th>{t('leads.col.student')}</th>
+                <th>{t('leads.col.status')}</th>
+                <th>{t('leads.col.sourceChannel')}</th>
+                <th>{t('leads.col.assignee')}</th>
+                <th>{t('common.updated')}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {leads.map((lead) => {
-                const config = getStageConfig(lead.pipelineStage)
                 return (
                   <tr key={lead.id}>
                     <td className="font-medium">{lead.parentName}</td>
@@ -436,7 +442,7 @@ function InactiveLeadsSection({ leads, onReactivate }: InactiveSectionProps) {
                               : '#FFFFFF',
                         }}
                       >
-                        {config.label}
+                        {t('stage.' + lead.pipelineStage)}
                       </span>
                     </td>
                     <td className="text-muted-foreground">
@@ -446,7 +452,7 @@ function InactiveLeadsSection({ leads, onReactivate }: InactiveSectionProps) {
                       {lead.assignedUser?.name || '-'}
                     </td>
                     <td className="text-muted-foreground text-xs">
-                      {timeAgo(lead.updatedAt)}
+                      {timeAgo(lead.updatedAt, t)}
                     </td>
                     <td>
                       <Button
@@ -456,7 +462,7 @@ function InactiveLeadsSection({ leads, onReactivate }: InactiveSectionProps) {
                         onClick={() => onReactivate(lead)}
                       >
                         <RotateCcw className="size-3" />
-                        재활성화
+                        {t('pipeline.reactivate')}
                       </Button>
                     </td>
                   </tr>
@@ -475,6 +481,7 @@ function InactiveLeadsSection({ leads, onReactivate }: InactiveSectionProps) {
 // ---------------------------------------------------------------------------
 
 export function PipelinePage() {
+  const t = useT()
   const navigate = useNavigate()
   const { data: leads = [], isLoading } = useLeads()
   const updateLead = useUpdateLead()
@@ -597,9 +604,9 @@ export function PipelinePage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">파이프라인</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('pipeline.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            드래그앤드롭으로 리드 상태를 변경하세요
+            {t('pipeline.subtitle')}
           </p>
         </div>
         <SkeletonColumns />
@@ -612,9 +619,9 @@ export function PipelinePage() {
       {/* ---- Header ---- */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">파이프라인</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('pipeline.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            드래그앤드롭으로 리드 상태를 변경하세요
+            {t('pipeline.subtitle')}
           </p>
         </div>
 
@@ -626,7 +633,7 @@ export function PipelinePage() {
                 className="inline-block size-2.5 rounded-full"
                 style={{ backgroundColor: STAGE_COLOR_MAP[s.key] }}
               />
-              <span className="text-xs text-muted-foreground">{s.label}</span>
+              <span className="text-xs text-muted-foreground">{t('stage.' + s.key)}</span>
             </div>
           ))}
         </div>
@@ -647,12 +654,13 @@ export function PipelinePage() {
               stage={stage}
               leads={columnLeads}
               onCardClick={handleCardClick}
+              t={t}
             />
           ))}
         </div>
 
         {/* ---- Inactive Drop Zones (appear while dragging) ---- */}
-        <InactiveDropZones isDragging={!!activeId} />
+        <InactiveDropZones isDragging={!!activeId} t={t} />
 
         {/* Drag overlay - renders the card being dragged */}
         <DragOverlay dropAnimation={null}>
@@ -665,6 +673,7 @@ export function PipelinePage() {
                 }
                 onClick={() => {}}
                 isDragOverlay
+                t={t}
               />
             </div>
           ) : null}
@@ -675,6 +684,7 @@ export function PipelinePage() {
       <InactiveLeadsSection
         leads={inactiveLeads}
         onReactivate={handleReactivate}
+        t={t}
       />
     </div>
   )

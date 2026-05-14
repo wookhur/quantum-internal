@@ -11,17 +11,18 @@ import {
 } from 'lucide-react'
 import { useMarketingMetricsByYear, useCreateMarketingMetric, useSyncMarketingMetrics } from '@/hooks/useMarketingMetrics'
 import { currentYearKST, currentMonthKST } from '@/lib/date'
+import { useT } from '@/i18n/LanguageContext'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   AreaChart, Area,
 } from 'recharts'
 
 const CHANNELS = [
-  { key: 'kakao', label: '카카오 채널', color: '#FEE500', textColor: '#3C1E1E', bgLight: 'bg-yellow-50', borderLight: 'border-yellow-200' },
-  { key: 'instagram', label: '인스타그램', color: '#E1306C', textColor: '#fff', bgLight: 'bg-pink-50', borderLight: 'border-pink-200' },
-  { key: 'youtube', label: '유튜브', color: '#FF0000', textColor: '#fff', bgLight: 'bg-red-50', borderLight: 'border-red-200' },
-  { key: 'blog', label: '블로그', color: '#03C75A', textColor: '#fff', bgLight: 'bg-green-50', borderLight: 'border-green-200' },
-  { key: 'news', label: '뉴스/기사', color: '#4A90D9', textColor: '#fff', bgLight: 'bg-blue-50', borderLight: 'border-blue-200' },
+  { key: 'kakao', labelKey: 'mktMetrics.kakao', color: '#FEE500', textColor: '#3C1E1E', bgLight: 'bg-yellow-50', borderLight: 'border-yellow-200' },
+  { key: 'instagram', labelKey: 'mktMetrics.instagram', color: '#E1306C', textColor: '#fff', bgLight: 'bg-pink-50', borderLight: 'border-pink-200' },
+  { key: 'youtube', labelKey: 'mktMetrics.youtube', color: '#FF0000', textColor: '#fff', bgLight: 'bg-red-50', borderLight: 'border-red-200' },
+  { key: 'blog', labelKey: 'mktMetrics.blog', color: '#03C75A', textColor: '#fff', bgLight: 'bg-green-50', borderLight: 'border-green-200' },
+  { key: 'news', labelKey: 'mktMetrics.news', color: '#4A90D9', textColor: '#fff', bgLight: 'bg-blue-50', borderLight: 'border-blue-200' },
 ] as const
 
 const MONTH_LABELS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
@@ -45,6 +46,7 @@ function formatNum(n: number): string {
 }
 
 export function MarketingMetricsPage() {
+  const t = useT()
   const [year, setYear] = useState(currentYear)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_METRIC_FORM)
@@ -142,13 +144,13 @@ export function MarketingMetricsPage() {
       {/* Sync result feedback */}
       {syncMetrics.isSuccess && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800 flex items-center justify-between">
-          <span>✓ 동기화 완료 — {syncMetrics.data.synced}개 채널 업데이트됨</span>
+          <span>✓ {t('mktMetrics.syncDone', { n: syncMetrics.data.synced })}</span>
           <button className="text-green-600 hover:text-green-800" onClick={() => syncMetrics.reset()}>✕</button>
         </div>
       )}
       {syncMetrics.isError && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 flex items-center justify-between">
-          <span>동기화 실패: {(syncMetrics.error as Error)?.message || '알 수 없는 오류'}</span>
+          <span>{t('mktMetrics.syncFail')}: {(syncMetrics.error as Error)?.message || t('common.unknownError')}</span>
           <button className="text-red-600 hover:text-red-800" onClick={() => syncMetrics.reset()}>✕</button>
         </div>
       )}
@@ -156,9 +158,9 @@ export function MarketingMetricsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">마케팅 지표</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('mktMetrics.title')}</h1>
           <p className="text-muted-foreground text-sm">
-            {isLoading ? '로딩 중...' : `${year}년 채널별 팔로워 추이 및 성과`}
+            {isLoading ? t('common.loading') : t('mktMetrics.subtitle', { year })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -180,21 +182,21 @@ export function MarketingMetricsPage() {
             onClick={() => syncMetrics.mutate()}
           >
             <RefreshCw className={`size-4 mr-1 ${syncMetrics.isPending ? 'animate-spin' : ''}`} />
-            {syncMetrics.isPending ? '동기화 중...' : 'API 동기화'}
+            {syncMetrics.isPending ? t('mktMetrics.syncing') : t('mktMetrics.apiSync')}
           </Button>
           <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}>
             <Plus className="size-4 mr-1" />
-            지표 추가
+            {t('mktMetrics.addMetric')}
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>지표 추가</DialogTitle>
+                <DialogTitle>{t('mktMetrics.addMetric')}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>연도</Label>
+                    <Label>{t('mktMetrics.year')}</Label>
                     <Input
                       type="number"
                       value={form.year}
@@ -202,7 +204,7 @@ export function MarketingMetricsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>월</Label>
+                    <Label>{t('mktMetrics.month')}</Label>
                     <Select value={String(form.month)} onValueChange={v => setForm(f => ({ ...f, month: Number(v) }))}>
                       <SelectTrigger>
                         <SelectValue />
@@ -216,29 +218,29 @@ export function MarketingMetricsPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>채널</Label>
+                  <Label>{t('mktMetrics.channel')}</Label>
                   <Select value={form.channel} onValueChange={v => v && setForm(f => ({ ...f, channel: v }))}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {CHANNELS.map(ch => (
-                        <SelectItem key={ch.key} value={ch.key}>{ch.label}</SelectItem>
+                        <SelectItem key={ch.key} value={ch.key}>{t(ch.labelKey)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>지표명</Label>
+                  <Label>{t('mktMetrics.metricName')}</Label>
                   <Input
                     value={form.metric}
                     onChange={e => setForm(f => ({ ...f, metric: e.target.value }))}
-                    placeholder="예: 팔로워 수, 조회수"
+                    placeholder={t('mktMetrics.metricPlaceholder')}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>값</Label>
+                    <Label>{t('mktMetrics.value')}</Label>
                     <Input
                       type="number"
                       value={form.value}
@@ -246,7 +248,7 @@ export function MarketingMetricsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>연간 목표 (선택)</Label>
+                    <Label>{t('mktMetrics.annualTarget')}</Label>
                     <Input
                       type="number"
                       value={form.annualTarget}
@@ -259,7 +261,7 @@ export function MarketingMetricsPage() {
                   onClick={handleCreateMetric}
                   disabled={createMetric.isPending || !form.metric}
                 >
-                  {createMetric.isPending ? '저장 중...' : '추가'}
+                  {createMetric.isPending ? t('common.saving') : t('common.add')}
                 </Button>
               </div>
             </DialogContent>
@@ -273,7 +275,7 @@ export function MarketingMetricsPage() {
         </div>
       ) : error ? (
         <div className="text-center py-20 text-destructive text-sm">
-          데이터를 불러오는 중 오류가 발생했습니다.
+          {t('common.error')}
         </div>
       ) : (
         <>
@@ -288,7 +290,7 @@ export function MarketingMetricsPage() {
                       className="px-2.5 py-1 rounded-md text-xs font-semibold"
                       style={{ backgroundColor: ch.color, color: ch.textColor }}
                     >
-                      {ch.label}
+                      {t(ch.labelKey)}
                     </div>
                     {ch.metricName && (
                       <span className="text-[10px] text-muted-foreground">{ch.metricName}</span>
@@ -309,7 +311,7 @@ export function MarketingMetricsPage() {
                     )}
                     {ch.hasData && ch.change === 0 && ch.prevValue > 0 && (
                       <div className="flex items-center gap-1 mt-0.5 text-xs text-muted-foreground">
-                        <Minus className="size-3.5" /> 변동 없음
+                        <Minus className="size-3.5" /> {t('common.noChange')}
                       </div>
                     )}
                   </div>
@@ -319,7 +321,7 @@ export function MarketingMetricsPage() {
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground flex items-center gap-1">
-                          <Target className="size-3" /> 목표 {formatNum(ch.annualTarget)}
+                          <Target className="size-3" /> {t('mktMetrics.target')} {formatNum(ch.annualTarget)}
                         </span>
                         <span className={`font-semibold ${ch.progressPct >= 100 ? 'text-emerald-600' : ch.progressPct >= 50 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                           {ch.progressPct}%
@@ -367,7 +369,7 @@ export function MarketingMetricsPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <TrendingUp className="size-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">월별 채널 추이</span>
+                    <span className="text-sm font-medium">{t('mktMetrics.monthlyTrend')}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {activeChannels.map(ch => (
@@ -378,7 +380,7 @@ export function MarketingMetricsPage() {
                         style={{ borderColor: ch.color, color: ch.color }}
                       >
                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ch.color }} />
-                        {ch.label}
+                        {t(ch.labelKey)}
                       </Badge>
                     ))}
                   </div>
@@ -400,14 +402,14 @@ export function MarketingMetricsPage() {
                         }}
                         formatter={(value: unknown, name: unknown) => {
                           const ch = CHANNELS.find(c => c.key === name)
-                          return [Number(value).toLocaleString(), ch?.label || String(name)]
+                          return [Number(value).toLocaleString(), ch ? t(ch.labelKey) : String(name)]
                         }}
                       />
                       <Legend
                         wrapperStyle={{ fontSize: '12px' }}
                         formatter={(value: string) => {
                           const ch = CHANNELS.find(c => c.key === value)
-                          return ch?.label || value
+                          return ch ? t(ch.labelKey) : value
                         }}
                       />
                       {CHANNELS.map(ch => (
@@ -443,7 +445,7 @@ export function MarketingMetricsPage() {
                           className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: ch.color }}
                         />
-                        <span className="text-sm font-medium">{ch.label}</span>
+                        <span className="text-sm font-medium">{t(ch.labelKey)}</span>
                         <span className="text-xs text-muted-foreground">{ch.metricName}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">

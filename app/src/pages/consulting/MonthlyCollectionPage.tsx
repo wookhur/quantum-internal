@@ -9,31 +9,50 @@ import {
 } from 'lucide-react'
 import { useInstallments } from '@/hooks/useInstallments'
 import { formatCurrency } from '@/types'
+import { useT } from '@/i18n/LanguageContext'
 import type { PaymentInstallment, InstallmentStatus } from '@/types'
 
-const STATUS_CONFIG: Record<InstallmentStatus, { label: string; color: string; icon: typeof Clock }> = {
-  paid: { label: '완납', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
-  partial: { label: '일부 납부', color: 'bg-amber-50 text-amber-700 border-amber-200', icon: CircleDot },
-  overdue: { label: '연체', color: 'bg-red-50 text-red-700 border-red-200', icon: AlertTriangle },
-  pending: { label: '예정', color: 'bg-gray-50 text-gray-600 border-gray-200', icon: Clock },
+function useStatusConfig() {
+  const t = useT()
+  const STATUS_CONFIG: Record<InstallmentStatus, { label: string; color: string; icon: typeof Clock }> = {
+    paid: { label: t('collection.status.fullyPaid'), color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+    partial: { label: t('collection.status.partial'), color: 'bg-amber-50 text-amber-700 border-amber-200', icon: CircleDot },
+    overdue: { label: t('collection.status.overdue'), color: 'bg-red-50 text-red-700 border-red-200', icon: AlertTriangle },
+    pending: { label: t('collection.status.pending'), color: 'bg-gray-50 text-gray-600 border-gray-200', icon: Clock },
+  }
+  return STATUS_CONFIG
 }
-
-const MONTH_NAMES = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
 
 function getMonthKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
-function formatMonthLabel(key: string): string {
-  const [year, month] = key.split('-')
-  return `${year}년 ${MONTH_NAMES[Number(month) - 1]}`
+function useFormatMonthLabel() {
+  const t = useT()
+  return (key: string): string => {
+    const [year, month] = key.split('-')
+    const monthName = t(`collection.monthNames.${Number(month)}`)
+    return t('collection.monthYearFormat').replace('{year}', year).replace('{month}', monthName)
+  }
 }
 
-function getDayLabel(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  const day = d.getDate()
-  const weekday = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()]
-  return `${day}일 (${weekday})`
+function useGetDayLabel() {
+  const t = useT()
+  const weekdayKeys = [
+    'collection.weekdays.sun',
+    'collection.weekdays.mon',
+    'collection.weekdays.tue',
+    'collection.weekdays.wed',
+    'collection.weekdays.thu',
+    'collection.weekdays.fri',
+    'collection.weekdays.sat',
+  ]
+  return (dateStr: string): string => {
+    const d = new Date(dateStr + 'T00:00:00')
+    const day = d.getDate()
+    const weekday = t(weekdayKeys[d.getDay()])
+    return `${day}${t('collection.daySuffix')} (${weekday})`
+  }
 }
 
 function isToday(dateStr: string): boolean {
@@ -45,8 +64,12 @@ function isPast(dateStr: string): boolean {
 }
 
 export function MonthlyCollectionPage() {
+  const t = useT()
   const { data: installments = [], isLoading, error } = useInstallments()
   const [currentMonth, setCurrentMonth] = useState(() => getMonthKey(new Date()))
+  const STATUS_CONFIG = useStatusConfig()
+  const formatMonthLabel = useFormatMonthLabel()
+  const getDayLabel = useGetDayLabel()
 
   // Navigate months
   const goMonth = (delta: number) => {
@@ -103,7 +126,7 @@ export function MonthlyCollectionPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <p className="text-red-500">데이터를 불러오는데 실패했습니다.</p>
+        <p className="text-red-500">{t('collection.loadError')}</p>
       </div>
     )
   }
@@ -112,9 +135,9 @@ export function MonthlyCollectionPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">월별 수금 일정</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('collection.title')}</h1>
         <p className="text-muted-foreground text-sm">
-          월별 납입 일정 및 수금 트래킹
+          {t('collection.subtitle')}
         </p>
       </div>
 
@@ -132,12 +155,12 @@ export function MonthlyCollectionPage() {
           </Button>
           {!isCurrentMonth && (
             <Button variant="ghost" size="sm" className="text-xs ml-2" onClick={goToday}>
-              이번 달
+              {t('common.thisMonth')}
             </Button>
           )}
         </div>
         <div className="text-sm text-muted-foreground">
-          총 {monthItems.length}건
+          {t('collection.totalCount').replace('{n}', String(monthItems.length))}
         </div>
       </div>
 
@@ -148,7 +171,7 @@ export function MonthlyCollectionPage() {
             <Calendar className="size-5 text-primary" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(totalExpected)}</div>
-              <div className="text-xs text-muted-foreground">예정 수금액</div>
+              <div className="text-xs text-muted-foreground">{t('collection.expectedAmount')}</div>
             </div>
           </CardContent>
         </Card>
@@ -157,7 +180,7 @@ export function MonthlyCollectionPage() {
             <CheckCircle2 className="size-5 text-emerald-500" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(totalCollected)}</div>
-              <div className="text-xs text-muted-foreground">수금 완료</div>
+              <div className="text-xs text-muted-foreground">{t('collection.collected')}</div>
             </div>
           </CardContent>
         </Card>
@@ -166,7 +189,7 @@ export function MonthlyCollectionPage() {
             <AlertTriangle className="size-5 text-red-500" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(totalOverdue)}</div>
-              <div className="text-xs text-muted-foreground">연체</div>
+              <div className="text-xs text-muted-foreground">{t('collection.overdue')}</div>
             </div>
           </CardContent>
         </Card>
@@ -175,7 +198,7 @@ export function MonthlyCollectionPage() {
             <Clock className="size-5 text-blue-500" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(totalPending)}</div>
-              <div className="text-xs text-muted-foreground">수금 대기</div>
+              <div className="text-xs text-muted-foreground">{t('collection.pending')}</div>
             </div>
           </CardContent>
         </Card>
@@ -187,21 +210,21 @@ export function MonthlyCollectionPage() {
           {monthItems.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground text-sm">
               <Calendar className="size-10 mx-auto mb-3 opacity-30" />
-              <p>{formatMonthLabel(currentMonth)}에 예정된 수금 일정이 없습니다.</p>
+              <p>{t('collection.noSchedule').replace('{month}', formatMonthLabel(currentMonth))}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[100px]">납기일</TableHead>
-                  <TableHead>계약자</TableHead>
-                  <TableHead>학생</TableHead>
-                  <TableHead>학교</TableHead>
-                  <TableHead>항목</TableHead>
-                  <TableHead className="text-right">납입 금액</TableHead>
-                  <TableHead className="text-right">수금액</TableHead>
-                  <TableHead className="text-right">잔액</TableHead>
-                  <TableHead className="w-[90px]">상태</TableHead>
+                  <TableHead className="w-[100px]">{t('collection.col.dueDate')}</TableHead>
+                  <TableHead>{t('collection.col.contractor')}</TableHead>
+                  <TableHead>{t('collection.col.student')}</TableHead>
+                  <TableHead>{t('collection.col.school')}</TableHead>
+                  <TableHead>{t('collection.col.item')}</TableHead>
+                  <TableHead className="text-right">{t('collection.col.amount')}</TableHead>
+                  <TableHead className="text-right">{t('collection.col.collected')}</TableHead>
+                  <TableHead className="text-right">{t('collection.col.balance')}</TableHead>
+                  <TableHead className="w-[90px]">{t('collection.col.status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

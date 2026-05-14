@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { LanguageProvider } from '@/i18n/LanguageContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { LoginPage } from '@/pages/auth/LoginPage'
@@ -33,20 +34,11 @@ const queryClient = new QueryClient({
   },
 })
 
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-center h-[60vh]">
-      <div className="text-center space-y-2">
-        <h2 className="text-xl font-semibold text-muted-foreground">{title}</h2>
-        <p className="text-sm text-muted-foreground">개발 예정</p>
-      </div>
-    </div>
-  )
-}
 
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <LanguageProvider>
       <AuthProvider>
         <BrowserRouter>
           <Routes>
@@ -88,6 +80,7 @@ export default function App() {
           </Routes>
         </BrowserRouter>
       </AuthProvider>
+      </LanguageProvider>
     </QueryClientProvider>
   )
 }

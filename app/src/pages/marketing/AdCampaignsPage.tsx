@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Loader2, DollarSign, MousePointerClick, BarChart3, Plus } from 'lucide-react'
 import { useAdCampaigns, useCreateAdCampaign } from '@/hooks/useAdCampaigns'
+import { useT } from '@/i18n/LanguageContext'
 import type { AdPlatform } from '@/types'
 
 const PLATFORM_CONFIG: Record<string, { label: string; className: string }> = {
@@ -37,6 +38,7 @@ const INITIAL_CAMPAIGN_FORM = {
 }
 
 export function AdCampaignsPage() {
+  const t = useT()
   const [platformFilter, setPlatformFilter] = useState<string>('all')
   const [monthFilter, setMonthFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -87,24 +89,24 @@ export function AdCampaignsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">광고 성과</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('ads.title')}</h1>
           <p className="text-muted-foreground">
-            {isLoading ? '로딩 중...' : `총 ${campaigns.length}개 캠페인${monthFilter !== 'all' ? ` · ${monthFilter.split('-')[0]}년 ${Number(monthFilter.split('-')[1])}월` : ''}`}
+            {isLoading ? t('common.loading') : t('ads.totalCampaigns', { n: campaigns.length }) + (monthFilter !== 'all' ? ` · ${monthFilter.split('-')[0]}년 ${Number(monthFilter.split('-')[1])}월` : '')}
           </p>
         </div>
         <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}>
           <Plus className="size-4 mr-1" />
-          캠페인 추가
+          {t('ads.addCampaign')}
         </Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>캠페인 추가</DialogTitle>
+              <DialogTitle>{t('ads.addCampaign')}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>플랫폼</Label>
+                  <Label>{t('ads.platform')}</Label>
                   <Select value={form.platform} onValueChange={v => setForm(f => ({ ...f, platform: v as AdPlatform }))}>
                     <SelectTrigger>
                       <SelectValue />
@@ -116,7 +118,7 @@ export function AdCampaignsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>이벤트명</Label>
+                  <Label>{t('ads.eventName')}</Label>
                   <Input
                     value={form.eventName}
                     onChange={e => setForm(f => ({ ...f, eventName: e.target.value }))}
@@ -125,7 +127,7 @@ export function AdCampaignsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>노출수</Label>
+                  <Label>{t('ads.impressions')}</Label>
                   <Input
                     type="number"
                     value={form.impressions}
@@ -133,7 +135,7 @@ export function AdCampaignsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>도달</Label>
+                  <Label>{t('ads.reach')}</Label>
                   <Input
                     type="number"
                     value={form.reach}
@@ -143,7 +145,7 @@ export function AdCampaignsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>클릭수</Label>
+                  <Label>{t('ads.clicks')}</Label>
                   <Input
                     type="number"
                     value={form.clicks}
@@ -151,7 +153,7 @@ export function AdCampaignsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>비용 (원)</Label>
+                  <Label>{t('ads.cost')}</Label>
                   <Input
                     type="number"
                     value={form.cost}
@@ -161,11 +163,11 @@ export function AdCampaignsPage() {
               </div>
               {form.impressions > 0 && form.clicks > 0 && (
                 <div className="text-xs text-muted-foreground">
-                  자동 계산 - CTR: {((form.clicks / form.impressions) * 100).toFixed(2)}% / CPC: {Math.round(form.cost / form.clicks).toLocaleString()}원
+                  {t('ads.autoCalc')} - CTR: {((form.clicks / form.impressions) * 100).toFixed(2)}% / CPC: {Math.round(form.cost / form.clicks).toLocaleString()}원
                 </div>
               )}
               <div className="space-y-2">
-                <Label>비고</Label>
+                <Label>{t('ads.note')}</Label>
                 <Textarea
                   value={form.note}
                   onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
@@ -177,7 +179,7 @@ export function AdCampaignsPage() {
                 onClick={handleCreateCampaign}
                 disabled={createCampaign.isPending || !form.eventName}
               >
-                {createCampaign.isPending ? '저장 중...' : '추가'}
+                {createCampaign.isPending ? t('common.saving') : t('common.add')}
               </Button>
             </div>
           </DialogContent>
@@ -193,7 +195,7 @@ export function AdCampaignsPage() {
             </div>
             <div>
               <div className="text-lg font-bold">{formatCurrency(summary.totalSpend)}원</div>
-              <div className="text-xs text-muted-foreground">총 광고비</div>
+              <div className="text-xs text-muted-foreground">{t('ads.totalSpend')}</div>
             </div>
           </CardContent>
         </Card>
@@ -204,7 +206,7 @@ export function AdCampaignsPage() {
             </div>
             <div>
               <div className="text-lg font-bold">{formatPercent(summary.avgCtr)}</div>
-              <div className="text-xs text-muted-foreground">평균 CTR</div>
+              <div className="text-xs text-muted-foreground">{t('ads.avgCtr')}</div>
             </div>
           </CardContent>
         </Card>
@@ -215,7 +217,7 @@ export function AdCampaignsPage() {
             </div>
             <div>
               <div className="text-lg font-bold">{Math.round(summary.avgCpc).toLocaleString()}원</div>
-              <div className="text-xs text-muted-foreground">평균 CPC</div>
+              <div className="text-xs text-muted-foreground">{t('ads.avgCpc')}</div>
             </div>
           </CardContent>
         </Card>
@@ -226,7 +228,7 @@ export function AdCampaignsPage() {
             </div>
             <div>
               <div className="text-lg font-bold">{summary.totalClicks.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">총 클릭수</div>
+              <div className="text-xs text-muted-foreground">{t('ads.totalClicks')}</div>
             </div>
           </CardContent>
         </Card>
@@ -238,20 +240,20 @@ export function AdCampaignsPage() {
           <div className="flex items-center gap-3">
             <Select value={platformFilter} onValueChange={v => setPlatformFilter(v || 'all')}>
               <SelectTrigger className="w-[150px] h-9">
-                <SelectValue placeholder="플랫폼" />
+                <SelectValue placeholder={t('ads.platform')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
+                <SelectItem value="all">{t('ads.allPlatforms')}</SelectItem>
                 <SelectItem value="meta">Meta</SelectItem>
                 <SelectItem value="kakao">Kakao</SelectItem>
               </SelectContent>
             </Select>
             <Select value={monthFilter} onValueChange={v => setMonthFilter(v || 'all')}>
               <SelectTrigger className="w-[150px] h-9">
-                <SelectValue placeholder="월" />
+                <SelectValue placeholder={t('mktMetrics.month')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체 월</SelectItem>
+                <SelectItem value="all">{t('ads.allMonths')}</SelectItem>
                 {Array.from({ length: 24 }, (_, i) => {
                   const year = 2025 + Math.floor(i / 12)
                   const month = (i % 12) + 1
@@ -277,28 +279,28 @@ export function AdCampaignsPage() {
             </div>
           ) : error ? (
             <div className="text-center py-20 text-destructive text-sm">
-              데이터를 불러오는 중 오류가 발생했습니다.
+              {t('common.error')}
             </div>
           ) : campaigns.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground text-sm">
-              광고 캠페인 데이터가 없습니다.
+              {t('ads.noData')}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[80px]">플랫폼</TableHead>
-                    <TableHead>이벤트명</TableHead>
-                    <TableHead className="text-right">노출수</TableHead>
-                    <TableHead className="text-right">도달</TableHead>
-                    <TableHead className="text-right">클릭</TableHead>
-                    <TableHead className="text-right">비용</TableHead>
+                    <TableHead className="w-[80px]">{t('ads.platform')}</TableHead>
+                    <TableHead>{t('ads.eventName')}</TableHead>
+                    <TableHead className="text-right">{t('ads.impressions')}</TableHead>
+                    <TableHead className="text-right">{t('ads.reach')}</TableHead>
+                    <TableHead className="text-right">{t('ads.clicks')}</TableHead>
+                    <TableHead className="text-right">{t('ads.cost')}</TableHead>
                     <TableHead className="text-right">CTR</TableHead>
                     <TableHead className="text-right">CPC</TableHead>
-                    <TableHead className="text-right">댓글</TableHead>
-                    <TableHead className="text-right">친구 증감</TableHead>
-                    <TableHead>비고</TableHead>
+                    <TableHead className="text-right">{t('ads.comments')}</TableHead>
+                    <TableHead className="text-right">{t('ads.friendsDiff')}</TableHead>
+                    <TableHead>{t('ads.note')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

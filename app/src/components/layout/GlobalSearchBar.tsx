@@ -3,16 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { Search, User, FileText, FolderKanban, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useGlobalSearch, type GlobalSearchResult } from '@/hooks/useGlobalSearch'
+import { useT } from '@/i18n/LanguageContext'
 import { getStageConfig } from '@/types'
 import type { PipelineStage } from '@/types'
 
 const TYPE_CONFIG = {
-  lead: { icon: User, label: '리드', color: 'text-blue-600', bg: 'bg-blue-50' },
-  contract: { icon: FileText, label: '계약', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  project: { icon: FolderKanban, label: '프로젝트', color: 'text-violet-600', bg: 'bg-violet-50' },
+  lead: { icon: User, labelKey: 'search.lead' as const, color: 'text-blue-600', bg: 'bg-blue-50' },
+  contract: { icon: FileText, labelKey: 'search.contract' as const, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  project: { icon: FolderKanban, labelKey: 'search.project' as const, color: 'text-violet-600', bg: 'bg-violet-50' },
 } as const
 
 export function GlobalSearchBar() {
+  const t = useT()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -115,7 +117,7 @@ export function GlobalSearchBar() {
         }}
         onFocus={() => query.trim() && setOpen(true)}
         onKeyDown={handleKeyDown}
-        placeholder="이름, 학교, 연락처, 프로젝트 검색..."
+        placeholder={t('search.inputPlaceholder')}
         className="pl-9 pr-9 h-9 rounded-full bg-[#F6F7FB] border-0 text-sm text-gray-700 placeholder:text-gray-400 focus-visible:ring-1 focus-visible:ring-blue-200 focus-visible:bg-white transition-colors"
       />
 
@@ -124,11 +126,11 @@ export function GlobalSearchBar() {
         <div className="absolute top-full left-0 right-0 mt-1.5 rounded-xl bg-white shadow-lg border border-gray-200 overflow-hidden z-50 max-h-[420px] overflow-y-auto">
           {results.length === 0 && !isFetching ? (
             <div className="px-4 py-6 text-center text-sm text-gray-400">
-              검색 결과가 없습니다
+              {t('search.noResults')}
             </div>
           ) : results.length === 0 && isFetching ? (
             <div className="px-4 py-6 text-center text-sm text-gray-400">
-              검색 중...
+              {t('search.searching')}
             </div>
           ) : (
             <>
@@ -142,7 +144,7 @@ export function GlobalSearchBar() {
                   <div key={type}>
                     <div className="px-3 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Icon className={`size-3 ${config.color}`} />
-                      {config.label} ({items.length}건)
+                      {t(config.labelKey)} ({t('search.resultCount', { n: items.length })})
                     </div>
                     {items.map((item) => {
                       const currentIdx = flatIdx++

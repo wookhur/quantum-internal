@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,21 +31,27 @@ const ROLE_CONFIG: Record<UserRole, { label: string; className: string; icon: ty
   viewer: { label: 'Viewer', className: 'bg-gray-50 text-gray-600 border-gray-200', icon: Eye },
 }
 
-const DEPT_OPTIONS: { value: Department; label: string }[] = [
-  { value: 'management', label: '경영기획' },
-  { value: 'sales', label: '세일즈' },
-  { value: 'marketing', label: '마케팅' },
-  { value: 'finance', label: '재무' },
-  { value: 'service', label: '서비스' },
-]
+function useDeptOptions() {
+  const t = useT()
+  return [
+    { value: 'management' as Department, label: t('access.deptManagement') },
+    { value: 'sales' as Department, label: t('access.deptSales') },
+    { value: 'marketing' as Department, label: t('access.deptMarketing') },
+    { value: 'finance' as Department, label: t('access.deptFinance') },
+    { value: 'service' as Department, label: t('access.deptService') },
+  ]
+}
 
-const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
-  { value: 'admin', label: 'Admin (전체 관리자)' },
-  { value: 'manager', label: 'Manager (매니저)' },
-  { value: 'staff', label: 'Staff (직원)' },
-  { value: 'freelancer', label: 'Freelancer (외부)' },
-  { value: 'viewer', label: 'Viewer (열람자)' },
-]
+function useRoleOptions() {
+  const t = useT()
+  return [
+    { value: 'admin' as UserRole, label: `Admin (${t('access.roleAdmin')})` },
+    { value: 'manager' as UserRole, label: `Manager (${t('access.roleManager')})` },
+    { value: 'staff' as UserRole, label: `Staff (${t('access.roleStaff')})` },
+    { value: 'freelancer' as UserRole, label: `Freelancer (${t('access.roleFreelancer')})` },
+    { value: 'viewer' as UserRole, label: `Viewer (${t('access.roleViewer')})` },
+  ]
+}
 
 function UserEditDialog({
   user,
@@ -57,6 +64,9 @@ function UserEditDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const t = useT()
+  const DEPT_OPTIONS = useDeptOptions()
+  const ROLE_OPTIONS = useRoleOptions()
   const updateProfile = useUpdateProfile()
   const updateFeatureAccess = useUpdateFeatureAccess()
   const { user: currentUser } = useAuth()
@@ -130,7 +140,7 @@ function UserEditDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserCog className="size-5" />
-            {user.name} 접근 권한 설정
+            {user.name} {t('access.accessSettings')}
           </DialogTitle>
         </DialogHeader>
 
@@ -143,7 +153,7 @@ function UserEditDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">역할</Label>
+                <Label className="text-xs">{t('access.role')}</Label>
                 <Select value={role} onValueChange={(v) => handleRoleChange(v as UserRole)}>
                   <SelectTrigger className="h-9">
                     <SelectValue />
@@ -156,13 +166,13 @@ function UserEditDialog({
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">부서</Label>
+                <Label className="text-xs">{t('access.department')}</Label>
                 <Select value={department || '_none'} onValueChange={(v) => setDepartment(!v || v === '_none' ? '' : v)}>
                   <SelectTrigger className="h-9">
-                    <SelectValue placeholder="선택" />
+                    <SelectValue placeholder={t('common.select')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">미지정</SelectItem>
+                    <SelectItem value="_none">{t('common.unassigned')}</SelectItem>
                     {DEPT_OPTIONS.map(opt => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
@@ -173,20 +183,20 @@ function UserEditDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">직책</Label>
+                <Label className="text-xs">{t('access.position')}</Label>
                 <Input
                   value={position}
                   onChange={(e) => setPosition(e.target.value)}
-                  placeholder="예: 팀장, 이사"
+                  placeholder={t('access.positionPlaceholder')}
                   className="h-9"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">외부 인력</Label>
+                <Label className="text-xs">{t('access.externalStaff')}</Label>
                 <div className="flex items-center gap-2 h-9">
                   <Switch checked={isExternal} onCheckedChange={setIsExternal} />
                   <span className="text-xs text-muted-foreground">
-                    {isExternal ? '외부 (프리랜서 등)' : '내부 직원'}
+                    {isExternal ? t('access.external') : t('access.internal')}
                   </span>
                 </div>
               </div>
@@ -196,7 +206,7 @@ function UserEditDialog({
           {/* Feature Access */}
           <div className="space-y-3 border-t pt-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">기능 접근 권한</h3>
+              <h3 className="text-sm font-semibold">{t('access.featureAccess')}</h3>
               <div className="flex items-center gap-2">
                 <Switch
                   checked={useCustomAccess}
@@ -204,14 +214,14 @@ function UserEditDialog({
                   id="custom-access"
                 />
                 <Label htmlFor="custom-access" className="text-xs text-muted-foreground cursor-pointer">
-                  커스텀 설정
+                  {t('access.customSettings')}
                 </Label>
               </div>
             </div>
 
             {!useCustomAccess && (
               <div className="text-xs text-muted-foreground bg-blue-50 text-blue-700 rounded p-2">
-                현재 역할({ROLE_CONFIG[role]?.label})의 기본 접근 권한이 적용됩니다. 커스텀 설정을 켜면 개별 모듈을 조정할 수 있습니다.
+                {t('access.defaultAccessNote').replace('{role}', ROLE_CONFIG[role]?.label || '')}
               </div>
             )}
 
@@ -236,7 +246,7 @@ function UserEditDialog({
                     <div className="flex items-center gap-2">
                       {!useCustomAccess && isDefault && (
                         <Badge variant="outline" className="text-[10px] h-4 bg-blue-50 text-blue-600 border-blue-200">
-                          기본
+                          {t('access.default')}
                         </Badge>
                       )}
                       <Switch
@@ -253,18 +263,18 @@ function UserEditDialog({
 
           {isSelf && (
             <div className="text-xs text-amber-600 bg-amber-50 rounded p-2">
-              본인 계정의 권한 변경 시 페이지를 새로고침해야 반영됩니다.
+              {t('access.selfEditWarning')}
             </div>
           )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            취소
+            {t('common.cancel')}
           </Button>
           <Button onClick={handleSave} disabled={saving} className="gap-1.5">
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-            {saving ? '저장 중...' : '저장'}
+            {saving ? t('common.saving') : t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -273,6 +283,9 @@ function UserEditDialog({
 }
 
 export function AccessManagementPage() {
+  const t = useT()
+  const DEPT_OPTIONS = useDeptOptions()
+  const ROLE_OPTIONS = useRoleOptions()
   const { user: currentUser } = useAuth()
   const { data: profiles = [], isLoading: profilesLoading } = useProfiles()
   const { data: featureAccess = [], isLoading: accessLoading } = useFeatureAccess()
@@ -317,8 +330,8 @@ export function AccessManagementPage() {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
         <UserX className="size-12 text-muted-foreground" />
-        <p className="text-muted-foreground">접근 권한이 없습니다.</p>
-        <p className="text-xs text-muted-foreground">Admin 또는 Manager 권한이 필요합니다.</p>
+        <p className="text-muted-foreground">{t('access.noPermission')}</p>
+        <p className="text-xs text-muted-foreground">{t('access.requireAdminOrManager')}</p>
       </div>
     )
   }
@@ -327,9 +340,9 @@ export function AccessManagementPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">접근 권한 관리</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('planning.access')}</h1>
         <p className="text-muted-foreground text-sm">
-          직원별 역할 및 기능 접근 권한을 관리합니다
+          {t('access.subtitle')}
         </p>
       </div>
 
@@ -340,7 +353,7 @@ export function AccessManagementPage() {
             <Users className="size-5 text-primary" />
             <div>
               <div className="text-lg font-bold">{stats.total}</div>
-              <div className="text-xs text-muted-foreground">전체 사용자</div>
+              <div className="text-xs text-muted-foreground">{t('access.totalUsers')}</div>
             </div>
           </CardContent>
         </Card>
@@ -376,7 +389,7 @@ export function AccessManagementPage() {
             <Briefcase className="size-5 text-purple-500" />
             <div>
               <div className="text-lg font-bold">{stats.external}</div>
-              <div className="text-xs text-muted-foreground">외부 인력</div>
+              <div className="text-xs text-muted-foreground">{t('access.externalStaff')}</div>
             </div>
           </CardContent>
         </Card>
@@ -387,14 +400,14 @@ export function AccessManagementPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <Shield className="size-4" />
-            역할별 기본 접근 권한
+            {t('access.defaultAccessByRole')}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[120px]">역할</TableHead>
+                <TableHead className="w-[120px]">{t('access.role')}</TableHead>
                 {FEATURE_MODULES.map(m => (
                   <TableHead key={m.key} className="text-center text-xs w-20">{m.label}</TableHead>
                 ))}
@@ -430,7 +443,7 @@ export function AccessManagementPage() {
             <div className="relative flex-1 min-w-[200px] max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="이름, 이메일 검색..."
+                placeholder={t('access.searchPlaceholder')}
                 className="pl-9 h-9"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -438,10 +451,10 @@ export function AccessManagementPage() {
             </div>
             <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v || 'all')}>
               <SelectTrigger className="w-[160px] h-9">
-                <SelectValue placeholder="역할" />
+                <SelectValue placeholder={t('access.role')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체 역할</SelectItem>
+                <SelectItem value="all">{t('access.allRoles')}</SelectItem>
                 {ROLE_OPTIONS.map(opt => (
                   <SelectItem key={opt.value} value={opt.value}>{opt.label.split(' ')[0]}</SelectItem>
                 ))}
@@ -460,17 +473,17 @@ export function AccessManagementPage() {
             </div>
           ) : filteredProfiles.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground text-sm">
-              사용자가 없습니다.
+              {t('access.noUsers')}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[250px]">사용자</TableHead>
-                  <TableHead className="w-[100px]">역할</TableHead>
-                  <TableHead className="w-[100px]">부서</TableHead>
-                  <TableHead className="w-[90px]">직책</TableHead>
-                  <TableHead>접근 가능 기능</TableHead>
+                  <TableHead className="w-[250px]">{t('access.user')}</TableHead>
+                  <TableHead className="w-[100px]">{t('access.role')}</TableHead>
+                  <TableHead className="w-[100px]">{t('access.department')}</TableHead>
+                  <TableHead className="w-[90px]">{t('access.position')}</TableHead>
+                  <TableHead>{t('access.accessibleFeatures')}</TableHead>
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -496,12 +509,12 @@ export function AccessManagementPage() {
                               {profile.name}
                               {isSelf && (
                                 <Badge variant="outline" className="text-[10px] h-4 bg-blue-50 text-blue-600 border-blue-200">
-                                  나
+                                  {t('access.me')}
                                 </Badge>
                               )}
                               {profile.isExternal && (
                                 <Badge variant="outline" className="text-[10px] h-4 bg-purple-50 text-purple-600 border-purple-200">
-                                  외부
+                                  {t('access.externalBadge')}
                                 </Badge>
                               )}
                             </div>
@@ -533,7 +546,7 @@ export function AccessManagementPage() {
                           ))}
                           {hasCustom && (
                             <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-normal bg-amber-50 text-amber-600 border-amber-200">
-                              커스텀
+                              {t('access.custom')}
                             </Badge>
                           )}
                         </div>
@@ -546,7 +559,7 @@ export function AccessManagementPage() {
                           onClick={() => setEditUser(profile)}
                         >
                           <UserCog className="size-3.5 mr-1" />
-                          편집
+                          {t('common.edit')}
                         </Button>
                       </TableCell>
                     </TableRow>

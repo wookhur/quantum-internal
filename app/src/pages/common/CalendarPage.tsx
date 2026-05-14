@@ -5,9 +5,13 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot, FileWarning, Globe } from 'lucide-react'
 import { useCalendarEvents, type ContractCalendarItem } from '@/hooks/useCalendarEvents'
 import { todayKST, currentYearKST, currentMonthKST, formatTimeKST } from '@/lib/date'
+import { useT } from '@/i18n/LanguageContext'
 import type { Meeting, Event, Todo, GoogleCalendarEvent } from '@/types'
 
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
+const WEEKDAY_KEYS = [
+  'calendar.weekdaySun', 'calendar.weekdayMon', 'calendar.weekdayTue',
+  'calendar.weekdayWed', 'calendar.weekdayThu', 'calendar.weekdayFri', 'calendar.weekdaySat',
+] as const
 
 interface DayData {
   date: number
@@ -170,7 +174,7 @@ function DayCell({
         {day.contractExpiries.slice(0, 1).map(c => (
           <div key={c.id} className="flex items-center gap-0.5">
             <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
-            <span className="text-[10px] text-orange-700 truncate">{c.studentName} 만료</span>
+            <span className="text-[10px] text-orange-700 truncate">{c.studentName}</span>
           </div>
         ))}
         {day.todos.slice(0, 1).map(t => (
@@ -190,6 +194,7 @@ function DayCell({
 }
 
 export function CalendarPage() {
+  const t = useT()
   const [year, setYear] = useState(() => currentYearKST())
   const [month, setMonth] = useState(() => currentMonthKST())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -249,16 +254,16 @@ export function CalendarPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">캘린더</h1>
-          <p className="text-muted-foreground">미팅, 이벤트, 계약 만료일을 한눈에 확인하세요</p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('calendar.title')}</h1>
+          <p className="text-muted-foreground">{t('calendar.subtitle')}</p>
         </div>
         <div className="flex items-center gap-1">
           <div className="flex items-center gap-2 mr-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> 미팅</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> 이벤트</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 inline-block" /> 구글 캘린더</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> 계약 만료</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> 할일</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> {t('calendar.legendMeeting')}</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> {t('calendar.legendEvent')}</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 inline-block" /> {t('calendar.legendGoogle')}</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> {t('calendar.legendContractExpiry')}</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> {t('calendar.legendTodo')}</span>
           </div>
         </div>
       </div>
@@ -273,14 +278,14 @@ export function CalendarPage() {
                   <ChevronLeft className="size-4" />
                 </Button>
                 <CardTitle className="text-lg font-semibold">
-                  {year}년 {month}월
+                  {t('calendar.yearMonth', { year: String(year), month: String(month) })}
                 </CardTitle>
                 <Button variant="ghost" size="icon" className="size-8" onClick={goToNextMonth}>
                   <ChevronRight className="size-4" />
                 </Button>
               </div>
               <Button variant="outline" size="sm" onClick={goToToday}>
-                오늘
+                {t('common.today')}
               </Button>
             </div>
           </CardHeader>
@@ -293,14 +298,14 @@ export function CalendarPage() {
               <div>
                 {/* Weekday headers */}
                 <div className="grid grid-cols-7 border-b">
-                  {WEEKDAYS.map((day, i) => (
+                  {WEEKDAY_KEYS.map((key, i) => (
                     <div
-                      key={day}
+                      key={key}
                       className={`text-center text-xs font-medium py-2 ${
                         i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-muted-foreground'
                       }`}
                     >
-                      {day}
+                      {t(key)}
                     </div>
                   ))}
                 </div>
@@ -329,19 +334,19 @@ export function CalendarPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">
               {selectedDay
-                ? `${parseInt(selectedDate!.slice(5, 7))}월 ${parseInt(selectedDate!.slice(8, 10))}일 일정`
-                : '날짜를 선택하세요'
+                ? t('calendar.daySchedule', { month: String(parseInt(selectedDate!.slice(5, 7))), day: String(parseInt(selectedDate!.slice(8, 10))) })
+                : t('calendar.selectDate')
               }
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {!selectedDay ? (
-              <div className="text-center py-12 text-muted-foreground text-sm">
-                캘린더에서 날짜를 클릭하면<br />상세 일정을 확인할 수 있습니다.
+              <div className="text-center py-12 text-muted-foreground text-sm whitespace-pre-line">
+                {t('calendar.selectDateHint')}
               </div>
             ) : selectedDay.meetings.length + selectedDay.events.length + selectedDay.todos.length + selectedDay.contractExpiries.length + selectedDay.googleEvents.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
-                이 날에는 일정이 없습니다.
+                {t('calendar.noSchedule')}
               </div>
             ) : (
               <>
@@ -350,18 +355,18 @@ export function CalendarPage() {
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <Video className="size-3.5 text-blue-500" />
-                      <h3 className="text-xs font-semibold text-blue-700">미팅 ({selectedDay.meetings.length})</h3>
+                      <h3 className="text-xs font-semibold text-blue-700">{t('calendar.meetingSection')} ({selectedDay.meetings.length})</h3>
                     </div>
                     <div className="space-y-2">
                       {selectedDay.meetings.map(m => (
                         <div key={m.id} className="p-2.5 rounded-lg border border-blue-200 bg-blue-50/50">
                           <div className="text-sm font-medium">{m.parentName}</div>
                           {m.studentName && (
-                            <div className="text-xs text-muted-foreground">학생: {m.studentName}</div>
+                            <div className="text-xs text-muted-foreground">{t('calendar.student')}: {m.studentName}</div>
                           )}
                           <div className="flex items-center gap-2 mt-1">
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-300">
-                              {m.meetingNumber}차 상담
+                              {t('calendar.nthConsultation', { n: m.meetingNumber })}
                             </Badge>
                             {m.currentSchool && (
                               <span className="text-[10px] text-muted-foreground">{m.currentSchool}</span>
@@ -386,14 +391,14 @@ export function CalendarPage() {
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <CalendarDays className="size-3.5 text-emerald-500" />
-                      <h3 className="text-xs font-semibold text-emerald-700">이벤트 ({selectedDay.events.length})</h3>
+                      <h3 className="text-xs font-semibold text-emerald-700">{t('calendar.eventSection')} ({selectedDay.events.length})</h3>
                     </div>
                     <div className="space-y-2">
                       {selectedDay.events.map(e => (
                         <div key={e.id} className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/50">
                           <div className="text-sm font-medium">{e.eventName}</div>
                           {e.venue && (
-                            <div className="text-xs text-muted-foreground">장소: {e.venue}</div>
+                            <div className="text-xs text-muted-foreground">{t('calendar.venue')}: {e.venue}</div>
                           )}
                           {e.eventDatetime && (
                             <div className="text-[11px] text-muted-foreground mt-0.5">
@@ -401,8 +406,8 @@ export function CalendarPage() {
                             </div>
                           )}
                           <div className="flex gap-1 mt-1.5 flex-wrap">
-                            {e.speakerConfirmed && <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 border-emerald-300">연사 확정</Badge>}
-                            {e.venueConfirmed && <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 border-emerald-300">장소 확정</Badge>}
+                            {e.speakerConfirmed && <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 border-emerald-300">{t('calendar.speakerConfirmed')}</Badge>}
+                            {e.venueConfirmed && <Badge variant="outline" className="text-[10px] px-1 py-0 bg-emerald-100 border-emerald-300">{t('calendar.venueConfirmed')}</Badge>}
                           </div>
                         </div>
                       ))}
@@ -415,17 +420,17 @@ export function CalendarPage() {
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <Globe className="size-3.5 text-violet-500" />
-                      <h3 className="text-xs font-semibold text-violet-700">구글 캘린더 ({selectedDay.googleEvents.length})</h3>
+                      <h3 className="text-xs font-semibold text-violet-700">{t('calendar.googleSection')} ({selectedDay.googleEvents.length})</h3>
                     </div>
                     <div className="space-y-2">
                       {selectedDay.googleEvents.map(g => (
                         <div key={g.id} className="p-2.5 rounded-lg border border-violet-200 bg-violet-50/50">
                           <div className="text-sm font-medium">{g.summary}</div>
                           {g.location && (
-                            <div className="text-xs text-muted-foreground">장소: {g.location}</div>
+                            <div className="text-xs text-muted-foreground">{t('calendar.venue')}: {g.location}</div>
                           )}
                           <div className="text-[11px] text-muted-foreground mt-0.5">
-                            {g.isAllDay ? '종일' : `${formatTimeKST(g.startTime)} - ${formatTimeKST(g.endTime)}`}
+                            {g.isAllDay ? t('calendar.allDay') : `${formatTimeKST(g.startTime)} - ${formatTimeKST(g.endTime)}`}
                           </div>
                           <div className="flex items-center gap-1.5 mt-1">
                             {g.calendarId && (
@@ -440,7 +445,7 @@ export function CalendarPage() {
                                 rel="noopener noreferrer"
                                 className="text-[10px] text-violet-600 hover:underline"
                               >
-                                화상회의 참가
+                                {t('calendar.joinConference')}
                               </a>
                             )}
                           </div>
@@ -455,21 +460,21 @@ export function CalendarPage() {
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <FileWarning className="size-3.5 text-orange-500" />
-                      <h3 className="text-xs font-semibold text-orange-700">계약 만료 ({selectedDay.contractExpiries.length})</h3>
+                      <h3 className="text-xs font-semibold text-orange-700">{t('calendar.contractExpirySection')} ({selectedDay.contractExpiries.length})</h3>
                     </div>
                     <div className="space-y-2">
                       {selectedDay.contractExpiries.map(c => (
                         <div key={c.id} className="p-2.5 rounded-lg border border-orange-200 bg-orange-50/50">
                           <div className="text-sm font-medium">{c.studentName}</div>
-                          <div className="text-xs text-muted-foreground">계약자: {c.contractorName}</div>
+                          <div className="text-xs text-muted-foreground">{t('calendar.contractorName')}: {c.contractorName}</div>
                           {c.schoolName && (
-                            <div className="text-xs text-muted-foreground">학교: {c.schoolName}</div>
+                            <div className="text-xs text-muted-foreground">{t('calendar.schoolName')}: {c.schoolName}</div>
                           )}
                           <Badge
                             variant="outline"
                             className="text-[10px] px-1.5 py-0 mt-1 border-orange-400 text-orange-600"
                           >
-                            계약 만료일
+                            {t('calendar.contractExpiryDate')}
                           </Badge>
                         </div>
                       ))}
@@ -482,27 +487,27 @@ export function CalendarPage() {
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <CircleDot className="size-3.5 text-red-500" />
-                      <h3 className="text-xs font-semibold text-red-700">할일 ({selectedDay.todos.length})</h3>
+                      <h3 className="text-xs font-semibold text-red-700">{t('calendar.todoSection')} ({selectedDay.todos.length})</h3>
                     </div>
                     <div className="space-y-2">
-                      {selectedDay.todos.map(t => (
-                        <div key={t.id} className="p-2.5 rounded-lg border border-red-200 bg-red-50/50">
-                          <div className="text-sm font-medium">{t.title}</div>
-                          {t.description && (
-                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{t.description}</p>
+                      {selectedDay.todos.map(td => (
+                        <div key={td.id} className="p-2.5 rounded-lg border border-red-200 bg-red-50/50">
+                          <div className="text-sm font-medium">{td.title}</div>
+                          {td.description && (
+                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{td.description}</p>
                           )}
                           <div className="flex items-center gap-1.5 mt-1">
                             <Badge
                               variant="outline"
                               className={`text-[10px] px-1.5 py-0 ${
-                                t.priority === 'high'
+                                td.priority === 'high'
                                   ? 'border-red-400 text-red-600'
-                                  : t.priority === 'medium'
+                                  : td.priority === 'medium'
                                     ? 'border-yellow-400 text-yellow-600'
                                     : 'border-gray-300 text-gray-500'
                               }`}
                             >
-                              {t.priority === 'high' ? '긴급' : t.priority === 'medium' ? '보통' : '낮음'}
+                              {td.priority === 'high' ? t('priority.high') : td.priority === 'medium' ? t('priority.medium') : t('priority.low')}
                             </Badge>
                           </div>
                         </div>

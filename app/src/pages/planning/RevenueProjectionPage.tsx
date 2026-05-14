@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -20,11 +21,9 @@ import {
 import { useRevenueProjection } from '@/hooks/useInstallments'
 import { formatCurrency } from '@/types'
 
-const MONTH_NAMES = ['', '1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
-
-function getMonthLabel(monthKey: string): string {
+function getMonthLabel(monthKey: string, t: (key: string) => string): string {
   const [year, month] = monthKey.split('-')
-  return `${year}년 ${MONTH_NAMES[Number(month)]}`
+  return `${year}${t('planOverview.yearSuffix')} ${Number(month)}${t('planOverview.monthSuffix')}`
 }
 
 function isCurrentMonth(monthKey: string): boolean {
@@ -40,6 +39,7 @@ function isFutureMonth(monthKey: string): boolean {
 }
 
 export function RevenueProjectionPage() {
+  const t = useT()
   const { data: projection = [], isLoading, error } = useRevenueProjection()
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null)
 
@@ -84,7 +84,7 @@ export function RevenueProjectionPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <p className="text-red-500">데이터를 불러오는데 실패했습니다.</p>
+        <p className="text-red-500">{t('planOverview.loadError')}</p>
       </div>
     )
   }
@@ -95,9 +95,9 @@ export function RevenueProjectionPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">매출 전망</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('planning.projection')}</h1>
         <p className="text-muted-foreground text-sm">
-          계약 기반 월별 수금 예측 (계약금 · 중도금 · 잔금)
+          {t('revProjection.subtitle')}
         </p>
       </div>
 
@@ -108,7 +108,7 @@ export function RevenueProjectionPage() {
             <CheckCircle2 className="size-5 text-emerald-500" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(totalPaid)}</div>
-              <div className="text-xs text-muted-foreground">수금 완료</div>
+              <div className="text-xs text-muted-foreground">{t('revProjection.paid')}</div>
             </div>
           </CardContent>
         </Card>
@@ -117,7 +117,7 @@ export function RevenueProjectionPage() {
             <Clock className="size-5 text-blue-500" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(totalPending)}</div>
-              <div className="text-xs text-muted-foreground">수금 예정</div>
+              <div className="text-xs text-muted-foreground">{t('revProjection.pending')}</div>
             </div>
           </CardContent>
         </Card>
@@ -126,7 +126,7 @@ export function RevenueProjectionPage() {
             <AlertTriangle className="size-5 text-red-500" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(totalOverdue)}</div>
-              <div className="text-xs text-muted-foreground">미수금 (연체)</div>
+              <div className="text-xs text-muted-foreground">{t('revProjection.overdue')}</div>
             </div>
           </CardContent>
         </Card>
@@ -135,7 +135,7 @@ export function RevenueProjectionPage() {
             <TrendingUp className="size-5 text-primary" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(futureTotal)}</div>
-              <div className="text-xs text-muted-foreground">향후 예상 매출</div>
+              <div className="text-xs text-muted-foreground">{t('revProjection.futureRevenue')}</div>
             </div>
           </CardContent>
         </Card>
@@ -145,8 +145,8 @@ export function RevenueProjectionPage() {
         <Card>
           <CardContent className="py-20 text-center text-muted-foreground">
             <DollarSign className="size-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">아직 납입 일정이 등록된 계약이 없습니다.</p>
-            <p className="text-xs mt-1">계약 추가 시 계약금·중도금·잔금 일정을 입력하면 자동으로 매출 전망에 반영됩니다.</p>
+            <p className="text-sm">{t('revProjection.noSchedule')}</p>
+            <p className="text-xs mt-1">{t('revProjection.noScheduleHint')}</p>
           </CardContent>
         </Card>
       ) : (
@@ -156,7 +156,7 @@ export function RevenueProjectionPage() {
             <CardContent className="pt-6 pb-4">
               <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                 <TrendingUp className="size-4 text-primary" />
-                월별 매출 현황 및 전망
+                {t('revProjection.chartTitle')}
               </h3>
               {(() => {
                 // Build a 12-month window: 3 past + current + 8 future
@@ -167,20 +167,24 @@ export function RevenueProjectionPage() {
                 const startIdx = Math.max(0, curIdx >= 0 ? curIdx - 3 : 0)
                 const windowData = projection.slice(startIdx, startIdx + 12)
 
+                const paidLabel = t('revProjection.paid')
+                const pendingLabel = t('revProjection.pending')
+                const overdueLabel = t('revProjection.overdueShort')
+
                 const chartData = windowData.map((m) => {
                   const [y, mo] = m.month.split('-')
                   return {
-                    month: `${y.slice(2)}.${Number(mo)}월`,
+                    month: `${y.slice(2)}.${Number(mo)}${t('planOverview.monthSuffix')}`,
                     monthKey: m.month,
-                    수금완료: m.paid,
-                    수금예정: m.pending,
-                    연체: m.overdue,
+                    [paidLabel]: m.paid,
+                    [pendingLabel]: m.pending,
+                    [overdueLabel]: m.overdue,
                   }
                 })
 
                 const curLabel = (() => {
                   const [y, mo] = curKey.split('-')
-                  return `${y.slice(2)}.${Number(mo)}월`
+                  return `${y.slice(2)}.${Number(mo)}${t('planOverview.monthSuffix')}`
                 })()
 
                 return (
@@ -198,8 +202,8 @@ export function RevenueProjectionPage() {
                         tickLine={false}
                         tick={{ fontSize: 11, fill: '#94a3b8' }}
                         tickFormatter={(v) => {
-                          if (v >= 100_000_000) return `${(v / 100_000_000).toFixed(1)}억`
-                          if (v >= 10_000) return `${(v / 10_000).toFixed(0)}만`
+                          if (v >= 100_000_000) return `${(v / 100_000_000).toFixed(1)}${t('revProjection.unitBillion')}`
+                          if (v >= 10_000) return `${(v / 10_000).toFixed(0)}${t('revProjection.unitTenThousand')}`
                           return v.toLocaleString()
                         }}
                       />
@@ -214,11 +218,11 @@ export function RevenueProjectionPage() {
                         stroke="#3b82f6"
                         strokeDasharray="4 4"
                         strokeWidth={1.5}
-                        label={{ value: '이번 달', position: 'top', fontSize: 10, fill: '#3b82f6' }}
+                        label={{ value: t('common.thisMonth'), position: 'top', fontSize: 10, fill: '#3b82f6' }}
                       />
-                      <Bar dataKey="수금완료" stackId="revenue" fill="#10b981" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="수금예정" stackId="revenue" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="연체" stackId="revenue" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey={paidLabel} stackId="revenue" fill="#10b981" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey={pendingLabel} stackId="revenue" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey={overdueLabel} stackId="revenue" fill="#ef4444" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )
@@ -232,19 +236,19 @@ export function RevenueProjectionPage() {
               <CardContent className="py-4">
                 <h3 className="text-sm font-semibold text-blue-700 mb-3 flex items-center gap-2">
                   <Calendar className="size-4" />
-                  이번 달 ({getMonthLabel(currentMonth.month)})
+                  {t('common.thisMonth')} ({getMonthLabel(currentMonth.month, t)})
                 </h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <span className="text-xs text-muted-foreground">수금 완료</span>
+                    <span className="text-xs text-muted-foreground">{t('revProjection.paid')}</span>
                     <p className="text-lg font-bold text-emerald-600">{formatCurrency(currentMonth.paid)}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-muted-foreground">수금 예정</span>
+                    <span className="text-xs text-muted-foreground">{t('revProjection.pending')}</span>
                     <p className="text-lg font-bold text-blue-600">{formatCurrency(currentMonth.pending)}</p>
                   </div>
                   <div>
-                    <span className="text-xs text-muted-foreground">합계</span>
+                    <span className="text-xs text-muted-foreground">{t('common.total')}</span>
                     <p className="text-lg font-bold">{formatCurrency(currentMonth.paid + currentMonth.pending + currentMonth.overdue)}</p>
                   </div>
                 </div>
@@ -274,12 +278,12 @@ export function RevenueProjectionPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10"></TableHead>
-                    <TableHead>월</TableHead>
-                    <TableHead className="text-right">수금 완료</TableHead>
-                    <TableHead className="text-right">수금 예정</TableHead>
-                    <TableHead className="text-right">연체</TableHead>
-                    <TableHead className="text-right">합계</TableHead>
-                    <TableHead className="text-right w-20">건수</TableHead>
+                    <TableHead>{t('common.month')}</TableHead>
+                    <TableHead className="text-right">{t('revProjection.paid')}</TableHead>
+                    <TableHead className="text-right">{t('revProjection.pending')}</TableHead>
+                    <TableHead className="text-right">{t('revProjection.overdueShort')}</TableHead>
+                    <TableHead className="text-right">{t('common.total')}</TableHead>
+                    <TableHead className="text-right w-20">{t('revProjection.count')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -305,12 +309,12 @@ export function RevenueProjectionPage() {
                           </TableCell>
                           <TableCell>
                             <span className="flex items-center gap-2">
-                              {getMonthLabel(m.month)}
+                              {getMonthLabel(m.month, t)}
                               {isCurrent && (
-                                <Badge className="bg-blue-500 text-white text-[10px] h-4">이번 달</Badge>
+                                <Badge className="bg-blue-500 text-white text-[10px] h-4">{t('common.thisMonth')}</Badge>
                               )}
                               {isFuture && (
-                                <Badge variant="outline" className="text-[10px] h-4 text-muted-foreground">예정</Badge>
+                                <Badge variant="outline" className="text-[10px] h-4 text-muted-foreground">{t('revProjection.scheduled')}</Badge>
                               )}
                             </span>
                           </TableCell>
@@ -327,7 +331,7 @@ export function RevenueProjectionPage() {
                             {formatCurrency(total)}
                           </TableCell>
                           <TableCell className="text-right text-sm">
-                            {m.items.length}건
+                            {m.items.length}{t('common.count')}
                           </TableCell>
                         </TableRow>
 

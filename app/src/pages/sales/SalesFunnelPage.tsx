@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -33,6 +34,7 @@ function formatPercent(value: number) {
 }
 
 export function SalesFunnelPage() {
+  const t = useT()
   const { data: events = [], isLoading, error } = useSalesEvents()
 
   // Aggregate stats
@@ -64,23 +66,23 @@ export function SalesFunnelPage() {
 
   // Funnel data for visualization
   const funnelData = useMemo(() => [
-    { name: '신청자', value: totals.applicants, fill: FUNNEL_COLORS[0] },
-    { name: '참석자', value: totals.attendees, fill: FUNNEL_COLORS[1] },
-    { name: '상담', value: totals.totalMeetings, fill: FUNNEL_COLORS[2] },
-    { name: '계약', value: totals.contracts, fill: FUNNEL_COLORS[5] },
-  ], [totals])
+    { name: t('funnel.applicants'), value: totals.applicants, fill: FUNNEL_COLORS[0] },
+    { name: t('funnel.attendees'), value: totals.attendees, fill: FUNNEL_COLORS[1] },
+    { name: t('funnel.consult'), value: totals.totalMeetings, fill: FUNNEL_COLORS[2] },
+    { name: t('leadDetail.contracts'), value: totals.contracts, fill: FUNNEL_COLORS[5] },
+  ], [totals, t])
 
   // Bar chart data per event
   const barData = useMemo(() => {
     return events.map(e => ({
       name: e.eventName.length > 10 ? e.eventName.slice(0, 10) + '…' : e.eventName,
       fullName: e.eventName,
-      신청자: e.applicants,
-      참석자: e.attendees,
-      상담: e.totalMeetings,
-      계약: e.contracts,
+      [t('funnel.applicants')]: e.applicants,
+      [t('funnel.attendees')]: e.attendees,
+      [t('funnel.consult')]: e.totalMeetings,
+      [t('leadDetail.contracts')]: e.contracts,
     }))
-  }, [events])
+  }, [events, t])
 
   if (isLoading) {
     return (
@@ -93,7 +95,7 @@ export function SalesFunnelPage() {
   if (error) {
     return (
       <div className="text-center py-20 text-destructive text-sm">
-        데이터를 불러오는 중 오류가 발생했습니다.
+        {t('common.error')}
       </div>
     )
   }
@@ -102,9 +104,9 @@ export function SalesFunnelPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">영업 퍼널</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('funnel.title')}</h1>
         <p className="text-sm text-gray-500 mt-1">
-          이벤트별 신청 → 참석 → 상담 → 계약 전환 현황
+          {t('funnel.subtitle')}
         </p>
       </div>
 
@@ -116,8 +118,8 @@ export function SalesFunnelPage() {
               <Users className="h-4 w-4 text-blue-500" />
             </div>
             <div>
-              <p className="text-[11px] font-medium text-gray-500 uppercase">총 신청</p>
-              <p className="text-xl font-bold">{totals.applicants}명</p>
+              <p className="text-[11px] font-medium text-gray-500 uppercase">{t('funnel.totalApplicants')}</p>
+              <p className="text-xl font-bold">{totals.applicants}{t('common.people')}</p>
             </div>
           </CardContent>
         </Card>
@@ -127,9 +129,9 @@ export function SalesFunnelPage() {
               <Users className="h-4 w-4 text-indigo-500" />
             </div>
             <div>
-              <p className="text-[11px] font-medium text-gray-500 uppercase">총 참석</p>
-              <p className="text-xl font-bold">{totals.attendees}명</p>
-              <p className="text-[10px] text-muted-foreground">참석률 {formatPercent(attendanceRate)}</p>
+              <p className="text-[11px] font-medium text-gray-500 uppercase">{t('funnel.totalAttendees')}</p>
+              <p className="text-xl font-bold">{totals.attendees}{t('common.people')}</p>
+              <p className="text-[10px] text-muted-foreground">{t('funnel.attendanceRate')} {formatPercent(attendanceRate)}</p>
             </div>
           </CardContent>
         </Card>
@@ -139,8 +141,8 @@ export function SalesFunnelPage() {
               <Phone className="h-4 w-4 text-green-500" />
             </div>
             <div>
-              <p className="text-[11px] font-medium text-gray-500 uppercase">전화 상담</p>
-              <p className="text-xl font-bold">{totals.phoneConsultations}건</p>
+              <p className="text-[11px] font-medium text-gray-500 uppercase">{t('funnel.phoneConsult')}</p>
+              <p className="text-xl font-bold">{totals.phoneConsultations}{t('common.count')}</p>
             </div>
           </CardContent>
         </Card>
@@ -150,8 +152,8 @@ export function SalesFunnelPage() {
               <Video className="h-4 w-4 text-purple-500" />
             </div>
             <div>
-              <p className="text-[11px] font-medium text-gray-500 uppercase">Zoom 예약</p>
-              <p className="text-xl font-bold">{totals.zoomBookings}건</p>
+              <p className="text-[11px] font-medium text-gray-500 uppercase">{t('funnel.zoomBooking')}</p>
+              <p className="text-xl font-bold">{totals.zoomBookings}{t('common.count')}</p>
             </div>
           </CardContent>
         </Card>
@@ -161,8 +163,8 @@ export function SalesFunnelPage() {
               <Handshake className="h-4 w-4 text-amber-500" />
             </div>
             <div>
-              <p className="text-[11px] font-medium text-gray-500 uppercase">대면 예약</p>
-              <p className="text-xl font-bold">{totals.inPersonBookings}건</p>
+              <p className="text-[11px] font-medium text-gray-500 uppercase">{t('funnel.inPersonBooking')}</p>
+              <p className="text-xl font-bold">{totals.inPersonBookings}{t('common.count')}</p>
             </div>
           </CardContent>
         </Card>
@@ -172,9 +174,9 @@ export function SalesFunnelPage() {
               <TrendingUp className="h-4 w-4 text-emerald-500" />
             </div>
             <div>
-              <p className="text-[11px] font-medium text-gray-500 uppercase">총 계약</p>
-              <p className="text-xl font-bold">{totals.contracts}건</p>
-              <p className="text-[10px] text-muted-foreground">전환율 {formatPercent(overallRate)}</p>
+              <p className="text-[11px] font-medium text-gray-500 uppercase">{t('funnel.totalContracts')}</p>
+              <p className="text-xl font-bold">{totals.contracts}{t('common.count')}</p>
+              <p className="text-[10px] text-muted-foreground">{t('dashboard.conversionRate')} {formatPercent(overallRate)}</p>
             </div>
           </CardContent>
         </Card>
@@ -185,7 +187,7 @@ export function SalesFunnelPage() {
         {/* Funnel Chart */}
         <Card>
           <CardHeader className="pb-2">
-            <span className="text-sm font-medium">전체 전환 퍼널</span>
+            <span className="text-sm font-medium">{t('funnel.overallFunnel')}</span>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
@@ -198,7 +200,7 @@ export function SalesFunnelPage() {
                       backgroundColor: 'hsl(var(--card))',
                       fontSize: '12px',
                     }}
-                    formatter={(value: unknown) => [`${Number(value).toLocaleString()}명`, '']}
+                    formatter={(value: unknown) => [`${Number(value).toLocaleString()}${t('common.people')}`, '']}
                   />
                   <Funnel
                     dataKey="value"
@@ -233,7 +235,7 @@ export function SalesFunnelPage() {
         {/* Bar Chart per event */}
         <Card>
           <CardHeader className="pb-2">
-            <span className="text-sm font-medium">이벤트별 비교</span>
+            <span className="text-sm font-medium">{t('funnel.byEvent')}</span>
           </CardHeader>
           <CardContent>
             <div className="h-[300px]">
@@ -257,10 +259,10 @@ export function SalesFunnelPage() {
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Bar dataKey="신청자" fill="#3B82F6" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="참석자" fill="#6366F1" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="상담" fill="#8B5CF6" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="계약" fill="#10B981" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey={t('funnel.applicants')} fill="#3B82F6" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey={t('funnel.attendees')} fill="#6366F1" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey={t('funnel.consult')} fill="#8B5CF6" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey={t('leadDetail.contracts')} fill="#10B981" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -271,29 +273,29 @@ export function SalesFunnelPage() {
       {/* Detail Table */}
       <Card>
         <CardHeader className="pb-2">
-          <span className="text-sm font-medium">이벤트별 상세</span>
+          <span className="text-sm font-medium">{t('funnel.eventDetail')}</span>
         </CardHeader>
         <CardContent className="p-0">
           {events.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
-              영업 이벤트 데이터가 없습니다.
+              {t('funnel.noEvents')}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>월</TableHead>
-                    <TableHead>이벤트</TableHead>
-                    <TableHead className="text-right">신청</TableHead>
-                    <TableHead className="text-right">참석</TableHead>
-                    <TableHead className="text-right">참석률</TableHead>
-                    <TableHead className="text-right">전화상담</TableHead>
-                    <TableHead className="text-right">Zoom</TableHead>
-                    <TableHead className="text-right">대면</TableHead>
-                    <TableHead className="text-right">총 상담</TableHead>
-                    <TableHead className="text-right">계약</TableHead>
-                    <TableHead className="text-right">전환율</TableHead>
+                    <TableHead>{t('funnel.col.month')}</TableHead>
+                    <TableHead>{t('funnel.col.event')}</TableHead>
+                    <TableHead className="text-right">{t('funnel.col.applicants')}</TableHead>
+                    <TableHead className="text-right">{t('funnel.col.attendees')}</TableHead>
+                    <TableHead className="text-right">{t('funnel.attendanceRate')}</TableHead>
+                    <TableHead className="text-right">{t('funnel.col.phoneConsult')}</TableHead>
+                    <TableHead className="text-right">{t('funnel.col.zoom')}</TableHead>
+                    <TableHead className="text-right">{t('funnel.col.inPerson')}</TableHead>
+                    <TableHead className="text-right">{t('funnel.col.totalConsult')}</TableHead>
+                    <TableHead className="text-right">{t('funnel.col.contracts')}</TableHead>
+                    <TableHead className="text-right">{t('dashboard.conversionRate')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -327,7 +329,7 @@ export function SalesFunnelPage() {
                   {/* Totals row */}
                   <TableRow className="bg-muted/30 font-semibold">
                     <TableCell />
-                    <TableCell className="text-sm">합계</TableCell>
+                    <TableCell className="text-sm">{t('common.total')}</TableCell>
                     <TableCell className="text-right tabular-nums text-sm">{totals.applicants}</TableCell>
                     <TableCell className="text-right tabular-nums text-sm">{totals.attendees}</TableCell>
                     <TableCell className="text-right tabular-nums text-sm">

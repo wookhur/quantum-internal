@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Trophy, Gamepad2, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useT } from '@/i18n/LanguageContext'
 import { useGameLeaderboard, useSubmitScore } from '@/hooks/useGameLeaderboard'
 
 // ─── Simple Dino Runner (pure canvas, no external deps) ───
@@ -43,7 +44,7 @@ function initState(): GameState {
   }
 }
 
-function drawGame(ctx: CanvasRenderingContext2D, s: GameState) {
+function drawGame(ctx: CanvasRenderingContext2D, s: GameState, labels?: { gameOver: string; restart: string; start: string }) {
   const w = ctx.canvas.width
   const h = ctx.canvas.height
 
@@ -130,7 +131,7 @@ function drawGame(ctx: CanvasRenderingContext2D, s: GameState) {
     ctx.textAlign = 'center'
     ctx.fillText('GAME OVER', w / 2, h / 2 - 15)
     ctx.font = '13px sans-serif'
-    ctx.fillText('스페이스바를 눌러 다시 시작', w / 2, h / 2 + 10)
+    ctx.fillText(labels?.restart || 'Press Space to restart', w / 2, h / 2 + 10)
   }
 
   // Start
@@ -138,15 +139,18 @@ function drawGame(ctx: CanvasRenderingContext2D, s: GameState) {
     ctx.fillStyle = '#535353'
     ctx.font = 'bold 16px sans-serif'
     ctx.textAlign = 'center'
-    ctx.fillText('스페이스바를 눌러 시작!', w / 2, h / 2)
+    ctx.fillText(labels?.start || 'Press Space to start!', w / 2, h / 2)
   }
 }
 
 function DinoCanvas({ onGameOver }: { onGameOver: (score: number, hi: number) => void }) {
+  const t = useT()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stateRef = useRef<GameState>(initState())
   const rafRef = useRef<number>(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const labelsRef = useRef({ gameOver: 'GAME OVER', restart: t('game.pressSpaceToRestart'), start: t('game.pressSpaceToStart') })
+  labelsRef.current = { gameOver: 'GAME OVER', restart: t('game.pressSpaceToRestart'), start: t('game.pressSpaceToStart') }
 
   const tick = useCallback(() => {
     const s = stateRef.current
@@ -205,7 +209,7 @@ function DinoCanvas({ onGameOver }: { onGameOver: (score: number, hi: number) =>
 
     // Draw
     const ctx = canvasRef.current?.getContext('2d')
-    if (ctx) drawGame(ctx, s)
+    if (ctx) drawGame(ctx, s, labelsRef.current)
 
     if (s.playing) rafRef.current = requestAnimationFrame(tick)
   }, [onGameOver])
@@ -249,7 +253,7 @@ function DinoCanvas({ onGameOver }: { onGameOver: (score: number, hi: number) =>
 
   useEffect(() => {
     const ctx = canvasRef.current?.getContext('2d')
-    if (ctx) drawGame(ctx, stateRef.current)
+    if (ctx) drawGame(ctx, stateRef.current, labelsRef.current)
 
     const el = containerRef.current
     if (el) {
@@ -286,6 +290,7 @@ function DinoCanvas({ onGameOver }: { onGameOver: (score: number, hi: number) =>
 // ─── Main Page ───
 
 export function GamePage() {
+  const t = useT()
   const [lastScore, setLastScore] = useState<number | null>(null)
   const [highScore, setHighScore] = useState(0)
   const { user } = useAuth()
@@ -306,7 +311,7 @@ export function GamePage() {
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Gamepad2 className="size-6" /> T-Rex Runner
         </h1>
-        <p className="text-muted-foreground">스페이스바로 점프! 팀원들과 최고 점수를 겨뤄보세요.</p>
+        <p className="text-muted-foreground">{t('game.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -322,13 +327,13 @@ export function GamePage() {
           <div className="flex gap-3">
             <Card className="flex-1">
               <CardContent className="py-3 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">마지막 점수</span>
+                <span className="text-sm text-muted-foreground">{t('game.lastScore')}</span>
                 <span className="text-xl font-bold font-mono">{lastScore ?? '-'}</span>
               </CardContent>
             </Card>
             <Card className="flex-1">
               <CardContent className="py-3 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">내 최고 점수</span>
+                <span className="text-sm text-muted-foreground">{t('game.myHighScore')}</span>
                 <span className="text-xl font-bold font-mono text-primary">{highScore || '-'}</span>
               </CardContent>
             </Card>
@@ -336,10 +341,10 @@ export function GamePage() {
 
           <div className="text-xs text-muted-foreground">
             <p>
-              <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">Space</kbd> 또는{' '}
-              <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">↑</kbd> 점프 &nbsp;|&nbsp;{' '}
-              <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">↓</kbd> 숙이기
-              &nbsp;|&nbsp; 게임 영역을 클릭하면 포커스됩니다
+              <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">Space</kbd> {t('game.or')}{' '}
+              <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">↑</kbd> {t('game.jump')} &nbsp;|&nbsp;{' '}
+              <kbd className="px-1.5 py-0.5 bg-muted rounded text-[10px] font-mono">↓</kbd> {t('game.duck')}
+              &nbsp;|&nbsp; {t('game.clickToFocus')}
             </p>
           </div>
         </div>
@@ -348,7 +353,7 @@ export function GamePage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Trophy className="size-4 text-warning" /> 리더보드
+              <Trophy className="size-4 text-warning" /> {t('game.leaderboard')}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -358,16 +363,16 @@ export function GamePage() {
               </div>
             ) : leaderboard.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
-                아직 기록이 없습니다. 게임을 시작하세요!
+                {t('game.noRecords')}
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10 text-center">#</TableHead>
-                    <TableHead>이름</TableHead>
-                    <TableHead className="text-right">점수</TableHead>
-                    <TableHead className="text-right w-16">날짜</TableHead>
+                    <TableHead>{t('game.colName')}</TableHead>
+                    <TableHead className="text-right">{t('game.colScore')}</TableHead>
+                    <TableHead className="text-right w-16">{t('game.colDate')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -383,7 +388,7 @@ export function GamePage() {
                         </TableCell>
                         <TableCell className={`text-sm font-medium ${isMe ? 'text-primary' : ''}`}>
                           {entry.name}
-                          {isMe && <Badge className="ml-1.5 text-[9px] px-1 py-0 bg-primary">나</Badge>}
+                          {isMe && <Badge className="ml-1.5 text-[9px] px-1 py-0 bg-primary">{t('game.me')}</Badge>}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm font-semibold">{entry.score.toLocaleString()}</TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground">{entry.date}</TableCell>

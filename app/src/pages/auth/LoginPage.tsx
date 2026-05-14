@@ -6,8 +6,10 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useT } from '@/i18n/LanguageContext'
 
 export function LoginPage() {
+  const t = useT()
   const { user, loading, signInWithGoogle, signInWithEmail } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -52,8 +54,8 @@ export function LoginPage() {
 
         <Card>
           <CardHeader className="text-center pb-4">
-            <CardTitle className="text-lg">로그인</CardTitle>
-            <CardDescription>회사 계정으로 로그인하세요</CardDescription>
+            <CardTitle className="text-lg">{t('login.title')}</CardTitle>
+            <CardDescription>{t('login.subtitle')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {error && (
@@ -74,7 +76,7 @@ export function LoginPage() {
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
               </svg>
-              Google 계정으로 로그인
+              {t('login.googleLogin')}
             </Button>
 
             <div className="relative">
@@ -82,14 +84,14 @@ export function LoginPage() {
                 <Separator className="w-full" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">또는</span>
+                <span className="bg-card px-2 text-muted-foreground">{t('login.or')}</span>
               </div>
             </div>
 
             {/* Email/Password */}
             <form onSubmit={handleEmail} className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-sm">이메일</Label>
+                <Label htmlFor="email" className="text-sm">{t('login.email')}</Label>
                 <Input
                   id="email"
                   type="email"
@@ -101,7 +103,7 @@ export function LoginPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-sm">비밀번호</Label>
+                <Label htmlFor="password" className="text-sm">{t('login.password')}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -113,7 +115,7 @@ export function LoginPage() {
                 />
               </div>
               <Button className="w-full h-10" type="submit" disabled={submitting}>
-                {submitting ? '로그인 중...' : '로그인'}
+                {submitting ? t('login.submitting') : t('login.submit')}
               </Button>
             </form>
           </CardContent>

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -39,14 +40,6 @@ interface EmployeeMetrics {
   todosOwned: number
   todosCompleted: number
   todosAssigned: number
-}
-
-const DEPT_LABELS: Record<Department, string> = {
-  management: '경영',
-  sales: '세일즈',
-  marketing: '마케팅',
-  finance: '재무',
-  service: '서비스',
 }
 
 const DEPT_COLORS: Record<Department, string> = {
@@ -189,6 +182,7 @@ function useEmployeePerformance() {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export function EmployeePerformancePage() {
+  const t = useT()
   const [deptFilter, setDeptFilter] = useState<string>('all')
   const { metrics, isLoading } = useEmployeePerformance()
 
@@ -251,9 +245,9 @@ export function EmployeePerformancePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">직원 성과</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('empPerf.title')}</h1>
         <p className="text-sm text-gray-500 mt-1">
-          전체 직원의 세일즈, 컨설팅, 프로젝트 실적을 부서별로 확인합니다.
+          {t('empPerf.subtitle')}
         </p>
       </div>
 
@@ -267,7 +261,7 @@ export function EmployeePerformancePage() {
               </div>
               <div>
                 <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
-                  직원 수
+                  {t('empPerf.employees')}
                 </p>
                 <p className="text-xl font-bold text-gray-900">
                   {totals.employees}명
@@ -285,7 +279,7 @@ export function EmployeePerformancePage() {
               </div>
               <div>
                 <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
-                  총 콜
+                  {t('empPerf.totalCalls')}
                 </p>
                 <p className="text-xl font-bold text-gray-900">
                   {totals.calls}건
@@ -303,7 +297,7 @@ export function EmployeePerformancePage() {
               </div>
               <div>
                 <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
-                  총 상담
+                  {t('empPerf.totalConsults')}
                 </p>
                 <p className="text-xl font-bold text-gray-900">
                   {totals.consultations}건
@@ -321,7 +315,7 @@ export function EmployeePerformancePage() {
               </div>
               <div>
                 <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
-                  총 계약
+                  {t('empPerf.totalContracts')}
                 </p>
                 <p className="text-xl font-bold text-gray-900">
                   {totals.contracts}건
@@ -339,7 +333,7 @@ export function EmployeePerformancePage() {
               </div>
               <div>
                 <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
-                  프로젝트
+                  {t('empPerf.projects')}
                 </p>
                 <p className="text-xl font-bold text-gray-900">
                   {totals.todosComplete}/{totals.todos}
@@ -354,15 +348,15 @@ export function EmployeePerformancePage() {
       <div className="flex items-center gap-3">
         <Select value={deptFilter} onValueChange={(v) => setDeptFilter(v || 'all')}>
           <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="부서 필터" />
+            <SelectValue placeholder={t('common.filter')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">전체 부서</SelectItem>
-            <SelectItem value="management">경영</SelectItem>
-            <SelectItem value="sales">세일즈</SelectItem>
-            <SelectItem value="marketing">마케팅</SelectItem>
-            <SelectItem value="finance">재무</SelectItem>
-            <SelectItem value="service">서비스</SelectItem>
+            <SelectItem value="all">{t('common.allDepartments')}</SelectItem>
+            <SelectItem value="management">{t('dept.management')}</SelectItem>
+            <SelectItem value="sales">{t('dept.sales')}</SelectItem>
+            <SelectItem value="marketing">{t('dept.marketing')}</SelectItem>
+            <SelectItem value="finance">{t('dept.finance')}</SelectItem>
+            <SelectItem value="service">{t('dept.service')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -381,8 +375,8 @@ export function EmployeePerformancePage() {
                 }
               >
                 {dept !== 'none'
-                  ? DEPT_LABELS[dept as Department]
-                  : '부서 미지정'}
+                  ? t('dept.' + dept)
+                  : t('empPerf.noDept')}
               </Badge>
               <span className="text-sm text-gray-500">{members.length}명</span>
             </div>
@@ -390,16 +384,16 @@ export function EmployeePerformancePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[140px]">이름</TableHead>
-                  <TableHead className="w-[80px]">직급</TableHead>
-                  <TableHead className="text-right">담당 리드</TableHead>
-                  <TableHead className="text-right">콜</TableHead>
-                  <TableHead className="text-right">상담</TableHead>
-                  <TableHead className="text-right">계약(세일즈)</TableHead>
-                  <TableHead className="text-right">계약 매출</TableHead>
-                  <TableHead className="text-right">담당(서비스)</TableHead>
-                  <TableHead className="text-right">미팅</TableHead>
-                  <TableHead className="text-right">프로젝트</TableHead>
+                  <TableHead className="w-[140px]">{t('empPerf.col.name')}</TableHead>
+                  <TableHead className="w-[80px]">{t('empPerf.col.position')}</TableHead>
+                  <TableHead className="text-right">{t('empPerf.col.leads')}</TableHead>
+                  <TableHead className="text-right">{t('empPerf.col.calls')}</TableHead>
+                  <TableHead className="text-right">{t('empPerf.col.consults')}</TableHead>
+                  <TableHead className="text-right">{t('empPerf.col.contractsSales')}</TableHead>
+                  <TableHead className="text-right">{t('empPerf.col.revenue')}</TableHead>
+                  <TableHead className="text-right">{t('empPerf.col.contractsService')}</TableHead>
+                  <TableHead className="text-right">{t('empPerf.col.meetings')}</TableHead>
+                  <TableHead className="text-right">{t('empPerf.col.projects')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -471,7 +465,7 @@ export function EmployeePerformancePage() {
 
       {filtered.length === 0 && (
         <div className="text-center py-12 text-gray-400">
-          해당 부서에 직원이 없습니다.
+          {t('empPerf.noEmployees')}
         </div>
       )}
     </div>

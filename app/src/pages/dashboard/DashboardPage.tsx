@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -131,15 +132,15 @@ function useNeglectedLeads() {
 
 // --- Constants ---
 
-const PIPELINE_STAGES: { key: PipelineStage; name: string; color: string }[] = [
-  { key: 'new_lead', name: '신규 리드', color: '#FDAB3D' },
-  { key: 'contact_attempted', name: '컨택 시도', color: '#FFCB00' },
-  { key: 'consultation_scheduled', name: '상담 예약', color: '#00C875' },
-  { key: 'first_consultation', name: '1차 상담', color: '#0073EA' },
-  { key: 'second_consultation', name: '2차 상담', color: '#A25DDC' },
-  { key: 'third_consultation', name: '3차 상담', color: '#784BD1' },
-  { key: 'contract_review', name: '계약 검토', color: '#FF158A' },
-  { key: 'contracted', name: '계약 완료', color: '#00C875' },
+const PIPELINE_STAGE_COLORS: { key: PipelineStage; color: string }[] = [
+  { key: 'new_lead', color: '#FDAB3D' },
+  { key: 'contact_attempted', color: '#FFCB00' },
+  { key: 'consultation_scheduled', color: '#00C875' },
+  { key: 'first_consultation', color: '#0073EA' },
+  { key: 'second_consultation', color: '#A25DDC' },
+  { key: 'third_consultation', color: '#784BD1' },
+  { key: 'contract_review', color: '#FF158A' },
+  { key: 'contracted', color: '#00C875' },
 ]
 
 /**
@@ -248,28 +249,6 @@ const CHANNEL_COLORS: Record<string, string> = {
   other: '#9CA3AF',      // gray
 }
 
-const CHANNEL_LABELS: Record<string, string> = {
-  instagram: '인스타그램',
-  youtube: '유튜브',
-  kakao: '카카오톡',
-  naver: '네이버/블로그',
-  referral: '소개/추천',
-  seminar: '세미나/설명회',
-  website: '웹사이트',
-  facebook: '페이스북',
-  tiktok: '틱톡',
-  ad: '광고',
-  event: '이벤트/박람회',
-  phone: '전화 인바운드',
-  other: '기타',
-}
-
-const PRIORITY_LABELS: Record<string, string> = {
-  high: '긴급',
-  medium: '보통',
-  low: '낮음',
-}
-
 function formatKRW(n: number) {
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
   if (n >= 10_000) return `₩${(n / 10_000).toLocaleString()}만`
@@ -277,6 +256,7 @@ function formatKRW(n: number) {
 }
 
 export function DashboardPage() {
+  const t = useT()
   const { data: todayMeetings = [], isLoading: meetingsLoading } = useTodayMeetings()
   const { data: todos = [], isLoading: todosLoading } = useDashboardTodos()
   const { data: pipelineLeads = [], isLoading: pipelineLoading } = usePipelineStats()
@@ -290,8 +270,8 @@ export function DashboardPage() {
     pipelineLeads.forEach((l: { pipeline_stage: string }) => {
       counts[l.pipeline_stage] = (counts[l.pipeline_stage] || 0) + 1
     })
-    return PIPELINE_STAGES.map(s => ({ ...s, count: counts[s.key] || 0 }))
-  }, [pipelineLeads])
+    return PIPELINE_STAGE_COLORS.map(s => ({ ...s, name: t('stage.' + s.key), count: counts[s.key] || 0 }))
+  }, [pipelineLeads, t])
 
   // Channel distribution (normalized to merge typos/variations)
   const channelData = useMemo(() => {
@@ -302,12 +282,12 @@ export function DashboardPage() {
     })
     return Object.entries(counts)
       .map(([key, value]) => ({
-        name: CHANNEL_LABELS[key] || key,
+        name: t('channel.' + key),
         value,
         color: CHANNEL_COLORS[key] || '#9CA3AF',
       }))
       .sort((a, b) => b.value - a.value)
-  }, [monthlyLeads])
+  }, [monthlyLeads, t])
 
   const totalLeads = monthlyLeads.length
   const totalConsultations = pipelineLeads.filter(
@@ -326,8 +306,8 @@ export function DashboardPage() {
     <div className="space-y-6">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">대시보드</h1>
-        <p className="text-muted-foreground">{todayKST()} 전사 현황</p>
+        <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.title')}</h1>
+        <p className="text-muted-foreground">{todayKST()} {t('dashboard.companyStatus')}</p>
       </div>
 
       {/* KPI Cards Row */}
@@ -335,7 +315,7 @@ export function DashboardPage() {
         {/* 신규 리드 */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">이번 달 신규 리드</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.newLeadsThisMonth')}</CardTitle>
             <Users className="size-4 text-primary" />
           </CardHeader>
           <CardContent>
@@ -346,7 +326,7 @@ export function DashboardPage() {
                 <div className="text-2xl font-bold">{totalLeads}명</div>
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                   <ArrowUpRight className="size-3 text-success" />
-                  이번 달 기준
+                  {t('dashboard.thisMonthBasis')}
                 </p>
               </>
             )}
@@ -356,7 +336,7 @@ export function DashboardPage() {
         {/* 상담 & 계약 */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">상담 → 계약</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.consultToContract')}</CardTitle>
             <FileSignature className="size-4 text-accent" />
           </CardHeader>
           <CardContent>
@@ -368,7 +348,7 @@ export function DashboardPage() {
                   {totalConsultations}건 → {totalContracted}건
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  전환율 <span className="font-semibold text-foreground">{conversionRate}%</span>
+                  {t('dashboard.conversionRate')} <span className="font-semibold text-foreground">{conversionRate}%</span>
                 </p>
               </>
             )}
@@ -378,7 +358,7 @@ export function DashboardPage() {
         {/* 미수금 */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">미수금 합계</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.outstandingTotal')}</CardTitle>
             <AlertCircle className="size-4 text-destructive" />
           </CardHeader>
           <CardContent>
@@ -387,7 +367,7 @@ export function DashboardPage() {
             ) : (
               <>
                 <div className="text-2xl font-bold text-destructive">{formatKRW(outstanding)}</div>
-                <p className="text-xs text-muted-foreground mt-1">{overdueCount}건 미수금</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('dashboard.outstandingCount', { n: overdueCount })}</p>
               </>
             )}
           </CardContent>
@@ -396,7 +376,7 @@ export function DashboardPage() {
         {/* 오늘 미팅 수 */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">오늘 미팅</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.todayMeetings')}</CardTitle>
             <Calendar className="size-4 text-primary" />
           </CardHeader>
           <CardContent>
@@ -405,7 +385,7 @@ export function DashboardPage() {
             ) : (
               <>
                 <div className="text-2xl font-bold">{todayMeetings.length}건</div>
-                <p className="text-xs text-muted-foreground mt-1">{todayKST()} 기준</p>
+                <p className="text-xs text-muted-foreground mt-1">{todayKST()} {t('dashboard.basis')}</p>
               </>
             )}
           </CardContent>
@@ -419,30 +399,24 @@ export function DashboardPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2 text-amber-800">
                 <AlertTriangle className="size-5 text-amber-500" />
-                방치 리드 경고
+                {t('dashboard.neglectedAlert')}
                 <Badge variant="destructive" className="text-xs ml-1">
                   {neglectedLeads.length}건
                 </Badge>
               </CardTitle>
               <Link to="/sales/pipeline">
                 <Button variant="ghost" size="sm" className="text-xs gap-1 text-amber-700 hover:text-amber-900">
-                  파이프라인 보기 <ChevronRight className="size-3" />
+                  {t('dashboard.viewPipeline')} <ChevronRight className="size-3" />
                 </Button>
               </Link>
             </div>
             <CardDescription className="text-amber-700/70">
-              3일 이상 업데이트가 없는 활성 리드입니다. 후속 조치가 필요합니다.
+              {t('dashboard.neglectedDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-2">
               {neglectedLeads.map((lead) => {
-                const stageLabels: Record<string, string> = {
-                  new_lead: '신규 리드', contact_attempted: '컨택 시도',
-                  consultation_scheduled: '상담 예약', first_consultation: '1차 상담',
-                  second_consultation: '2차 상담', third_consultation: '3차 상담',
-                  contract_review: '계약 검토',
-                }
                 const urgency = lead.daysSince >= 14 ? 'bg-red-100 text-red-700 border-red-200' :
                   lead.daysSince >= 7 ? 'bg-orange-100 text-orange-700 border-orange-200' :
                   'bg-amber-100 text-amber-700 border-amber-200'
@@ -458,7 +432,7 @@ export function DashboardPage() {
                   >
                     <div className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold border ${urgency}`}>
                       <Clock className="size-3" />
-                      {lead.daysSince}일
+                      {lead.daysSince}{t('dashboard.days')}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -467,7 +441,7 @@ export function DashboardPage() {
                           {lead.student_name ? ` / ${lead.student_name as string}` : ''}
                         </span>
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
-                          {stageLabels[lead.pipeline_stage as string] || lead.pipeline_stage}
+                          {t('stage.' + (lead.pipeline_stage as string))}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
@@ -476,7 +450,7 @@ export function DashboardPage() {
                         {assignedName ? (
                           <span className="text-primary font-medium">{assignedName}</span>
                         ) : (
-                          <span className="text-red-500 font-medium">미배정</span>
+                          <span className="text-red-500 font-medium">{t('common.unassigned')}</span>
                         )}
                       </div>
                     </div>
@@ -497,8 +471,8 @@ export function DashboardPage() {
         {/* 유입 채널 분포 */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">유입 채널 분포</CardTitle>
-            <CardDescription>이번 달 리드</CardDescription>
+            <CardTitle className="text-base">{t('dashboard.channelDistribution')}</CardTitle>
+            <CardDescription>{t('dashboard.thisMonthLeads')}</CardDescription>
           </CardHeader>
           <CardContent>
             {leadsLoading ? (
@@ -507,7 +481,7 @@ export function DashboardPage() {
               </div>
             ) : channelData.length === 0 ? (
               <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
-                이번 달 리드 데이터가 없습니다
+                {t('dashboard.noLeadData')}
               </div>
             ) : (
               <div className="flex items-center gap-8">
@@ -538,7 +512,7 @@ export function DashboardPage() {
         {/* 파이프라인 요약 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">파이프라인 현황</CardTitle>
+            <CardTitle className="text-base">{t('dashboard.pipelineStatus')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {pipelineLoading ? (
@@ -564,7 +538,7 @@ export function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Calendar className="size-4" /> 오늘 미팅
+              <Calendar className="size-4" /> {t('dashboard.todayMeetings')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -574,7 +548,7 @@ export function DashboardPage() {
               </div>
             ) : todayMeetings.length === 0 ? (
               <div className="text-sm text-muted-foreground text-center py-8">
-                오늘 예정된 미팅이 없습니다
+                {t('dashboard.noMeetingsToday')}
               </div>
             ) : (
               todayMeetings.map((m: Record<string, unknown>, i: number) => (
@@ -588,7 +562,7 @@ export function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {(m.meeting_number as number) || 1}차 미팅
+                        {(m.meeting_number as number) || 1}{t('dashboard.meeting')}
                       </Badge>
                       {m.source_channel ? (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0">
@@ -607,7 +581,7 @@ export function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle2 className="size-4" /> 급한 할일
+              <CheckCircle2 className="size-4" /> {t('dashboard.urgentTodos')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -617,24 +591,24 @@ export function DashboardPage() {
               </div>
             ) : todos.length === 0 ? (
               <div className="text-sm text-muted-foreground text-center py-8">
-                진행 중인 할일이 없습니다
+                {t('dashboard.noTodos')}
               </div>
             ) : (
-              todos.map((t: Record<string, unknown>, i: number) => (
+              todos.map((todo: Record<string, unknown>, i: number) => (
                 <div key={i} className="flex items-start gap-3">
                   <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
-                    t.priority === 'high' ? 'bg-destructive' :
-                    t.priority === 'medium' ? 'bg-warning' : 'bg-muted-foreground'
+                    todo.priority === 'high' ? 'bg-destructive' :
+                    todo.priority === 'medium' ? 'bg-warning' : 'bg-muted-foreground'
                   }`} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm truncate">{String(t.title || '')}</div>
+                    <div className="text-sm truncate">{String(todo.title || '')}</div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-muted-foreground">
-                        {PRIORITY_LABELS[(t.priority as string) || 'medium']}
+                        {t('priority.' + ((todo.priority as string) || 'medium'))}
                       </span>
-                      {t.due_date ? (
+                      {todo.due_date ? (
                         <span className="text-xs text-muted-foreground">
-                          · 마감: {String(t.due_date).slice(0, 10)}
+                          · {t('dashboard.due')}: {String(todo.due_date).slice(0, 10)}
                         </span>
                       ) : null}
                     </div>

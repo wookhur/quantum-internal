@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -137,6 +138,7 @@ function AssignedAvatar({ user }: { user: Lead['assignedUser'] }) {
 // ============ Main component ============
 
 export function LeadsPage() {
+  const t = useT()
   // -- Filter state
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<string>('all')
@@ -265,7 +267,7 @@ export function LeadsPage() {
         <div className="flex items-center gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">리드 관리</h1>
+              <h1 className="text-2xl font-bold tracking-tight">{t('leads.title')}</h1>
               {!isLoading && (
                 <Badge variant="secondary" className="text-xs font-semibold">
                   {totalCount}
@@ -273,13 +275,13 @@ export function LeadsPage() {
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">
-              세일즈 파이프라인 리드 목록
+              {t('leads.subtitle')}
             </p>
           </div>
         </div>
         <Button className="gap-1.5" onClick={() => setDialogOpen(true)}>
           <Plus className="size-4" />
-          새 리드
+          {t('leads.newLead')}
         </Button>
       </div>
 
@@ -290,7 +292,7 @@ export function LeadsPage() {
           <div className="relative flex-1 min-w-[200px] max-w-xs">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="이름, 연락처, 학교 검색..."
+              placeholder={t('leads.searchPlaceholder')}
               className="pl-8 h-8"
               value={search}
               onChange={(e) => {
@@ -309,10 +311,10 @@ export function LeadsPage() {
             }}
           >
             <SelectTrigger className="w-[140px]" size="sm">
-              <SelectValue placeholder="파이프라인" />
+              <SelectValue placeholder={t('leads.pipeline')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">전체 단계</SelectItem>
+              <SelectItem value="all">{t('leads.allStages')}</SelectItem>
               {PIPELINE_STAGES.map((s) => (
                 <SelectItem key={s.key} value={s.key}>
                   {s.label}
@@ -330,10 +332,10 @@ export function LeadsPage() {
             }}
           >
             <SelectTrigger className="w-[140px]" size="sm">
-              <SelectValue placeholder="유입채널" />
+              <SelectValue placeholder={t('leads.sourceChannel')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">전체 채널</SelectItem>
+              <SelectItem value="all">{t('leads.allChannels')}</SelectItem>
               {SOURCE_CHANNELS.map((ch) => (
                 <SelectItem key={ch} value={ch}>
                   {ch}
@@ -351,10 +353,10 @@ export function LeadsPage() {
             }}
           >
             <SelectTrigger className="w-[130px]" size="sm">
-              <SelectValue placeholder="담당자" />
+              <SelectValue placeholder={t('leads.col.assignee')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">전체 담당자</SelectItem>
+              <SelectItem value="all">{t('leads.allAssignees')}</SelectItem>
               {assignedUsers.map((u) => (
                 <SelectItem key={u.id} value={u.id}>
                   {u.name}
@@ -367,7 +369,7 @@ export function LeadsPage() {
           {activeFilterCount > 0 && (
             <>
               <Badge variant="secondary" className="text-xs gap-1">
-                {activeFilterCount}개 필터
+                {t('leads.filtersActive', { n: activeFilterCount })}
               </Badge>
               <Button
                 variant="ghost"
@@ -376,7 +378,7 @@ export function LeadsPage() {
                 onClick={resetFilters}
               >
                 <X className="size-3" />
-                필터 초기화
+                {t('common.filterReset')}
               </Button>
             </>
           )}
@@ -387,25 +389,25 @@ export function LeadsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={Users}
-          label="전체 리드"
+          label={t('leads.totalLeads')}
           value={stats?.total ?? '-'}
           accent="#0073EA"
         />
         <StatCard
           icon={CalendarDays}
-          label="이번 달"
+          label={t('common.thisMonth')}
           value={stats?.thisMonth ?? '-'}
           accent="#A25DDC"
         />
         <StatCard
           icon={TrendingUp}
-          label="활성 리드"
+          label={t('leads.activeLeads')}
           value={activeLeadCount}
           accent="#00C875"
         />
         <StatCard
           icon={BarChart3}
-          label="전환율"
+          label={t('dashboard.conversionRate')}
           value={stats ? `${stats.conversionRate}%` : '-'}
           accent="#FF158A"
         />
@@ -416,14 +418,14 @@ export function LeadsPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
             <Loader2 className="size-7 animate-spin text-primary/40" />
-            <p className="text-sm text-muted-foreground">리드를 불러오고 있습니다...</p>
+            <p className="text-sm text-muted-foreground">{t('leads.loadingLeads')}</p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-24 gap-2">
             <p className="text-sm text-destructive font-medium">
-              데이터를 불러오는 중 오류가 발생했습니다
+              {t('common.error')}
             </p>
-            <p className="text-xs text-muted-foreground">잠시 후 다시 시도해 주세요.</p>
+            <p className="text-xs text-muted-foreground">{t('common.tryAgainLater')}</p>
           </div>
         ) : totalCount === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
@@ -431,17 +433,17 @@ export function LeadsPage() {
               <Users className="size-7 text-muted-foreground/50" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-foreground">리드가 없습니다</p>
+              <p className="text-sm font-medium text-foreground">{t('leads.noLeads')}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {activeFilterCount > 0
-                  ? '필터 조건에 맞는 리드가 없습니다. 필터를 변경해 보세요.'
-                  : '새 리드를 추가하여 파이프라인을 시작하세요.'}
+                  ? t('leads.noLeadsFiltered')
+                  : t('leads.noLeadsEmpty')}
               </p>
             </div>
             {activeFilterCount === 0 && (
               <Button size="sm" className="gap-1.5 mt-1" onClick={() => setDialogOpen(true)}>
                 <Plus className="size-3.5" />
-                새 리드 추가
+                {t('leads.addNewLead')}
               </Button>
             )}
           </div>
@@ -450,18 +452,18 @@ export function LeadsPage() {
             <table className="monday-table">
               <thead>
                 <tr>
-                  <th style={{ width: 110 }}>상태</th>
-                  <th style={{ width: 80 }}>리드일자</th>
-                  <th>부모님</th>
-                  <th>학생</th>
-                  <th className="hidden md:table-cell">학교</th>
-                  <th className="hidden lg:table-cell" style={{ width: 60 }}>학년</th>
-                  <th className="hidden lg:table-cell">지역</th>
-                  <th>관심분야</th>
-                  <th>유입채널</th>
-                  <th>담당자</th>
-                  <th className="hidden xl:table-cell" style={{ maxWidth: 200 }}>메모</th>
-                  <th style={{ width: 70 }}>액션</th>
+                  <th style={{ width: 110 }}>{t('leads.col.status')}</th>
+                  <th style={{ width: 80 }}>{t('leads.col.leadDate')}</th>
+                  <th>{t('leads.col.parent')}</th>
+                  <th>{t('leads.col.student')}</th>
+                  <th className="hidden md:table-cell">{t('leads.col.school')}</th>
+                  <th className="hidden lg:table-cell" style={{ width: 60 }}>{t('leads.col.grade')}</th>
+                  <th className="hidden lg:table-cell">{t('leads.col.region')}</th>
+                  <th>{t('leads.col.interestArea')}</th>
+                  <th>{t('leads.col.sourceChannel')}</th>
+                  <th>{t('leads.col.assignee')}</th>
+                  <th className="hidden xl:table-cell" style={{ maxWidth: 200 }}>{t('leads.col.memo')}</th>
+                  <th style={{ width: 70 }}>{t('leads.col.action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -542,7 +544,7 @@ export function LeadsPage() {
         {totalCount > ROWS_PER_PAGE && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border">
             <p className="text-xs text-muted-foreground">
-              {totalCount}개 중 {startIdx + 1}-{Math.min(endIdx, totalCount)}
+              {startIdx + 1}-{Math.min(endIdx, totalCount)} {t('common.of')} {totalCount}
             </p>
             <div className="flex items-center gap-1">
               <Button
@@ -573,8 +575,8 @@ export function LeadsPage() {
       <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>새 리드 추가</DialogTitle>
-            <DialogDescription>새로운 리드 정보를 입력해 주세요.</DialogDescription>
+            <DialogTitle>{t('leads.addNewLead')}</DialogTitle>
+            <DialogDescription>{t('leads.addNewLeadDesc')}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
@@ -582,7 +584,7 @@ export function LeadsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">
-                  부모님 성함 <span className="text-destructive">*</span>
+                  {t('leads.parentName')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.parentName}
@@ -591,7 +593,7 @@ export function LeadsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">학생 이름</Label>
+                <Label className="text-xs font-medium">{t('leads.studentName')}</Label>
                 <Input
                   value={form.studentName}
                   onChange={(e) => updateForm('studentName', e.target.value)}
@@ -604,7 +606,7 @@ export function LeadsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">
-                  연락처 <span className="text-destructive">*</span>
+                  {t('leads.phone')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.phone}
@@ -613,7 +615,7 @@ export function LeadsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">이메일</Label>
+                <Label className="text-xs font-medium">{t('leads.email')}</Label>
                 <Input
                   type="email"
                   value={form.email}
@@ -626,21 +628,21 @@ export function LeadsPage() {
             {/* Row 3: school + grade */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">재학 학교</Label>
+                <Label className="text-xs font-medium">{t('leads.currentSchool')}</Label>
                 <Input
                   value={form.currentSchool}
                   onChange={(e) => updateForm('currentSchool', e.target.value)}
-                  placeholder="학교명"
+                  placeholder={t('leads.schoolPlaceholder')}
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">학년</Label>
+                <Label className="text-xs font-medium">{t('leads.grade')}</Label>
                 <Select
                   value={form.grade}
                   onValueChange={(v) => v && updateForm('grade', v)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="선택" />
+                    <SelectValue placeholder={t('common.select')} />
                   </SelectTrigger>
                   <SelectContent>
                     {GRADES.map((g) => (
@@ -656,13 +658,13 @@ export function LeadsPage() {
             {/* Row 4: region + interest area */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">지역</Label>
+                <Label className="text-xs font-medium">{t('leads.region')}</Label>
                 <Select
                   value={form.region}
                   onValueChange={(v) => v && updateForm('region', v)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="선택" />
+                    <SelectValue placeholder={t('common.select')} />
                   </SelectTrigger>
                   <SelectContent>
                     {REGIONS.map((r) => (
@@ -674,13 +676,13 @@ export function LeadsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">관심분야</Label>
+                <Label className="text-xs font-medium">{t('leads.interestArea')}</Label>
                 <Select
                   value={form.interestArea}
                   onValueChange={(v) => v && updateForm('interestArea', v)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="선택" />
+                    <SelectValue placeholder={t('common.select')} />
                   </SelectTrigger>
                   <SelectContent>
                     {INTEREST_AREAS.map((a) => (
@@ -696,14 +698,14 @@ export function LeadsPage() {
             {/* Row 5: source channel */}
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">
-                유입 채널 <span className="text-destructive">*</span>
+                {t('leads.sourceChannel')} <span className="text-destructive">*</span>
               </Label>
               <Select
                 value={form.sourceChannel}
                 onValueChange={(v) => v && updateForm('sourceChannel', v)}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="유입 채널을 선택해 주세요" />
+                  <SelectValue placeholder={t('leads.sourceChannelPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {SOURCE_CHANNELS.map((ch) => (
@@ -717,25 +719,25 @@ export function LeadsPage() {
 
             {/* Row 6: memo */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">메모</Label>
+              <Label className="text-xs font-medium">{t('leads.memo')}</Label>
               <Textarea
                 value={form.memo}
                 onChange={(e) => updateForm('memo', e.target.value)}
                 rows={3}
-                placeholder="특이사항이나 메모를 입력하세요..."
+                placeholder={t('leads.memoPlaceholder')}
               />
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => handleDialogClose(false)}>
-              취소
+              {t('common.cancel')}
             </Button>
             <Button onClick={handleCreateLead} disabled={!canSubmit}>
               {createLead.isPending && (
                 <Loader2 className="size-4 animate-spin mr-1.5" />
               )}
-              리드 추가
+              {t('leads.addLead')}
             </Button>
           </DialogFooter>
         </DialogContent>

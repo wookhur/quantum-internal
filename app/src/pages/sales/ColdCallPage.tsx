@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -197,20 +198,20 @@ function getLeadPriority(lead: Lead): number {
   return Math.max(0, Math.min(100, score))
 }
 
-function getPriorityLabel(score: number): { label: string; color: string; icon: typeof Flame } {
-  if (score >= 80) return { label: '최우선', color: 'bg-red-500 text-white', icon: Flame }
-  if (score >= 60) return { label: '높음', color: 'bg-orange-500 text-white', icon: Star }
-  if (score >= 40) return { label: '보통', color: 'bg-yellow-500 text-white', icon: Sparkles }
-  return { label: '낮음', color: 'bg-gray-400 text-white', icon: Clock }
+function getPriorityLabel(score: number, t: (key: string, params?: Record<string, string | number>) => string): { label: string; color: string; icon: typeof Flame } {
+  if (score >= 80) return { label: t('priority.highest'), color: 'bg-red-500 text-white', icon: Flame }
+  if (score >= 60) return { label: t('priority.high'), color: 'bg-orange-500 text-white', icon: Star }
+  if (score >= 40) return { label: t('priority.medium'), color: 'bg-yellow-500 text-white', icon: Sparkles }
+  return { label: t('priority.low'), color: 'bg-gray-400 text-white', icon: Clock }
 }
 
 // ============ Grade groups for filtering ============
 
 const GRADE_GROUPS = [
-  { label: '전체', value: 'all' },
-  { label: '고등 (G10-12, 고1-3)', value: 'high' },
-  { label: '중등 (G7-9, 중1-3)', value: 'middle' },
-  { label: '대학생', value: 'college' },
+  { labelKey: 'coldCall.gradeAll', value: 'all' },
+  { labelKey: 'coldCall.gradeHigh', value: 'high' },
+  { labelKey: 'coldCall.gradeMiddle', value: 'middle' },
+  { labelKey: 'coldCall.gradeCollege', value: 'college' },
 ]
 
 const HIGH_GRADES = new Set(['G10', 'G11', 'G12', '고1', '고2', '고3', 'Y10', 'Y11', 'Y12', 'Y13'])
@@ -227,6 +228,7 @@ function matchesGradeGroup(grade: string, group: string): boolean {
 // ============ Main Component ============
 
 export function ColdCallPage() {
+  const t = useT()
   const [search, setSearch] = useState('')
   const [gradeGroup, setGradeGroup] = useState('all')
   const [selectedGrade, setSelectedGrade] = useState('all')
@@ -301,12 +303,12 @@ export function ColdCallPage() {
             <div>
               <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
                 <PhoneCall className="size-5 text-primary" />
-                콜드콜
+                {t('coldCall.title')}
               </h1>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {isLoading ? '로딩 중...' : `${filteredCount}명 / 전체 ${totalColdCallable}명`}
+                {isLoading ? t('common.loading') : t('coldCall.countSummary', { filtered: filteredCount, total: totalColdCallable })}
                 {highPriorityCount > 0 && (
-                  <span className="text-red-500 font-medium"> ({highPriorityCount}명 최우선)</span>
+                  <span className="text-red-500 font-medium"> ({t('coldCall.highPriorityCount', { n: highPriorityCount })})</span>
                 )}
               </p>
             </div>
@@ -316,9 +318,9 @@ export function ColdCallPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="priority">우선순위</SelectItem>
-                <SelectItem value="date">최신순</SelectItem>
-                <SelectItem value="grade">학년순</SelectItem>
+                <SelectItem value="priority">{t('coldCall.sortPriority')}</SelectItem>
+                <SelectItem value="date">{t('coldCall.sortDate')}</SelectItem>
+                <SelectItem value="grade">{t('coldCall.sortGrade')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -327,7 +329,7 @@ export function ColdCallPage() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
-              placeholder="이름, 전화번호, 학교 검색..."
+              placeholder={t('coldCall.searchPlaceholder')}
               className="pl-8 h-8 text-xs"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -344,7 +346,7 @@ export function ColdCallPage() {
               <SelectContent>
                 {GRADE_GROUPS.map((g) => (
                   <SelectItem key={g.value} value={g.value}>
-                    {g.label}
+                    {t(g.labelKey)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -352,10 +354,10 @@ export function ColdCallPage() {
             <Select value={selectedGrade} onValueChange={(v) => setSelectedGrade(v || 'all')}>
               <SelectTrigger className="h-7 text-xs flex-1">
                 <GraduationCap className="size-3 mr-1" />
-                <SelectValue placeholder="학년" />
+                <SelectValue placeholder={t('leads.grade')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체 학년</SelectItem>
+                <SelectItem value="all">{t('coldCall.allGrades')}</SelectItem>
                 {GRADES.map((g) => (
                   <SelectItem key={g} value={g}>
                     {g}
@@ -367,7 +369,7 @@ export function ColdCallPage() {
           <div className="relative">
             <School className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
             <Input
-              placeholder="학교명 필터..."
+              placeholder={t('coldCall.schoolFilter')}
               className="pl-7 h-7 text-xs"
               value={selectedSchool}
               onChange={(e) => setSelectedSchool(e.target.value)}
@@ -383,11 +385,11 @@ export function ColdCallPage() {
             </div>
           ) : coldCallLeads.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground text-sm">
-              조건에 맞는 리드가 없습니다.
+              {t('coldCall.noLeads')}
             </div>
           ) : (
             coldCallLeads.map((lead) => {
-              const priority = getPriorityLabel(lead._priority)
+              const priority = getPriorityLabel(lead._priority, t)
               const PriorityIcon = priority.icon
               const isSelected = lead.id === selectedLeadId
               return (
@@ -414,7 +416,7 @@ export function ColdCallPage() {
                       </div>
                       {lead.studentName && (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {lead.parentName} (학부모)
+                          {lead.parentName} ({t('coldCall.parent')})
                         </p>
                       )}
                       <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
@@ -461,8 +463,8 @@ export function ColdCallPage() {
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <Phone className="size-12 mb-4 opacity-30" />
-            <p className="text-sm">왼쪽 목록에서 리드를 선택하세요</p>
-            <p className="text-xs mt-1">리드의 상세 정보와 콜드콜 기록을 확인할 수 있습니다</p>
+            <p className="text-sm">{t('coldCall.selectLead')}</p>
+            <p className="text-xs mt-1">{t('coldCall.selectLeadDesc')}</p>
           </div>
         )}
       </div>
@@ -479,6 +481,7 @@ function ColdCallDetail({
   lead: Lead & { _priority: number }
   onClose: () => void
 }) {
+  const t = useT()
   const { user } = useAuth()
   const { data: activities = [], isLoading: activitiesLoading } = useLeadActivities(lead.id)
   const createActivity = useCreateActivity()
@@ -490,19 +493,19 @@ function ColdCallDetail({
   const [showMemoEdit, setShowMemoEdit] = useState(false)
   const [excludeConfirm, setExcludeConfirm] = useState<PipelineStage | null>(null)
 
-  const priority = getPriorityLabel(lead._priority)
+  const priority = getPriorityLabel(lead._priority, t)
   const stage = getStageConfig(lead.pipelineStage)
 
   const handleLogCall = useCallback(() => {
     if (!callNote.trim() && !callResult) return
 
     const resultLabels: Record<string, string> = {
-      connected: '통화 성공',
-      no_answer: '부재중',
-      callback: '콜백 요청',
+      connected: t('coldCall.callConnected'),
+      no_answer: t('coldCall.callNoAnswer'),
+      callback: t('coldCall.callCallback'),
     }
 
-    const title = callResult ? `콜드콜 - ${resultLabels[callResult]}` : '콜드콜'
+    const title = callResult ? `${t('coldCall.title')} - ${resultLabels[callResult]}` : t('coldCall.title')
     const content = callNote.trim() || undefined
 
     createActivity.mutate(
@@ -594,17 +597,17 @@ function ColdCallDetail({
               {stage.label}
             </span>
             <Badge className={`${priority.color} text-xs`}>
-              우선순위 {lead._priority}점
+              {t('coldCall.priorityScore', { score: lead._priority })}
             </Badge>
           </div>
           {lead.studentName && (
-            <p className="text-sm text-muted-foreground">{lead.parentName} (학부모)</p>
+            <p className="text-sm text-muted-foreground">{lead.parentName} ({t('coldCall.parent')})</p>
           )}
         </div>
         <div className="flex items-center gap-2">
           <Link to={`/sales/leads/${lead.id}`}>
             <Button variant="outline" size="sm" className="text-xs gap-1">
-              상세 페이지 <ChevronRight className="size-3" />
+              {t('coldCall.detailPage')} <ChevronRight className="size-3" />
             </Button>
           </Link>
           <Button variant="ghost" size="icon" className="size-7" onClick={onClose}>
@@ -618,7 +621,7 @@ function ColdCallDetail({
         {/* Contact Info */}
         <Card>
           <CardContent className="p-4 space-y-2.5">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">연락처</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('coldCall.contactInfo')}</h3>
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm">
                 <Phone className="size-4 text-muted-foreground shrink-0" />
@@ -651,7 +654,7 @@ function ColdCallDetail({
         {/* Student Info */}
         <Card>
           <CardContent className="p-4 space-y-2.5">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">학생 정보</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('coldCall.studentInfo')}</h3>
             <div className="space-y-2">
               {lead.currentSchool && (
                 <div className="flex items-center gap-2 text-sm">
@@ -680,27 +683,27 @@ function ColdCallDetail({
       <Card>
         <CardContent className="p-4">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
-            유입 정보
+            {t('coldCall.sourceInfo')}
           </h3>
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="text-xs text-muted-foreground">유입 경로</span>
+              <span className="text-xs text-muted-foreground">{t('coldCall.sourceChannel')}</span>
               <p className="font-medium flex items-center gap-1.5 mt-0.5">
                 <Globe className="size-3.5 text-primary" />
                 {lead.sourceChannel}
               </p>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground">유입일</span>
+              <span className="text-xs text-muted-foreground">{t('coldCall.leadDate')}</span>
               <p className="font-medium flex items-center gap-1.5 mt-0.5">
                 <Calendar className="size-3.5 text-primary" />
                 {lead.leadDate}
               </p>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground">담당자</span>
+              <span className="text-xs text-muted-foreground">{t('coldCall.assignee')}</span>
               <p className="font-medium mt-0.5">
-                {lead.assignedUser?.name || '미배정'}
+                {lead.assignedUser?.name || t('common.unassigned')}
               </p>
             </div>
           </div>
@@ -712,7 +715,7 @@ function ColdCallDetail({
         <CardContent className="p-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              메모 / 특이사항
+              {t('coldCall.memoNotes')}
             </h3>
             {!showMemoEdit && (
               <Button
@@ -724,7 +727,7 @@ function ColdCallDetail({
                   setShowMemoEdit(true)
                 }}
               >
-                수정
+                {t('common.edit')}
               </Button>
             )}
           </div>
@@ -735,26 +738,26 @@ function ColdCallDetail({
                 onChange={(e) => setMemoEdit(e.target.value)}
                 rows={3}
                 className="text-sm resize-none"
-                placeholder="메모를 입력하세요..."
+                placeholder={t('coldCall.memoPlaceholder')}
               />
               <div className="flex gap-2">
                 <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveMemo} disabled={updateLead.isPending}>
-                  <Save className="size-3" /> 저장
+                  <Save className="size-3" /> {t('common.save')}
                 </Button>
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowMemoEdit(false)}>
-                  취소
+                  {t('common.cancel')}
                 </Button>
               </div>
             </div>
           ) : (
             <p className="text-sm leading-relaxed text-muted-foreground">
-              {lead.memo || '메모 없음'}
+              {lead.memo || t('common.noMemo')}
             </p>
           )}
           {lead.requiredAction && (
             <div className="mt-2 px-2.5 py-1.5 rounded-md bg-amber-50 border border-amber-200">
               <span className="text-xs font-medium text-amber-700">
-                필요 조치: {lead.requiredAction}
+                {t('coldCall.requiredAction')}: {lead.requiredAction}
               </span>
             </div>
           )}
@@ -766,7 +769,7 @@ function ColdCallDetail({
         <CardContent className="p-4">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <PhoneCall className="size-4 text-primary" />
-            콜드콜 기록
+            {t('coldCall.callLog')}
           </h3>
           <div className="space-y-3">
             {/* Call result buttons */}
@@ -779,7 +782,7 @@ function ColdCallDetail({
                 }`}
                 onClick={() => setCallResult(callResult === 'connected' ? '' : 'connected')}
               >
-                <PhoneCall className="size-3.5" /> 통화 성공
+                <PhoneCall className="size-3.5" /> {t('coldCall.callConnected')}
               </Button>
               <Button
                 size="sm"
@@ -789,7 +792,7 @@ function ColdCallDetail({
                 }`}
                 onClick={() => setCallResult(callResult === 'no_answer' ? '' : 'no_answer')}
               >
-                <PhoneOff className="size-3.5" /> 부재중
+                <PhoneOff className="size-3.5" /> {t('coldCall.callNoAnswer')}
               </Button>
               <Button
                 size="sm"
@@ -799,7 +802,7 @@ function ColdCallDetail({
                 }`}
                 onClick={() => setCallResult(callResult === 'callback' ? '' : 'callback')}
               >
-                <Phone className="size-3.5" /> 콜백 요청
+                <Phone className="size-3.5" /> {t('coldCall.callCallback')}
               </Button>
             </div>
 
@@ -809,7 +812,7 @@ function ColdCallDetail({
               onChange={(e) => setCallNote(e.target.value)}
               rows={3}
               className="text-sm resize-none bg-white"
-              placeholder="통화 내용을 기록하세요... (관심사, 질문, 특이사항 등)"
+              placeholder={t('coldCall.callNotePlaceholder')}
             />
 
             <Button
@@ -822,7 +825,7 @@ function ColdCallDetail({
               ) : (
                 <Send className="size-4" />
               )}
-              콜 기록 저장
+              {t('coldCall.saveCallLog')}
             </Button>
           </div>
         </CardContent>
@@ -834,7 +837,7 @@ function ColdCallDetail({
           {/* Advance to next stage */}
           <div>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              진행 단계 변경
+              {t('coldCall.stageChange')}
             </h3>
             <div className="flex gap-2">
               <Button
@@ -844,7 +847,7 @@ function ColdCallDetail({
                 onClick={() => handleAdvanceStage('consultation_scheduled')}
               >
                 <CalendarCheck className="size-3.5" />
-                상담 예약
+                {t('coldCall.scheduleConsultation')}
               </Button>
               <Button
                 size="sm"
@@ -853,7 +856,7 @@ function ColdCallDetail({
                 onClick={() => handleAdvanceStage('first_consultation')}
               >
                 <Video className="size-3.5" />
-                1차 상담
+                {t('coldCall.firstConsultation')}
               </Button>
             </div>
           </div>
@@ -863,19 +866,16 @@ function ColdCallDetail({
           {/* Exclude from cold call */}
           <div>
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              콜드콜 목록에서 제외
+              {t('coldCall.excludeFromList')}
             </h3>
 
             {excludeConfirm ? (
               <div className="rounded-lg border-2 border-red-200 bg-red-50 p-3 space-y-2">
                 <p className="text-sm font-medium text-red-800">
-                  이 리드를 &lsquo;{
-                    excludeConfirm === 'rejected' ? '거절' :
-                    excludeConfirm === 'lost' ? '이탈' : '보류'
-                  }&rsquo;(으)로 이동하시겠습니까?
+                  {t('coldCall.excludeConfirmTitle', { stage: t('stage.' + excludeConfirm) })}
                 </p>
                 <p className="text-xs text-red-600">
-                  콜드콜 목록에서 빠지며, 파이프라인 비활성 섹션에서 확인할 수 있습니다.
+                  {t('coldCall.excludeConfirmDesc')}
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -886,7 +886,7 @@ function ColdCallDetail({
                     disabled={updateLead.isPending}
                   >
                     {updateLead.isPending ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
-                    확인
+                    {t('common.confirm')}
                   </Button>
                   <Button
                     size="sm"
@@ -894,7 +894,7 @@ function ColdCallDetail({
                     className="h-7 text-xs"
                     onClick={() => setExcludeConfirm(null)}
                   >
-                    취소
+                    {t('common.cancel')}
                   </Button>
                 </div>
               </div>
@@ -907,7 +907,7 @@ function ColdCallDetail({
                   onClick={() => setExcludeConfirm('rejected')}
                 >
                   <XCircle className="size-3.5" />
-                  거절
+                  {t('stage.rejected')}
                 </Button>
                 <Button
                   size="sm"
@@ -916,7 +916,7 @@ function ColdCallDetail({
                   onClick={() => setExcludeConfirm('lost')}
                 >
                   <UserX className="size-3.5" />
-                  이탈
+                  {t('stage.lost')}
                 </Button>
                 <Button
                   size="sm"
@@ -925,7 +925,7 @@ function ColdCallDetail({
                   onClick={() => setExcludeConfirm('on_hold')}
                 >
                   <Pause className="size-3.5" />
-                  보류
+                  {t('stage.on_hold')}
                 </Button>
               </div>
             )}
@@ -937,7 +937,7 @@ function ColdCallDetail({
       <Card>
         <CardContent className="p-4">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            활동 기록 ({activities.length})
+            {t('coldCall.activityHistory')} ({activities.length})
           </h3>
           {activitiesLoading ? (
             <div className="flex justify-center py-6">
@@ -945,7 +945,7 @@ function ColdCallDetail({
             </div>
           ) : activities.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
-              아직 활동 기록이 없습니다.
+              {t('coldCall.noActivities')}
             </p>
           ) : (
             <div className="space-y-2">

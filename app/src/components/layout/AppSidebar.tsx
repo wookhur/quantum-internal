@@ -37,69 +37,71 @@ import {
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useFeatureAccess, getEffectiveModules, type FeatureModule } from '@/hooks/useProfiles'
+import { useLanguage } from '@/i18n/LanguageContext'
+import type { TranslationKeys } from '@/i18n/translations'
 
 interface NavItemDef {
-  label: string
+  labelKey: TranslationKeys
   to: string
   icon: LucideIcon
 }
 
 /** Each nav section maps to a feature module for access control */
-const NAV_SECTIONS: { title: string; module: FeatureModule; items: NavItemDef[] }[] = [
+const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: NavItemDef[] }[] = [
   {
-    title: '공통',
+    titleKey: 'nav.common',
     module: 'dashboard',
     items: [
-      { label: '대시보드', to: '/dashboard', icon: LayoutDashboard },
-      { label: '캘린더', to: '/calendar', icon: Calendar },
-      { label: '프로젝트', to: '/todos', icon: CheckSquare },
+      { labelKey: 'nav.dashboard', to: '/dashboard', icon: LayoutDashboard },
+      { labelKey: 'nav.calendar', to: '/calendar', icon: Calendar },
+      { labelKey: 'nav.projects', to: '/todos', icon: CheckSquare },
     ],
   },
   {
-    title: '세일즈',
+    titleKey: 'nav.sales',
     module: 'sales',
     items: [
-      { label: '콜드콜', to: '/sales/cold-call', icon: PhoneCall },
-      { label: '리드 관리', to: '/sales/leads', icon: Users },
-      { label: '파이프라인', to: '/sales/pipeline', icon: BarChart3 },
-      { label: '미팅 기록', to: '/sales/meetings', icon: ClipboardList },
-      { label: '영업 퍼널', to: '/sales/funnel', icon: Filter },
-      { label: '영업 현황', to: '/sales/performance', icon: TrendingUp },
+      { labelKey: 'nav.coldCall', to: '/sales/cold-call', icon: PhoneCall },
+      { labelKey: 'nav.leadManagement', to: '/sales/leads', icon: Users },
+      { labelKey: 'nav.pipeline', to: '/sales/pipeline', icon: BarChart3 },
+      { labelKey: 'nav.meetingRecords', to: '/sales/meetings', icon: ClipboardList },
+      { labelKey: 'nav.salesFunnel', to: '/sales/funnel', icon: Filter },
+      { labelKey: 'nav.salesPerformance', to: '/sales/performance', icon: TrendingUp },
     ],
   },
   {
-    title: '마케팅',
+    titleKey: 'nav.marketing',
     module: 'marketing',
     items: [
-      { label: '마케팅 지표', to: '/marketing/metrics', icon: BarChart2 },
-      { label: '광고 성과', to: '/marketing/ads', icon: Megaphone },
-      { label: '이벤트 관리', to: '/marketing/events', icon: CalendarDays },
-      { label: '영상 콘텐츠', to: '/marketing/videos', icon: Video },
+      { labelKey: 'nav.marketingMetrics', to: '/marketing/metrics', icon: BarChart2 },
+      { labelKey: 'nav.adPerformance', to: '/marketing/ads', icon: Megaphone },
+      { labelKey: 'nav.eventManagement', to: '/marketing/events', icon: CalendarDays },
+      { labelKey: 'nav.videoContent', to: '/marketing/videos', icon: Video },
     ],
   },
   {
-    title: '재무',
+    titleKey: 'nav.finance',
     module: 'finance',
     items: [
-      { label: '계약 관리', to: '/consulting/clients', icon: FileText },
-      { label: '월별 수금', to: '/consulting/collections', icon: CalendarDays },
+      { labelKey: 'nav.contractManagement', to: '/consulting/clients', icon: FileText },
+      { labelKey: 'nav.monthlyCollection', to: '/consulting/collections', icon: CalendarDays },
     ],
   },
   {
-    title: '경영기획',
+    titleKey: 'nav.planning',
     module: 'planning',
     items: [
-      { label: '경영 현황', to: '/planning/overview', icon: Briefcase },
-      { label: '매출 전망', to: '/planning/projection', icon: LineChart },
-      { label: '직원 성과', to: '/planning/employees', icon: Users },
-      { label: '접근 권한 관리', to: '/planning/access', icon: Shield },
+      { labelKey: 'nav.overview', to: '/planning/overview', icon: Briefcase },
+      { labelKey: 'nav.revenueProjection', to: '/planning/projection', icon: LineChart },
+      { labelKey: 'nav.employeePerformance', to: '/planning/employees', icon: Users },
+      { labelKey: 'nav.accessControl', to: '/planning/access', icon: Shield },
     ],
   },
   {
-    title: '쉬는 시간',
+    titleKey: 'nav.breakTime',
     module: 'game',
     items: [
-      { label: 'T-Rex 러너', to: '/game', icon: Gamepad2 },
+      { labelKey: 'nav.trexRunner', to: '/game', icon: Gamepad2 },
     ],
   },
 ]
@@ -108,6 +110,7 @@ export function AppSidebar() {
   const location = useLocation()
   const { user, signOut } = useAuth()
   const { data: featureAccess = [] } = useFeatureAccess()
+  const { language, setLanguage, t } = useLanguage()
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
 
@@ -148,12 +151,12 @@ export function AppSidebar() {
 
       <SidebarContent className="px-2">
         {visibleSections.map((section, sIdx) => (
-          <SidebarGroup key={section.title} className="py-1">
+          <SidebarGroup key={section.titleKey} className="py-1">
             {sIdx > 0 && (
               <SidebarSeparator className="mx-3 my-1 bg-gray-100" />
             )}
             <SidebarGroupLabel className="px-3 mb-0.5 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-              {section.title}
+              {t(section.titleKey)}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -183,7 +186,7 @@ export function AppSidebar() {
                           strokeWidth={active ? 2 : 1.75}
                         />
                         <span className="truncate text-[13px]">
-                          {item.label}
+                          {t(item.labelKey)}
                         </span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -198,6 +201,29 @@ export function AppSidebar() {
       {/* User area */}
       <SidebarFooter className="px-3 pb-4 pt-2">
         <SidebarSeparator className="mx-1 mb-3 bg-gray-100" />
+        {/* Language toggle */}
+        <div className="flex items-center justify-center gap-1 mb-2 mx-1">
+          <button
+            onClick={() => setLanguage('ko')}
+            className={`flex-1 text-[11px] font-medium py-1 rounded-md transition-colors ${
+              language === 'ko'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            한국어
+          </button>
+          <button
+            onClick={() => setLanguage('en')}
+            className={`flex-1 text-[11px] font-medium py-1 rounded-md transition-colors ${
+              language === 'en'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            English
+          </button>
+        </div>
         <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50 transition-colors">
           <Avatar className="h-8 w-8 ring-2 ring-blue-100">
             <AvatarFallback className="bg-blue-50 text-blue-600 text-xs font-semibold">
@@ -215,7 +241,7 @@ export function AppSidebar() {
           <button
             onClick={signOut}
             className="rounded-md p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-            title="로그아웃"
+            title={t('common.logout')}
           >
             <LogOut size={16} />
           </button>

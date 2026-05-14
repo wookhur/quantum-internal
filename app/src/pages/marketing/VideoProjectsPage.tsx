@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -48,13 +49,15 @@ import { useVideoProjects, useCreateVideoProject, useUpdateVideoProject, useDele
 import { useProfiles } from '@/hooks/useProfiles'
 import type { VideoStatus, VideoProject } from '@/types'
 
-const STATUS_CONFIG: Record<VideoStatus, { label: string; color: string; icon: typeof Video }> = {
-  idea: { label: '아이디어', color: 'bg-gray-100 text-gray-700', icon: Lightbulb },
-  approved: { label: '승인됨', color: 'bg-blue-100 text-blue-700', icon: CheckCircle2 },
-  filming: { label: '촬영 중', color: 'bg-amber-100 text-amber-700', icon: Film },
-  editing: { label: '편집 중', color: 'bg-purple-100 text-purple-700', icon: Clapperboard },
-  review: { label: '검토 중', color: 'bg-orange-100 text-orange-700', icon: Eye },
-  uploaded: { label: '업로드 완료', color: 'bg-green-100 text-green-700', icon: Upload },
+function getStatusConfig(t: (key: string) => string): Record<VideoStatus, { label: string; color: string; icon: typeof Video }> {
+  return {
+    idea: { label: t('video.statusIdea'), color: 'bg-gray-100 text-gray-700', icon: Lightbulb },
+    approved: { label: t('video.statusApproved'), color: 'bg-blue-100 text-blue-700', icon: CheckCircle2 },
+    filming: { label: t('video.statusFilming'), color: 'bg-amber-100 text-amber-700', icon: Film },
+    editing: { label: t('video.statusEditing'), color: 'bg-purple-100 text-purple-700', icon: Clapperboard },
+    review: { label: t('video.statusReview'), color: 'bg-orange-100 text-orange-700', icon: Eye },
+    uploaded: { label: t('video.statusUploaded'), color: 'bg-green-100 text-green-700', icon: Upload },
+  }
 }
 
 const STATUS_ORDER: VideoStatus[] = ['idea', 'approved', 'filming', 'editing', 'review', 'uploaded']
@@ -65,14 +68,16 @@ const PLATFORM_LABELS: Record<string, string> = {
   both: 'YouTube + Reels',
 }
 
-const DEFAULT_CHECKLIST: Record<string, string> = {
-  script: '스크립트 작성',
-  filming: '촬영 완료',
-  rough_cut: '러프컷 편집',
-  review: '내부 검토',
-  final_cut: '최종본 완성',
-  thumbnail: '썸네일 제작',
-  upload: '업로드',
+function getDefaultChecklist(t: (key: string) => string): Record<string, string> {
+  return {
+    script: t('video.checkScript'),
+    filming: t('video.checkFilming'),
+    rough_cut: t('video.checkRoughCut'),
+    review: t('video.checkReview'),
+    final_cut: t('video.checkFinalCut'),
+    thumbnail: t('video.checkThumbnail'),
+    upload: t('video.checkUpload'),
+  }
 }
 
 const INITIAL_FORM: {
@@ -94,6 +99,9 @@ const INITIAL_FORM: {
 }
 
 export function VideoProjectsPage() {
+  const t = useT()
+  const STATUS_CONFIG = useMemo(() => getStatusConfig(t), [t])
+  const DEFAULT_CHECKLIST = useMemo(() => getDefaultChecklist(t), [t])
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<VideoProject | null>(null)
@@ -185,20 +193,20 @@ export function VideoProjectsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">영상 콘텐츠</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('video.title')}</h1>
           <p className="text-muted-foreground text-sm">
             {isLoading
-              ? '로딩 중...'
-              : `총 ${stats.total}개 프로젝트 · ${stats.uploaded}개 업로드 완료 · ${stats.totalViews.toLocaleString()} 조회`}
+              ? t('common.loading')
+              : t('video.summary', { total: stats.total, uploaded: stats.uploaded, views: stats.totalViews.toLocaleString() })}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={statusFilter} onValueChange={v => setStatusFilter(v || 'all')}>
             <SelectTrigger className="w-[140px] h-9">
-              <SelectValue placeholder="상태" />
+              <SelectValue placeholder={t('common.status')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
+              <SelectItem value="all">{t('common.all')}</SelectItem>
               {STATUS_ORDER.map(s => (
                 <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
               ))}
@@ -206,7 +214,7 @@ export function VideoProjectsPage() {
           </Select>
           <Button size="sm" className="h-9" onClick={openCreate}>
             <Plus className="size-4 mr-1" />
-            영상 추가
+            {t('video.addVideo')}
           </Button>
         </div>
       </div>
@@ -244,11 +252,11 @@ export function VideoProjectsPage() {
         </div>
       ) : error ? (
         <div className="text-center py-20 text-destructive text-sm">
-          데이터를 불러오는 중 오류가 발생했습니다.
+          {t('common.loadError')}
         </div>
       ) : projects.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground text-sm">
-          영상 프로젝트가 없습니다.
+          {t('video.noProjects')}
         </div>
       ) : (
         <>
@@ -288,7 +296,7 @@ export function VideoProjectsPage() {
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm('이 영상 프로젝트를 삭제하시겠습니까?')) {
+                            if (confirm(t('video.deleteConfirm'))) {
                               deleteProject.mutate(project.id)
                             }
                           }}
@@ -306,7 +314,7 @@ export function VideoProjectsPage() {
                         <span className="bg-gray-100 rounded px-1.5 py-0.5">{project.category}</span>
                       )}
                       {project.assignedTo && (
-                        <span>{profileMap.get(project.assignedTo) || '담당자'}</span>
+                        <span>{profileMap.get(project.assignedTo) || t('coldCall.assignee')}</span>
                       )}
                       {project.dueDate && (
                         <span>{project.dueDate}</span>
@@ -352,14 +360,14 @@ export function VideoProjectsPage() {
                         className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
                       >
                         <ExternalLink className="size-3" />
-                        영상 보기
+                        {t('video.watchVideo')}
                       </a>
                     )}
 
                     {/* Checklist progress */}
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">체크리스트</span>
+                        <span className="text-muted-foreground">{t('video.checklist')}</span>
                         <span className={`font-medium ${checklistPct === 100 ? 'text-green-600' : 'text-muted-foreground'}`}>
                           {checkedCount}/{checklistEntries.length}
                         </span>
@@ -410,20 +418,20 @@ export function VideoProjectsPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <Video className="size-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">업로드 영상 성과</span>
+                  <span className="text-sm font-medium">{t('video.uploadedPerformance')}</span>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>제목</TableHead>
-                      <TableHead>플랫폼</TableHead>
-                      <TableHead className="text-right">조회수</TableHead>
-                      <TableHead className="text-right">좋아요</TableHead>
-                      <TableHead className="text-right">댓글</TableHead>
-                      <TableHead className="text-right">공유</TableHead>
-                      <TableHead>링크</TableHead>
+                      <TableHead>{t('video.col.title')}</TableHead>
+                      <TableHead>{t('ads.platform')}</TableHead>
+                      <TableHead className="text-right">{t('video.col.views')}</TableHead>
+                      <TableHead className="text-right">{t('video.col.likes')}</TableHead>
+                      <TableHead className="text-right">{t('video.col.comments')}</TableHead>
+                      <TableHead className="text-right">{t('video.col.shares')}</TableHead>
+                      <TableHead>{t('video.col.link')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -457,7 +465,7 @@ export function VideoProjectsPage() {
                                 className="text-blue-600 hover:underline text-xs"
                               >
                                 <ExternalLink className="size-3 inline mr-1" />
-                                보기
+                                {t('common.view')}
                               </a>
                             ) : (
                               '-'
@@ -477,28 +485,28 @@ export function VideoProjectsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingProject ? '영상 수정' : '영상 추가'}</DialogTitle>
+            <DialogTitle>{editingProject ? t('video.editVideo') : t('video.addVideo')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>제목</Label>
+              <Label>{t('video.col.title')}</Label>
               <Input
                 value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="영상 제목"
+                placeholder={t('video.col.title')}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>카테고리</Label>
+                <Label>{t('video.category')}</Label>
                 <Input
                   value={form.category}
                   onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                  placeholder="예: 입시가이드, 인터뷰"
+                  placeholder={t('video.categoryPlaceholder')}
                 />
               </div>
               <div className="space-y-2">
-                <Label>상태</Label>
+                <Label>{t('common.status')}</Label>
                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as VideoStatus }))}>
                   <SelectTrigger>
                     <SelectValue />
@@ -513,7 +521,7 @@ export function VideoProjectsPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>플랫폼</Label>
+                <Label>{t('ads.platform')}</Label>
                 <Select
                   value={form.platform}
                   onValueChange={v => setForm(f => ({ ...f, platform: v as 'youtube' | 'instagram_reels' | 'both' }))}
@@ -529,7 +537,7 @@ export function VideoProjectsPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>마감일</Label>
+                <Label>{t('video.dueDate')}</Label>
                 <Input
                   type="date"
                   value={form.dueDate}
@@ -538,13 +546,13 @@ export function VideoProjectsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>담당자</Label>
-              <Select value={form.assignedTo} onValueChange={v => setForm(f => ({ ...f, assignedTo: v }))}>
+              <Label>{t('coldCall.assignee')}</Label>
+              <Select value={form.assignedTo} onValueChange={v => setForm(f => ({ ...f, assignedTo: v ?? '' }))}>
                 <SelectTrigger>
-                  <SelectValue placeholder="선택" />
+                  <SelectValue placeholder={t('common.select')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">미지정</SelectItem>
+                  <SelectItem value="">{t('common.unassigned')}</SelectItem>
                   {profiles.map(p => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                   ))}
@@ -552,7 +560,7 @@ export function VideoProjectsPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>메모</Label>
+              <Label>{t('common.memo')}</Label>
               <Textarea
                 value={form.notes}
                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
@@ -564,7 +572,7 @@ export function VideoProjectsPage() {
               onClick={handleSave}
               disabled={createProject.isPending || updateProject.isPending || !form.title}
             >
-              {(createProject.isPending || updateProject.isPending) ? '저장 중...' : editingProject ? '수정' : '추가'}
+              {(createProject.isPending || updateProject.isPending) ? t('common.saving') : editingProject ? t('common.edit') : t('common.add')}
             </Button>
           </div>
         </DialogContent>

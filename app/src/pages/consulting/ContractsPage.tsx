@@ -15,13 +15,16 @@ import {
 import { useContractsWithInstallments, useCreateContract } from '@/hooks/useContracts'
 import { ContractPdfUploadDialog } from '@/components/ContractPdfUploadDialog'
 import { formatCurrency } from '@/types'
+import { useT } from '@/i18n/LanguageContext'
 import type { ContractStatus, PaymentInstallment, InstallmentStatus } from '@/types'
 
-const STATUS_CONFIG: Record<InstallmentStatus, { label: string; color: string }> = {
-  paid: { label: '완납', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  partial: { label: '일부 납부', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-  overdue: { label: '연체', color: 'bg-red-50 text-red-700 border-red-200' },
-  pending: { label: '예정', color: 'bg-gray-50 text-gray-600 border-gray-200' },
+function StatusConfig(t: (key: string) => string): Record<InstallmentStatus, { label: string; color: string }> {
+  return {
+    paid: { label: t('contracts.status.fullyPaid'), color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    partial: { label: t('contracts.status.partial'), color: 'bg-amber-50 text-amber-700 border-amber-200' },
+    overdue: { label: t('contracts.status.overdue'), color: 'bg-red-50 text-red-700 border-red-200' },
+    pending: { label: t('contracts.status.pending'), color: 'bg-gray-50 text-gray-600 border-gray-200' },
+  }
 }
 
 function ProgressBar({ progress }: { progress: number }) {
@@ -47,16 +50,17 @@ function ProgressBar({ progress }: { progress: number }) {
 }
 
 function CollectionStatusBadge({ progress, hasOverdue }: { progress: number; hasOverdue: boolean }) {
+  const t = useT()
   if (progress >= 100) {
-    return <Badge className="bg-emerald-500 text-white text-[10px] h-5">완납</Badge>
+    return <Badge className="bg-emerald-500 text-white text-[10px] h-5">{t('contracts.status.fullyPaid')}</Badge>
   }
   if (hasOverdue) {
-    return <Badge className="bg-red-500 text-white text-[10px] h-5">연체</Badge>
+    return <Badge className="bg-red-500 text-white text-[10px] h-5">{t('contracts.status.overdue')}</Badge>
   }
   if (progress > 0) {
-    return <Badge variant="outline" className="border-blue-500 text-blue-600 bg-blue-50 text-[10px] h-5">진행 중</Badge>
+    return <Badge variant="outline" className="border-blue-500 text-blue-600 bg-blue-50 text-[10px] h-5">{t('contracts.status.inProgress')}</Badge>
   }
-  return <Badge variant="outline" className="text-[10px] h-5">미납</Badge>
+  return <Badge variant="outline" className="text-[10px] h-5">{t('contracts.status.unpaid')}</Badge>
 }
 
 const INITIAL_CONTRACT_FORM = {
@@ -70,6 +74,7 @@ const INITIAL_CONTRACT_FORM = {
 
 export function ContractsPage() {
   const navigate = useNavigate()
+  const t = useT()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -93,9 +98,11 @@ export function ContractsPage() {
     search: search || undefined,
   })
 
+  const statusConfig = StatusConfig(t)
+
   // Summary stats
   const { total, totalPaid, totalOutstanding, overdueContracts, cancelledCount, avgProgress } = useMemo(() => {
-    const t = contracts.length
+    const cnt = contracts.length
     const paid = contracts.reduce((s, c) => s + (c.paidAmount || 0), 0)
     const outstanding = contracts.reduce((s, c) => s + (c.outstandingAmount || 0), 0)
     const overdue = contracts.filter(c => c.installments?.some(i => i.status === 'overdue')).length
@@ -104,7 +111,7 @@ export function ContractsPage() {
     const avg = activeContracts.length > 0
       ? Math.round(activeContracts.reduce((s, c) => s + (c.totalAmount > 0 ? ((c.paidAmount || 0) / c.totalAmount * 100) : 0), 0) / activeContracts.length)
       : 0
-    return { total: t, totalPaid: paid, totalOutstanding: outstanding, overdueContracts: overdue, cancelledCount: cancelled, avgProgress: avg }
+    return { total: cnt, totalPaid: paid, totalOutstanding: outstanding, overdueContracts: overdue, cancelledCount: cancelled, avgProgress: avg }
   }, [contracts])
 
   return (
@@ -112,37 +119,37 @@ export function ContractsPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">계약 관리</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('contracts.title')}</h1>
           <p className="text-muted-foreground text-sm">
-            {isLoading ? '로딩 중...' : `총 ${total}건 | 수금 완료 ${formatCurrency(totalPaid)} | 미수금 ${formatCurrency(totalOutstanding)}`}
+            {isLoading ? t('contracts.summaryLoading') : t('contracts.summaryText').replace('{total}', String(total)).replace('{paid}', formatCurrency(totalPaid)).replace('{outstanding}', formatCurrency(totalOutstanding))}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPdfDialogOpen(true)}>
-            <Upload className="size-3.5" /> PDF 업로드
+            <Upload className="size-3.5" /> {t('contracts.pdfUpload')}
           </Button>
           <Button size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
-            <Plus className="size-3.5" /> 계약 추가
+            <Plus className="size-3.5" /> {t('contracts.addContract')}
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>계약 추가</DialogTitle>
+                <DialogTitle>{t('contracts.addContract')}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>학부모명</Label>
+                    <Label>{t('contracts.parentName')}</Label>
                     <Input
-                      placeholder="학부모명"
+                      placeholder={t('contracts.parentName')}
                       value={form.contractorName}
                       onChange={e => setForm(f => ({ ...f, contractorName: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>학생명</Label>
+                    <Label>{t('contracts.studentName')}</Label>
                     <Input
-                      placeholder="학생명"
+                      placeholder={t('contracts.studentName')}
                       value={form.studentName}
                       onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))}
                     />
@@ -150,17 +157,17 @@ export function ContractsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>학교명</Label>
+                    <Label>{t('contracts.schoolName')}</Label>
                     <Input
-                      placeholder="학교명"
+                      placeholder={t('contracts.schoolName')}
                       value={form.schoolName}
                       onChange={e => setForm(f => ({ ...f, schoolName: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>학년</Label>
+                    <Label>{t('contracts.gradeName')}</Label>
                     <Input
-                      placeholder="학년"
+                      placeholder={t('contracts.gradeName')}
                       value={form.gradeAtContract}
                       onChange={e => setForm(f => ({ ...f, gradeAtContract: e.target.value }))}
                     />
@@ -168,7 +175,7 @@ export function ContractsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>계약일</Label>
+                    <Label>{t('contracts.contractDate')}</Label>
                     <Input
                       type="date"
                       value={form.contractDate}
@@ -176,7 +183,7 @@ export function ContractsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>만료일</Label>
+                    <Label>{t('contracts.expiryDate')}</Label>
                     <Input
                       type="date"
                       value={form.expiryDate}
@@ -189,7 +196,7 @@ export function ContractsPage() {
                   onClick={handleCreateContract}
                   disabled={!form.contractorName.trim() || !form.studentName.trim() || createContract.isPending}
                 >
-                  {createContract.isPending ? '추가 중...' : '추가'}
+                  {createContract.isPending ? t('contracts.adding') : t('common.add')}
                 </Button>
               </div>
             </DialogContent>
@@ -205,7 +212,7 @@ export function ContractsPage() {
             <CheckCircle2 className="size-5 text-emerald-500" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(totalPaid)}</div>
-              <div className="text-xs text-muted-foreground">수금 완료</div>
+              <div className="text-xs text-muted-foreground">{t('contracts.collectionComplete')}</div>
             </div>
           </CardContent>
         </Card>
@@ -214,7 +221,7 @@ export function ContractsPage() {
             <Clock className="size-5 text-blue-500" />
             <div>
               <div className="text-lg font-bold">{formatCurrency(totalOutstanding)}</div>
-              <div className="text-xs text-muted-foreground">미수금</div>
+              <div className="text-xs text-muted-foreground">{t('contracts.outstanding')}</div>
             </div>
           </CardContent>
         </Card>
@@ -223,7 +230,7 @@ export function ContractsPage() {
             <AlertTriangle className="size-5 text-red-500" />
             <div>
               <div className="text-lg font-bold">{overdueContracts}</div>
-              <div className="text-xs text-muted-foreground">연체 계약</div>
+              <div className="text-xs text-muted-foreground">{t('contracts.overdueContracts')}</div>
             </div>
           </CardContent>
         </Card>
@@ -232,7 +239,7 @@ export function ContractsPage() {
             <TrendingUp className="size-5 text-primary" />
             <div>
               <div className="text-lg font-bold">{avgProgress}%</div>
-              <div className="text-xs text-muted-foreground">평균 수금률</div>
+              <div className="text-xs text-muted-foreground">{t('contracts.avgCollectionRate')}</div>
             </div>
           </CardContent>
         </Card>
@@ -241,7 +248,7 @@ export function ContractsPage() {
             <Ban className="size-5 text-gray-400" />
             <div>
               <div className="text-lg font-bold">{cancelledCount}</div>
-              <div className="text-xs text-muted-foreground">취소/이탈</div>
+              <div className="text-xs text-muted-foreground">{t('contracts.cancelledCount')}</div>
             </div>
           </CardContent>
         </Card>
@@ -254,7 +261,7 @@ export function ContractsPage() {
             <div className="relative flex-1 min-w-[200px] max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
               <Input
-                placeholder="학생명, 계약자명 검색..."
+                placeholder={t('contracts.searchPlaceholder')}
                 className="pl-9 h-9"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -262,14 +269,14 @@ export function ContractsPage() {
             </div>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v || 'all')}>
               <SelectTrigger className="w-[150px] h-9">
-                <SelectValue placeholder="상태" />
+                <SelectValue placeholder={t('common.status')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
-                <SelectItem value="active">활성</SelectItem>
-                <SelectItem value="expiring_soon">만료 임박</SelectItem>
-                <SelectItem value="expired">만료</SelectItem>
-                <SelectItem value="cancelled">취소</SelectItem>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="active">{t('contracts.active')}</SelectItem>
+                <SelectItem value="expiring_soon">{t('contracts.expiringSoon')}</SelectItem>
+                <SelectItem value="expired">{t('contracts.expired')}</SelectItem>
+                <SelectItem value="cancelled">{t('contracts.cancelled')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -285,25 +292,25 @@ export function ContractsPage() {
             </div>
           ) : error ? (
             <div className="text-center py-20 text-destructive text-sm">
-              데이터를 불러오는 중 오류가 발생했습니다.
+              {t('contracts.loadError')}
             </div>
           ) : contracts.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground text-sm">
               <DollarSign className="size-10 mx-auto mb-3 opacity-30" />
-              <p>계약이 없습니다.</p>
+              <p>{t('contracts.noContracts')}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
-                  <TableHead className="w-[120px]">계약자</TableHead>
-                  <TableHead className="w-[90px]">학생</TableHead>
-                  <TableHead className="text-right w-[110px]">계약 금액</TableHead>
-                  <TableHead className="text-right w-[110px]">수금액</TableHead>
-                  <TableHead className="text-right w-[110px]">잔액</TableHead>
-                  <TableHead className="w-[140px]">수금률</TableHead>
-                  <TableHead className="w-[70px]">상태</TableHead>
+                  <TableHead className="w-[120px]">{t('contracts.col.contractor')}</TableHead>
+                  <TableHead className="w-[90px]">{t('contracts.col.student')}</TableHead>
+                  <TableHead className="text-right w-[110px]">{t('contracts.col.contractAmount')}</TableHead>
+                  <TableHead className="text-right w-[110px]">{t('contracts.col.collected')}</TableHead>
+                  <TableHead className="text-right w-[110px]">{t('contracts.col.balance')}</TableHead>
+                  <TableHead className="w-[140px]">{t('contracts.col.collectionRate')}</TableHead>
+                  <TableHead className="w-[70px]">{t('contracts.col.status')}</TableHead>
                   <TableHead className="w-8"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -342,7 +349,7 @@ export function ContractsPage() {
                             {contract.contractorName}
                             {isCancelled && (
                               <Badge variant="outline" className="text-[10px] h-4 bg-gray-100 text-gray-500 border-gray-300">
-                                취소
+                                {t('contracts.cancelled')}
                               </Badge>
                             )}
                           </div>
@@ -374,7 +381,7 @@ export function ContractsPage() {
 
                       {/* Expanded installment rows */}
                       {isExpanded && contract.installments?.map((inst: PaymentInstallment) => {
-                        const cfg = STATUS_CONFIG[inst.status]
+                        const cfg = statusConfig[inst.status]
                         const remaining = inst.amount - inst.paidAmount
                         return (
                           <TableRow key={inst.id} className="bg-muted/30 hover:bg-muted/50">
@@ -401,10 +408,10 @@ export function ContractsPage() {
                               {remaining > 0 ? formatCurrency(remaining) : '-'}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
-                              {inst.dueDate ? `납기: ${inst.dueDate}` : ''}
+                              {inst.dueDate ? t('contracts.dueDate').replace('{date}', inst.dueDate) : ''}
                             </TableCell>
                             <TableCell colSpan={2} className="text-xs text-muted-foreground">
-                              {inst.paidDate ? `납부: ${inst.paidDate}` : ''}
+                              {inst.paidDate ? t('contracts.paidDate').replace('{date}', inst.paidDate) : ''}
                             </TableCell>
                           </TableRow>
                         )

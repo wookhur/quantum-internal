@@ -16,20 +16,29 @@ import {
 import { useContract, useCancelContract } from '@/hooks/useContracts'
 import { useUpdateInstallment } from '@/hooks/useInstallments'
 import { formatCurrency, formatPhone } from '@/types'
+import { useT } from '@/i18n/LanguageContext'
 import type { PaymentInstallment, ContractStatus } from '@/types'
 
-const STATUS_CONFIG: Record<ContractStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
-  active: { label: '활성', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
-  expiring_soon: { label: '만료 임박', className: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: AlertTriangle },
-  expired: { label: '만료', className: 'bg-red-50 text-red-700 border-red-200', icon: AlertTriangle },
-  cancelled: { label: '취소', className: 'bg-gray-100 text-gray-500 border-gray-300', icon: Ban },
+function useStatusConfig() {
+  const t = useT()
+  const STATUS_CONFIG: Record<ContractStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
+    active: { label: t('contracts.active'), className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+    expiring_soon: { label: t('contracts.expiringSoon'), className: 'bg-yellow-50 text-yellow-700 border-yellow-200', icon: AlertTriangle },
+    expired: { label: t('contracts.expired'), className: 'bg-red-50 text-red-700 border-red-200', icon: AlertTriangle },
+    cancelled: { label: t('contracts.cancelled'), className: 'bg-gray-100 text-gray-500 border-gray-300', icon: Ban },
+  }
+  return STATUS_CONFIG
 }
 
-const INSTALLMENT_STATUS_CONFIG: Record<string, { label: string; className: string; icon: typeof CheckCircle2 }> = {
-  paid: { label: '완납', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
-  pending: { label: '예정', className: 'bg-gray-50 text-gray-600 border-gray-200', icon: Clock },
-  overdue: { label: '연체', className: 'bg-red-50 text-red-600 border-red-200', icon: AlertTriangle },
-  partial: { label: '일부 납입', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: DollarSign },
+function useInstallmentStatusConfig() {
+  const t = useT()
+  const INSTALLMENT_STATUS_CONFIG: Record<string, { label: string; className: string; icon: typeof CheckCircle2 }> = {
+    paid: { label: t('contracts.status.fullyPaid'), className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+    pending: { label: t('contracts.status.pending'), className: 'bg-gray-50 text-gray-600 border-gray-200', icon: Clock },
+    overdue: { label: t('contracts.status.overdue'), className: 'bg-red-50 text-red-600 border-red-200', icon: AlertTriangle },
+    partial: { label: t('contracts.partialPayment'), className: 'bg-amber-50 text-amber-700 border-amber-200', icon: DollarSign },
+  }
+  return INSTALLMENT_STATUS_CONFIG
 }
 
 function InstallmentCard({
@@ -41,6 +50,8 @@ function InstallmentCard({
   currency: 'KRW' | 'USD'
   onMarkPaid: (inst: PaymentInstallment) => void
 }) {
+  const t = useT()
+  const INSTALLMENT_STATUS_CONFIG = useInstallmentStatusConfig()
   const config = INSTALLMENT_STATUS_CONFIG[installment.status] || INSTALLMENT_STATUS_CONFIG.pending
   const StatusIcon = config.icon
   const isPaid = installment.status === 'paid'
@@ -76,7 +87,7 @@ function InstallmentCard({
               onClick={() => onMarkPaid(installment)}
             >
               <CreditCard className="size-3.5" />
-              수금 처리
+              {t('contracts.markPaid')}
             </Button>
           )}
         </div>
@@ -84,17 +95,17 @@ function InstallmentCard({
         {/* Payment details */}
         <div className="mt-3 grid grid-cols-3 gap-4 text-xs">
           <div>
-            <span className="text-muted-foreground">납입 예정일</span>
+            <span className="text-muted-foreground">{t('contracts.dueAmount')}</span>
             <p className="font-mono mt-0.5">{installment.dueDate || '-'}</p>
           </div>
           <div>
-            <span className="text-muted-foreground">납입액</span>
+            <span className="text-muted-foreground">{t('contracts.paidAmount')}</span>
             <p className={`font-mono mt-0.5 ${isPaid ? 'text-emerald-600' : ''}`}>
               {installment.paidAmount > 0 ? formatCurrency(installment.paidAmount, currency) : '-'}
             </p>
           </div>
           <div>
-            <span className="text-muted-foreground">잔액</span>
+            <span className="text-muted-foreground">{t('contracts.remainBalance')}</span>
             <p className={`font-mono mt-0.5 ${remaining > 0 ? 'text-red-500 font-medium' : ''}`}>
               {remaining > 0 ? formatCurrency(remaining, currency) : '-'}
             </p>
@@ -102,8 +113,8 @@ function InstallmentCard({
         </div>
         {installment.paidDate && (
           <div className="mt-2 text-xs text-muted-foreground">
-            납입일: {installment.paidDate}
-            {installment.paymentMethod && ` | ${installment.paymentMethod === 'bank_transfer' ? '계좌이체' : installment.paymentMethod === 'card' ? '카드' : '미국 송금'}`}
+            {t('contracts.paidDateLabel').replace('{date}', installment.paidDate)}
+            {installment.paymentMethod && ` | ${installment.paymentMethod === 'bank_transfer' ? t('contracts.paymentBankTransfer') : installment.paymentMethod === 'card' ? t('contracts.paymentCard') : t('contracts.paymentUsWire')}`}
           </div>
         )}
         {installment.notes && (
@@ -119,9 +130,11 @@ function InstallmentCard({
 export function ContractDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const t = useT()
   const { data: contract, isLoading, error } = useContract(id)
   const cancelContract = useCancelContract()
   const updateInstallment = useUpdateInstallment()
+  const STATUS_CONFIG = useStatusConfig()
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
@@ -189,9 +202,9 @@ export function ContractDetailPage() {
   if (error || !contract) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <p className="text-destructive text-sm">계약 정보를 불러올 수 없습니다.</p>
+        <p className="text-destructive text-sm">{t('contracts.contractNotFound')}</p>
         <Button variant="outline" onClick={() => navigate('/consulting/clients')}>
-          <ArrowLeft className="size-4 mr-2" /> 목록으로
+          <ArrowLeft className="size-4 mr-2" /> {t('contracts.backToList')}
         </Button>
       </div>
     )
@@ -226,7 +239,7 @@ export function ContractDetailPage() {
             className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
             onClick={() => setCancelDialogOpen(true)}
           >
-            <Ban className="size-3.5" /> 계약 취소
+            <Ban className="size-3.5" /> {t('contracts.cancelContract')}
           </Button>
         )}
       </div>
@@ -236,25 +249,25 @@ export function ContractDetailPage() {
         <CardContent className="py-5">
           <div className="grid grid-cols-4 gap-6">
             <div>
-              <div className="text-xs text-muted-foreground mb-1">총 계약금액</div>
+              <div className="text-xs text-muted-foreground mb-1">{t('contracts.totalContractAmount')}</div>
               <div className="text-xl font-bold font-mono">
                 {formatCurrency(contract.totalAmount, contract.currency)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground mb-1">수금 완료</div>
+              <div className="text-xs text-muted-foreground mb-1">{t('contracts.collectionComplete')}</div>
               <div className="text-xl font-bold font-mono text-emerald-600">
                 {formatCurrency(contract.paidAmount || 0, contract.currency)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground mb-1">미수금</div>
+              <div className="text-xs text-muted-foreground mb-1">{t('contracts.outstanding')}</div>
               <div className={`text-xl font-bold font-mono ${(contract.outstandingAmount || 0) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
                 {formatCurrency(contract.outstandingAmount || 0, contract.currency)}
               </div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground mb-1">수금률</div>
+              <div className="text-xs text-muted-foreground mb-1">{t('contracts.collectionRate')}</div>
               <div className="text-xl font-bold">
                 {contract.paymentProgress || 0}%
               </div>
@@ -273,12 +286,12 @@ export function ContractDetailPage() {
       <div>
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <DollarSign className="size-5" />
-          납입 일정 ({installments.length}건)
+          {t('contracts.installmentCount').replace('{n}', String(installments.length))}
         </h2>
         {installments.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground text-sm">
-              등록된 납입 일정이 없습니다.
+              {t('contracts.noInstallments')}
             </CardContent>
           </Card>
         ) : (
@@ -300,45 +313,45 @@ export function ContractDetailPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <UserCircle className="size-4" />
-            계약 상세 정보
+            {t('contracts.contractDetail')}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-sm">
             <div className="flex items-center gap-2">
               <Phone className="size-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground w-16">연락처</span>
+              <span className="text-muted-foreground w-16">{t('contracts.contact')}</span>
               <span className="font-medium">{contract.phone ? formatPhone(contract.phone) : '-'}</span>
             </div>
             <div className="flex items-center gap-2">
               <School className="size-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground w-16">학교</span>
+              <span className="text-muted-foreground w-16">{t('contracts.school')}</span>
               <span className="font-medium">{contract.schoolName} {contract.gradeAtContract || ''}</span>
             </div>
             <div className="flex items-center gap-2">
               <MapPin className="size-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground w-16">주소</span>
+              <span className="text-muted-foreground w-16">{t('contracts.address')}</span>
               <span className="font-medium">{contract.address || '-'}</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="size-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground w-16">계약일</span>
+              <span className="text-muted-foreground w-16">{t('contracts.contractDate')}</span>
               <span className="font-mono">{contract.contractDate}</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="size-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground w-16">만료일</span>
+              <span className="text-muted-foreground w-16">{t('contracts.expiryDate')}</span>
               <span className="font-mono">{contract.expiryDate}</span>
             </div>
             <div className="flex items-center gap-2">
               <DollarSign className="size-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground w-16">입금계좌</span>
-              <span className="font-medium">{contract.paymentAccount === 'US' ? '미국 계좌' : '한국 계좌'}</span>
+              <span className="text-muted-foreground w-16">{t('contracts.depositAccount')}</span>
+              <span className="font-medium">{contract.paymentAccount === 'US' ? t('contracts.usAccount') : t('contracts.krAccount')}</span>
             </div>
           </div>
           {contract.notes && (
             <div className="mt-4 p-3 bg-muted/50 rounded-lg text-sm">
-              <span className="text-xs text-muted-foreground">메모</span>
+              <span className="text-xs text-muted-foreground">{t('contracts.memo')}</span>
               <p className="mt-1">{contract.notes}</p>
             </div>
           )}
@@ -349,19 +362,18 @@ export function ContractDetailPage() {
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>계약 취소</DialogTitle>
+            <DialogTitle>{t('contracts.cancelContract')}</DialogTitle>
             <DialogDescription>
-              {contract.contractorName} ({contract.studentName}) 계약을 취소하시겠습니까?
-              미납 상태인 납입건은 모두 취소 처리됩니다.
+              {t('contracts.cancelConfirm').replace('{contractor}', contract.contractorName).replace('{student}', contract.studentName)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label>취소 사유 (선택)</Label>
+              <Label>{t('contracts.cancelReasonLabel')}</Label>
               <Textarea
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="연락 두절, 서비스 거부 등"
+                placeholder={t('contracts.cancelReasonPlaceholder')}
                 rows={3}
                 className="resize-none"
               />
@@ -369,14 +381,14 @@ export function ContractDetailPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
-              닫기
+              {t('contracts.close')}
             </Button>
             <Button
               variant="destructive"
               onClick={handleCancel}
               disabled={cancelContract.isPending}
             >
-              {cancelContract.isPending ? '처리 중...' : '계약 취소'}
+              {cancelContract.isPending ? t('contracts.processing') : t('contracts.cancelContract')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -386,14 +398,14 @@ export function ContractDetailPage() {
       <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>수금 처리</DialogTitle>
+            <DialogTitle>{t('contracts.markPaid')}</DialogTitle>
             <DialogDescription>
               {selectedInstallment?.label} — {selectedInstallment ? formatCurrency(selectedInstallment.amount, contract.currency) : ''}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>납입 금액</Label>
+              <Label>{t('contracts.paymentAmount')}</Label>
               <Input
                 type="number"
                 value={payForm.paidAmount}
@@ -401,7 +413,7 @@ export function ContractDetailPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>납입일</Label>
+              <Label>{t('contracts.paymentDate')}</Label>
               <Input
                 type="date"
                 value={payForm.paidDate}
@@ -409,36 +421,36 @@ export function ContractDetailPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>결제 수단</Label>
+              <Label>{t('contracts.paymentMethod')}</Label>
               <Select value={payForm.paymentMethod} onValueChange={(v) => setPayForm(f => ({ ...f, paymentMethod: v || 'bank_transfer' }))}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="bank_transfer">계좌이체</SelectItem>
-                  <SelectItem value="card">카드</SelectItem>
-                  <SelectItem value="us_wire">미국 송금</SelectItem>
+                  <SelectItem value="bank_transfer">{t('contracts.paymentBankTransfer')}</SelectItem>
+                  <SelectItem value="card">{t('contracts.paymentCard')}</SelectItem>
+                  <SelectItem value="us_wire">{t('contracts.paymentUsWire')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>메모 (선택)</Label>
+              <Label>{t('contracts.memoOptional')}</Label>
               <Input
                 value={payForm.notes}
                 onChange={(e) => setPayForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="메모"
+                placeholder={t('contracts.memoPlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayDialogOpen(false)}>
-              취소
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={handleMarkPaid}
               disabled={updateInstallment.isPending || !payForm.paidAmount || Number(payForm.paidAmount) <= 0}
             >
-              {updateInstallment.isPending ? '처리 중...' : '수금 확인'}
+              {updateInstallment.isPending ? t('contracts.processing') : t('contracts.confirmPayment')}
             </Button>
           </DialogFooter>
         </DialogContent>

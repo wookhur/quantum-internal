@@ -12,16 +12,18 @@ import { CalendarCheck, FileCheck, Plus, Loader2 } from 'lucide-react'
 import { useMeetings, useCreateMeeting, useUpdateNoteDelivered } from '@/hooks/useMeetings'
 import { useAuth } from '@/contexts/AuthContext'
 import { currentMonthStrKST } from '@/lib/date'
+import { useT } from '@/i18n/LanguageContext'
 
-const MEETING_NUMBER_BADGE: Record<number, { label: string; className: string }> = {
-  1: { label: '1차', className: 'bg-blue-100 text-blue-700 border-blue-200' },
-  2: { label: '2차', className: 'bg-violet-100 text-violet-700 border-violet-200' },
-  3: { label: '3차', className: 'bg-amber-100 text-amber-700 border-amber-200' },
-}
-
-function getMeetingBadge(num: number) {
-  if (MEETING_NUMBER_BADGE[num]) return MEETING_NUMBER_BADGE[num]
-  return { label: `${num}차`, className: 'bg-gray-100 text-gray-700 border-gray-200' }
+function getMeetingBadge(num: number, t: (key: string, params?: Record<string, string | number>) => string) {
+  const classNames: Record<number, string> = {
+    1: 'bg-blue-100 text-blue-700 border-blue-200',
+    2: 'bg-violet-100 text-violet-700 border-violet-200',
+    3: 'bg-amber-100 text-amber-700 border-amber-200',
+  }
+  return {
+    label: t('meetings.nthMeeting').replace('{n}', String(num)),
+    className: classNames[num] || 'bg-gray-100 text-gray-700 border-gray-200',
+  }
 }
 
 const INITIAL_MEETING_FORM = {
@@ -38,6 +40,7 @@ const INITIAL_MEETING_FORM = {
 }
 
 export function MeetingsPage() {
+  const t = useT()
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -99,13 +102,13 @@ export function MeetingsPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">미팅 기록</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('meetings.title')}</h1>
           <p className="text-muted-foreground">
-            {isLoading ? '로딩 중...' : `총 ${meetings.length}건의 미팅`}
+            {isLoading ? t('common.loading') : t('meetings.totalMeetings').replace('{n}', String(meetings.length))}
           </p>
         </div>
         <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-          <Plus className="size-4" /> 미팅 추가
+          <Plus className="size-4" /> {t('meetings.addMeeting')}
         </Button>
       </div>
 
@@ -116,7 +119,7 @@ export function MeetingsPage() {
             <CalendarCheck className="size-5 text-primary" />
             <div>
               <div className="text-lg font-bold">{thisMonthMeetings.length}</div>
-              <div className="text-xs text-muted-foreground">이번 달 미팅</div>
+              <div className="text-xs text-muted-foreground">{t('meetings.thisMonthMeetings')}</div>
             </div>
           </CardContent>
         </Card>
@@ -125,7 +128,7 @@ export function MeetingsPage() {
             <FileCheck className="size-5 text-success" />
             <div>
               <div className="text-lg font-bold">{noteDeliveryRate.toFixed(0)}%</div>
-              <div className="text-xs text-muted-foreground">노트 전달률 (이번 달)</div>
+              <div className="text-xs text-muted-foreground">{t('meetings.noteDeliveryRate')}</div>
             </div>
           </CardContent>
         </Card>
@@ -136,7 +139,7 @@ export function MeetingsPage() {
         <CardContent className="py-3">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground whitespace-nowrap">기간</span>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">{t('meetings.period')}</span>
               <Input
                 type="date"
                 className="w-[160px] h-9"
@@ -164,36 +167,36 @@ export function MeetingsPage() {
             </div>
           ) : error ? (
             <div className="text-center py-20 text-destructive text-sm">
-              데이터를 불러오는 중 오류가 발생했습니다.
+              {t('common.error')}
             </div>
           ) : meetings.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground text-sm">
-              미팅 기록이 없습니다.
+              {t('meetings.noMeetings')}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[90px]">미팅일</TableHead>
-                    <TableHead className="w-[60px]">회차</TableHead>
-                    <TableHead>학부모</TableHead>
-                    <TableHead>학생</TableHead>
-                    <TableHead>연락처</TableHead>
-                    <TableHead>학교</TableHead>
-                    <TableHead className="w-[50px]">학년</TableHead>
-                    <TableHead>지역</TableHead>
-                    <TableHead>관심 분야</TableHead>
-                    <TableHead>유입 채널</TableHead>
-                    <TableHead className="max-w-[150px]">메모</TableHead>
-                    <TableHead className="w-[60px] text-center">노트</TableHead>
-                    <TableHead className="w-[90px]">다음 미팅</TableHead>
-                    <TableHead className="max-w-[120px]">필요 조치</TableHead>
+                    <TableHead className="w-[90px]">{t('meetings.col.meetingDate')}</TableHead>
+                    <TableHead className="w-[60px]">{t('meetings.col.meetingNumber')}</TableHead>
+                    <TableHead>{t('meetings.col.parent')}</TableHead>
+                    <TableHead>{t('meetings.col.student')}</TableHead>
+                    <TableHead>{t('common.phone')}</TableHead>
+                    <TableHead>{t('common.school')}</TableHead>
+                    <TableHead className="w-[50px]">{t('common.grade')}</TableHead>
+                    <TableHead>{t('common.region')}</TableHead>
+                    <TableHead>{t('meetings.col.interestArea')}</TableHead>
+                    <TableHead>{t('meetings.col.sourceChannel')}</TableHead>
+                    <TableHead className="max-w-[150px]">{t('common.memo')}</TableHead>
+                    <TableHead className="w-[60px] text-center">{t('meetings.col.note')}</TableHead>
+                    <TableHead className="w-[90px]">{t('meetings.col.nextMeeting')}</TableHead>
+                    <TableHead className="max-w-[120px]">{t('meetings.col.requiredAction')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {meetings.map((meeting) => {
-                    const badge = getMeetingBadge(meeting.meetingNumber)
+                    const badge = getMeetingBadge(meeting.meetingNumber, t)
                     return (
                       <TableRow key={meeting.id}>
                         <TableCell className="text-xs text-muted-foreground font-mono">
@@ -257,69 +260,69 @@ export function MeetingsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>새 미팅 추가</DialogTitle>
+            <DialogTitle>{t('meetings.addMeetingTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>미팅일 *</Label>
+                <Label>{t('meetings.col.meetingDate')} *</Label>
                 <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>회차 *</Label>
+                <Label>{t('meetings.col.meetingNumber')} *</Label>
                 <Select value={form.meetingNumber} onValueChange={v => v && setForm(f => ({ ...f, meetingNumber: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">1차</SelectItem>
-                    <SelectItem value="2">2차</SelectItem>
-                    <SelectItem value="3">3차</SelectItem>
+                    <SelectItem value="1">{t('meetings.nthMeeting').replace('{n}', '1')}</SelectItem>
+                    <SelectItem value="2">{t('meetings.nthMeeting').replace('{n}', '2')}</SelectItem>
+                    <SelectItem value="3">{t('meetings.nthMeeting').replace('{n}', '3')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>학부모 이름 *</Label>
+                <Label>{t('leads.parentName')} *</Label>
                 <Input value={form.parentName} onChange={e => setForm(f => ({ ...f, parentName: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>학생 이름</Label>
+                <Label>{t('leads.studentName')}</Label>
                 <Input value={form.studentName} onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>연락처</Label>
+                <Label>{t('common.phone')}</Label>
                 <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="010-0000-0000" />
               </div>
               <div className="space-y-1.5">
-                <Label>학교</Label>
+                <Label>{t('common.school')}</Label>
                 <Input value={form.currentSchool} onChange={e => setForm(f => ({ ...f, currentSchool: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>학년</Label>
+                <Label>{t('common.grade')}</Label>
                 <Input value={form.grade} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>지역</Label>
+                <Label>{t('common.region')}</Label>
                 <Input value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>유입 채널</Label>
+                <Label>{t('leads.sourceChannel')}</Label>
                 <Input value={form.sourceChannel} onChange={e => setForm(f => ({ ...f, sourceChannel: e.target.value }))} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>메모</Label>
+              <Label>{t('common.memo')}</Label>
               <Textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} rows={3} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={handleCreateMeeting} disabled={!form.parentName || !form.meetingDate || createMeeting.isPending}>
                 {createMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
-                추가
+                {t('common.add')}
               </Button>
             </div>
           </div>

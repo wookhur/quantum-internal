@@ -10,20 +10,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Loader2, Calendar, MapPin, Users, CheckCircle2, Circle, Plus } from 'lucide-react'
 import { useEvents, useCreateEvent, useUpdateEvent } from '@/hooks/useEvents'
 import { formatDatetimeKST } from '@/lib/date'
+import { useT } from '@/i18n/LanguageContext'
 import type { Event } from '@/types'
 
-const CHECKLIST_ITEMS: { key: keyof Event; label: string }[] = [
-  { key: 'speakerConfirmed', label: '연사 확정' },
-  { key: 'venueConfirmed', label: '장소 확정' },
-  { key: 'copyWritten', label: '카피 작성' },
-  { key: 'designCompleted', label: '디자인 완료' },
-  { key: 'pptCompleted', label: 'PPT 완료' },
-  { key: 'uploaded', label: '업로드 완료' },
+const CHECKLIST_KEYS: { key: keyof Event; labelKey: string }[] = [
+  { key: 'speakerConfirmed', labelKey: 'events.speakerConfirmed' },
+  { key: 'venueConfirmed', labelKey: 'events.venueConfirmed' },
+  { key: 'copyWritten', labelKey: 'events.copyWritten' },
+  { key: 'designCompleted', labelKey: 'events.designCompleted' },
+  { key: 'pptCompleted', labelKey: 'events.pptCompleted' },
+  { key: 'uploaded', labelKey: 'events.uploaded' },
 ]
 
 function getChecklistProgress(event: Event): { completed: number; total: number; percent: number } {
-  const total = CHECKLIST_ITEMS.length
-  const completed = CHECKLIST_ITEMS.filter(item => event[item.key] === true).length
+  const total = CHECKLIST_KEYS.length
+  const completed = CHECKLIST_KEYS.filter(item => event[item.key] === true).length
   return { completed, total, percent: Math.round((completed / total) * 100) }
 }
 
@@ -48,6 +49,7 @@ const INITIAL_EVENT_FORM = {
 }
 
 export function EventsPage() {
+  const t = useT()
   const [monthFilter, setMonthFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_EVENT_FORM)
@@ -96,11 +98,11 @@ export function EventsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">이벤트 관리</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('events.title')}</h1>
           <p className="text-muted-foreground">
-            {isLoading ? '로딩 중...' : (
+            {isLoading ? t('common.loading') : (
               <>
-                총 {stats.total}개 이벤트 · {stats.fullyReady}개 준비 완료 · 평균 진행률 {stats.avgProgress}%
+                {t('events.totalEvents', { n: stats.total })} · {stats.fullyReady}{t('events.readyComplete')} · {t('events.avgProgress')} {stats.avgProgress}%
               </>
             )}
           </p>
@@ -108,10 +110,10 @@ export function EventsPage() {
         <div className="flex items-center gap-2">
           <Select value={monthFilter} onValueChange={v => setMonthFilter(v || 'all')}>
             <SelectTrigger className="w-[130px] h-9">
-              <SelectValue placeholder="월 필터" />
+              <SelectValue placeholder={t('events.monthFilter')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
+              <SelectItem value="all">{t('common.all')}</SelectItem>
               {MONTHS.map(m => (
                 <SelectItem key={m} value={m}>{m}</SelectItem>
               ))}
@@ -119,17 +121,17 @@ export function EventsPage() {
           </Select>
           <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}>
             <Plus className="size-4 mr-1" />
-            이벤트 추가
+            {t('events.addEvent')}
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>이벤트 추가</DialogTitle>
+                <DialogTitle>{t('events.addEvent')}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>월 (YYYY-MM)</Label>
+                    <Label>{t('events.month')}</Label>
                     <Input
                       placeholder="2026-04"
                       value={form.month}
@@ -137,7 +139,7 @@ export function EventsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>주차</Label>
+                    <Label>{t('events.week')}</Label>
                     <Input
                       type="number"
                       min={1}
@@ -148,14 +150,14 @@ export function EventsPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>이벤트명</Label>
+                  <Label>{t('events.eventName')}</Label>
                   <Input
                     value={form.eventName}
                     onChange={e => setForm(f => ({ ...f, eventName: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>일시</Label>
+                  <Label>{t('events.datetime')}</Label>
                   <Input
                     type="datetime-local"
                     value={form.eventDatetime}
@@ -163,16 +165,16 @@ export function EventsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>장소</Label>
+                  <Label>{t('events.venue')}</Label>
                   <Input
                     value={form.venue}
                     onChange={e => setForm(f => ({ ...f, venue: e.target.value }))}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>연사 (쉼표로 구분)</Label>
+                  <Label>{t('events.speakers')}</Label>
                   <Input
-                    placeholder="홍길동, 김철수"
+                    placeholder={t('events.speakersPlaceholder')}
                     value={form.speakers}
                     onChange={e => setForm(f => ({ ...f, speakers: e.target.value }))}
                   />
@@ -182,7 +184,7 @@ export function EventsPage() {
                   onClick={handleCreateEvent}
                   disabled={createEvent.isPending || !form.month || !form.eventName || !form.eventDatetime}
                 >
-                  {createEvent.isPending ? '저장 중...' : '추가'}
+                  {createEvent.isPending ? t('common.saving') : t('common.add')}
                 </Button>
               </div>
             </DialogContent>
@@ -196,11 +198,11 @@ export function EventsPage() {
         </div>
       ) : error ? (
         <div className="text-center py-20 text-destructive text-sm">
-          데이터를 불러오는 중 오류가 발생했습니다.
+          {t('common.error')}
         </div>
       ) : events.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground text-sm">
-          이벤트가 없습니다.
+          {t('events.noEvents')}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -219,7 +221,7 @@ export function EventsPage() {
                         </span>
                         {event.week && (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                            {event.week}주차
+                            {t('events.weekN', { n: event.week })}
                           </Badge>
                         )}
                       </div>
@@ -252,7 +254,7 @@ export function EventsPage() {
                   {/* Progress Bar */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">진행률</span>
+                      <span className="text-muted-foreground">{t('events.progress')}</span>
                       <span className={`font-medium ${progress.percent === 100 ? 'text-green-600' : progress.percent >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
                         {progress.percent}%
                       </span>
@@ -262,7 +264,7 @@ export function EventsPage() {
 
                   {/* Checklist */}
                   <div className="grid grid-cols-2 gap-1.5">
-                    {CHECKLIST_ITEMS.map(item => {
+                    {CHECKLIST_KEYS.map(item => {
                       const checked = event[item.key] === true
                       return (
                         <button
@@ -282,7 +284,7 @@ export function EventsPage() {
                           ) : (
                             <Circle className="size-3.5 text-muted-foreground/40 shrink-0" />
                           )}
-                          <span className={checked ? 'line-through' : ''}>{item.label}</span>
+                          <span className={checked ? 'line-through' : ''}>{t(item.labelKey)}</span>
                         </button>
                       )
                     })}

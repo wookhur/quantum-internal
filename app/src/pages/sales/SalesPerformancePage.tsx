@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Users, Handshake, CalendarCheck, TrendingUp, Plus, Loader2 } from 'lucide-react'
 import { useSalesEvents, useCreateSalesEvent } from '@/hooks/useSalesEvents'
+import { useT } from '@/i18n/LanguageContext'
 
 const INITIAL_EVENT_FORM = {
   month: '',
@@ -22,6 +23,7 @@ const INITIAL_EVENT_FORM = {
 }
 
 export function SalesPerformancePage() {
+  const t = useT()
   const [monthFilter, setMonthFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_EVENT_FORM)
@@ -71,7 +73,7 @@ export function SalesPerformancePage() {
   const groupedByMonth = useMemo(() => {
     const map = new Map<string, typeof events>()
     for (const event of events) {
-      const month = event.month || '미정'
+      const month = event.month || t('salesPerf.undecided')
       if (!map.has(month)) map.set(month, [])
       map.get(month)!.push(event)
     }
@@ -83,13 +85,13 @@ export function SalesPerformancePage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">영업 현황</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('salesPerf.title')}</h1>
           <p className="text-muted-foreground">
-            {isLoading ? '로딩 중...' : `총 ${events.length}건의 이벤트`}
+            {isLoading ? t('common.loading') : t('salesPerf.totalEvents').replace('{n}', String(events.length))}
           </p>
         </div>
         <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-          <Plus className="size-4" /> 실적 추가
+          <Plus className="size-4" /> {t('salesPerf.addRecord')}
         </Button>
       </div>
 
@@ -100,7 +102,7 @@ export function SalesPerformancePage() {
             <Users className="size-5 text-primary" />
             <div>
               <div className="text-lg font-bold">{totalApplicants.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">총 신청자</div>
+              <div className="text-xs text-muted-foreground">{t('salesPerf.totalApplicants')}</div>
             </div>
           </CardContent>
         </Card>
@@ -109,7 +111,7 @@ export function SalesPerformancePage() {
             <CalendarCheck className="size-5 text-blue-500" />
             <div>
               <div className="text-lg font-bold">{totalMeetings.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">총 미팅</div>
+              <div className="text-xs text-muted-foreground">{t('salesPerf.totalMeetings')}</div>
             </div>
           </CardContent>
         </Card>
@@ -118,7 +120,7 @@ export function SalesPerformancePage() {
             <Handshake className="size-5 text-success" />
             <div>
               <div className="text-lg font-bold">{totalContracts.toLocaleString()}</div>
-              <div className="text-xs text-muted-foreground">총 계약</div>
+              <div className="text-xs text-muted-foreground">{t('salesPerf.totalContracts')}</div>
             </div>
           </CardContent>
         </Card>
@@ -127,7 +129,7 @@ export function SalesPerformancePage() {
             <TrendingUp className="size-5 text-warning" />
             <div>
               <div className="text-lg font-bold">{avgContractRate.toFixed(1)}%</div>
-              <div className="text-xs text-muted-foreground">평균 계약률</div>
+              <div className="text-xs text-muted-foreground">{t('salesPerf.avgContractRate')}</div>
             </div>
           </CardContent>
         </Card>
@@ -139,10 +141,10 @@ export function SalesPerformancePage() {
           <div className="flex items-center gap-3">
             <Select value={monthFilter} onValueChange={(v) => setMonthFilter(v || 'all')}>
               <SelectTrigger className="w-[180px] h-9">
-                <SelectValue placeholder="월 선택" />
+                <SelectValue placeholder={t('salesPerf.selectMonth')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
                 {months.map(m => (
                   <SelectItem key={m} value={m}>{m}</SelectItem>
                 ))}
@@ -161,26 +163,26 @@ export function SalesPerformancePage() {
             </div>
           ) : error ? (
             <div className="text-center py-20 text-destructive text-sm">
-              데이터를 불러오는 중 오류가 발생했습니다.
+              {t('common.error')}
             </div>
           ) : events.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground text-sm">
-              영업 이벤트 데이터가 없습니다.
+              {t('salesPerf.noEvents')}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[90px]">월</TableHead>
-                  <TableHead>이벤트명</TableHead>
-                  <TableHead className="text-right w-[70px]">신청자</TableHead>
-                  <TableHead className="text-right w-[70px]">참석자</TableHead>
-                  <TableHead className="text-right w-[70px]">전화상담</TableHead>
+                  <TableHead className="w-[90px]">{t('common.month')}</TableHead>
+                  <TableHead>{t('salesPerf.col.eventName')}</TableHead>
+                  <TableHead className="text-right w-[70px]">{t('salesPerf.col.applicants')}</TableHead>
+                  <TableHead className="text-right w-[70px]">{t('salesPerf.col.attendees')}</TableHead>
+                  <TableHead className="text-right w-[70px]">{t('salesPerf.col.phoneConsult')}</TableHead>
                   <TableHead className="text-right w-[70px]">Zoom</TableHead>
-                  <TableHead className="text-right w-[70px]">대면</TableHead>
-                  <TableHead className="text-right w-[70px]">총 미팅</TableHead>
-                  <TableHead className="text-right w-[70px]">계약</TableHead>
-                  <TableHead className="text-right w-[80px]">계약률</TableHead>
+                  <TableHead className="text-right w-[70px]">{t('salesPerf.col.inPerson')}</TableHead>
+                  <TableHead className="text-right w-[70px]">{t('salesPerf.col.totalMeetings')}</TableHead>
+                  <TableHead className="text-right w-[70px]">{t('salesPerf.col.contracts')}</TableHead>
+                  <TableHead className="text-right w-[80px]">{t('salesPerf.col.contractRate')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -223,7 +225,7 @@ export function SalesPerformancePage() {
                 {/* Monthly subtotals */}
                 {monthFilter === 'all' && groupedByMonth.length > 1 && (
                   <TableRow className="bg-muted/50 font-medium">
-                    <TableCell colSpan={2} className="text-sm">합계</TableCell>
+                    <TableCell colSpan={2} className="text-sm">{t('common.total')}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">{totalApplicants}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
                       {events.reduce((s, e) => s + (e.attendees || 0), 0)}
@@ -252,52 +254,52 @@ export function SalesPerformancePage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>새 실적 추가</DialogTitle>
+            <DialogTitle>{t('salesPerf.addRecordTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>월 (YYYY-MM) *</Label>
+                <Label>{t('salesPerf.monthLabel')} *</Label>
                 <Input type="month" value={form.month} onChange={e => setForm(f => ({ ...f, month: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>이벤트명 *</Label>
+                <Label>{t('salesPerf.col.eventName')} *</Label>
                 <Input value={form.eventName} onChange={e => setForm(f => ({ ...f, eventName: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>신청자</Label>
+                <Label>{t('salesPerf.col.applicants')}</Label>
                 <Input type="number" min={0} value={form.applicants} onChange={e => setForm(f => ({ ...f, applicants: parseInt(e.target.value) || 0 }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>참석자</Label>
+                <Label>{t('salesPerf.col.attendees')}</Label>
                 <Input type="number" min={0} value={form.attendees} onChange={e => setForm(f => ({ ...f, attendees: parseInt(e.target.value) || 0 }))} />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>전화상담</Label>
+                <Label>{t('salesPerf.col.phoneConsult')}</Label>
                 <Input type="number" min={0} value={form.phoneConsultations} onChange={e => setForm(f => ({ ...f, phoneConsultations: parseInt(e.target.value) || 0 }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Zoom 예약</Label>
+                <Label>{t('salesPerf.zoomBooking')}</Label>
                 <Input type="number" min={0} value={form.zoomBookings} onChange={e => setForm(f => ({ ...f, zoomBookings: parseInt(e.target.value) || 0 }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>대면 예약</Label>
+                <Label>{t('salesPerf.inPersonBooking')}</Label>
                 <Input type="number" min={0} value={form.inPersonBookings} onChange={e => setForm(f => ({ ...f, inPersonBookings: parseInt(e.target.value) || 0 }))} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>계약</Label>
+              <Label>{t('salesPerf.col.contracts')}</Label>
               <Input type="number" min={0} value={form.contracts} onChange={e => setForm(f => ({ ...f, contracts: parseInt(e.target.value) || 0 }))} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={handleCreateEvent} disabled={!form.month || !form.eventName || createEvent.isPending}>
                 {createEvent.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
-                추가
+                {t('common.add')}
               </Button>
             </div>
           </div>

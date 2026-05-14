@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -8,6 +9,7 @@ import { useMonthlyPerformance } from '@/hooks/useMonthlyPerformance'
 import { formatCurrency } from '@/types'
 
 export function PlanningOverviewPage() {
+  const t = useT()
   const [yearFilter, setYearFilter] = useState<string>('all')
   const [regionFilter, setRegionFilter] = useState<string>('all')
 
@@ -42,7 +44,7 @@ export function PlanningOverviewPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
-        <p className="text-red-500">데이터를 불러오는데 실패했습니다.</p>
+        <p className="text-red-500">{t('planOverview.loadError')}</p>
       </div>
     )
   }
@@ -51,8 +53,8 @@ export function PlanningOverviewPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">경영 현황</h1>
-        <p className="text-sm text-gray-500 mt-1">월별 매출 목표 및 실적 현황을 확인합니다.</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t('planning.overview')}</h1>
+        <p className="text-sm text-gray-500 mt-1">{t('planOverview.subtitle')}</p>
       </div>
 
       {/* Summary Cards */}
@@ -61,7 +63,7 @@ export function PlanningOverviewPage() {
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">월 매출 목표</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t('planOverview.monthlyTarget')}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">
                   {latestMonth ? formatCurrency(latestMonth.target, latestMonth.currency) : '-'}
                 </p>
@@ -77,7 +79,7 @@ export function PlanningOverviewPage() {
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">실적</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t('planOverview.actual')}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">
                   {latestMonth ? formatCurrency(latestMonth.actual, latestMonth.currency) : '-'}
                 </p>
@@ -93,7 +95,7 @@ export function PlanningOverviewPage() {
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">달성률</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t('planOverview.achievementRate')}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">
                   {latestMonth ? `${latestMonth.achievementRate.toFixed(1)}%` : '-'}
                 </p>
@@ -109,7 +111,7 @@ export function PlanningOverviewPage() {
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">신규 계약</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{t('planOverview.newContracts')}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">
                   {latestMonth?.newContracts ?? '-'}
                 </p>
@@ -126,24 +128,24 @@ export function PlanningOverviewPage() {
       <div className="flex items-center gap-3">
         <Select value={yearFilter} onValueChange={v => setYearFilter(v || 'all')}>
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="연도" />
+            <SelectValue placeholder={t('planOverview.year')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">전체 연도</SelectItem>
+            <SelectItem value="all">{t('planOverview.allYears')}</SelectItem>
             {years.map(y => (
-              <SelectItem key={y} value={String(y)}>{y}년</SelectItem>
+              <SelectItem key={y} value={String(y)}>{y}{t('planOverview.yearSuffix')}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Select value={regionFilter} onValueChange={v => setRegionFilter(v || 'all')}>
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="지역" />
+            <SelectValue placeholder={t('common.region')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">전체 지역</SelectItem>
-            <SelectItem value="KR">한국</SelectItem>
-            <SelectItem value="US">미국</SelectItem>
+            <SelectItem value="all">{t('planOverview.allRegions')}</SelectItem>
+            <SelectItem value="KR">{t('planOverview.korea')}</SelectItem>
+            <SelectItem value="US">{t('planOverview.usa')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -154,30 +156,30 @@ export function PlanningOverviewPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>연도</TableHead>
-                <TableHead>월</TableHead>
-                <TableHead>지역</TableHead>
-                <TableHead className="text-right">목표</TableHead>
-                <TableHead className="text-right">실적</TableHead>
-                <TableHead className="text-right">달성률</TableHead>
-                <TableHead className="text-right">신규 계약</TableHead>
+                <TableHead>{t('planOverview.year')}</TableHead>
+                <TableHead>{t('common.month')}</TableHead>
+                <TableHead>{t('common.region')}</TableHead>
+                <TableHead className="text-right">{t('planOverview.target')}</TableHead>
+                <TableHead className="text-right">{t('planOverview.actual')}</TableHead>
+                <TableHead className="text-right">{t('planOverview.achievementRate')}</TableHead>
+                <TableHead className="text-right">{t('planOverview.newContracts')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {performances.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-gray-400">
-                    데이터가 없습니다.
+                    {t('common.noData')}
                   </TableCell>
                 </TableRow>
               ) : (
                 performances.map(p => (
                   <TableRow key={p.id}>
                     <TableCell>{p.year}</TableCell>
-                    <TableCell>{p.month}월</TableCell>
+                    <TableCell>{p.month}{t('planOverview.monthSuffix')}</TableCell>
                     <TableCell>
                       <Badge variant={p.region === 'KR' ? 'default' : 'secondary'}>
-                        {p.region === 'KR' ? '한국' : '미국'}
+                        {p.region === 'KR' ? t('planOverview.korea') : t('planOverview.usa')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">{formatCurrency(p.target, p.currency)}</TableCell>
@@ -199,10 +201,10 @@ export function PlanningOverviewPage() {
       {/* Summary Footer */}
       {performances.length > 0 && (
         <div className="flex items-center gap-4 text-sm text-gray-500">
-          <span>합계 목표: {formatCurrency(totalTarget, performances[0].currency)}</span>
-          <span>합계 실적: {formatCurrency(totalActual, performances[0].currency)}</span>
-          <span>평균 달성률: {avgAchievementRate.toFixed(1)}%</span>
-          <span>총 신규 계약: {totalNewContracts}건</span>
+          <span>{t('planOverview.totalTarget')}: {formatCurrency(totalTarget, performances[0].currency)}</span>
+          <span>{t('planOverview.totalActual')}: {formatCurrency(totalActual, performances[0].currency)}</span>
+          <span>{t('planOverview.avgAchievementRate')}: {avgAchievementRate.toFixed(1)}%</span>
+          <span>{t('planOverview.totalNewContracts')}: {totalNewContracts}{t('common.count')}</span>
         </div>
       )}
     </div>
