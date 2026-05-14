@@ -20,6 +20,8 @@ import { MonthlyCollectionPage } from '@/pages/consulting/MonthlyCollectionPage'
 import { MarketingMetricsPage } from '@/pages/marketing/MarketingMetricsPage'
 import { AdCampaignsPage } from '@/pages/marketing/AdCampaignsPage'
 import { EventsPage } from '@/pages/marketing/EventsPage'
+import { VideoProjectsPage } from '@/pages/marketing/VideoProjectsPage'
+import { SalesFunnelPage } from '@/pages/sales/SalesFunnelPage'
 import { PlanningOverviewPage } from '@/pages/planning/PlanningOverviewPage'
 import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
@@ -62,11 +64,12 @@ export default function App() {
                 <Route path="/sales/performance" element={<SalesPerformancePage />} />
                 <Route path="/sales/meetings" element={<MeetingsPage />} />
                 <Route path="/sales/cold-call" element={<ColdCallPage />} />
+                <Route path="/sales/funnel" element={<SalesFunnelPage />} />
 
                 <Route path="/marketing/metrics" element={<MarketingMetricsPage />} />
                 <Route path="/marketing/ads" element={<AdCampaignsPage />} />
                 <Route path="/marketing/events" element={<EventsPage />} />
-                <Route path="/marketing/videos" element={<PlaceholderPage title="영상 콘텐츠" />} />
+                <Route path="/marketing/videos" element={<VideoProjectsPage />} />
 
                 <Route path="/consulting/clients" element={<ContractsPage />} />
                 <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />
