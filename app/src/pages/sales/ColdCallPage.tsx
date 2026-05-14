@@ -42,6 +42,7 @@ import {
   CalendarCheck,
 } from 'lucide-react'
 import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead } from '@/hooks/useLeads'
+import { useAuth } from '@/contexts/AuthContext'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
 import { getStageConfig, GRADES } from '@/types'
 import { Link } from 'react-router-dom'
@@ -478,6 +479,7 @@ function ColdCallDetail({
   lead: Lead & { _priority: number }
   onClose: () => void
 }) {
+  const { user } = useAuth()
   const { data: activities = [], isLoading: activitiesLoading } = useLeadActivities(lead.id)
   const createActivity = useCreateActivity()
   const updateLead = useUpdateLead()
@@ -516,13 +518,24 @@ function ColdCallDetail({
           setCallNote('')
           setCallResult('')
 
+          // Build update payload
+          const updateData: Record<string, unknown> = {}
+
           // Auto-advance stage if new_lead
           if (lead.pipelineStage === 'new_lead') {
-            const newStage: PipelineStage =
+            updateData.pipelineStage =
               callResult === 'no_answer' ? 'no_response' : 'contact_attempted'
+          }
+
+          // Auto-assign current user if lead has no assignee
+          if (!lead.assignedTo && user) {
+            updateData.assignedTo = user.id
+          }
+
+          if (Object.keys(updateData).length > 0) {
             updateLead.mutate({
               id: lead.id,
-              data: { pipelineStage: newStage },
+              data: updateData,
               previousStage: lead.pipelineStage,
             })
           }
