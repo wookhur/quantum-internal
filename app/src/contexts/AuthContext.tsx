@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Session } from '@supabase/supabase-js'
 import type { User, UserRole } from '@/types'
@@ -28,19 +28,38 @@ function toUser(data: Record<string, unknown>, fallbackEmail: string): User {
   }
 }
 
+function fallbackUser(s: Session): User {
+  return {
+    id: s.user.id,
+    email: s.user.email || '',
+    name: s.user.user_metadata?.full_name || s.user.user_metadata?.name || s.user.email?.split('@')[0] || 'User',
+    role: 'viewer' as UserRole,
+    isExternal: false,
+    createdAt: s.user.created_at,
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const profileFetchInProgress = useRef<Promise<User | null> | null>(null)
 
-  const fetchProfile = useCallback(async (userId: string, email: string, fullName?: string): Promise<User | null> => {
-    // Prevent concurrent fetchProfile calls from racing
-    if (profileFetchInProgress.current) {
-      return profileFetchInProgress.current
-    }
+  // KEY FIX: track whether we've successfully loaded the profile.
+  // Once loaded, we NEVER re-fetch or allow fallback to overwrite it.
+  const profileResolved = useRef(false)
+  const fetchInFlight = useRef<Promise<User | null> | null>(null)
 
-    const doFetch = async (): Promise<User | null> => {
+  useEffect(() => {
+    let isMounted = true
+
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        console.warn('Auth loading safety timeout (12s)')
+        setLoading(false)
+      }
+    }, 12000)
+
+    async function fetchProfile(userId: string, email: string, fullName?: string): Promise<User | null> {
       // 1. Try to get existing profile
       const { data, error } = await supabase
         .from('profiles')
@@ -52,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return toUser(data, email)
       }
 
-      // 2. Profile not found — try to create it
+      // 2. Profile not found — try to create
       const name = fullName || email.split('@')[0]
       const { data: newProfile, error: insertError } = await supabase
         .from('profiles')
@@ -64,129 +83,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return toUser(newProfile, email)
       }
 
-      // 3. INSERT failed (e.g., duplicate from concurrent call) — try SELECT again
+      // 3. INSERT race — retry SELECT
       const { data: retryData } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single()
 
-      if (retryData) {
-        return toUser(retryData, email)
-      }
+      if (retryData) return toUser(retryData, email)
 
-      console.error('Failed to create or fetch profile:', insertError)
+      console.error('Failed to fetch/create profile:', insertError)
       return null
     }
 
-    // Add timeout to prevent hanging — resolve with null instead of rejecting
-    const timeoutPromise = new Promise<User | null>((resolve) =>
-      setTimeout(() => {
-        console.warn('Profile fetch timeout (10s) — continuing with fallback user')
-        resolve(null)
-      }, 10000)
-    )
-
-    profileFetchInProgress.current = doFetch()
-    try {
-      return await Promise.race([profileFetchInProgress.current, timeoutPromise])
-    } finally {
-      profileFetchInProgress.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    let isMounted = true
-
-    // Safety timeout — if auth takes longer than 12s, stop loading
-    const safetyTimer = setTimeout(() => {
-      if (isMounted) {
-        console.warn('Auth loading safety timeout reached (12s)')
-        setLoading(false)
+    /** Load profile exactly once. All concurrent callers share the same promise. */
+    async function ensureProfile(s: Session) {
+      // Already have a good profile — just update session
+      if (profileResolved.current) {
+        if (isMounted) setSession(s)
+        return
       }
-    }, 12000)
 
-    // Helper: build a fallback user from Supabase auth session (when profile fetch fails)
-    function fallbackUser(s: Session): User {
-      return {
-        id: s.user.id,
-        email: s.user.email || '',
-        name: s.user.user_metadata?.full_name || s.user.user_metadata?.name || s.user.email?.split('@')[0] || 'User',
-        role: 'viewer' as UserRole,
-        isExternal: false,
-        createdAt: s.user.created_at,
+      // Deduplicate concurrent calls
+      if (!fetchInFlight.current) {
+        const fullName = s.user.user_metadata?.full_name || s.user.user_metadata?.name
+        fetchInFlight.current = Promise.race([
+          fetchProfile(s.user.id, s.user.email || '', fullName),
+          new Promise<null>(resolve => setTimeout(() => {
+            console.warn('Profile fetch timeout (8s)')
+            resolve(null)
+          }, 8000)),
+        ])
       }
-    }
 
-    // Use onAuthStateChange as the single source of truth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, s) => {
-        try {
-          if (s?.user) {
-            // On TOKEN_REFRESHED, just update the session — don't re-fetch profile
-            // This prevents the sidebar from flashing to viewer role when profile fetch fails during token refresh
-            if (event === 'TOKEN_REFRESHED') {
-              if (isMounted) {
-                setSession(s)
-                // If no user profile is loaded yet (first load), still fetch it
-                setUser(prev => prev || fallbackUser(s))
-              }
-              return
-            }
-
-            const fullName = s.user.user_metadata?.full_name || s.user.user_metadata?.name
-            const profile = await fetchProfile(s.user.id, s.user.email || '', fullName)
-            if (isMounted) {
-              // Even if profile is null, keep user logged in with fallback
-              setUser(profile || fallbackUser(s))
-              setSession(s)
-            }
-          } else if (isMounted) {
-            setUser(null)
-            setSession(null)
-          }
-        } catch (err) {
-          console.error('Auth state change error:', err)
-          // CRITICAL: if session exists, keep user logged in — preserve existing profile
-          if (isMounted && s?.user) {
-            setSession(s)
-            setUser(prev => prev || fallbackUser(s))
-          } else if (isMounted) {
-            setUser(null)
-            setSession(null)
-          }
-        } finally {
-          if (isMounted) {
-            clearTimeout(safetyTimer)
-            setLoading(false)
-          }
-        }
-      }
-    )
-
-    // Also check initial session (in case onAuthStateChange doesn't fire)
-    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       try {
-        if (s?.user) {
-          const fullName = s.user.user_metadata?.full_name || s.user.user_metadata?.name
-          const profile = await fetchProfile(s.user.id, s.user.email || '', fullName)
-          if (isMounted) {
-            setUser(profile || fallbackUser(s))
-            setSession(s)
+        const profile = await fetchInFlight.current
+        if (isMounted) {
+          if (profile) {
+            profileResolved.current = true
+            setUser(profile)
+          } else {
+            // Only use fallback if we've NEVER successfully loaded
+            setUser(prev => prev && prev.role !== 'viewer' ? prev : fallbackUser(s))
           }
+          setSession(s)
         }
       } catch (err) {
-        console.error('Get session error:', err)
-        // Keep user logged in with fallback if session exists
-        if (isMounted && s?.user) {
-          setUser(fallbackUser(s))
+        console.error('Profile fetch error:', err)
+        if (isMounted) {
+          setUser(prev => prev && prev.role !== 'viewer' ? prev : fallbackUser(s))
           setSession(s)
         }
       } finally {
+        fetchInFlight.current = null
         if (isMounted) {
           clearTimeout(safetyTimer)
           setLoading(false)
         }
+      }
+    }
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, s) => {
+        if (event === 'SIGNED_OUT') {
+          profileResolved.current = false
+          if (isMounted) { setUser(null); setSession(null); setLoading(false) }
+          return
+        }
+        if (s?.user) {
+          await ensureProfile(s)
+        }
+      }
+    )
+
+    // Also check initial session
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (s?.user) {
+        await ensureProfile(s)
+      } else if (isMounted) {
+        clearTimeout(safetyTimer)
+        setLoading(false)
       }
     })
 
@@ -195,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(safetyTimer)
       subscription.unsubscribe()
     }
-  }, [fetchProfile])
+  }, [])
 
   const signInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -215,10 +192,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signOut = async () => {
+    profileResolved.current = false
     try {
       await supabase.auth.signOut()
     } catch (err) {
-      console.error('Sign out error (clearing local state anyway):', err)
+      console.error('Sign out error:', err)
     } finally {
       setUser(null)
       setSession(null)
