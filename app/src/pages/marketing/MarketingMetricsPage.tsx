@@ -7,9 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  Loader2, TrendingUp, Target, Plus, ArrowUpRight, ArrowDownRight, Minus,
+  Loader2, TrendingUp, Target, Plus, ArrowUpRight, ArrowDownRight, Minus, RefreshCw,
 } from 'lucide-react'
-import { useMarketingMetricsByYear, useCreateMarketingMetric } from '@/hooks/useMarketingMetrics'
+import { useMarketingMetricsByYear, useCreateMarketingMetric, useSyncMarketingMetrics } from '@/hooks/useMarketingMetrics'
 import { currentYearKST, currentMonthKST } from '@/lib/date'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -49,6 +49,7 @@ export function MarketingMetricsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_METRIC_FORM)
   const createMetric = useCreateMarketingMetric()
+  const syncMetrics = useSyncMarketingMetrics()
 
   const handleCreateMetric = () => {
     createMetric.mutate(
@@ -138,6 +139,20 @@ export function MarketingMetricsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Sync result feedback */}
+      {syncMetrics.isSuccess && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800 flex items-center justify-between">
+          <span>✓ 동기화 완료 — {syncMetrics.data.synced}개 채널 업데이트됨</span>
+          <button className="text-green-600 hover:text-green-800" onClick={() => syncMetrics.reset()}>✕</button>
+        </div>
+      )}
+      {syncMetrics.isError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800 flex items-center justify-between">
+          <span>동기화 실패: {(syncMetrics.error as Error)?.message || '알 수 없는 오류'}</span>
+          <button className="text-red-600 hover:text-red-800" onClick={() => syncMetrics.reset()}>✕</button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -157,6 +172,16 @@ export function MarketingMetricsPage() {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9"
+            disabled={syncMetrics.isPending}
+            onClick={() => syncMetrics.mutate()}
+          >
+            <RefreshCw className={`size-4 mr-1 ${syncMetrics.isPending ? 'animate-spin' : ''}`} />
+            {syncMetrics.isPending ? '동기화 중...' : 'API 동기화'}
+          </Button>
           <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}>
             <Plus className="size-4 mr-1" />
             지표 추가

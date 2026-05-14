@@ -72,6 +72,33 @@ export function useMarketingMetrics(filters?: { year?: number; month?: number })
   })
 }
 
+export interface SyncResult {
+  success: boolean
+  synced: number
+  results?: { channel: string; value: number }[]
+  errors?: string[]
+  timestamp: string
+}
+
+export function useSyncMarketingMetrics() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (): Promise<SyncResult> => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+
+      const { data, error } = await supabase.functions.invoke('sync-marketing-metrics', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      if (error) throw error
+      return data as SyncResult
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketing_metrics'] })
+    },
+  })
+}
+
 export function useMarketingMetricsByYear(year: number) {
   return useQuery({
     queryKey: ['marketing_metrics', 'year', year],
