@@ -116,7 +116,7 @@ export function useGlobalSearch(query: string) {
             subtitle: [row.school_name, row.contract_date].filter(Boolean).join(' · '),
             meta: `${Number(row.total_amount).toLocaleString()} ${row.currency}`,
             stage: statusLabel[row.status] || row.status,
-            navigateTo: `/consulting/contracts/${row.id}`,
+            navigateTo: `/consulting/clients/${row.id}`,
             raw: row,
           })
         }
@@ -138,7 +138,7 @@ export function useGlobalSearch(query: string) {
             subtitle: row.description ? (row.description.length > 50 ? row.description.slice(0, 50) + '…' : row.description) : '',
             meta: row.due_date || undefined,
             stage: statusLabel[row.status] || row.status,
-            navigateTo: `/common/todos`,
+            navigateTo: `/todos`,
             raw: row,
           })
         }
