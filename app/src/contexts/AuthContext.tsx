@@ -120,9 +120,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Use onAuthStateChange as the single source of truth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, s) => {
+      async (event, s) => {
         try {
           if (s?.user) {
+            // On TOKEN_REFRESHED, just update the session — don't re-fetch profile
+            // This prevents the sidebar from flashing to viewer role when profile fetch fails during token refresh
+            if (event === 'TOKEN_REFRESHED') {
+              if (isMounted) {
+                setSession(s)
+                // If no user profile is loaded yet (first load), still fetch it
+                setUser(prev => prev || fallbackUser(s))
+              }
+              return
+            }
+
             const fullName = s.user.user_metadata?.full_name || s.user.user_metadata?.name
             const profile = await fetchProfile(s.user.id, s.user.email || '', fullName)
             if (isMounted) {
@@ -136,10 +147,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           console.error('Auth state change error:', err)
-          // CRITICAL: if session exists, keep user logged in with fallback
+          // CRITICAL: if session exists, keep user logged in — preserve existing profile
           if (isMounted && s?.user) {
-            setUser(fallbackUser(s))
             setSession(s)
+            setUser(prev => prev || fallbackUser(s))
           } else if (isMounted) {
             setUser(null)
             setSession(null)
