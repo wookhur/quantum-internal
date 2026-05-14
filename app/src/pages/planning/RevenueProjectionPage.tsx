@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -13,9 +13,12 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+  Legend, ResponsiveContainer, ReferenceLine,
+} from 'recharts'
 import { useRevenueProjection } from '@/hooks/useInstallments'
 import { formatCurrency } from '@/types'
-import { useState } from 'react'
 
 const MONTH_NAMES = ['', '1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
 
@@ -92,7 +95,7 @@ export function RevenueProjectionPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">매출 Projection</h1>
+        <h1 className="text-2xl font-bold tracking-tight">매출 전망</h1>
         <p className="text-muted-foreground text-sm">
           계약 기반 월별 수금 예측 (계약금 · 중도금 · 잔금)
         </p>
@@ -143,11 +146,66 @@ export function RevenueProjectionPage() {
           <CardContent className="py-20 text-center text-muted-foreground">
             <DollarSign className="size-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">아직 납입 일정이 등록된 계약이 없습니다.</p>
-            <p className="text-xs mt-1">계약 추가 시 계약금·중도금·잔금 일정을 입력하면 자동으로 Projection에 반영됩니다.</p>
+            <p className="text-xs mt-1">계약 추가 시 계약금·중도금·잔금 일정을 입력하면 자동으로 매출 전망에 반영됩니다.</p>
           </CardContent>
         </Card>
       ) : (
         <>
+          {/* Revenue Chart */}
+          <Card>
+            <CardContent className="pt-6 pb-4">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <TrendingUp className="size-4 text-primary" />
+                월별 매출 현황 및 전망
+              </h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart
+                  data={projection.map((m) => ({
+                    month: MONTH_NAMES[Number(m.month.split('-')[1])] || m.month,
+                    monthKey: m.month,
+                    수금완료: m.paid,
+                    수금예정: m.pending,
+                    연체: m.overdue,
+                  }))}
+                  margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis
+                    dataKey="month"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: '#64748b' }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: '#94a3b8' }}
+                    tickFormatter={(v) => v >= 10000 ? `${(v / 10000).toFixed(0)}만` : v.toLocaleString()}
+                  />
+                  <RechartsTooltip
+                    formatter={(value, name) => [formatCurrency(Number(value)), String(name)]}
+                    contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13 }}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
+                  />
+                  {/* Reference line for current month */}
+                  {currentMonth && (
+                    <ReferenceLine
+                      x={MONTH_NAMES[Number(currentMonth.month.split('-')[1])]}
+                      stroke="#3b82f6"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                  <Bar dataKey="수금완료" stackId="revenue" fill="#10b981" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="수금예정" stackId="revenue" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="연체" stackId="revenue" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
           {/* Current Month Highlight */}
           {currentMonth && (
             <Card className="border-blue-200 bg-blue-50/50">

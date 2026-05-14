@@ -89,7 +89,7 @@ const NAV_SECTIONS: { title: string; module: FeatureModule; items: NavItemDef[] 
     module: 'planning',
     items: [
       { label: '경영 현황', to: '/planning/overview', icon: Briefcase },
-      { label: '매출 Projection', to: '/planning/projection', icon: LineChart },
+      { label: '매출 전망', to: '/planning/projection', icon: LineChart },
       { label: '접근 권한 관리', to: '/planning/access', icon: Shield },
     ],
   },
