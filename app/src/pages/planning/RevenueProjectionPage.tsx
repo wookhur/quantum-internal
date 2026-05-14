@@ -151,58 +151,78 @@ export function RevenueProjectionPage() {
         </Card>
       ) : (
         <>
-          {/* Revenue Chart */}
+          {/* Revenue Chart — show last 3 months + next 9 months (12 total) */}
           <Card>
             <CardContent className="pt-6 pb-4">
               <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                 <TrendingUp className="size-4 text-primary" />
                 월별 매출 현황 및 전망
               </h3>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart
-                  data={projection.map((m) => ({
-                    month: MONTH_NAMES[Number(m.month.split('-')[1])] || m.month,
+              {(() => {
+                // Build a 12-month window: 3 past + current + 8 future
+                const now = new Date()
+                const curKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+                const allKeys = projection.map(m => m.month)
+                const curIdx = allKeys.indexOf(curKey)
+                const startIdx = Math.max(0, curIdx >= 0 ? curIdx - 3 : 0)
+                const windowData = projection.slice(startIdx, startIdx + 12)
+
+                const chartData = windowData.map((m) => {
+                  const [y, mo] = m.month.split('-')
+                  return {
+                    month: `${y.slice(2)}.${Number(mo)}월`,
                     monthKey: m.month,
                     수금완료: m.paid,
                     수금예정: m.pending,
                     연체: m.overdue,
-                  }))}
-                  margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="month"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 12, fill: '#64748b' }}
-                  />
-                  <YAxis
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 11, fill: '#94a3b8' }}
-                    tickFormatter={(v) => v >= 10000 ? `${(v / 10000).toFixed(0)}만` : v.toLocaleString()}
-                  />
-                  <RechartsTooltip
-                    formatter={(value, name) => [formatCurrency(Number(value)), String(name)]}
-                    contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13 }}
-                  />
-                  <Legend
-                    wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
-                  />
-                  {/* Reference line for current month */}
-                  {currentMonth && (
-                    <ReferenceLine
-                      x={MONTH_NAMES[Number(currentMonth.month.split('-')[1])]}
-                      stroke="#3b82f6"
-                      strokeDasharray="4 4"
-                      strokeWidth={1.5}
-                    />
-                  )}
-                  <Bar dataKey="수금완료" stackId="revenue" fill="#10b981" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="수금예정" stackId="revenue" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="연체" stackId="revenue" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+                  }
+                })
+
+                const curLabel = (() => {
+                  const [y, mo] = curKey.split('-')
+                  return `${y.slice(2)}.${Number(mo)}월`
+                })()
+
+                return (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={chartData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis
+                        dataKey="month"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 12, fill: '#64748b' }}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 11, fill: '#94a3b8' }}
+                        tickFormatter={(v) => {
+                          if (v >= 100_000_000) return `${(v / 100_000_000).toFixed(1)}억`
+                          if (v >= 10_000) return `${(v / 10_000).toFixed(0)}만`
+                          return v.toLocaleString()
+                        }}
+                      />
+                      <RechartsTooltip
+                        formatter={(value, name) => [formatCurrency(Number(value)), String(name)]}
+                        labelFormatter={(label) => String(label)}
+                        contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13 }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
+                      <ReferenceLine
+                        x={curLabel}
+                        stroke="#3b82f6"
+                        strokeDasharray="4 4"
+                        strokeWidth={1.5}
+                        label={{ value: '이번 달', position: 'top', fontSize: 10, fill: '#3b82f6' }}
+                      />
+                      <Bar dataKey="수금완료" stackId="revenue" fill="#10b981" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="수금예정" stackId="revenue" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="연체" stackId="revenue" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )
+              })()}
             </CardContent>
           </Card>
 
