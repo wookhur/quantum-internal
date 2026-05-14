@@ -52,7 +52,7 @@ const NAV_SECTIONS: { title: string; module: FeatureModule; items: NavItemDef[] 
     items: [
       { label: '대시보드', to: '/dashboard', icon: LayoutDashboard },
       { label: '캘린더', to: '/calendar', icon: Calendar },
-      { label: '할일', to: '/todos', icon: CheckSquare },
+      { label: '프로젝트', to: '/todos', icon: CheckSquare },
     ],
   },
   {

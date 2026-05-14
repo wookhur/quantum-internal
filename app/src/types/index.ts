@@ -196,15 +196,19 @@ export interface PaymentInstallment {
   contract?: Contract
 }
 
-// ============ TODOS ============
+// ============ PROJECTS (formerly TODOS) ============
 export type TodoStatus = 'todo' | 'in_progress' | 'done'
 export type TodoPriority = 'low' | 'medium' | 'high'
+export type ProjectTeam = 'management' | 'sales' | 'marketing' | 'finance' | 'service'
 
 export interface Todo {
   id: string
   title: string
   description?: string
-  assignedTo: string
+  team?: ProjectTeam
+  ownerId?: string         // 책임자 1명
+  assignees?: string[]     // 담당자 여러명
+  assignedTo: string       // legacy - 하위호환
   assignedUser?: User
   status: TodoStatus
   priority: TodoPriority

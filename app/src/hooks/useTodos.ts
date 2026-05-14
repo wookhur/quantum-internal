@@ -1,12 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Todo, TodoStatus, TodoPriority } from '@/types'
+import type { Todo, TodoStatus, TodoPriority, ProjectTeam } from '@/types'
 
 function mapTodo(row: Record<string, unknown>): Todo {
   return {
     id: row.id as string,
     title: row.title as string,
     description: row.description as string,
+    team: row.team as ProjectTeam | undefined,
+    ownerId: row.owner_id as string | undefined,
+    assignees: (row.assignees as string[]) || [],
     assignedTo: row.assigned_to as string,
     status: row.status as TodoStatus,
     priority: row.priority as TodoPriority,
@@ -19,18 +22,19 @@ function mapTodo(row: Record<string, unknown>): Todo {
   }
 }
 
-export function useTodos(filters?: { assignedTo?: string; status?: TodoStatus }) {
+/** Fetch all projects (visible to everyone) */
+export function useTodos(filters?: { status?: TodoStatus; team?: ProjectTeam }) {
   return useQuery({
     queryKey: ['todos', filters],
     queryFn: async () => {
       let query = supabase
         .from('todos')
         .select('*')
+        .order('priority', { ascending: true })
         .order('due_date', { ascending: true, nullsFirst: false })
-        .order('priority', { ascending: false })
 
-      if (filters?.assignedTo) query = query.eq('assigned_to', filters.assignedTo)
       if (filters?.status) query = query.eq('status', filters.status)
+      if (filters?.team) query = query.eq('team', filters.team)
 
       const { data, error } = await query
       if (error) throw error
@@ -42,13 +46,28 @@ export function useTodos(filters?: { assignedTo?: string; status?: TodoStatus })
 export function useCreateTodo() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (todo: { title: string; description?: string; assignedTo: string; priority: TodoPriority; dueDate?: string; createdBy: string; linkedEntityType?: string; linkedEntityId?: string }) => {
+    mutationFn: async (todo: {
+      title: string
+      description?: string
+      priority: TodoPriority
+      dueDate?: string
+      team?: ProjectTeam
+      ownerId?: string
+      assignees?: string[]
+      assignedTo: string
+      createdBy: string
+      linkedEntityType?: string
+      linkedEntityId?: string
+    }) => {
       const { data, error } = await supabase.from('todos').insert({
         title: todo.title,
         description: todo.description,
         assigned_to: todo.assignedTo,
         priority: todo.priority,
         due_date: todo.dueDate,
+        team: todo.team,
+        owner_id: todo.ownerId,
+        assignees: todo.assignees || [],
         created_by: todo.createdBy,
         linked_entity_type: todo.linkedEntityType,
         linked_entity_id: todo.linkedEntityId,
@@ -60,6 +79,39 @@ export function useCreateTodo() {
   })
 }
 
+export function useUpdateTodo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: {
+      id: string
+      title?: string
+      description?: string
+      status?: TodoStatus
+      priority?: TodoPriority
+      dueDate?: string
+      team?: ProjectTeam | null
+      ownerId?: string | null
+      assignees?: string[]
+    }) => {
+      const { id, ...rest } = payload
+      const update: Record<string, unknown> = {}
+      if (rest.title !== undefined) update.title = rest.title
+      if (rest.description !== undefined) update.description = rest.description
+      if (rest.status !== undefined) update.status = rest.status
+      if (rest.priority !== undefined) update.priority = rest.priority
+      if (rest.dueDate !== undefined) update.due_date = rest.dueDate
+      if (rest.team !== undefined) update.team = rest.team
+      if (rest.ownerId !== undefined) update.owner_id = rest.ownerId
+      if (rest.assignees !== undefined) update.assignees = rest.assignees
+
+      const { error } = await supabase.from('todos').update(update).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['todos'] }),
+  })
+}
+
+/** Legacy: quick status toggle */
 export function useUpdateTodoStatus() {
   const qc = useQueryClient()
   return useMutation({

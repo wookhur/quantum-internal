@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,16 +8,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Circle, Clock, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import {
+  Plus, Circle, Clock, CheckCircle2, AlertCircle, Loader2,
+  Users, User as UserIcon, Building2,
+} from 'lucide-react'
 import { useTodos, useCreateTodo, useUpdateTodoStatus } from '@/hooks/useTodos'
+import { useProfiles } from '@/hooks/useProfiles'
 import { useAuth } from '@/contexts/AuthContext'
 import { daysFromTodayKST } from '@/lib/date'
-import type { Todo, TodoPriority, TodoStatus } from '@/types'
+import type { Todo, TodoPriority, TodoStatus, ProjectTeam, User } from '@/types'
 
 const PRIORITY_CONFIG: Record<TodoPriority, { label: string; dotColor: string }> = {
   high: { label: '긴급', dotColor: 'bg-destructive' },
   medium: { label: '보통', dotColor: 'bg-warning' },
   low: { label: '낮음', dotColor: 'bg-muted-foreground' },
+}
+
+const TEAM_CONFIG: Record<ProjectTeam, { label: string; color: string }> = {
+  management: { label: '경영', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+  sales: { label: '세일즈', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  marketing: { label: '마케팅', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+  finance: { label: '재무', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  service: { label: '서비스', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
 }
 
 function getDaysUntilDue(dueDate?: string) {
@@ -35,7 +47,38 @@ function DueBadge({ dueDate }: { dueDate?: string }) {
   return <span className="text-xs text-muted-foreground">{dueDate?.slice(5)}</span>
 }
 
-function TodoCard({ todo, onToggle }: { todo: Todo; onToggle: (id: string, status: TodoStatus) => void }) {
+function TeamBadge({ team }: { team?: ProjectTeam }) {
+  if (!team) return null
+  const cfg = TEAM_CONFIG[team]
+  return (
+    <Badge variant="outline" className={`text-[10px] h-4 px-1.5 font-medium ${cfg.color}`}>
+      {cfg.label}
+    </Badge>
+  )
+}
+
+function PersonChip({ userId, profiles }: { userId: string; profiles: User[] }) {
+  const user = profiles.find(p => p.id === userId)
+  if (!user) return <span className="text-xs text-muted-foreground">?</span>
+  return (
+    <span className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded-full px-2 py-0.5">
+      <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold shrink-0">
+        {user.name.charAt(0)}
+      </span>
+      {user.name}
+    </span>
+  )
+}
+
+function ProjectCard({
+  todo,
+  profiles,
+  onToggle,
+}: {
+  todo: Todo
+  profiles: User[]
+  onToggle: (id: string, status: TodoStatus) => void
+}) {
   const p = PRIORITY_CONFIG[todo.priority]
   const isDone = todo.status === 'done'
 
@@ -58,16 +101,31 @@ function TodoCard({ todo, onToggle }: { todo: Todo; onToggle: (id: string, statu
             {todo.title}
           </span>
           <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.dotColor}`} />
+          <TeamBadge team={todo.team} />
         </div>
         {todo.description && (
           <p className="text-xs text-muted-foreground truncate">{todo.description}</p>
         )}
-        <div className="flex items-center gap-2 mt-1.5">
+        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           <DueBadge dueDate={todo.dueDate} />
-          {todo.linkedEntityType && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-              {todo.linkedEntityType === 'lead' ? '리드' : todo.linkedEntityType === 'contract' ? '계약' : '이벤트'}
-            </Badge>
+          {/* 책임자 */}
+          {todo.ownerId && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <UserIcon className="size-3" />
+              <PersonChip userId={todo.ownerId} profiles={profiles} />
+            </span>
+          )}
+          {/* 담당자 */}
+          {todo.assignees && todo.assignees.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Users className="size-3" />
+              {todo.assignees.slice(0, 3).map(uid => (
+                <PersonChip key={uid} userId={uid} profiles={profiles} />
+              ))}
+              {todo.assignees.length > 3 && (
+                <span className="text-[10px] text-muted-foreground">+{todo.assignees.length - 3}</span>
+              )}
+            </span>
           )}
         </div>
       </div>
@@ -77,9 +135,20 @@ function TodoCard({ todo, onToggle }: { todo: Todo; onToggle: (id: string, statu
 
 export function TodosPage() {
   const [tab, setTab] = useState('all')
+  const [teamFilter, setTeamFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [form, setForm] = useState({ title: '', description: '', priority: 'medium' as TodoPriority, dueDate: '' })
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as TodoPriority,
+    dueDate: '',
+    team: '' as string,
+    ownerId: '' as string,
+    assignees: [] as string[],
+  })
+
   const { data: todos = [], isLoading } = useTodos()
+  const { data: profiles = [] } = useProfiles()
   const updateStatus = useUpdateTodoStatus()
   const createTodo = useCreateTodo()
   const { user } = useAuth()
@@ -88,7 +157,7 @@ export function TodosPage() {
     updateStatus.mutate({ id, status })
   }
 
-  const handleCreateTodo = () => {
+  const handleCreateProject = () => {
     if (!form.title.trim() || !user) return
     createTodo.mutate(
       {
@@ -96,23 +165,37 @@ export function TodosPage() {
         description: form.description || undefined,
         priority: form.priority,
         dueDate: form.dueDate || undefined,
-        assignedTo: user.id,
+        team: (form.team || undefined) as ProjectTeam | undefined,
+        ownerId: form.ownerId || undefined,
+        assignees: form.assignees.length > 0 ? form.assignees : undefined,
+        assignedTo: form.ownerId || user.id,
         createdBy: user.id,
       },
       {
         onSuccess: () => {
           setDialogOpen(false)
-          setForm({ title: '', description: '', priority: 'medium', dueDate: '' })
+          setForm({ title: '', description: '', priority: 'medium', dueDate: '', team: '', ownerId: '', assignees: [] })
         },
       },
     )
   }
 
-  const filtered = todos.filter(t => {
-    if (tab === 'todo') return t.status !== 'done'
-    if (tab === 'done') return t.status === 'done'
-    return true
-  })
+  const toggleAssignee = (uid: string) => {
+    setForm(f => ({
+      ...f,
+      assignees: f.assignees.includes(uid)
+        ? f.assignees.filter(a => a !== uid)
+        : [...f.assignees, uid],
+    }))
+  }
+
+  const filtered = useMemo(() => {
+    let list = todos
+    if (tab === 'todo') list = list.filter(t => t.status !== 'done')
+    if (tab === 'done') list = list.filter(t => t.status === 'done')
+    if (teamFilter !== 'all') list = list.filter(t => t.team === teamFilter)
+    return list
+  }, [todos, tab, teamFilter])
 
   const todoCount = todos.filter(t => t.status === 'todo').length
   const inProgressCount = todos.filter(t => t.status === 'in_progress').length
@@ -123,8 +206,8 @@ export function TodosPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">할일 목록</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight">프로젝트</h1>
+          <p className="text-muted-foreground text-sm">
             {isLoading ? '로딩 중...' : (
               <>
                 {todoCount + inProgressCount}개 진행 중 · {doneCount}개 완료
@@ -134,18 +217,20 @@ export function TodosPage() {
           </p>
         </div>
         <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-          <Plus className="size-4" /> 할일 추가
+          <Plus className="size-4" /> 프로젝트 추가
         </Button>
+
+        {/* Create Project Dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>할일 추가</DialogTitle>
+              <DialogTitle>프로젝트 추가</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-2">
               <div className="space-y-2">
                 <Label>제목</Label>
                 <Input
-                  placeholder="할일 제목"
+                  placeholder="프로젝트 제목"
                   value={form.title}
                   onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 />
@@ -158,7 +243,23 @@ export function TodosPage() {
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-2">
+                  <Label>담당 팀</Label>
+                  <Select value={form.team || '_none'} onValueChange={v => setForm(f => ({ ...f, team: !v || v === '_none' ? '' : v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="팀 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">미정</SelectItem>
+                      <SelectItem value="management">경영</SelectItem>
+                      <SelectItem value="sales">세일즈</SelectItem>
+                      <SelectItem value="marketing">마케팅</SelectItem>
+                      <SelectItem value="finance">재무</SelectItem>
+                      <SelectItem value="service">서비스</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2">
                   <Label>우선순위</Label>
                   <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v as TodoPriority }))}>
@@ -181,9 +282,65 @@ export function TodosPage() {
                   />
                 </div>
               </div>
+
+              {/* 책임자 */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <UserIcon className="size-3.5" /> 책임자 (1명)
+                </Label>
+                <Select value={form.ownerId || '_none'} onValueChange={v => setForm(f => ({ ...f, ownerId: !v || v === '_none' ? '' : v }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="책임자 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">미정</SelectItem>
+                    {profiles.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.name} {p.position ? `(${p.position})` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 담당자 (다중 선택) */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5">
+                  <Users className="size-3.5" /> 담당자 (복수 선택)
+                </Label>
+                <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1">
+                  {profiles.map(p => {
+                    const selected = form.assignees.includes(p.id)
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => toggleAssignee(p.id)}
+                        className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${
+                          selected ? 'bg-blue-50 text-blue-700' : 'hover:bg-muted/50'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
+                          selected ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300'
+                        }`}>
+                          {selected && '✓'}
+                        </span>
+                        <span>{p.name}</span>
+                        {p.department && (
+                          <span className="text-[10px] text-muted-foreground ml-auto">
+                            {TEAM_CONFIG[p.department]?.label || p.department}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+                {form.assignees.length > 0 && (
+                  <p className="text-xs text-muted-foreground">{form.assignees.length}명 선택됨</p>
+                )}
+              </div>
+
               <Button
                 className="w-full"
-                onClick={handleCreateTodo}
+                onClick={handleCreateProject}
                 disabled={!form.title.trim() || createTodo.isPending}
               >
                 {createTodo.isPending ? '추가 중...' : '추가'}
@@ -233,7 +390,7 @@ export function TodosPage() {
         </Card>
       </div>
 
-      {/* Todo List */}
+      {/* Project List */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -244,15 +401,22 @@ export function TodosPage() {
                 <TabsTrigger value="done">완료</TabsTrigger>
               </TabsList>
             </Tabs>
-            <Select>
-              <SelectTrigger className="w-[120px] h-8 text-xs">
-                <SelectValue placeholder="담당자" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">전체</SelectItem>
-                <SelectItem value="me">나</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select value={teamFilter} onValueChange={v => setTeamFilter(v || 'all')}>
+                <SelectTrigger className="w-[120px] h-8 text-xs">
+                  <Building2 className="size-3 mr-1" />
+                  <SelectValue placeholder="팀" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체 팀</SelectItem>
+                  <SelectItem value="management">경영</SelectItem>
+                  <SelectItem value="sales">세일즈</SelectItem>
+                  <SelectItem value="marketing">마케팅</SelectItem>
+                  <SelectItem value="finance">재무</SelectItem>
+                  <SelectItem value="service">서비스</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-1">
@@ -262,11 +426,11 @@ export function TodosPage() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm">
-              할일이 없습니다.
+              프로젝트가 없습니다.
             </div>
           ) : (
             filtered.map(todo => (
-              <TodoCard key={todo.id} todo={todo} onToggle={handleToggle} />
+              <ProjectCard key={todo.id} todo={todo} profiles={profiles} onToggle={handleToggle} />
             ))
           )}
         </CardContent>
