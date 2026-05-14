@@ -23,6 +23,7 @@ import { EventsPage } from '@/pages/marketing/EventsPage'
 import { PlanningOverviewPage } from '@/pages/planning/PlanningOverviewPage'
 import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
+import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +75,7 @@ export default function App() {
                 <Route path="/planning/overview" element={<PlanningOverviewPage />} />
                 <Route path="/planning/projection" element={<RevenueProjectionPage />} />
                 <Route path="/planning/access" element={<AccessManagementPage />} />
+                <Route path="/planning/employees" element={<EmployeePerformancePage />} />
 
                 <Route path="/game" element={<GamePage />} />
               </Route>
