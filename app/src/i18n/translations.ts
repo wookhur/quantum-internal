@@ -266,6 +266,8 @@ const koTranslations = {
   'coldCall.detailPage': '상세 페이지',
   'coldCall.priorityScore': '우선순위 {n}점',
   'coldCall.parent': '학부모',
+  'coldCall.countSummary': '{filtered} / {total}건',
+  'coldCall.highPriorityCount': '긴급 {n}건',
 
   // ── Pipeline ──
   'pipeline.title': '파이프라인',
@@ -1065,6 +1067,8 @@ const enTranslations: Record<string, string> = {
   'coldCall.detailPage': 'Detail Page',
   'coldCall.priorityScore': 'Priority {n}',
   'coldCall.parent': 'Parent',
+  'coldCall.countSummary': '{filtered} / {total}',
+  'coldCall.highPriorityCount': '{n} urgent',
 
   // ── Pipeline ──
   'pipeline.title': 'Pipeline',

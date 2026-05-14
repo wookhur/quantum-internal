@@ -119,12 +119,14 @@ export function MarketingMetricsPage() {
 
   // Build chart data: monthly trend per channel (only channels with data)
   const chartData = useMemo(() => {
-    // Find the latest month with any data
+    // Find the latest month with any data, but cap at current month for current year
     let maxMonth = 0
     for (const m of metrics) {
       if (m.value > 0 && m.month > maxMonth) maxMonth = m.month
     }
-    const displayMonths = Math.max(maxMonth + 1, 6) // show at least 6 months
+    // Don't show future months (avoids trailing zeros that make graph dip)
+    const capMonth = year === currentYear ? currentMonth : 12
+    const displayMonths = Math.min(Math.max(maxMonth, 6), capMonth)
 
     return Array.from({ length: Math.min(displayMonths, 12) }, (_, i) => {
       const m = i + 1
@@ -435,7 +437,8 @@ export function MarketingMetricsPage() {
           {/* Per-channel detail charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {activeChannels.map(ch => {
-              const data = ch.monthlyValues.slice(0, Math.max(ch.latestMonth + 1, 6))
+              const capMonth = year === currentYear ? currentMonth : 12
+              const data = ch.monthlyValues.slice(0, Math.min(Math.max(ch.latestMonth + 1, 6), capMonth))
               return (
                 <Card key={ch.key}>
                   <CardHeader className="pb-2">

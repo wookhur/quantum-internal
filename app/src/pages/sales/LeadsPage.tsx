@@ -459,8 +459,8 @@ export function LeadsPage() {
                   <th className="hidden md:table-cell">{t('leads.col.school')}</th>
                   <th className="hidden lg:table-cell" style={{ width: 60 }}>{t('leads.col.grade')}</th>
                   <th className="hidden lg:table-cell">{t('leads.col.region')}</th>
-                  <th>{t('leads.col.interestArea')}</th>
-                  <th>{t('leads.col.sourceChannel')}</th>
+                  <th>{t('leads.col.interest')}</th>
+                  <th>{t('leads.col.channel')}</th>
                   <th>{t('leads.col.assignee')}</th>
                   <th className="hidden xl:table-cell" style={{ maxWidth: 200 }}>{t('leads.col.memo')}</th>
                   <th style={{ width: 70 }}>{t('leads.col.action')}</th>
