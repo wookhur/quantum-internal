@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, Circle, Clock, CheckCircle2, AlertCircle, Loader2,
   Users, User as UserIcon, Building2, Pencil, MessageSquare,
-  MoreHorizontal, Trash2, Send,
+  MoreHorizontal, Trash2, Send, ChevronRight,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -375,48 +375,51 @@ function ProjectCard({
   todo,
   profiles,
   onToggle,
-  onEdit,
-  onOpenComments,
+  onClick,
 }: {
   todo: Todo
   profiles: User[]
   onToggle: (id: string, status: TodoStatus) => void
-  onEdit: (todo: Todo) => void
-  onOpenComments: (todo: Todo) => void
+  onClick: (todo: Todo) => void
 }) {
   const isDone = todo.status === 'done'
 
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-lg border transition-colors hover:bg-muted/30 group ${isDone ? 'opacity-50' : ''}`}>
+    <div
+      className={`flex items-start gap-3 p-3 rounded-lg border transition-colors hover:bg-muted/30 cursor-pointer group ${isDone ? 'opacity-50' : ''}`}
+      onClick={() => onClick(todo)}
+    >
       {/* Status dropdown button */}
-      <DropdownMenu>
-        <DropdownMenuTrigger className="mt-0.5 shrink-0 focus:outline-none" title="상태 변경">
-          {isDone ? (
-            <CheckCircle2 className="size-5 text-emerald-500" />
-          ) : todo.status === 'in_progress' ? (
-            <Clock className="size-5 text-blue-500" />
-          ) : (
-            <Circle className="size-5 text-muted-foreground/40 hover:text-primary transition-colors" />
-          )}
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-32">
-          {(Object.entries(STATUS_CONFIG) as [TodoStatus, typeof STATUS_CONFIG.todo][]).map(([key, cfg]) => {
-            const Icon = cfg.icon
-            const isActive = todo.status === key
-            return (
-              <DropdownMenuItem
-                key={key}
-                onClick={() => onToggle(todo.id, key)}
-                className={isActive ? 'bg-muted font-medium' : ''}
-              >
-                <Icon className={`size-4 mr-2 ${cfg.color}`} />
-                {cfg.label}
-                {isActive && <span className="ml-auto text-[10px] text-muted-foreground">현재</span>}
-              </DropdownMenuItem>
-            )
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="mt-0.5 shrink-0 focus:outline-none" title="상태 변경">
+            {isDone ? (
+              <CheckCircle2 className="size-5 text-emerald-500" />
+            ) : todo.status === 'in_progress' ? (
+              <Clock className="size-5 text-blue-500" />
+            ) : (
+              <Circle className="size-5 text-muted-foreground/40 hover:text-primary transition-colors" />
+            )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-32">
+            {(Object.entries(STATUS_CONFIG) as [TodoStatus, typeof STATUS_CONFIG.todo][]).map(([key, cfg]) => {
+              const Icon = cfg.icon
+              const isActive = todo.status === key
+              return (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => onToggle(todo.id, key)}
+                  className={isActive ? 'bg-muted font-medium' : ''}
+                >
+                  <Icon className={`size-4 mr-2 ${cfg.color}`} />
+                  {cfg.label}
+                  {isActive && <span className="ml-auto text-[10px] text-muted-foreground">현재</span>}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
@@ -453,23 +456,8 @@ function ProjectCard({
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button
-          onClick={() => onOpenComments(todo)}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-          title="댓글"
-        >
-          <MessageSquare className="size-4" />
-        </button>
-        <button
-          onClick={() => onEdit(todo)}
-          className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-          title="수정"
-        >
-          <Pencil className="size-4" />
-        </button>
-      </div>
+      {/* Arrow indicator */}
+      <ChevronRight className="size-4 text-muted-foreground shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
     </div>
   )
 }
@@ -480,7 +468,6 @@ export function TodosPage() {
   const [teamFilter, setTeamFilter] = useState<string>('all')
   const [createOpen, setCreateOpen] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
-  const [commentsTodo, setCommentsTodo] = useState<Todo | null>(null)
   const [form, setForm] = useState<ProjectFormData>({ ...EMPTY_FORM })
 
   const { data: todos = [], isLoading } = useTodos()
@@ -547,11 +534,6 @@ export function TodosPage() {
       },
       { onSuccess: () => { setEditingTodo(null); setForm({ ...EMPTY_FORM }) } },
     )
-  }
-
-  // ── Open comments ──
-  const openComments = (todo: Todo) => {
-    setCommentsTodo(todo)
   }
 
   const filtered = useMemo(() => {
@@ -652,15 +634,6 @@ export function TodosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Comments-only Dialog ── */}
-      <Dialog open={!!commentsTodo} onOpenChange={open => { if (!open) setCommentsTodo(null) }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base">{commentsTodo?.title}</DialogTitle>
-          </DialogHeader>
-          {commentsTodo && <CommentsSection todoId={commentsTodo.id} />}
-        </DialogContent>
-      </Dialog>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-3">
@@ -747,8 +720,7 @@ export function TodosPage() {
                 todo={todo}
                 profiles={profiles}
                 onToggle={handleToggle}
-                onEdit={openEdit}
-                onOpenComments={openComments}
+                onClick={openEdit}
               />
             ))
           )}
