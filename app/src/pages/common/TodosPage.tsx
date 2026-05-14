@@ -475,6 +475,7 @@ export function TodosPage() {
   const t = useT()
   const [tab, setTab] = useState('all')
   const [teamFilter, setTeamFilter] = useState<string>('all')
+  const [onlyMine, setOnlyMine] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [form, setForm] = useState<ProjectFormData>({ ...EMPTY_FORM })
@@ -550,8 +551,14 @@ export function TodosPage() {
     if (tab === 'in_progress') list = list.filter(t => t.status === 'in_progress' || t.status === 'todo')
     if (tab === 'done') list = list.filter(t => t.status === 'done')
     if (teamFilter !== 'all') list = list.filter(t => t.team === teamFilter)
+    if (onlyMine && user) list = list.filter(t =>
+      t.ownerId === user.id ||
+      t.assignedTo === user.id ||
+      (t.assignees && t.assignees.includes(user.id)) ||
+      t.createdBy === user.id
+    )
     return list
-  }, [todos, tab, teamFilter])
+  }, [todos, tab, teamFilter, onlyMine, user])
 
   const todoCount = todos.filter(t => t.status === 'todo').length
   const inProgressCount = todos.filter(t => t.status === 'in_progress').length
@@ -696,6 +703,17 @@ export function TodosPage() {
               </TabsList>
             </Tabs>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setOnlyMine(v => !v)}
+                className={`flex items-center gap-1.5 h-8 px-3 rounded-md border text-xs font-medium transition-colors ${
+                  onlyMine
+                    ? 'bg-blue-50 border-blue-200 text-blue-700'
+                    : 'border-input text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                <UserIcon className="size-3" />
+                {t('todos.onlyMine')}
+              </button>
               <Select value={teamFilter} onValueChange={v => setTeamFilter(v || 'all')}>
                 <SelectTrigger className="w-[120px] h-8 text-xs">
                   <Building2 className="size-3 mr-1" />

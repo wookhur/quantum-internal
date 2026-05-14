@@ -722,6 +722,7 @@ const koTranslations = {
   'todos.commentPlaceholder': '댓글을 입력하세요...',
   'todos.dueTodayLabel': '오늘',
   'todos.dueTomorrowLabel': '내일',
+  'todos.onlyMine': '내 프로젝트',
   'todos.allTeams': '전체 팀',
 
   // ── Calendar ──
@@ -1520,6 +1521,7 @@ const enTranslations: Record<string, string> = {
   'todos.commentPlaceholder': 'Write a comment...',
   'todos.dueTodayLabel': 'Today',
   'todos.dueTomorrowLabel': 'Tomorrow',
+  'todos.onlyMine': 'My Projects',
   'todos.allTeams': 'All Teams',
 
   // ── Calendar ──
