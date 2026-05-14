@@ -322,17 +322,19 @@ export function ContractsPage() {
                       <TableRow
                         key={contract.id}
                         className={`cursor-pointer hover:bg-muted/50 ${isCancelled ? 'opacity-50' : ''}`}
-                        onClick={() => {
-                          if (hasInstallments) {
-                            setExpandedContract(isExpanded ? null : contract.id)
-                          } else {
-                            navigate(`/consulting/clients/${contract.id}`)
-                          }
-                        }}
+                        onClick={() => navigate(`/consulting/clients/${contract.id}`)}
                       >
                         <TableCell className="px-2">
                           {hasInstallments ? (
-                            isExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />
+                            <button
+                              className="p-0.5 rounded hover:bg-muted"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setExpandedContract(isExpanded ? null : contract.id)
+                              }}
+                            >
+                              {isExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
+                            </button>
                           ) : null}
                         </TableCell>
                         <TableCell className="font-medium">
@@ -366,16 +368,7 @@ export function ContractsPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <button
-                            className="p-1 rounded hover:bg-muted"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              navigate(`/consulting/clients/${contract.id}`)
-                            }}
-                            title="상세보기"
-                          >
-                            <ChevronRight className="size-4 text-muted-foreground" />
-                          </button>
+                          <ChevronRight className="size-4 text-muted-foreground" />
                         </TableCell>
                       </TableRow>
 
