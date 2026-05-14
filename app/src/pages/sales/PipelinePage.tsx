@@ -7,6 +7,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
@@ -25,7 +26,7 @@ import {
   type PipelineStage,
 } from '@/types'
 import { Badge } from '@/components/ui/badge'
-import { ChevronDown, ChevronRight, RotateCcw, User } from 'lucide-react'
+import { ChevronDown, ChevronRight, RotateCcw, User, Pause, PhoneOff, XCircle, UserX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 // ---------------------------------------------------------------------------
@@ -293,6 +294,78 @@ function SkeletonColumns() {
 }
 
 // ---------------------------------------------------------------------------
+// Inactive Drop Zone (visible only while dragging)
+// ---------------------------------------------------------------------------
+
+const INACTIVE_DROP_CONFIG: {
+  key: PipelineStage
+  label: string
+  icon: typeof Pause
+  color: string
+  bgColor: string
+  hoverBg: string
+  description: string
+}[] = [
+  { key: 'on_hold', label: '보류', icon: Pause, color: 'text-amber-600', bgColor: 'bg-amber-50', hoverBg: 'bg-amber-100', description: '나중에 다시 연락' },
+  { key: 'no_response', label: '응답없음', icon: PhoneOff, color: 'text-gray-500', bgColor: 'bg-gray-50', hoverBg: 'bg-gray-100', description: '연락이 안 됨' },
+  { key: 'rejected', label: '거절', icon: XCircle, color: 'text-red-500', bgColor: 'bg-red-50', hoverBg: 'bg-red-100', description: '서비스 거절' },
+  { key: 'lost', label: '이탈', icon: UserX, color: 'text-gray-400', bgColor: 'bg-gray-50', hoverBg: 'bg-gray-100', description: '더 이상 진행 불가' },
+]
+
+function InactiveDropZoneItem({ stageKey, label, icon: Icon, color, bgColor, hoverBg, description }: {
+  stageKey: PipelineStage
+  label: string
+  icon: typeof Pause
+  color: string
+  bgColor: string
+  hoverBg: string
+  description: string
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: stageKey })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`
+        flex-1 flex items-center justify-center gap-2.5 rounded-xl border-2 border-dashed
+        py-4 px-3 transition-all duration-200 min-w-[140px]
+        ${isOver
+          ? `${hoverBg} border-current ${color} scale-[1.03] shadow-md`
+          : `${bgColor} border-gray-200 ${color}`
+        }
+      `}
+    >
+      <Icon className={`size-5 ${color} ${isOver ? 'animate-pulse' : ''}`} />
+      <div className="text-left">
+        <p className={`text-sm font-semibold ${color}`}>{label}</p>
+        <p className="text-[11px] text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  )
+}
+
+function InactiveDropZones({ isDragging }: { isDragging: boolean }) {
+  if (!isDragging) return null
+
+  return (
+    <div className="animate-in slide-in-from-bottom-4 fade-in duration-300 flex gap-3">
+      {INACTIVE_DROP_CONFIG.map((config) => (
+        <InactiveDropZoneItem
+          key={config.key}
+          stageKey={config.key}
+          label={config.label}
+          icon={config.icon}
+          color={config.color}
+          bgColor={config.bgColor}
+          hoverBg={config.hoverBg}
+          description={config.description}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Inactive Leads Section
 // ---------------------------------------------------------------------------
 
@@ -480,6 +553,11 @@ export function PipelinePage() {
         targetStage = over.id as PipelineStage
       }
 
+      // Check if we dropped over an inactive drop zone
+      if (!targetStage && INACTIVE_STAGES.some((s) => s.key === over.id)) {
+        targetStage = over.id as PipelineStage
+      }
+
       if (!targetStage || targetStage === draggedLead.pipelineStage) return
 
       updateLead.mutate({
@@ -572,6 +650,9 @@ export function PipelinePage() {
             />
           ))}
         </div>
+
+        {/* ---- Inactive Drop Zones (appear while dragging) ---- */}
+        <InactiveDropZones isDragging={!!activeId} />
 
         {/* Drag overlay - renders the card being dragged */}
         <DragOverlay dropAnimation={null}>

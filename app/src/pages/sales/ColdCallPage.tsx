@@ -36,6 +36,10 @@ import {
   Video,
   Save,
   Globe,
+  XCircle,
+  UserX,
+  Pause,
+  CalendarCheck,
 } from 'lucide-react'
 import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead } from '@/hooks/useLeads'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
@@ -482,6 +486,7 @@ function ColdCallDetail({
   const [callResult, setCallResult] = useState<'connected' | 'no_answer' | 'callback' | ''>('')
   const [memoEdit, setMemoEdit] = useState(lead.memo || '')
   const [showMemoEdit, setShowMemoEdit] = useState(false)
+  const [excludeConfirm, setExcludeConfirm] = useState<PipelineStage | null>(null)
 
   const priority = getPriorityLabel(lead._priority)
   const stage = getStageConfig(lead.pipelineStage)
@@ -525,6 +530,38 @@ function ColdCallDetail({
       },
     )
   }, [callNote, callResult, lead, createActivity, updateLead])
+
+  const handleExclude = useCallback(
+    (targetStage: PipelineStage) => {
+      updateLead.mutate(
+        {
+          id: lead.id,
+          data: { pipelineStage: targetStage },
+          previousStage: lead.pipelineStage,
+        },
+        {
+          onSuccess: () => {
+            setExcludeConfirm(null)
+            onClose()
+          },
+        },
+      )
+    },
+    [lead, updateLead, onClose],
+  )
+
+  const handleAdvanceStage = useCallback(
+    (targetStage: PipelineStage) => {
+      updateLead.mutate({
+        id: lead.id,
+        data: { pipelineStage: targetStage },
+        previousStage: lead.pipelineStage,
+      }, {
+        onSuccess: () => onClose(),
+      })
+    },
+    [lead, updateLead, onClose],
+  )
 
   const handleSaveMemo = useCallback(() => {
     updateLead.mutate(
@@ -774,6 +811,111 @@ function ColdCallDetail({
               )}
               콜 기록 저장
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Stage Actions: Advance or Exclude */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          {/* Advance to next stage */}
+          <div>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              진행 단계 변경
+            </h3>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 flex-1 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+                onClick={() => handleAdvanceStage('consultation_scheduled')}
+              >
+                <CalendarCheck className="size-3.5" />
+                상담 예약
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 flex-1 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                onClick={() => handleAdvanceStage('first_consultation')}
+              >
+                <Video className="size-3.5" />
+                1차 상담
+              </Button>
+            </div>
+          </div>
+
+          <div className="border-t" />
+
+          {/* Exclude from cold call */}
+          <div>
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              콜드콜 목록에서 제외
+            </h3>
+
+            {excludeConfirm ? (
+              <div className="rounded-lg border-2 border-red-200 bg-red-50 p-3 space-y-2">
+                <p className="text-sm font-medium text-red-800">
+                  이 리드를 &lsquo;{
+                    excludeConfirm === 'rejected' ? '거절' :
+                    excludeConfirm === 'lost' ? '이탈' : '보류'
+                  }&rsquo;(으)로 이동하시겠습니까?
+                </p>
+                <p className="text-xs text-red-600">
+                  콜드콜 목록에서 빠지며, 파이프라인 비활성 섹션에서 확인할 수 있습니다.
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => handleExclude(excludeConfirm)}
+                    disabled={updateLead.isPending}
+                  >
+                    {updateLead.isPending ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
+                    확인
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    onClick={() => setExcludeConfirm(null)}
+                  >
+                    취소
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1.5 flex-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  onClick={() => setExcludeConfirm('rejected')}
+                >
+                  <XCircle className="size-3.5" />
+                  거절
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1.5 flex-1 border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-700"
+                  onClick={() => setExcludeConfirm('lost')}
+                >
+                  <UserX className="size-3.5" />
+                  이탈
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs gap-1.5 flex-1 border-amber-200 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                  onClick={() => setExcludeConfirm('on_hold')}
+                >
+                  <Pause className="size-3.5" />
+                  보류
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
