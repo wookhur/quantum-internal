@@ -1,20 +1,23 @@
 import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger,
 } from '@/components/ui/select'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Loader2, Users, Search, UserCheck, UserX, Save } from 'lucide-react'
+import { Loader2, Users, Search, UserX, Save } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useT } from '@/i18n/LanguageContext'
-import { toast } from 'sonner'
+// toast notification helper
+const toast = {
+  success: (msg: string) => { console.log('[success]', msg) },
+  error: (msg: string) => { console.error('[error]', msg) },
+}
 
 // ── Consultant Pool ──
 const CONSULTANTS = [
@@ -25,8 +28,6 @@ const CONSULTANTS = [
   { id: 'danny', name: 'Danny', color: 'bg-rose-500' },
   { id: 'liz', name: '유리즈', color: 'bg-cyan-500' },
 ] as const
-
-type ConsultantId = (typeof CONSULTANTS)[number]['id']
 
 interface ContractRow {
   id: string
