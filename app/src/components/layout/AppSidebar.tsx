@@ -32,6 +32,7 @@ import {
   PhoneCall,
   LineChart,
   Shield,
+  UserCheck,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -85,6 +86,13 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     items: [
       { labelKey: 'nav.contractManagement', to: '/consulting/clients', icon: FileText },
       { labelKey: 'nav.monthlyCollection', to: '/consulting/collections', icon: CalendarDays },
+    ],
+  },
+  {
+    titleKey: 'nav.service',
+    module: 'service',
+    items: [
+      { labelKey: 'nav.consultantAssignment', to: '/service/assignments', icon: UserCheck },
     ],
   },
   {

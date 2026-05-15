@@ -74,6 +74,7 @@ export type FeatureModule =
   | 'sales'
   | 'marketing'
   | 'finance'
+  | 'service'
   | 'planning'
   | 'game'
 
@@ -84,15 +85,16 @@ export const FEATURE_MODULES: { key: FeatureModule; label: string; description: 
   { key: 'sales', label: '세일즈', description: '콜드콜, 리드, 파이프라인, 미팅, 영업 현황' },
   { key: 'marketing', label: '마케팅', description: '마케팅 지표, 광고, 이벤트, 영상' },
   { key: 'finance', label: '재무', description: '계약 관리, 결제 관리' },
+  { key: 'service', label: '서비스', description: '컨설턴트 배치, 서비스 관리' },
   { key: 'planning', label: '경영기획', description: '경영 현황, 매출 Projection, 접근 관리' },
   { key: 'game', label: '쉬는 시간', description: 'T-Rex 러너 게임' },
 ]
 
 /** Default feature access per role */
 export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
-  admin: ['dashboard', 'calendar', 'todos', 'sales', 'marketing', 'finance', 'planning', 'game'],
-  manager: ['dashboard', 'calendar', 'todos', 'sales', 'marketing', 'finance', 'planning', 'game'],
-  staff: ['dashboard', 'calendar', 'todos', 'sales', 'marketing', 'game'],
+  admin: ['dashboard', 'calendar', 'todos', 'sales', 'marketing', 'finance', 'service', 'planning', 'game'],
+  manager: ['dashboard', 'calendar', 'todos', 'sales', 'marketing', 'finance', 'service', 'planning', 'game'],
+  staff: ['dashboard', 'calendar', 'todos', 'sales', 'marketing', 'service', 'game'],
   freelancer: ['dashboard', 'calendar', 'todos', 'game'],
   viewer: ['dashboard', 'game'],
 }
