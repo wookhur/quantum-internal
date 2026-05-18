@@ -129,6 +129,11 @@ const koTranslations = {
   'priority.medium': '보통',
   'priority.low': '낮음',
   'priority.highest': '최우선',
+  // Cold call priority ranks (sales only)
+  'coldCall.rank1': '1순위',
+  'coldCall.rank2': '2순위',
+  'coldCall.rank3': '3순위',
+  'coldCall.rank4': '4순위',
 
   // ── Pipeline stages ──
   'stage.new_lead': '신규 리드',
@@ -952,6 +957,11 @@ const enTranslations: Record<string, string> = {
   'priority.medium': 'Medium',
   'priority.low': 'Low',
   'priority.highest': 'Top Priority',
+  // Cold call priority ranks (sales only)
+  'coldCall.rank1': 'Priority 1',
+  'coldCall.rank2': 'Priority 2',
+  'coldCall.rank3': 'Priority 3',
+  'coldCall.rank4': 'Priority 4',
 
   // ── Pipeline stages ──
   'stage.new_lead': 'New Lead',

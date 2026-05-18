@@ -199,10 +199,10 @@ function getLeadPriority(lead: Lead): number {
 }
 
 function getPriorityLabel(score: number, t: (key: string, params?: Record<string, string | number>) => string): { label: string; color: string; icon: typeof Flame } {
-  if (score >= 80) return { label: t('priority.highest'), color: 'bg-red-500 text-white', icon: Flame }
-  if (score >= 60) return { label: t('priority.high'), color: 'bg-orange-500 text-white', icon: Star }
-  if (score >= 40) return { label: t('priority.medium'), color: 'bg-yellow-500 text-white', icon: Sparkles }
-  return { label: t('priority.low'), color: 'bg-gray-400 text-white', icon: Clock }
+  if (score >= 80) return { label: t('coldCall.rank1'), color: 'bg-red-500 text-white', icon: Flame }
+  if (score >= 60) return { label: t('coldCall.rank2'), color: 'bg-orange-500 text-white', icon: Star }
+  if (score >= 40) return { label: t('coldCall.rank3'), color: 'bg-yellow-500 text-white', icon: Sparkles }
+  return { label: t('coldCall.rank4'), color: 'bg-gray-400 text-white', icon: Clock }
 }
 
 // ============ Grade groups for filtering ============
