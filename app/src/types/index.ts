@@ -381,6 +381,56 @@ export interface NavItem {
   children?: NavItem[]
 }
 
+// ============ STUDENT 360 (SERVICE) ============
+export type ServiceStudentStatus = 'active' | 'paused' | 'completed'
+export type ServiceReportStatus = 'none' | 'pending' | 'submitted'
+
+export interface ServiceStudent {
+  id: string
+  name: string
+  englishName?: string
+  school?: string
+  grade?: string
+  parentName?: string
+  contact?: string
+  assignedConsultant?: string
+  assignedConsultantUser?: User
+  status: ServiceStudentStatus
+  notes?: string
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ServiceMeeting {
+  id: string
+  studentId: string
+  meetingDate?: string
+  meetingType?: string
+  consultantId?: string
+  consultantUser?: User
+  summary?: string
+  reportStatus: ServiceReportStatus
+  reportUrl?: string
+  reportDate?: string
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ServiceDiaryEntry {
+  id: string
+  studentId: string
+  entryDate?: string
+  category?: string
+  content?: string
+  authorId?: string
+  authorUser?: User
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
 // ============ FORMATTING HELPERS ============
 export function formatCurrency(amount: number, currency: 'KRW' | 'USD' = 'KRW'): string {
   if (currency === 'USD') {

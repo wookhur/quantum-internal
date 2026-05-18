@@ -28,6 +28,7 @@ import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
 import { ConsultantAssignmentPage } from '@/pages/service/ConsultantAssignmentPage'
+import { Student360Page } from '@/pages/service/Student360Page'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,6 +70,7 @@ export default function App() {
                 <Route path="/consulting/collections" element={<MonthlyCollectionPage />} />
 
                 <Route path="/service/assignments" element={<ConsultantAssignmentPage />} />
+                <Route path="/service/student-360" element={<Student360Page />} />
 
                 <Route path="/planning/overview" element={<PlanningOverviewPage />} />
                 <Route path="/planning/projection" element={<RevenueProjectionPage />} />
