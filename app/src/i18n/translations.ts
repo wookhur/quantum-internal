@@ -229,7 +229,11 @@ const koTranslations = {
 
   // ── Cold Call ──
   'coldCall.title': '콜드콜',
-  'coldCall.topPriority': '최우선',
+  'coldCall.topPriority': '1순위',
+  'coldCall.priority1': '1순위',
+  'coldCall.priority2': '2순위',
+  'coldCall.priority3': '3순위',
+  'coldCall.priority4': '4순위',
   'coldCall.sortPriority': '우선순위',
   'coldCall.sortRecent': '최신순',
   'coldCall.sortGrade': '학년순',
@@ -269,7 +273,7 @@ const koTranslations = {
   'coldCall.priorityScore': '우선순위 {n}점',
   'coldCall.parent': '학부모',
   'coldCall.countSummary': '{filtered} / {total}건',
-  'coldCall.highPriorityCount': '긴급 {n}건',
+  'coldCall.highPriorityCount': '1순위 {n}건',
 
   // ── Service ──
   'service.assignmentTitle': '학생별 컨설턴트 배치',
@@ -1051,7 +1055,11 @@ const enTranslations: Record<string, string> = {
 
   // ── Cold Call ──
   'coldCall.title': 'Cold Call',
-  'coldCall.topPriority': 'Top Priority',
+  'coldCall.topPriority': 'Priority 1',
+  'coldCall.priority1': 'Priority 1',
+  'coldCall.priority2': 'Priority 2',
+  'coldCall.priority3': 'Priority 3',
+  'coldCall.priority4': 'Priority 4',
   'coldCall.sortPriority': 'Priority',
   'coldCall.sortRecent': 'Most Recent',
   'coldCall.sortGrade': 'By Grade',
@@ -1091,7 +1099,7 @@ const enTranslations: Record<string, string> = {
   'coldCall.priorityScore': 'Priority {n}',
   'coldCall.parent': 'Parent',
   'coldCall.countSummary': '{filtered} / {total}',
-  'coldCall.highPriorityCount': '{n} urgent',
+  'coldCall.highPriorityCount': '{n} priority 1',
 
   // ── Service ──
   'service.assignmentTitle': 'Consultant Assignment',
