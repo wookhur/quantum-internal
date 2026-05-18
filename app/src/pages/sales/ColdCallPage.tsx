@@ -202,7 +202,7 @@ function getPriorityLabel(score: number, t: (key: string, params?: Record<string
   if (score >= 80) return { label: t('coldCall.priority1'), color: 'bg-red-500 text-white', icon: Flame }
   if (score >= 60) return { label: t('coldCall.priority2'), color: 'bg-orange-500 text-white', icon: Star }
   if (score >= 40) return { label: t('coldCall.priority3'), color: 'bg-yellow-500 text-white', icon: Sparkles }
-  return { label: t('priority.low'), color: 'bg-gray-400 text-white', icon: Clock }
+  return { label: t('coldCall.priority4'), color: 'bg-gray-400 text-white', icon: Clock }
 }
 
 // ============ Grade groups for filtering ============
