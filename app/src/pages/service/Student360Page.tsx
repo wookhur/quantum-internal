@@ -228,7 +228,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     notes: student?.notes || '',
   })
 
-  const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
+  const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
   const submit = () => {
     if (!form.name.trim()) return
@@ -385,7 +385,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
     reportUrl: meeting?.reportUrl || '',
     reportDate: meeting?.reportDate || '',
   })
-  const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
+  const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
   const submit = () => {
     const payload = {
@@ -525,7 +525,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
     category: entry?.category || '',
     content: entry?.content || '',
   })
-  const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
+  const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
   const submit = () => {
     const payload = {
