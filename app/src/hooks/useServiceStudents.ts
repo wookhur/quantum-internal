@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type {
   ServiceStudent,
-  ServiceStudentStatus,
   ServiceMeeting,
   ServiceReportStatus,
   ServiceDiaryEntry,
@@ -13,14 +12,24 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
   return {
     id: row.id as string,
     name: row.name as string,
-    englishName: (row.english_name as string) || undefined,
-    school: (row.school as string) || undefined,
-    grade: (row.grade as string) || undefined,
+    koreanName: (row.korean_name as string) || undefined,
+    nationality: (row.nationality as string) || undefined,
     parentName: (row.parent_name as string) || undefined,
     contact: (row.contact as string) || undefined,
+    region: (row.region as string) || undefined,
+    grade: (row.grade as string) || undefined,
+    school: (row.school as string) || undefined,
     assignedConsultant: (row.assigned_consultant as string) || undefined,
-    status: row.status as ServiceStudentStatus,
+    essayEditor: (row.essay_editor as string) || undefined,
+    partners: (row.partners as string) || undefined,
+    majors: (row.majors as string) || undefined,
+    contractType: (row.contract_type as string) || undefined,
+    startDate: (row.start_date as string) || undefined,
+    endDate: (row.end_date as string) || undefined,
+    status: (row.status as string) || undefined,
     notes: (row.notes as string) || undefined,
+    acceptedUni: (row.accepted_uni as string) || undefined,
+    address: (row.address as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -49,8 +58,15 @@ function mapDiary(row: Record<string, unknown>): ServiceDiaryEntry {
     id: row.id as string,
     studentId: row.student_id as string,
     entryDate: (row.entry_date as string) || undefined,
-    category: (row.category as string) || undefined,
-    content: (row.content as string) || undefined,
+    agendaItems: (row.agenda_items as string) || undefined,
+    meetingSummary: (row.meeting_summary as string) || undefined,
+    extracurricularNotes: (row.extracurricular_notes as string) || undefined,
+    identityNarrativeNotes: (row.identity_narrative_notes as string) || undefined,
+    questionsConcerns: (row.questions_concerns as string) || undefined,
+    nextMeetingAgenda: (row.next_meeting_agenda as string) || undefined,
+    followUpCommitments: (row.follow_up_commitments as string) || undefined,
+    assignments: (row.assignments as string) || undefined,
+    criticalDates: (row.critical_dates as string) || undefined,
     authorId: (row.author_id as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
@@ -78,26 +94,46 @@ export function useCreateServiceStudent() {
   return useMutation({
     mutationFn: async (s: {
       name: string
-      englishName?: string
-      school?: string
-      grade?: string
+      koreanName?: string
+      nationality?: string
       parentName?: string
       contact?: string
+      region?: string
+      grade?: string
+      school?: string
       assignedConsultant?: string
-      status?: ServiceStudentStatus
+      essayEditor?: string
+      partners?: string
+      majors?: string
+      contractType?: string
+      startDate?: string
+      endDate?: string
+      status?: string
       notes?: string
+      acceptedUni?: string
+      address?: string
       createdBy?: string
     }) => {
       const { data, error } = await supabase.from('service_students').insert({
         name: s.name,
-        english_name: s.englishName,
-        school: s.school,
-        grade: s.grade,
+        korean_name: s.koreanName,
+        nationality: s.nationality,
         parent_name: s.parentName,
         contact: s.contact,
+        region: s.region,
+        grade: s.grade,
+        school: s.school,
         assigned_consultant: s.assignedConsultant || null,
+        essay_editor: s.essayEditor,
+        partners: s.partners,
+        majors: s.majors,
+        contract_type: s.contractType,
+        start_date: s.startDate || null,
+        end_date: s.endDate || null,
         status: s.status || 'active',
         notes: s.notes,
+        accepted_uni: s.acceptedUni,
+        address: s.address,
         created_by: s.createdBy || null,
       }).select().single()
       if (error) throw error
@@ -113,26 +149,46 @@ export function useUpdateServiceStudent() {
     mutationFn: async (payload: {
       id: string
       name?: string
-      englishName?: string
-      school?: string
-      grade?: string
+      koreanName?: string
+      nationality?: string
       parentName?: string
       contact?: string
+      region?: string
+      grade?: string
+      school?: string
       assignedConsultant?: string | null
-      status?: ServiceStudentStatus
+      essayEditor?: string
+      partners?: string
+      majors?: string
+      contractType?: string
+      startDate?: string | null
+      endDate?: string | null
+      status?: string
       notes?: string
+      acceptedUni?: string
+      address?: string
     }) => {
       const { id, ...rest } = payload
       const update: Record<string, unknown> = {}
       if (rest.name !== undefined) update.name = rest.name
-      if (rest.englishName !== undefined) update.english_name = rest.englishName
-      if (rest.school !== undefined) update.school = rest.school
-      if (rest.grade !== undefined) update.grade = rest.grade
+      if (rest.koreanName !== undefined) update.korean_name = rest.koreanName
+      if (rest.nationality !== undefined) update.nationality = rest.nationality
       if (rest.parentName !== undefined) update.parent_name = rest.parentName
       if (rest.contact !== undefined) update.contact = rest.contact
+      if (rest.region !== undefined) update.region = rest.region
+      if (rest.grade !== undefined) update.grade = rest.grade
+      if (rest.school !== undefined) update.school = rest.school
       if (rest.assignedConsultant !== undefined) update.assigned_consultant = rest.assignedConsultant
+      if (rest.essayEditor !== undefined) update.essay_editor = rest.essayEditor
+      if (rest.partners !== undefined) update.partners = rest.partners
+      if (rest.majors !== undefined) update.majors = rest.majors
+      if (rest.contractType !== undefined) update.contract_type = rest.contractType
+      if (rest.startDate !== undefined) update.start_date = rest.startDate
+      if (rest.endDate !== undefined) update.end_date = rest.endDate
       if (rest.status !== undefined) update.status = rest.status
       if (rest.notes !== undefined) update.notes = rest.notes
+      if (rest.acceptedUni !== undefined) update.accepted_uni = rest.acceptedUni
+      if (rest.address !== undefined) update.address = rest.address
       const { error } = await supabase.from('service_students').update(update).eq('id', id)
       if (error) throw error
     },
@@ -268,16 +324,30 @@ export function useCreateServiceDiary() {
     mutationFn: async (d: {
       studentId: string
       entryDate?: string
-      category?: string
-      content?: string
+      agendaItems?: string
+      meetingSummary?: string
+      extracurricularNotes?: string
+      identityNarrativeNotes?: string
+      questionsConcerns?: string
+      nextMeetingAgenda?: string
+      followUpCommitments?: string
+      assignments?: string
+      criticalDates?: string
       authorId?: string
       createdBy?: string
     }) => {
       const { data, error } = await supabase.from('service_diary').insert({
         student_id: d.studentId,
         entry_date: d.entryDate || null,
-        category: d.category,
-        content: d.content,
+        agenda_items: d.agendaItems,
+        meeting_summary: d.meetingSummary,
+        extracurricular_notes: d.extracurricularNotes,
+        identity_narrative_notes: d.identityNarrativeNotes,
+        questions_concerns: d.questionsConcerns,
+        next_meeting_agenda: d.nextMeetingAgenda,
+        follow_up_commitments: d.followUpCommitments,
+        assignments: d.assignments,
+        critical_dates: d.criticalDates,
         author_id: d.authorId || null,
         created_by: d.createdBy || null,
       }).select().single()
@@ -295,14 +365,28 @@ export function useUpdateServiceDiary() {
       id: string
       studentId: string
       entryDate?: string | null
-      category?: string
-      content?: string
+      agendaItems?: string
+      meetingSummary?: string
+      extracurricularNotes?: string
+      identityNarrativeNotes?: string
+      questionsConcerns?: string
+      nextMeetingAgenda?: string
+      followUpCommitments?: string
+      assignments?: string
+      criticalDates?: string
     }) => {
       const { id, studentId: _s, ...rest } = payload
       const update: Record<string, unknown> = {}
       if (rest.entryDate !== undefined) update.entry_date = rest.entryDate
-      if (rest.category !== undefined) update.category = rest.category
-      if (rest.content !== undefined) update.content = rest.content
+      if (rest.agendaItems !== undefined) update.agenda_items = rest.agendaItems
+      if (rest.meetingSummary !== undefined) update.meeting_summary = rest.meetingSummary
+      if (rest.extracurricularNotes !== undefined) update.extracurricular_notes = rest.extracurricularNotes
+      if (rest.identityNarrativeNotes !== undefined) update.identity_narrative_notes = rest.identityNarrativeNotes
+      if (rest.questionsConcerns !== undefined) update.questions_concerns = rest.questionsConcerns
+      if (rest.nextMeetingAgenda !== undefined) update.next_meeting_agenda = rest.nextMeetingAgenda
+      if (rest.followUpCommitments !== undefined) update.follow_up_commitments = rest.followUpCommitments
+      if (rest.assignments !== undefined) update.assignments = rest.assignments
+      if (rest.criticalDates !== undefined) update.critical_dates = rest.criticalDates
       const { error } = await supabase.from('service_diary').update(update).eq('id', id)
       if (error) throw error
     },

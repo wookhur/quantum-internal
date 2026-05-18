@@ -32,7 +32,6 @@ import {
   PhoneCall,
   LineChart,
   Shield,
-  UserCheck,
   UserSearch,
   type LucideIcon,
 } from 'lucide-react'
@@ -86,7 +85,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     module: 'service',
     items: [
       { labelKey: 'nav.student360', to: '/service/student-360', icon: UserSearch },
-      { labelKey: 'nav.consultantAssignment', to: '/service/assignments', icon: UserCheck },
     ],
   },
   {

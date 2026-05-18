@@ -382,21 +382,29 @@ export interface NavItem {
 }
 
 // ============ STUDENT 360 (SERVICE) ============
-export type ServiceStudentStatus = 'active' | 'paused' | 'completed'
 export type ServiceReportStatus = 'none' | 'pending' | 'submitted'
 
 export interface ServiceStudent {
   id: string
-  name: string
-  englishName?: string
-  school?: string
-  grade?: string
+  name: string                 // Student Name (English/roman)
+  koreanName?: string
+  nationality?: string
   parentName?: string
   contact?: string
+  region?: string
+  grade?: string
+  school?: string
   assignedConsultant?: string
-  assignedConsultantUser?: User
-  status: ServiceStudentStatus
+  essayEditor?: string
+  partners?: string
+  majors?: string
+  contractType?: string
+  startDate?: string
+  endDate?: string
+  status?: string
   notes?: string
+  acceptedUni?: string
+  address?: string
   createdBy?: string
   createdAt: string
   updatedAt: string
@@ -422,10 +430,16 @@ export interface ServiceDiaryEntry {
   id: string
   studentId: string
   entryDate?: string
-  category?: string
-  content?: string
+  agendaItems?: string
+  meetingSummary?: string
+  extracurricularNotes?: string
+  identityNarrativeNotes?: string
+  questionsConcerns?: string
+  nextMeetingAgenda?: string
+  followUpCommitments?: string
+  assignments?: string
+  criticalDates?: string
   authorId?: string
-  authorUser?: User
   createdBy?: string
   createdAt: string
   updatedAt: string

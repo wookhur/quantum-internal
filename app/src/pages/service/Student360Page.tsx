@@ -23,10 +23,10 @@ import {
   useServiceDiary, useCreateServiceDiary, useUpdateServiceDiary, useDeleteServiceDiary,
 } from '@/hooks/useServiceStudents'
 import type {
-  ServiceStudent, ServiceStudentStatus, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
+  ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
 } from '@/types'
 
-// Shared consultant pool (mirrors ConsultantAssignmentPage)
+// Shared consultant pool
 const CONSULTANTS = [
   { id: 'sangbum', name: '한상범' },
   { id: 'jihyun', name: '김지현' },
@@ -40,17 +40,24 @@ function consultantName(id?: string) {
   return CONSULTANTS.find(c => c.id === id)?.name || id || '—'
 }
 
-const STATUS_META: Record<ServiceStudentStatus, { labelKey: string; className: string }> = {
-  active: { labelKey: 'student360.statusActive', className: 'bg-emerald-100 text-emerald-700' },
-  paused: { labelKey: 'student360.statusPaused', className: 'bg-amber-100 text-amber-700' },
-  completed: { labelKey: 'student360.statusCompleted', className: 'bg-gray-100 text-gray-600' },
-}
-
 const REPORT_META: Record<ServiceReportStatus, { labelKey: string; className: string }> = {
   none: { labelKey: 'student360.reportNone', className: 'bg-gray-100 text-gray-600' },
   pending: { labelKey: 'student360.reportPending', className: 'bg-amber-100 text-amber-700' },
   submitted: { labelKey: 'student360.reportSubmitted', className: 'bg-emerald-100 text-emerald-700' },
 }
+
+// Meeting-diary columns (from the original Meeting Diary sheet)
+const DIARY_FIELDS = [
+  { key: 'agendaItems', labelKey: 'student360.agendaItems' },
+  { key: 'meetingSummary', labelKey: 'student360.meetingSummary' },
+  { key: 'extracurricularNotes', labelKey: 'student360.extracurricularNotes' },
+  { key: 'identityNarrativeNotes', labelKey: 'student360.identityNarrativeNotes' },
+  { key: 'questionsConcerns', labelKey: 'student360.questionsConcerns' },
+  { key: 'nextMeetingAgenda', labelKey: 'student360.nextMeetingAgenda' },
+  { key: 'followUpCommitments', labelKey: 'student360.followUpCommitments' },
+  { key: 'assignments', labelKey: 'student360.assignments' },
+  { key: 'criticalDates', labelKey: 'student360.criticalDates' },
+] as const satisfies ReadonlyArray<{ key: keyof ServiceDiaryEntry; labelKey: string }>
 
 export function Student360Page() {
   const t = useT()
@@ -65,7 +72,7 @@ export function Student360Page() {
     if (!q) return students
     return students.filter(s =>
       s.name.toLowerCase().includes(q) ||
-      (s.englishName || '').toLowerCase().includes(q) ||
+      (s.koreanName || '').toLowerCase().includes(q) ||
       (s.school || '').toLowerCase().includes(q) ||
       (s.parentName || '').toLowerCase().includes(q)
     )
@@ -109,11 +116,11 @@ export function Student360Page() {
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="font-medium text-sm truncate">
-                  {s.name}{s.englishName ? ` · ${s.englishName}` : ''}
+                  {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
                 </span>
-                <Badge className={`${STATUS_META[s.status].className} text-[10px] shrink-0`}>
-                  {t(STATUS_META[s.status].labelKey)}
-                </Badge>
+                {s.status && (
+                  <Badge variant="outline" className="text-[10px] shrink-0">{s.status}</Badge>
+                )}
               </div>
               <div className="text-xs text-muted-foreground mt-1 truncate">
                 {[s.school, s.grade].filter(Boolean).join(' · ') || '—'}
@@ -156,10 +163,8 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <CardTitle className="flex items-center gap-2">
           <UserIcon className="size-5 text-primary" />
           {student.name}
-          {student.englishName && <span className="text-muted-foreground font-normal">· {student.englishName}</span>}
-          <Badge className={`${STATUS_META[student.status].className}`}>
-            {t(STATUS_META[student.status].labelKey)}
-          </Badge>
+          {student.koreanName && <span className="text-muted-foreground font-normal">· {student.koreanName}</span>}
+          {student.status && <Badge variant="outline">{student.status}</Badge>}
         </CardTitle>
         <div className="flex gap-2">
           <StudentDialog
@@ -180,11 +185,21 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         </div>
       </CardHeader>
       <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-        <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
-        <Field label={t('student360.grade')} value={student.grade} />
+        <Field label={t('student360.nationality')} value={student.nationality} />
         <Field icon={<UserIcon className="size-4" />} label={t('student360.parentName')} value={student.parentName} />
         <Field icon={<Phone className="size-4" />} label={t('student360.contact')} value={student.contact} />
+        <Field label={t('student360.region')} value={student.region} />
+        <Field label={t('student360.grade')} value={student.grade} />
+        <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
         <Field label={t('student360.consultant')} value={consultantName(student.assignedConsultant)} />
+        <Field label={t('student360.essayEditor')} value={student.essayEditor} />
+        <Field label={t('student360.partners')} value={student.partners} />
+        <Field label={t('student360.majors')} value={student.majors} />
+        <Field label={t('student360.contractType')} value={student.contractType} />
+        <Field label={t('student360.startDate')} value={student.startDate} />
+        <Field label={t('student360.endDate')} value={student.endDate} />
+        <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
+        <Field label={t('student360.address')} value={student.address} />
         {student.notes && (
           <div className="col-span-2 md:col-span-3">
             <p className="text-xs text-muted-foreground mb-1">{t('student360.notes')}</p>
@@ -218,14 +233,24 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
   const update = useUpdateServiceStudent()
   const [form, setForm] = useState({
     name: student?.name || '',
-    englishName: student?.englishName || '',
-    school: student?.school || '',
-    grade: student?.grade || '',
+    koreanName: student?.koreanName || '',
+    nationality: student?.nationality || '',
     parentName: student?.parentName || '',
     contact: student?.contact || '',
+    region: student?.region || '',
+    grade: student?.grade || '',
+    school: student?.school || '',
     assignedConsultant: student?.assignedConsultant || '',
-    status: (student?.status || 'active') as string,
+    essayEditor: student?.essayEditor || '',
+    partners: student?.partners || '',
+    majors: student?.majors || '',
+    contractType: student?.contractType || '',
+    startDate: student?.startDate || '',
+    endDate: student?.endDate || '',
+    status: student?.status || '',
     notes: student?.notes || '',
+    acceptedUni: student?.acceptedUni || '',
+    address: student?.address || '',
   })
 
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
@@ -234,14 +259,24 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     if (!form.name.trim()) return
     const payload = {
       name: form.name.trim(),
-      englishName: form.englishName || undefined,
-      school: form.school || undefined,
-      grade: form.grade || undefined,
+      koreanName: form.koreanName || undefined,
+      nationality: form.nationality || undefined,
       parentName: form.parentName || undefined,
       contact: form.contact || undefined,
+      region: form.region || undefined,
+      grade: form.grade || undefined,
+      school: form.school || undefined,
       assignedConsultant: form.assignedConsultant || undefined,
-      status: form.status as ServiceStudentStatus,
+      essayEditor: form.essayEditor || undefined,
+      partners: form.partners || undefined,
+      majors: form.majors || undefined,
+      contractType: form.contractType || undefined,
+      startDate: form.startDate || undefined,
+      endDate: form.endDate || undefined,
+      status: form.status || undefined,
       notes: form.notes || undefined,
+      acceptedUni: form.acceptedUni || undefined,
+      address: form.address || undefined,
     }
     if (student) {
       update.mutate({ id: student.id, ...payload }, { onSuccess: () => setOpen(false) })
@@ -259,13 +294,15 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
         <DialogHeader>
           <DialogTitle>{student ? t('student360.editStudent') : t('student360.newStudent')}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
           <LabeledInput label={`${t('student360.name')} *`} value={form.name} onChange={v => set('name', v)} />
-          <LabeledInput label={t('student360.englishName')} value={form.englishName} onChange={v => set('englishName', v)} />
-          <LabeledInput label={t('student360.school')} value={form.school} onChange={v => set('school', v)} />
-          <LabeledInput label={t('student360.grade')} value={form.grade} onChange={v => set('grade', v)} />
+          <LabeledInput label={t('student360.koreanName')} value={form.koreanName} onChange={v => set('koreanName', v)} />
+          <LabeledInput label={t('student360.nationality')} value={form.nationality} onChange={v => set('nationality', v)} />
           <LabeledInput label={t('student360.parentName')} value={form.parentName} onChange={v => set('parentName', v)} />
           <LabeledInput label={t('student360.contact')} value={form.contact} onChange={v => set('contact', v)} />
+          <LabeledInput label={t('student360.region')} value={form.region} onChange={v => set('region', v)} />
+          <LabeledInput label={t('student360.grade')} value={form.grade} onChange={v => set('grade', v)} />
+          <LabeledInput label={t('student360.school')} value={form.school} onChange={v => set('school', v)} />
           <div>
             <Label className="text-xs">{t('student360.consultant')}</Label>
             <Select value={form.assignedConsultant} onValueChange={v => set('assignedConsultant', v)}>
@@ -275,16 +312,23 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
               </SelectContent>
             </Select>
           </div>
+          <LabeledInput label={t('student360.essayEditor')} value={form.essayEditor} onChange={v => set('essayEditor', v)} />
+          <LabeledInput label={t('student360.partners')} value={form.partners} onChange={v => set('partners', v)} />
+          <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
+          <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />
           <div>
-            <Label className="text-xs">{t('student360.status')}</Label>
-            <Select value={form.status} onValueChange={v => set('status', v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">{t('student360.statusActive')}</SelectItem>
-                <SelectItem value="paused">{t('student360.statusPaused')}</SelectItem>
-                <SelectItem value="completed">{t('student360.statusCompleted')}</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label className="text-xs">{t('student360.startDate')}</Label>
+            <Input type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-xs">{t('student360.endDate')}</Label>
+            <Input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
+          </div>
+          <LabeledInput label={t('student360.status')} value={form.status} onChange={v => set('status', v)} />
+          <LabeledInput label={t('student360.acceptedUni')} value={form.acceptedUni} onChange={v => set('acceptedUni', v)} />
+          <div className="col-span-2">
+            <Label className="text-xs">{t('student360.address')}</Label>
+            <Input value={form.address} onChange={e => set('address', e.target.value)} />
           </div>
           <div className="col-span-2">
             <Label className="text-xs">{t('student360.notes')}</Label>
@@ -485,7 +529,6 @@ function DiarySection({ studentId, authorName, createdBy }: {
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <span>{d.entryDate || '—'}</span>
-                {d.category && <Badge variant="outline">{d.category}</Badge>}
                 {d.authorId && <span className="text-muted-foreground font-normal">{d.authorId}</span>}
               </div>
               <div className="flex items-center gap-2">
@@ -501,7 +544,18 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 </Button>
               </div>
             </div>
-            {d.content && <p className="text-sm mt-2 whitespace-pre-wrap">{d.content}</p>}
+            <div className="mt-2 space-y-2">
+              {DIARY_FIELDS.map(f => {
+                const val = d[f.key]
+                if (!val) return null
+                return (
+                  <div key={f.key}>
+                    <p className="text-xs font-medium text-muted-foreground">{t(f.labelKey)}</p>
+                    <p className="text-sm whitespace-pre-wrap">{val}</p>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         ))}
       </CardContent>
@@ -522,16 +576,30 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
   const update = useUpdateServiceDiary()
   const [form, setForm] = useState({
     entryDate: entry?.entryDate || new Date().toISOString().slice(0, 10),
-    category: entry?.category || '',
-    content: entry?.content || '',
+    agendaItems: entry?.agendaItems || '',
+    meetingSummary: entry?.meetingSummary || '',
+    extracurricularNotes: entry?.extracurricularNotes || '',
+    identityNarrativeNotes: entry?.identityNarrativeNotes || '',
+    questionsConcerns: entry?.questionsConcerns || '',
+    nextMeetingAgenda: entry?.nextMeetingAgenda || '',
+    followUpCommitments: entry?.followUpCommitments || '',
+    assignments: entry?.assignments || '',
+    criticalDates: entry?.criticalDates || '',
   })
-  const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
+  const setField = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const submit = () => {
     const payload = {
       entryDate: form.entryDate || undefined,
-      category: form.category || undefined,
-      content: form.content || undefined,
+      agendaItems: form.agendaItems || undefined,
+      meetingSummary: form.meetingSummary || undefined,
+      extracurricularNotes: form.extracurricularNotes || undefined,
+      identityNarrativeNotes: form.identityNarrativeNotes || undefined,
+      questionsConcerns: form.questionsConcerns || undefined,
+      nextMeetingAgenda: form.nextMeetingAgenda || undefined,
+      followUpCommitments: form.followUpCommitments || undefined,
+      assignments: form.assignments || undefined,
+      criticalDates: form.criticalDates || undefined,
     }
     if (entry) {
       update.mutate({ id: entry.id, studentId, ...payload }, { onSuccess: () => setOpen(false) })
@@ -543,20 +611,25 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <span onClick={() => setOpen(true)}>{trigger}</span>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{entry ? t('student360.editDiary') : t('student360.newDiary')}</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
           <div>
             <Label className="text-xs">{t('student360.entryDate')}</Label>
-            <Input type="date" value={form.entryDate} onChange={e => set('entryDate', e.target.value)} />
+            <Input type="date" value={form.entryDate} onChange={e => setField('entryDate', e.target.value)} />
           </div>
-          <LabeledInput label={t('student360.category')} value={form.category} onChange={v => set('category', v)} />
-          <div className="col-span-2">
-            <Label className="text-xs">{t('student360.content')}</Label>
-            <Textarea value={form.content} onChange={e => set('content', e.target.value)} rows={5} />
-          </div>
+          {DIARY_FIELDS.map(f => (
+            <div key={f.key}>
+              <Label className="text-xs">{t(f.labelKey)}</Label>
+              <Textarea
+                value={form[f.key]}
+                onChange={e => setField(f.key, e.target.value)}
+                rows={3}
+              />
+            </div>
+          ))}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
