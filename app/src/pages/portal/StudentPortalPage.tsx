@@ -34,6 +34,9 @@ const DIARY_FIELDS = [
   { key: 'critical_dates', label: 'Critical Dates' },
 ]
 
+/** Safely extract string from unknown Supabase row value */
+const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+
 export function StudentPortalPage() {
   const { token } = useParams<{ token: string }>()
   const { data, isLoading, error } = usePortalData(token)
@@ -74,8 +77,8 @@ export function StudentPortalPage() {
   if (!data) return null
 
   const s = data.student
-  const studentName = (s.name as string) || ''
-  const koreanName = (s.korean_name as string) || ''
+  const studentName = str(s.name)
+  const koreanName = str(s.korean_name)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -105,21 +108,21 @@ export function StudentPortalPage() {
               <GraduationCap className="size-5 text-blue-500" />
               {studentName}
               {koreanName && <span className="text-muted-foreground font-normal">· {koreanName}</span>}
-              {s.status && <Badge variant="outline">{s.status as string}</Badge>}
+              {str(s.status) && <Badge variant="outline">{str(s.status)}</Badge>}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-              <PortalField label="학교" value={s.school as string} />
-              <PortalField label="학년" value={s.grade as string} />
-              <PortalField label="담당 컨설턴트" value={CONSULTANTS[(s.assigned_consultant as string) || ''] || (s.assigned_consultant as string)} />
-              <PortalField label="에세이 에디터" value={s.essay_editor as string} />
-              <PortalField label="파트너" value={s.partners as string} />
-              <PortalField label="전공" value={s.majors as string} />
-              <PortalField label="계약 유형" value={s.contract_type as string} />
-              <PortalField label="시작일" value={s.start_date as string} />
-              <PortalField label="종료일" value={s.end_date as string} />
-              {s.accepted_uni && <PortalField label="합격 대학" value={s.accepted_uni as string} />}
+              <PortalField label="학교" value={str(s.school)} />
+              <PortalField label="학년" value={str(s.grade)} />
+              <PortalField label="담당 컨설턴트" value={CONSULTANTS[str(s.assigned_consultant)] || str(s.assigned_consultant)} />
+              <PortalField label="에세이 에디터" value={str(s.essay_editor)} />
+              <PortalField label="파트너" value={str(s.partners)} />
+              <PortalField label="전공" value={str(s.majors)} />
+              <PortalField label="계약 유형" value={str(s.contract_type)} />
+              <PortalField label="시작일" value={str(s.start_date)} />
+              <PortalField label="종료일" value={str(s.end_date)} />
+              {str(s.accepted_uni) && <PortalField label="합격 대학" value={str(s.accepted_uni)} />}
             </div>
           </CardContent>
         </Card>
@@ -138,16 +141,16 @@ export function StudentPortalPage() {
               <p className="text-sm text-muted-foreground">미팅 기록이 없습니다.</p>
             )}
             {data.meetings.map((m) => {
-              const status = (m.report_status as string) || 'none'
+              const status = str(m.report_status) || 'none'
               const reportMeta = REPORT_BADGE[status] || REPORT_BADGE.none
               return (
-                <div key={m.id as string} className="rounded-lg border p-4">
+                <div key={str(m.id)} className="rounded-lg border p-4">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 text-sm font-medium">
-                      <span className="font-mono">{(m.meeting_date as string) || '—'}</span>
-                      {m.meeting_type && <Badge variant="outline">{m.meeting_type as string}</Badge>}
+                      <span className="font-mono">{str(m.meeting_date) || '—'}</span>
+                      {str(m.meeting_type) && <Badge variant="outline">{str(m.meeting_type)}</Badge>}
                       <span className="text-muted-foreground font-normal">
-                        {CONSULTANTS[(m.consultant_id as string) || ''] || (m.consultant_id as string) || ''}
+                        {CONSULTANTS[str(m.consultant_id)] || str(m.consultant_id)}
                       </span>
                     </div>
                     <Badge className={reportMeta.className}>
@@ -155,17 +158,17 @@ export function StudentPortalPage() {
                       {reportMeta.label}
                     </Badge>
                   </div>
-                  {m.summary && (
-                    <p className="text-sm mt-2 whitespace-pre-wrap text-gray-700">{m.summary as string}</p>
+                  {str(m.summary) && (
+                    <p className="text-sm mt-2 whitespace-pre-wrap text-gray-700">{str(m.summary)}</p>
                   )}
-                  {m.report_url && (
+                  {str(m.report_url) && (
                     <a
-                      href={m.report_url as string}
+                      href={str(m.report_url)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs text-blue-600 underline mt-2 inline-block"
                     >
-                      리포트 보기{m.report_date ? ` · ${m.report_date}` : ''}
+                      리포트 보기{str(m.report_date) ? ` · ${str(m.report_date)}` : ''}
                     </a>
                   )}
                 </div>
@@ -188,16 +191,16 @@ export function StudentPortalPage() {
               <p className="text-sm text-muted-foreground">다이어리 기록이 없습니다.</p>
             )}
             {data.diary.map((d) => (
-              <div key={d.id as string} className="rounded-lg border p-4">
+              <div key={str(d.id)} className="rounded-lg border p-4">
                 <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                  <span className="font-mono">{(d.entry_date as string) || '—'}</span>
-                  {d.author_id && (
-                    <span className="text-muted-foreground font-normal">{d.author_id as string}</span>
+                  <span className="font-mono">{str(d.entry_date) || '—'}</span>
+                  {str(d.author_id) && (
+                    <span className="text-muted-foreground font-normal">{str(d.author_id)}</span>
                   )}
                 </div>
                 <div className="space-y-3">
                   {DIARY_FIELDS.map((f) => {
-                    const val = d[f.key] as string | undefined
+                    const val = str(d[f.key])
                     if (!val) return null
                     return (
                       <div key={f.key}>

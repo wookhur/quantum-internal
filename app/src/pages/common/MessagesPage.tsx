@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -11,7 +11,6 @@ import {
   useMessageThread,
   useSendMessage,
   useMarkRead,
-  useUnreadCount,
   useMessageSubscription,
 } from '@/hooks/useMessages'
 import { useT } from '@/i18n/LanguageContext'

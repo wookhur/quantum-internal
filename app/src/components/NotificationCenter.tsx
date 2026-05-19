@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Bell, X, AlertTriangle, AlertCircle, Info, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useAppNotifications, NOTIFICATION_TYPES } from '@/hooks/useNotifications'
+import { useAppNotifications } from '@/hooks/useNotifications'
 import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/hooks/useNotificationPreferences'
 import { useNavigate } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
