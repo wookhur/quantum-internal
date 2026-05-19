@@ -306,6 +306,7 @@ export function ContractsPage() {
                   <TableHead className="w-8"></TableHead>
                   <TableHead className="w-[120px]">{t('contracts.col.contractor')}</TableHead>
                   <TableHead className="w-[90px]">{t('contracts.col.student')}</TableHead>
+                  <TableHead className="w-[95px]">{t('contracts.col.contractDate')}</TableHead>
                   <TableHead className="text-right w-[110px]">{t('contracts.col.contractAmount')}</TableHead>
                   <TableHead className="text-right w-[110px]">{t('contracts.col.collected')}</TableHead>
                   <TableHead className="text-right w-[110px]">{t('contracts.col.balance')}</TableHead>
@@ -355,6 +356,9 @@ export function ContractsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm">{contract.studentName}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {contract.contractDate || '-'}
+                        </TableCell>
                         <TableCell className="text-right font-mono text-sm">
                           {contract.totalAmount > 0 ? formatCurrency(contract.totalAmount, contract.currency) : '-'}
                         </TableCell>
