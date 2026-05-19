@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
-  Loader2, GraduationCap, CalendarDays, FileText, NotebookPen, ShieldCheck, AlertTriangle,
+  Loader2, GraduationCap, CalendarDays, FileText, ShieldCheck, AlertTriangle,
 } from 'lucide-react'
 import { usePortalData } from '@/hooks/usePortalTokens'
 
@@ -21,18 +21,6 @@ const REPORT_BADGE: Record<string, { label: string; className: string }> = {
   pending: { label: '리포트 대기', className: 'bg-amber-100 text-amber-700' },
   submitted: { label: '리포트 제출', className: 'bg-emerald-100 text-emerald-700' },
 }
-
-const DIARY_FIELDS = [
-  { key: 'agenda_items', label: 'Agenda Items' },
-  { key: 'meeting_summary', label: 'Meeting Summary' },
-  { key: 'extracurricular_notes', label: 'Extracurricular Development Notes' },
-  { key: 'identity_narrative_notes', label: 'Identity & Narrative Development Notes' },
-  { key: 'questions_concerns', label: 'Questions & Concerns' },
-  { key: 'next_meeting_agenda', label: 'Next Meeting Agenda' },
-  { key: 'follow_up_commitments', label: 'Follow-Up Commitments' },
-  { key: 'assignments', label: 'Assignments' },
-  { key: 'critical_dates', label: 'Critical Dates' },
-]
 
 /** Safely extract string from unknown Supabase row value */
 const str = (v: unknown): string => (typeof v === 'string' ? v : '')
@@ -119,9 +107,7 @@ export function StudentPortalPage() {
               <PortalField label="에세이 에디터" value={str(s.essay_editor)} />
               <PortalField label="파트너" value={str(s.partners)} />
               <PortalField label="전공" value={str(s.majors)} />
-              <PortalField label="계약 유형" value={str(s.contract_type)} />
               <PortalField label="시작일" value={str(s.start_date)} />
-              <PortalField label="종료일" value={str(s.end_date)} />
               {str(s.accepted_uni) && <PortalField label="합격 대학" value={str(s.accepted_uni)} />}
             </div>
           </CardContent>
@@ -174,44 +160,6 @@ export function StudentPortalPage() {
                 </div>
               )
             })}
-          </CardContent>
-        </Card>
-
-        {/* Diary */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <NotebookPen className="size-5 text-blue-500" />
-              미팅 다이어리
-              <span className="text-muted-foreground font-normal">({data.diary.length})</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {data.diary.length === 0 && (
-              <p className="text-sm text-muted-foreground">다이어리 기록이 없습니다.</p>
-            )}
-            {data.diary.map((d) => (
-              <div key={str(d.id)} className="rounded-lg border p-4">
-                <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                  <span className="font-mono">{str(d.entry_date) || '—'}</span>
-                  {str(d.author_id) && (
-                    <span className="text-muted-foreground font-normal">{str(d.author_id)}</span>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  {DIARY_FIELDS.map((f) => {
-                    const val = str(d[f.key])
-                    if (!val) return null
-                    return (
-                      <div key={f.key}>
-                        <p className="text-xs font-medium text-muted-foreground mb-0.5">{f.label}</p>
-                        <p className="text-sm whitespace-pre-wrap">{val}</p>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
           </CardContent>
         </Card>
 
