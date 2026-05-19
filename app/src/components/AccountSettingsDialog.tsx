@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
-import { Camera, Loader2, User, Bell, Save } from 'lucide-react'
+import { Camera, Loader2, User, Bell, Save, Monitor } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useUpdateProfile } from '@/hooks/useProfiles'
 import {
@@ -17,6 +17,7 @@ import { NOTIFICATION_TYPES } from '@/hooks/useNotifications'
 import { supabase } from '@/lib/supabase'
 import { useT } from '@/i18n/LanguageContext'
 import { useLanguage } from '@/i18n/LanguageContext'
+import { useUIScale, UI_SCALE_OPTIONS } from '@/hooks/useUIScale'
 
 interface Props {
   open: boolean
@@ -37,7 +38,8 @@ export function AccountSettingsDialog({ open, onOpenChange }: Props) {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [tab, setTab] = useState<'profile' | 'notifications'>('profile')
+  const { scale, setScale } = useUIScale()
+  const [tab, setTab] = useState<'profile' | 'display' | 'notifications'>('profile')
 
   // Reset form when dialog opens
   const handleOpenChange = (isOpen: boolean) => {
@@ -126,6 +128,16 @@ export function AccountSettingsDialog({ open, onOpenChange }: Props) {
             <User className="size-3.5" /> {t('account.profile')}
           </button>
           <button
+            onClick={() => setTab('display')}
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === 'display'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Monitor className="size-3.5" /> {t('account.display')}
+          </button>
+          <button
             onClick={() => setTab('notifications')}
             className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               tab === 'notifications'
@@ -209,6 +221,39 @@ export function AccountSettingsDialog({ open, onOpenChange }: Props) {
               )}
               {t('common.save')}
             </Button>
+          </div>
+        )}
+
+        {tab === 'display' && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">{t('account.displayDesc')}</p>
+            <div className="space-y-2">
+              <Label>{t('account.uiScale')}</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {UI_SCALE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setScale(opt.value)}
+                    className={`rounded-lg border-2 p-3 text-center transition-colors ${
+                      scale === opt.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                    }`}
+                  >
+                    <div
+                      className="font-bold mb-1"
+                      style={{ fontSize: opt.value === 'small' ? 13 : opt.value === 'medium' ? 15 : 17 }}
+                    >
+                      가
+                    </div>
+                    <div className="text-[11px]">
+                      {language === 'ko' ? opt.labelKo : opt.labelEn}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">{t('account.uiScaleNote')}</p>
+            </div>
           </div>
         )}
 

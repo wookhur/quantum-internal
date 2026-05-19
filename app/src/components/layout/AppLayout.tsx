@@ -11,6 +11,7 @@ import { GlobalSearchBar } from './GlobalSearchBar'
 import { NotificationCenter } from '@/components/NotificationCenter'
 import { AccountSettingsDialog } from '@/components/AccountSettingsDialog'
 import { useUnreadCount, useMessageSubscription } from '@/hooks/useMessages'
+import { useUIScale } from '@/hooks/useUIScale'
 
 export function AppLayout() {
   const { user } = useAuth()
@@ -19,6 +20,7 @@ export function AppLayout() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { data: unreadCount = 0 } = useUnreadCount()
   useMessageSubscription()
+  useUIScale() // applies saved font-size to document root
 
   return (
     <SidebarProvider>

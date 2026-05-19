@@ -950,6 +950,10 @@ const koTranslations = {
   'account.namePlaceholder': '이름을 입력하세요',
   'account.position': '직급',
   'account.positionPlaceholder': '직급을 입력하세요',
+  'account.display': '화면',
+  'account.displayDesc': '화면 표시 크기를 설정합니다.',
+  'account.uiScale': 'UI 크기',
+  'account.uiScaleNote': '설정은 이 기기에 저장되며 즉시 적용됩니다.',
   'account.notifDesc': '받고 싶은 알림을 선택하세요.',
 
   // ── Messages ──
@@ -1914,6 +1918,10 @@ const enTranslations: Record<string, string> = {
   'account.namePlaceholder': 'Enter your name',
   'account.position': 'Position',
   'account.positionPlaceholder': 'Enter your position',
+  'account.display': 'Display',
+  'account.displayDesc': 'Adjust the display size of the interface.',
+  'account.uiScale': 'UI Scale',
+  'account.uiScaleNote': 'Settings are saved on this device and applied immediately.',
   'account.notifDesc': 'Choose which notifications you want to receive.',
 
   // ── Messages ──
