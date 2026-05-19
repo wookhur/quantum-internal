@@ -948,8 +948,8 @@ const koTranslations = {
   'account.notifications': '알림 설정',
   'account.name': '이름',
   'account.namePlaceholder': '이름을 입력하세요',
-  'account.position': '직위',
-  'account.positionPlaceholder': '직위를 입력하세요',
+  'account.position': '직급',
+  'account.positionPlaceholder': '직급을 입력하세요',
   'account.notifDesc': '받고 싶은 알림을 선택하세요.',
 
   // ── Messages ──
