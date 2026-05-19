@@ -388,6 +388,7 @@ export interface ServiceStudent {
   id: string
   name: string                 // Student Name (English/roman)
   koreanName?: string
+  email?: string
   nationality?: string
   parentName?: string
   contact?: string

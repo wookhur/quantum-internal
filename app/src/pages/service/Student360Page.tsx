@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import {
-  Search, Plus, Pencil, Trash2, GraduationCap, Phone, User as UserIcon,
+  Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
@@ -196,10 +196,11 @@ function ProfileSection({ student, onDeleted, createdBy }: {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-        <Field label={t('student360.nationality')} value={student.nationality} />
-        <Field icon={<UserIcon className="size-4" />} label={t('student360.parentName')} value={student.parentName} />
+      <CardContent className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+        <Field icon={<Mail className="size-4" />} label={t('student360.email')} value={student.email} />
         <Field icon={<Phone className="size-4" />} label={t('student360.contact')} value={student.contact} />
+        <Field icon={<UserIcon className="size-4" />} label={t('student360.parentName')} value={student.parentName} />
+        <Field label={t('student360.nationality')} value={student.nationality} />
         <Field label={t('student360.region')} value={student.region} />
         <Field label={t('student360.grade')} value={student.grade} />
         <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
@@ -208,6 +209,8 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field label={t('student360.partners')} value={student.partners} />
         <Field label={t('student360.majors')} value={student.majors} />
         <Field label={t('student360.contractType')} value={student.contractType} />
+        <Field label={t('student360.status')} value={student.status} />
+        <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
         <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
         <div>
           <p className="text-xs text-muted-foreground mb-0.5">{t('student360.chatLink')}</p>
@@ -226,10 +229,9 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         </div>
         <Field label={t('student360.startDate')} value={student.startDate} />
         <Field label={t('student360.endDate')} value={student.endDate} />
-        <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
         <Field label={t('student360.address')} value={student.address} />
         {student.notes && (
-          <div className="col-span-2 md:col-span-3">
+          <div className="col-span-2">
             <p className="text-xs text-muted-foreground mb-1">{t('student360.notes')}</p>
             <p className="whitespace-pre-wrap">{student.notes}</p>
           </div>
@@ -383,6 +385,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
   const buildForm = () => ({
     name: student?.name || '',
     koreanName: student?.koreanName || '',
+    email: student?.email || '',
     nationality: student?.nationality || '',
     parentName: student?.parentName || '',
     contact: student?.contact || '',
@@ -415,6 +418,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     const payload = {
       name: form.name.trim(),
       koreanName: form.koreanName || undefined,
+      email: form.email || undefined,
       nationality: form.nationality || undefined,
       parentName: form.parentName || undefined,
       contact: form.contact || undefined,
@@ -455,9 +459,10 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
         <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
           <LabeledInput label={`${t('student360.name')} *`} value={form.name} onChange={v => set('name', v)} />
           <LabeledInput label={t('student360.koreanName')} value={form.koreanName} onChange={v => set('koreanName', v)} />
-          <LabeledInput label={t('student360.nationality')} value={form.nationality} onChange={v => set('nationality', v)} />
-          <LabeledInput label={t('student360.parentName')} value={form.parentName} onChange={v => set('parentName', v)} />
+          <LabeledInput label={t('student360.email')} value={form.email} onChange={v => set('email', v)} />
           <LabeledInput label={t('student360.contact')} value={form.contact} onChange={v => set('contact', v)} />
+          <LabeledInput label={t('student360.parentName')} value={form.parentName} onChange={v => set('parentName', v)} />
+          <LabeledInput label={t('student360.nationality')} value={form.nationality} onChange={v => set('nationality', v)} />
           <LabeledInput label={t('student360.region')} value={form.region} onChange={v => set('region', v)} />
           <LabeledInput label={t('student360.grade')} value={form.grade} onChange={v => set('grade', v)} />
           <LabeledInput label={t('student360.school')} value={form.school} onChange={v => set('school', v)} />
@@ -474,6 +479,8 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           <LabeledInput label={t('student360.partners')} value={form.partners} onChange={v => set('partners', v)} />
           <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />
+          <LabeledInput label={t('student360.status')} value={form.status} onChange={v => set('status', v)} />
+          <LabeledInput label={t('student360.acceptedUni')} value={form.acceptedUni} onChange={v => set('acceptedUni', v)} />
           <div>
             <Label className="text-xs">{t('student360.commPlatform')}</Label>
             <Select value={form.communicationPlatform} onValueChange={v => set('communicationPlatform', v)}>
@@ -492,8 +499,6 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
             <Label className="text-xs">{t('student360.endDate')}</Label>
             <Input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
           </div>
-          <LabeledInput label={t('student360.status')} value={form.status} onChange={v => set('status', v)} />
-          <LabeledInput label={t('student360.acceptedUni')} value={form.acceptedUni} onChange={v => set('acceptedUni', v)} />
           <div className="col-span-2">
             <Label className="text-xs">{t('student360.address')}</Label>
             <Input value={form.address} onChange={e => set('address', e.target.value)} />

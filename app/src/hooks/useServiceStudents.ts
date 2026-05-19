@@ -13,6 +13,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     id: row.id as string,
     name: row.name as string,
     koreanName: (row.korean_name as string) || undefined,
+    email: (row.email as string) || undefined,
     nationality: (row.nationality as string) || undefined,
     parentName: (row.parent_name as string) || undefined,
     contact: (row.contact as string) || undefined,
@@ -97,6 +98,7 @@ export function useCreateServiceStudent() {
     mutationFn: async (s: {
       name: string
       koreanName?: string
+      email?: string
       nationality?: string
       parentName?: string
       contact?: string
@@ -121,6 +123,7 @@ export function useCreateServiceStudent() {
       const { data, error } = await supabase.from('service_students').insert({
         name: s.name,
         korean_name: s.koreanName,
+        email: s.email,
         nationality: s.nationality,
         parent_name: s.parentName,
         contact: s.contact,
@@ -156,6 +159,7 @@ export function useUpdateServiceStudent() {
       id: string
       name?: string
       koreanName?: string
+      email?: string
       nationality?: string
       parentName?: string
       contact?: string
@@ -180,6 +184,7 @@ export function useUpdateServiceStudent() {
       const update: Record<string, unknown> = {}
       if (rest.name !== undefined) update.name = rest.name
       if (rest.koreanName !== undefined) update.korean_name = rest.koreanName
+      if (rest.email !== undefined) update.email = rest.email
       if (rest.nationality !== undefined) update.nationality = rest.nationality
       if (rest.parentName !== undefined) update.parent_name = rest.parentName
       if (rest.contact !== undefined) update.contact = rest.contact
