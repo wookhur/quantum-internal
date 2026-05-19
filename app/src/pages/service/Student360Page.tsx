@@ -198,6 +198,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         <Field icon={<Mail className="size-4" />} label={t('student360.email')} value={student.email} />
+        <Field icon={<Mail className="size-4" />} label={t('student360.parentEmail')} value={student.parentEmail} />
         <Field icon={<Phone className="size-4" />} label={t('student360.contact')} value={student.contact} />
         <Field icon={<UserIcon className="size-4" />} label={t('student360.parentName')} value={student.parentName} />
         <Field label={t('student360.nationality')} value={student.nationality} />
@@ -211,24 +212,28 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field label={t('student360.contractType')} value={student.contractType} />
         <Field label={t('student360.status')} value={student.status} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
-        <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
-        <div>
-          <p className="text-xs text-muted-foreground mb-0.5">{t('student360.chatLink')}</p>
-          {student.chatLink ? (
-            <a
-              href={student.chatLink}
-              target="_blank"
-              rel="noreferrer"
-              className="text-primary underline break-all"
-            >
-              {t('student360.openChat')}
-            </a>
-          ) : (
-            <p>—</p>
-          )}
+        <div className="col-span-2 grid grid-cols-2 gap-x-6 gap-y-3">
+          <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
+          <div>
+            <p className="text-xs text-muted-foreground mb-0.5">{t('student360.chatLink')}</p>
+            {student.chatLink ? (
+              <a
+                href={student.chatLink}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary underline break-all"
+              >
+                {t('student360.openChat')}
+              </a>
+            ) : (
+              <p>—</p>
+            )}
+          </div>
         </div>
-        <Field label={t('student360.startDate')} value={student.startDate} />
-        <Field label={t('student360.endDate')} value={student.endDate} />
+        <div className="col-span-2 grid grid-cols-2 gap-x-6 gap-y-3">
+          <Field label={t('student360.startDate')} value={student.startDate} />
+          <Field label={t('student360.endDate')} value={student.endDate} />
+        </div>
         <Field label={t('student360.address')} value={student.address} />
         {student.notes && (
           <div className="col-span-2">
@@ -386,6 +391,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     name: student?.name || '',
     koreanName: student?.koreanName || '',
     email: student?.email || '',
+    parentEmail: student?.parentEmail || '',
     nationality: student?.nationality || '',
     parentName: student?.parentName || '',
     contact: student?.contact || '',
@@ -419,6 +425,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
       name: form.name.trim(),
       koreanName: form.koreanName || undefined,
       email: form.email || undefined,
+      parentEmail: form.parentEmail || undefined,
       nationality: form.nationality || undefined,
       parentName: form.parentName || undefined,
       contact: form.contact || undefined,
@@ -460,6 +467,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           <LabeledInput label={`${t('student360.name')} *`} value={form.name} onChange={v => set('name', v)} />
           <LabeledInput label={t('student360.koreanName')} value={form.koreanName} onChange={v => set('koreanName', v)} />
           <LabeledInput label={t('student360.email')} value={form.email} onChange={v => set('email', v)} />
+          <LabeledInput label={t('student360.parentEmail')} value={form.parentEmail} onChange={v => set('parentEmail', v)} />
           <LabeledInput label={t('student360.contact')} value={form.contact} onChange={v => set('contact', v)} />
           <LabeledInput label={t('student360.parentName')} value={form.parentName} onChange={v => set('parentName', v)} />
           <LabeledInput label={t('student360.nationality')} value={form.nationality} onChange={v => set('nationality', v)} />
@@ -481,23 +489,27 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />
           <LabeledInput label={t('student360.status')} value={form.status} onChange={v => set('status', v)} />
           <LabeledInput label={t('student360.acceptedUni')} value={form.acceptedUni} onChange={v => set('acceptedUni', v)} />
-          <div>
-            <Label className="text-xs">{t('student360.commPlatform')}</Label>
-            <Select value={form.communicationPlatform} onValueChange={v => set('communicationPlatform', v)}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                {COMM_PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div className="col-span-2 grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">{t('student360.commPlatform')}</Label>
+              <Select value={form.communicationPlatform} onValueChange={v => set('communicationPlatform', v)}>
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {COMM_PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <LabeledInput label={t('student360.chatLink')} value={form.chatLink} onChange={v => set('chatLink', v)} />
           </div>
-          <LabeledInput label={t('student360.chatLink')} value={form.chatLink} onChange={v => set('chatLink', v)} />
-          <div>
-            <Label className="text-xs">{t('student360.startDate')}</Label>
-            <Input type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
-          </div>
-          <div>
-            <Label className="text-xs">{t('student360.endDate')}</Label>
-            <Input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
+          <div className="col-span-2 grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">{t('student360.startDate')}</Label>
+              <Input type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('student360.endDate')}</Label>
+              <Input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
+            </div>
           </div>
           <div className="col-span-2">
             <Label className="text-xs">{t('student360.address')}</Label>

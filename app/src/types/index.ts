@@ -389,6 +389,7 @@ export interface ServiceStudent {
   name: string                 // Student Name (English/roman)
   koreanName?: string
   email?: string
+  parentEmail?: string
   nationality?: string
   parentName?: string
   contact?: string

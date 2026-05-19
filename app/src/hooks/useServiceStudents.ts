@@ -14,6 +14,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     name: row.name as string,
     koreanName: (row.korean_name as string) || undefined,
     email: (row.email as string) || undefined,
+    parentEmail: (row.parent_email as string) || undefined,
     nationality: (row.nationality as string) || undefined,
     parentName: (row.parent_name as string) || undefined,
     contact: (row.contact as string) || undefined,
@@ -99,6 +100,7 @@ export function useCreateServiceStudent() {
       name: string
       koreanName?: string
       email?: string
+      parentEmail?: string
       nationality?: string
       parentName?: string
       contact?: string
@@ -124,6 +126,7 @@ export function useCreateServiceStudent() {
         name: s.name,
         korean_name: s.koreanName,
         email: s.email,
+        parent_email: s.parentEmail,
         nationality: s.nationality,
         parent_name: s.parentName,
         contact: s.contact,
@@ -160,6 +163,7 @@ export function useUpdateServiceStudent() {
       name?: string
       koreanName?: string
       email?: string
+      parentEmail?: string
       nationality?: string
       parentName?: string
       contact?: string
@@ -185,6 +189,7 @@ export function useUpdateServiceStudent() {
       if (rest.name !== undefined) update.name = rest.name
       if (rest.koreanName !== undefined) update.korean_name = rest.koreanName
       if (rest.email !== undefined) update.email = rest.email
+      if (rest.parentEmail !== undefined) update.parent_email = rest.parentEmail
       if (rest.nationality !== undefined) update.nationality = rest.nationality
       if (rest.parentName !== undefined) update.parent_name = rest.parentName
       if (rest.contact !== undefined) update.contact = rest.contact
