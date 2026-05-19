@@ -98,17 +98,17 @@ export function MeetingsPage() {
   }, [thisMonthMeetings])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{t('meetings.title')}</h1>
-          <p className="text-muted-foreground">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-lg md:text-2xl font-bold tracking-tight">{t('meetings.title')}</h1>
+          <p className="text-sm text-muted-foreground truncate">
             {isLoading ? t('common.loading') : t('meetings.totalMeetings').replace('{n}', String(meetings.length))}
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setDialogOpen(true)}>
-          <Plus className="size-4" /> {t('meetings.addMeeting')}
+        <Button className="gap-2 shrink-0" size="sm" onClick={() => setDialogOpen(true)}>
+          <Plus className="size-4" /> <span className="hidden sm:inline">{t('meetings.addMeeting')}</span>
         </Button>
       </div>
 
@@ -137,23 +137,21 @@ export function MeetingsPage() {
       {/* Filters */}
       <Card>
         <CardContent className="py-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground whitespace-nowrap">{t('meetings.period')}</span>
-              <Input
-                type="date"
-                className="w-[160px] h-9"
-                value={dateFrom}
-                onChange={e => setDateFrom(e.target.value)}
-              />
-              <span className="text-sm text-muted-foreground">~</span>
-              <Input
-                type="date"
-                className="w-[160px] h-9"
-                value={dateTo}
-                onChange={e => setDateTo(e.target.value)}
-              />
-            </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">{t('meetings.period')}</span>
+            <Input
+              type="date"
+              className="w-full sm:w-[160px] h-9"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+            />
+            <span className="text-sm text-muted-foreground hidden sm:inline">~</span>
+            <Input
+              type="date"
+              className="w-full sm:w-[160px] h-9"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -178,19 +176,19 @@ export function MeetingsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[90px]">{t('meetings.col.meetingDate')}</TableHead>
-                    <TableHead className="w-[60px]">{t('meetings.col.meetingNumber')}</TableHead>
-                    <TableHead>{t('meetings.col.parent')}</TableHead>
+                    <TableHead className="w-[70px]">{t('meetings.col.meetingDate')}</TableHead>
+                    <TableHead className="w-[50px]">{t('meetings.col.meetingNumber')}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{t('meetings.col.parent')}</TableHead>
                     <TableHead>{t('meetings.col.student')}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t('common.phone')}</TableHead>
-                    <TableHead className="hidden md:table-cell">{t('common.school')}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t('common.phone')}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{t('common.school')}</TableHead>
                     <TableHead className="hidden lg:table-cell w-[50px]">{t('common.grade')}</TableHead>
                     <TableHead className="hidden xl:table-cell">{t('common.region')}</TableHead>
                     <TableHead className="hidden xl:table-cell">{t('meetings.col.interestArea')}</TableHead>
                     <TableHead className="hidden xl:table-cell">{t('meetings.col.sourceChannel')}</TableHead>
-                    <TableHead className="hidden lg:table-cell max-w-[150px]">{t('common.memo')}</TableHead>
-                    <TableHead className="w-[60px] text-center">{t('meetings.col.note')}</TableHead>
-                    <TableHead className="hidden lg:table-cell w-[90px]">{t('meetings.col.nextMeeting')}</TableHead>
+                    <TableHead className="hidden xl:table-cell max-w-[150px]">{t('common.memo')}</TableHead>
+                    <TableHead className="w-[40px] text-center">{t('meetings.col.note')}</TableHead>
+                    <TableHead className="hidden xl:table-cell w-[90px]">{t('meetings.col.nextMeeting')}</TableHead>
                     <TableHead className="hidden xl:table-cell max-w-[120px]">{t('meetings.col.requiredAction')}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -207,10 +205,10 @@ export function MeetingsPage() {
                             {badge.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-medium text-sm">{meeting.parentName}</TableCell>
+                        <TableCell className="hidden sm:table-cell font-medium text-sm">{meeting.parentName}</TableCell>
                         <TableCell className="text-sm">{meeting.studentName || '-'}</TableCell>
-                        <TableCell className="hidden md:table-cell text-xs text-muted-foreground font-mono">{meeting.phone || '-'}</TableCell>
-                        <TableCell className="hidden md:table-cell text-sm">{meeting.currentSchool || '-'}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground font-mono">{meeting.phone || '-'}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm">{meeting.currentSchool || '-'}</TableCell>
                         <TableCell className="hidden lg:table-cell text-sm">{meeting.grade || '-'}</TableCell>
                         <TableCell className="hidden xl:table-cell text-sm text-muted-foreground">{meeting.region || '-'}</TableCell>
                         <TableCell className="hidden xl:table-cell text-sm max-w-[120px] truncate">{meeting.interestArea || '-'}</TableCell>
@@ -219,7 +217,7 @@ export function MeetingsPage() {
                             <Badge variant="outline" className="text-xs font-normal">{meeting.sourceChannel}</Badge>
                           ) : '-'}
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-xs max-w-[150px] truncate text-muted-foreground">
+                        <TableCell className="hidden xl:table-cell text-xs max-w-[150px] truncate text-muted-foreground">
                           {meeting.memo || '-'}
                         </TableCell>
                         <TableCell className="text-center">
@@ -238,7 +236,7 @@ export function MeetingsPage() {
                             )}
                           </button>
                         </TableCell>
-                        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground font-mono">
+                        <TableCell className="hidden xl:table-cell text-xs text-muted-foreground font-mono">
                           {meeting.nextMeetingDate?.replace('2026-', '').replace('2025-', '') || '-'}
                         </TableCell>
                         <TableCell className="hidden xl:table-cell text-sm max-w-[120px] truncate">

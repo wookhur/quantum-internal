@@ -28,6 +28,7 @@ import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
 import { Student360Page } from '@/pages/service/Student360Page'
+import { MessagesPage } from '@/pages/common/MessagesPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,6 +51,7 @@ export default function App() {
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/todos" element={<TodosPage />} />
+                <Route path="/messages" element={<MessagesPage />} />
 
                 <Route path="/sales/leads" element={<LeadsPage />} />
                 <Route path="/sales/leads/:id" element={<LeadDetailPage />} />

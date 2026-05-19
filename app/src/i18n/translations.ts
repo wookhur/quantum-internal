@@ -53,12 +53,18 @@ const koTranslations = {
   'common.yearsAgo': '{n}년 전',
   'common.noChange': '변동 없음',
   'common.allDepartments': '전체 부서',
+  'common.loadError': '데이터를 불러오는 중 오류가 발생했습니다.',
+  'common.tryAgainLater': '잠시 후 다시 시도해 주세요.',
+  'common.unknownError': '알 수 없는 오류가 발생했습니다.',
+  'common.updated': '업데이트됨',
+  'common.view': '보기',
 
   // ── Sidebar Nav ──
   'nav.common': '공통',
   'nav.dashboard': '대시보드',
   'nav.calendar': '캘린더',
   'nav.projects': '프로젝트',
+  'nav.messages': '메시지',
   'nav.sales': '세일즈',
   'nav.coldCall': '콜드콜',
   'nav.leadManagement': '리드 관리',
@@ -248,6 +254,16 @@ const koTranslations = {
   'leads.col.assignee': '담당자',
   'leads.col.memo': '메모',
   'leads.col.action': '액션',
+  'leads.col.sourceChannel': '유입채널',
+  'leads.addNewLeadDesc': '새로운 리드 정보를 입력해 주세요.',
+  'leads.email': '이메일',
+  'leads.grade': '학년',
+  'leads.memo': '메모',
+  'leads.phone': '연락처',
+  'leads.pipeline': '파이프라인',
+  'leads.region': '지역',
+  'leads.schoolPlaceholder': '학교를 입력하세요',
+  'leads.sourceChannelPlaceholder': '유입 채널을 선택해 주세요',
 
   // ── Lead Detail ──
   'leadDetail.customerJourney': '고객 여정 요약',
@@ -335,6 +351,17 @@ const koTranslations = {
   'coldCall.parent': '학부모',
   'coldCall.countSummary': '{filtered} / {total}건',
   'coldCall.highPriorityCount': '긴급 {n}건',
+  'coldCall.callCallback': '콜백 요청',
+  'coldCall.callConnected': '통화 성공',
+  'coldCall.callNoAnswer': '부재중',
+  'coldCall.contactInfo': '연락처',
+  'coldCall.excludeConfirmDesc': '콜드콜 목록에서 빠지며, 파이프라인 비활성 섹션에서 확인할 수 있습니다.',
+  'coldCall.firstConsultation': '1차 상담',
+  'coldCall.leadDate': '유입일',
+  'coldCall.memoPlaceholder': '메모를 입력하세요...',
+  'coldCall.scheduleConsultation': '상담 예약',
+  'coldCall.sortDate': '최신순',
+  'coldCall.sourceChannel': '유입 채널',
 
   // ── Service ──
   'service.assignmentTitle': '학생별 컨설턴트 배치',
@@ -462,6 +489,7 @@ const koTranslations = {
   'mktMetrics.youtube': '유튜브',
   'mktMetrics.blog': '블로그',
   'mktMetrics.news': '뉴스/기사',
+  'mktMetrics.month': '월',
 
   // ── Ad Campaigns ──
   'ads.title': '광고 성과',
@@ -486,6 +514,9 @@ const koTranslations = {
   'ads.noData': '광고 캠페인 데이터가 없습니다.',
   'ads.allPlatforms': '전체',
   'ads.allMonths': '전체 월',
+  'ads.friendsDiff': '친구 증감',
+  'ads.note': '비고',
+  'ads.totalSpend': '총 광고비',
 
   // ── Events ──
   'events.title': '이벤트 관리',
@@ -507,6 +538,9 @@ const koTranslations = {
   'events.designCompleted': '디자인 완료',
   'events.pptCompleted': 'PPT 완료',
   'events.uploaded': '업로드 완료',
+  'events.month': '월',
+  'events.monthFilter': '월 필터',
+  'events.week': '주차',
 
   // ── Video Projects ──
   'video.title': '영상 콘텐츠',
@@ -887,6 +921,35 @@ const koTranslations = {
   'game.me': '나',
   'game.pressSpaceToRestart': '스페이스바를 눌러 다시 시작',
   'game.pressSpaceToStart': '스페이스바를 눌러 시작!',
+
+  // ── Notifications ──
+  'notif.title': '알림',
+  'notif.noNotifications': '새로운 알림이 없습니다.',
+  'notif.viewDetail': '자세히 보기',
+  'notif.dontShowAgain': '다시 표시하지 않기',
+
+  // ── Account Settings ──
+  'account.settings': '계정 설정',
+  'account.profile': '프로필',
+  'account.notifications': '알림 설정',
+  'account.name': '이름',
+  'account.namePlaceholder': '이름을 입력하세요',
+  'account.position': '직위',
+  'account.positionPlaceholder': '직위를 입력하세요',
+  'account.notifDesc': '받고 싶은 알림을 선택하세요.',
+
+  // ── Messages ──
+  'msg.title': '메시지',
+  'msg.subtitle': '팀원들과 대화하세요',
+  'msg.searchPlaceholder': '이름 검색...',
+  'msg.team': '팀원',
+  'msg.noConversations': '대화가 없습니다. 새 대화를 시작하세요.',
+  'msg.startConversation': '메시지를 보내 대화를 시작하세요.',
+  'msg.selectConversation': '대화를 선택하세요.',
+  'msg.placeholder': '메시지를 입력하세요...',
+  'msg.unknownUser': '알 수 없는 사용자',
+  'msg.yesterday': '어제',
+  'msg.daysAgo': '일 전',
 } as const
 
 const enTranslations: Record<string, string> = {
@@ -941,12 +1004,18 @@ const enTranslations: Record<string, string> = {
   'common.yearsAgo': '{n}y ago',
   'common.noChange': 'No change',
   'common.allDepartments': 'All departments',
+  'common.loadError': 'An error occurred while loading data.',
+  'common.tryAgainLater': 'Please try again later.',
+  'common.unknownError': 'An unknown error occurred.',
+  'common.updated': 'Updated',
+  'common.view': 'View',
 
   // ── Sidebar Nav ──
   'nav.common': 'General',
   'nav.dashboard': 'Dashboard',
   'nav.calendar': 'Calendar',
   'nav.projects': 'Projects',
+  'nav.messages': 'Messages',
   'nav.sales': 'Sales',
   'nav.coldCall': 'Cold Call',
   'nav.leadManagement': 'Lead Management',
@@ -1135,6 +1204,16 @@ const enTranslations: Record<string, string> = {
   'leads.col.assignee': 'Assignee',
   'leads.col.memo': 'Memo',
   'leads.col.action': 'Action',
+  'leads.col.sourceChannel': 'Source Channel',
+  'leads.addNewLeadDesc': 'Enter the new lead information.',
+  'leads.email': 'Email',
+  'leads.grade': 'Grade',
+  'leads.memo': 'Memo',
+  'leads.phone': 'Phone',
+  'leads.pipeline': 'Pipeline',
+  'leads.region': 'Region',
+  'leads.schoolPlaceholder': 'Enter school name',
+  'leads.sourceChannelPlaceholder': 'Select source channel',
 
   // ── Lead Detail ──
   'leadDetail.customerJourney': 'Customer Journey Summary',
@@ -1222,6 +1301,17 @@ const enTranslations: Record<string, string> = {
   'coldCall.parent': 'Parent',
   'coldCall.countSummary': '{filtered} / {total}',
   'coldCall.highPriorityCount': '{n} urgent',
+  'coldCall.callCallback': 'Callback',
+  'coldCall.callConnected': 'Connected',
+  'coldCall.callNoAnswer': 'No Answer',
+  'coldCall.contactInfo': 'Contact',
+  'coldCall.excludeConfirmDesc': 'This will remove the lead from cold call list. It can be found in the inactive pipeline section.',
+  'coldCall.firstConsultation': '1st Consultation',
+  'coldCall.leadDate': 'Lead Date',
+  'coldCall.memoPlaceholder': 'Enter memo...',
+  'coldCall.scheduleConsultation': 'Schedule Consult',
+  'coldCall.sortDate': 'Most Recent',
+  'coldCall.sourceChannel': 'Source Channel',
 
   // ── Service ──
   'service.assignmentTitle': 'Consultant Assignment',
@@ -1349,6 +1439,7 @@ const enTranslations: Record<string, string> = {
   'mktMetrics.youtube': 'YouTube',
   'mktMetrics.blog': 'Blog',
   'mktMetrics.news': 'News/Articles',
+  'mktMetrics.month': 'Month',
 
   // ── Ad Campaigns ──
   'ads.title': 'Ad Performance',
@@ -1373,6 +1464,9 @@ const enTranslations: Record<string, string> = {
   'ads.noData': 'No ad campaign data.',
   'ads.allPlatforms': 'All',
   'ads.allMonths': 'All months',
+  'ads.friendsDiff': 'Friend Change',
+  'ads.note': 'Note',
+  'ads.totalSpend': 'Total Ad Spend',
 
   // ── Events ──
   'events.title': 'Event Management',
@@ -1394,6 +1488,9 @@ const enTranslations: Record<string, string> = {
   'events.designCompleted': 'Design Done',
   'events.pptCompleted': 'PPT Done',
   'events.uploaded': 'Uploaded',
+  'events.month': 'Month',
+  'events.monthFilter': 'Month Filter',
+  'events.week': 'Week',
 
   // ── Video Projects ──
   'video.title': 'Video Content',
@@ -1774,6 +1871,35 @@ const enTranslations: Record<string, string> = {
   'game.me': 'Me',
   'game.pressSpaceToRestart': 'Press Space to restart',
   'game.pressSpaceToStart': 'Press Space to start!',
+
+  // ── Notifications ──
+  'notif.title': 'Notifications',
+  'notif.noNotifications': 'No new notifications.',
+  'notif.viewDetail': 'View Details',
+  'notif.dontShowAgain': 'Don\'t show again',
+
+  // ── Account Settings ──
+  'account.settings': 'Account Settings',
+  'account.profile': 'Profile',
+  'account.notifications': 'Notifications',
+  'account.name': 'Name',
+  'account.namePlaceholder': 'Enter your name',
+  'account.position': 'Position',
+  'account.positionPlaceholder': 'Enter your position',
+  'account.notifDesc': 'Choose which notifications you want to receive.',
+
+  // ── Messages ──
+  'msg.title': 'Messages',
+  'msg.subtitle': 'Chat with your team',
+  'msg.searchPlaceholder': 'Search by name...',
+  'msg.team': 'Team',
+  'msg.noConversations': 'No conversations yet. Start a new chat.',
+  'msg.startConversation': 'Send a message to start chatting.',
+  'msg.selectConversation': 'Select a conversation.',
+  'msg.placeholder': 'Type a message...',
+  'msg.unknownUser': 'Unknown User',
+  'msg.yesterday': 'Yesterday',
+  'msg.daysAgo': 'd ago',
 }
 
 export type TranslationKeys = keyof typeof koTranslations

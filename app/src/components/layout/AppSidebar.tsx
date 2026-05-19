@@ -11,7 +11,7 @@ import {
   SidebarFooter,
   SidebarSeparator,
 } from '@/components/ui/sidebar'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   LogOut,
   LayoutDashboard,
@@ -33,6 +33,8 @@ import {
   LineChart,
   Shield,
   UserSearch,
+  MessageSquare,
+  Settings,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -56,6 +58,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.dashboard', to: '/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.calendar', to: '/calendar', icon: Calendar },
       { labelKey: 'nav.projects', to: '/todos', icon: CheckSquare },
+      { labelKey: 'nav.messages', to: '/messages', icon: MessageSquare },
     ],
   },
   {
@@ -114,7 +117,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
   },
 ]
 
-export function AppSidebar() {
+export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const location = useLocation()
   const { user, signOut } = useAuth()
   const { data: featureAccess = [] } = useFeatureAccess()
@@ -210,19 +213,32 @@ export function AppSidebar() {
       <SidebarFooter className="px-3 pb-4 pt-2">
         <SidebarSeparator className="mx-1 mb-3 bg-gray-100" />
         <div className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50 transition-colors">
-          <Avatar className="h-8 w-8 ring-2 ring-blue-100">
-            <AvatarFallback className="bg-blue-50 text-blue-600 text-xs font-semibold">
-              {user?.name?.charAt(0) || '?'}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col flex-1 min-w-0">
-            <span className="text-[13px] font-medium text-gray-900 truncate">
-              {user?.name || 'User'}
-            </span>
-            <span className="text-[11px] text-gray-400 truncate">
-              {user?.role || ''}
-            </span>
-          </div>
+          <button
+            onClick={onOpenSettings}
+            className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+          >
+            <Avatar className="h-8 w-8 ring-2 ring-blue-100">
+              {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name} />}
+              <AvatarFallback className="bg-blue-50 text-blue-600 text-xs font-semibold">
+                {user?.name?.charAt(0) || '?'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col flex-1 min-w-0 text-left">
+              <span className="text-[13px] font-medium text-gray-900 truncate">
+                {user?.name || 'User'}
+              </span>
+              <span className="text-[11px] text-gray-400 truncate">
+                {user?.role || ''}
+              </span>
+            </div>
+          </button>
+          <button
+            onClick={onOpenSettings}
+            className="rounded-md p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            title={t('account.settings')}
+          >
+            <Settings size={16} />
+          </button>
           <button
             onClick={signOut}
             className="rounded-md p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
