@@ -968,6 +968,7 @@ const koTranslations = {
   'msg.unknownUser': '알 수 없는 사용자',
   'msg.yesterday': '어제',
   'msg.daysAgo': '일 전',
+  'msg.attachFile': '파일 첨부',
 } as const
 
 const enTranslations: Record<string, string> = {
@@ -1936,6 +1937,7 @@ const enTranslations: Record<string, string> = {
   'msg.unknownUser': 'Unknown User',
   'msg.yesterday': 'Yesterday',
   'msg.daysAgo': 'd ago',
+  'msg.attachFile': 'Attach file',
 }
 
 export type TranslationKeys = keyof typeof koTranslations

@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Loader2, Send, Search, MessageSquare, ArrowLeft, Check, CheckCheck } from 'lucide-react'
+import { Loader2, Send, Search, MessageSquare, ArrowLeft, Check, CheckCheck, Paperclip, X, FileText } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import {
@@ -26,7 +26,10 @@ export function MessagesPage() {
   const [messageText, setMessageText] = useState('')
   const [search, setSearch] = useState('')
   const [showNewChat, setShowNewChat] = useState(false)
+  const [attachedFile, setAttachedFile] = useState<File | null>(null)
+  const [attachPreview, setAttachPreview] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: messages = [], isLoading: messagesLoading } = useMessageThread(selectedPartnerId)
 
@@ -68,9 +71,12 @@ export function MessagesPage() {
 
   const handleSend = () => {
     const text = messageText.trim()
-    if (!text || !selectedPartnerId || sendMessage.isPending) return
+    if ((!text && !attachedFile) || !selectedPartnerId || sendMessage.isPending) return
+    const file = attachedFile || undefined
     setMessageText('')
-    sendMessage.mutate({ receiverId: selectedPartnerId, content: text })
+    setAttachedFile(null)
+    setAttachPreview(null)
+    sendMessage.mutate({ receiverId: selectedPartnerId, content: text || (file ? `📎 ${file.name}` : ''), file })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -78,6 +84,36 @@ export function MessagesPage() {
       e.preventDefault()
       handleSend()
     }
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      alert('파일 크기는 10MB 이하만 가능합니다.')
+      return
+    }
+    setAttachedFile(file)
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onloadend = () => setAttachPreview(reader.result as string)
+      reader.readAsDataURL(file)
+    } else {
+      setAttachPreview(null)
+    }
+    // Reset input so same file can be re-selected
+    e.target.value = ''
+  }
+
+  const clearAttachment = () => {
+    setAttachedFile(null)
+    setAttachPreview(null)
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes}B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
   }
 
   const selectedPartner = profiles.find((p) => p.id === selectedPartnerId)
@@ -293,9 +329,43 @@ export function MessagesPage() {
                                 : 'bg-white border border-gray-200 text-gray-900 rounded-bl-md'
                             }`}
                           >
-                            <div className="text-sm whitespace-pre-wrap break-words">
-                              {msg.content}
-                            </div>
+                            {/* Attachment preview */}
+                            {msg.attachmentUrl && msg.attachmentType?.startsWith('image/') && (
+                              <a href={msg.attachmentUrl} target="_blank" rel="noopener noreferrer" className="block mb-1.5">
+                                <img
+                                  src={msg.attachmentUrl}
+                                  alt={msg.attachmentName || 'image'}
+                                  className="rounded-lg max-h-48 object-cover cursor-pointer"
+                                  loading="lazy"
+                                />
+                              </a>
+                            )}
+                            {msg.attachmentUrl && !msg.attachmentType?.startsWith('image/') && (
+                              <a
+                                href={msg.attachmentUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`flex items-center gap-2 rounded-lg p-2 mb-1.5 ${
+                                  isMine ? 'bg-blue-600/50' : 'bg-gray-50'
+                                }`}
+                              >
+                                <FileText className="size-5 shrink-0" />
+                                <div className="min-w-0">
+                                  <div className="text-xs font-medium truncate">{msg.attachmentName}</div>
+                                  {msg.attachmentSize && (
+                                    <div className={`text-[10px] ${isMine ? 'text-blue-200' : 'text-gray-400'}`}>
+                                      {formatFileSize(msg.attachmentSize)}
+                                    </div>
+                                  )}
+                                </div>
+                              </a>
+                            )}
+                            {/* Text content (hide if it's just the auto-generated file placeholder) */}
+                            {msg.content && !(msg.attachmentUrl && msg.content.startsWith('📎 ')) && (
+                              <div className="text-sm whitespace-pre-wrap break-words">
+                                {msg.content}
+                              </div>
+                            )}
                             <div
                               className={`text-[10px] mt-1 flex items-center gap-1 ${
                                 isMine ? 'text-blue-200 justify-end' : 'text-gray-400'
@@ -318,8 +388,43 @@ export function MessagesPage() {
                 </div>
 
                 {/* Input area */}
-                <div className="p-3 border-t border-gray-100 bg-white">
+                <div className="p-3 border-t border-gray-100 bg-white space-y-2">
+                  {/* Attachment preview */}
+                  {attachedFile && (
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-2">
+                      {attachPreview ? (
+                        <img src={attachPreview} alt="" className="h-10 w-10 rounded object-cover" />
+                      ) : (
+                        <div className="h-10 w-10 rounded bg-gray-200 flex items-center justify-center">
+                          <FileText className="size-5 text-gray-500" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate">{attachedFile.name}</div>
+                        <div className="text-[10px] text-gray-400">{formatFileSize(attachedFile.size)}</div>
+                      </div>
+                      <button onClick={clearAttachment} className="text-gray-400 hover:text-gray-600">
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="shrink-0 text-gray-400 hover:text-gray-600"
+                      title={t('msg.attachFile')}
+                    >
+                      <Paperclip className="size-4" />
+                    </Button>
                     <Input
                       value={messageText}
                       onChange={(e) => setMessageText(e.target.value)}
@@ -331,7 +436,7 @@ export function MessagesPage() {
                     <Button
                       size="icon"
                       onClick={handleSend}
-                      disabled={!messageText.trim() || sendMessage.isPending}
+                      disabled={(!messageText.trim() && !attachedFile) || sendMessage.isPending}
                       className="shrink-0"
                     >
                       {sendMessage.isPending ? (

@@ -14,6 +14,10 @@ export interface Message {
   senderAvatarUrl?: string
   receiverName?: string
   receiverAvatarUrl?: string
+  attachmentUrl?: string
+  attachmentName?: string
+  attachmentType?: string
+  attachmentSize?: number
 }
 
 function mapMessage(row: Record<string, unknown>): Message {
@@ -30,6 +34,10 @@ function mapMessage(row: Record<string, unknown>): Message {
     senderAvatarUrl: sender?.avatar_url as string | undefined,
     receiverName: receiver?.name as string | undefined,
     receiverAvatarUrl: receiver?.avatar_url as string | undefined,
+    attachmentUrl: row.attachment_url as string | undefined,
+    attachmentName: row.attachment_name as string | undefined,
+    attachmentType: row.attachment_type as string | undefined,
+    attachmentSize: row.attachment_size as number | undefined,
   }
 }
 
@@ -80,16 +88,57 @@ export function useMessageThread(partnerId: string | null) {
   })
 }
 
-/** Send a message */
+/** Send a message (optionally with file attachment) */
 export function useSendMessage() {
   const { user } = useAuth()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ receiverId, content }: { receiverId: string; content: string }) => {
+    mutationFn: async ({
+      receiverId,
+      content,
+      file,
+    }: {
+      receiverId: string
+      content: string
+      file?: File
+    }) => {
+      let attachmentUrl: string | undefined
+      let attachmentName: string | undefined
+      let attachmentType: string | undefined
+      let attachmentSize: number | undefined
+
+      // Upload file to Supabase Storage if provided
+      if (file) {
+        const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+        if (file.size > MAX_SIZE) throw new Error('파일 크기는 10MB 이하만 가능합니다.')
+
+        const ext = file.name.split('.').pop() || 'bin'
+        const path = `${user!.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+        const { error: uploadError } = await supabase.storage
+          .from('message-attachments')
+          .upload(path, file)
+        if (uploadError) throw uploadError
+
+        const { data: urlData } = supabase.storage
+          .from('message-attachments')
+          .getPublicUrl(path)
+
+        attachmentUrl = urlData.publicUrl
+        attachmentName = file.name
+        attachmentType = file.type
+        attachmentSize = file.size
+      }
+
       const { error } = await supabase.from('messages').insert({
         sender_id: user!.id,
         receiver_id: receiverId,
         content,
+        ...(attachmentUrl && {
+          attachment_url: attachmentUrl,
+          attachment_name: attachmentName,
+          attachment_type: attachmentType,
+          attachment_size: attachmentSize,
+        }),
       })
       if (error) throw error
     },
