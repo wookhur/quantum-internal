@@ -1,4 +1,4 @@
-import { useState, useMemo, type ReactNode } from 'react'
+import { useState, useMemo, useEffect, type ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +42,8 @@ const CONSULTANTS = [
 function consultantName(id?: string) {
   return CONSULTANTS.find(c => c.id === id)?.name || id || '—'
 }
+
+const COMM_PLATFORMS = ['KakaoTalk', 'WhatsApp', 'WeChat', 'Email', 'Etc'] as const
 
 const REPORT_META: Record<ServiceReportStatus, { labelKey: string; className: string }> = {
   none: { labelKey: 'student360.reportNone', className: 'bg-gray-100 text-gray-600' },
@@ -200,6 +202,22 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field label={t('student360.partners')} value={student.partners} />
         <Field label={t('student360.majors')} value={student.majors} />
         <Field label={t('student360.contractType')} value={student.contractType} />
+        <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
+        <div>
+          <p className="text-xs text-muted-foreground mb-0.5">{t('student360.chatLink')}</p>
+          {student.chatLink ? (
+            <a
+              href={student.chatLink}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary underline break-all"
+            >
+              {t('student360.openChat')}
+            </a>
+          ) : (
+            <p>—</p>
+          )}
+        </div>
         <Field label={t('student360.startDate')} value={student.startDate} />
         <Field label={t('student360.endDate')} value={student.endDate} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
@@ -356,7 +374,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
   const [open, setOpen] = useState(false)
   const create = useCreateServiceStudent()
   const update = useUpdateServiceStudent()
-  const [form, setForm] = useState({
+  const buildForm = () => ({
     name: student?.name || '',
     koreanName: student?.koreanName || '',
     nationality: student?.nationality || '',
@@ -370,6 +388,8 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     partners: student?.partners || '',
     majors: student?.majors || '',
     contractType: student?.contractType || '',
+    communicationPlatform: student?.communicationPlatform || '',
+    chatLink: student?.chatLink || '',
     startDate: student?.startDate || '',
     endDate: student?.endDate || '',
     status: student?.status || '',
@@ -377,6 +397,10 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     acceptedUni: student?.acceptedUni || '',
     address: student?.address || '',
   })
+  const [form, setForm] = useState(buildForm)
+
+  // Reset to a clean form (or the student's values) every time the dialog opens
+  useEffect(() => { if (open) setForm(buildForm()) }, [open])
 
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
@@ -396,6 +420,8 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
       partners: form.partners || undefined,
       majors: form.majors || undefined,
       contractType: form.contractType || undefined,
+      communicationPlatform: form.communicationPlatform || undefined,
+      chatLink: form.chatLink || undefined,
       startDate: form.startDate || undefined,
       endDate: form.endDate || undefined,
       status: form.status || undefined,
@@ -441,6 +467,16 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           <LabeledInput label={t('student360.partners')} value={form.partners} onChange={v => set('partners', v)} />
           <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />
+          <div>
+            <Label className="text-xs">{t('student360.commPlatform')}</Label>
+            <Select value={form.communicationPlatform} onValueChange={v => set('communicationPlatform', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {COMM_PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <LabeledInput label={t('student360.chatLink')} value={form.chatLink} onChange={v => set('chatLink', v)} />
           <div>
             <Label className="text-xs">{t('student360.startDate')}</Label>
             <Input type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
@@ -545,7 +581,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
   const [open, setOpen] = useState(false)
   const create = useCreateServiceMeeting()
   const update = useUpdateServiceMeeting()
-  const [form, setForm] = useState({
+  const buildForm = () => ({
     meetingDate: meeting?.meetingDate || '',
     meetingType: meeting?.meetingType || '',
     consultantId: meeting?.consultantId || '',
@@ -554,6 +590,8 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
     reportUrl: meeting?.reportUrl || '',
     reportDate: meeting?.reportDate || '',
   })
+  const [form, setForm] = useState(buildForm)
+  useEffect(() => { if (open) setForm(buildForm()) }, [open])
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
   const submit = () => {
@@ -634,6 +672,16 @@ function DiarySection({ studentId, authorName, createdBy }: {
   const t = useT()
   const { data: entries = [] } = useServiceDiary(studentId)
   const del = useDeleteServiceDiary()
+  const [diarySearch, setDiarySearch] = useState('')
+
+  const visibleEntries = useMemo(() => {
+    const q = diarySearch.trim().toLowerCase()
+    if (!q) return entries
+    return entries.filter(d =>
+      (d.entryDate || '').toLowerCase().includes(q) ||
+      DIARY_FIELDS.some(f => (d[f.key] || '').toLowerCase().includes(q))
+    )
+  }, [entries, diarySearch])
 
   return (
     <Card>
@@ -648,8 +696,20 @@ function DiarySection({ studentId, authorName, createdBy }: {
         />
       </CardHeader>
       <CardContent className="space-y-2">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder={t('student360.diarySearchPlaceholder')}
+            value={diarySearch}
+            onChange={(e) => setDiarySearch(e.target.value)}
+          />
+        </div>
         {entries.length === 0 && <p className="text-sm text-muted-foreground">{t('student360.noDiary')}</p>}
-        {entries.map(d => (
+        {entries.length > 0 && visibleEntries.length === 0 && (
+          <p className="text-sm text-muted-foreground">{t('student360.diaryNoMatch')}</p>
+        )}
+        {visibleEntries.map(d => (
           <div key={d.id} className="rounded-lg border p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -699,7 +759,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
   const [open, setOpen] = useState(false)
   const create = useCreateServiceDiary()
   const update = useUpdateServiceDiary()
-  const [form, setForm] = useState({
+  const buildForm = () => ({
     entryDate: entry?.entryDate || new Date().toISOString().slice(0, 10),
     agendaItems: entry?.agendaItems || '',
     meetingSummary: entry?.meetingSummary || '',
@@ -711,6 +771,8 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
     assignments: entry?.assignments || '',
     criticalDates: entry?.criticalDates || '',
   })
+  const [form, setForm] = useState(buildForm)
+  useEffect(() => { if (open) setForm(buildForm()) }, [open])
   const setField = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const submit = () => {
