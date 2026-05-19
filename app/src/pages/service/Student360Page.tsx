@@ -45,6 +45,12 @@ function consultantName(id?: string) {
 
 const COMM_PLATFORMS = ['KakaoTalk', 'WhatsApp', 'WeChat', 'Email', 'Etc'] as const
 
+function reportSaveError(e: unknown) {
+  const msg = (e as { message?: string })?.message || String(e)
+  // Surface the real reason instead of failing silently.
+  alert(`저장 실패 / Save failed:\n${msg}`)
+}
+
 const REPORT_META: Record<ServiceReportStatus, { labelKey: string; className: string }> = {
   none: { labelKey: 'student360.reportNone', className: 'bg-gray-100 text-gray-600' },
   pending: { labelKey: 'student360.reportPending', className: 'bg-amber-100 text-amber-700' },
@@ -430,10 +436,11 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
       address: form.address || undefined,
     }
     if (student) {
-      update.mutate({ id: student.id, ...payload }, { onSuccess: () => setOpen(false) })
+      update.mutate({ id: student.id, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
     } else {
       create.mutate({ ...payload, createdBy }, {
         onSuccess: (s) => { setOpen(false); onSaved?.(s) },
+        onError: reportSaveError,
       })
     }
   }
@@ -605,9 +612,9 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
       reportDate: form.reportDate || undefined,
     }
     if (meeting) {
-      update.mutate({ id: meeting.id, studentId, ...payload }, { onSuccess: () => setOpen(false) })
+      update.mutate({ id: meeting.id, studentId, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
     } else {
-      create.mutate({ studentId, ...payload, createdBy }, { onSuccess: () => setOpen(false) })
+      create.mutate({ studentId, ...payload, createdBy }, { onSuccess: () => setOpen(false), onError: reportSaveError })
     }
   }
 
@@ -789,9 +796,9 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
       criticalDates: form.criticalDates || undefined,
     }
     if (entry) {
-      update.mutate({ id: entry.id, studentId, ...payload }, { onSuccess: () => setOpen(false) })
+      update.mutate({ id: entry.id, studentId, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
     } else {
-      create.mutate({ studentId, ...payload, authorId: authorName, createdBy }, { onSuccess: () => setOpen(false) })
+      create.mutate({ studentId, ...payload, authorId: authorName, createdBy }, { onSuccess: () => setOpen(false), onError: reportSaveError })
     }
   }
 
