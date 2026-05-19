@@ -212,24 +212,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field label={t('student360.contractType')} value={student.contractType} />
         <Field label={t('student360.status')} value={student.status} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
-        <div className="col-span-2 grid grid-cols-2 gap-x-6 gap-y-3">
-          <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">{t('student360.chatLink')}</p>
-            {student.chatLink ? (
-              <a
-                href={student.chatLink}
-                target="_blank"
-                rel="noreferrer"
-                className="text-primary underline break-all"
-              >
-                {t('student360.openChat')}
-              </a>
-            ) : (
-              <p>—</p>
-            )}
-          </div>
-        </div>
+        <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
         <div className="col-span-2 grid grid-cols-2 gap-x-6 gap-y-3">
           <Field label={t('student360.startDate')} value={student.startDate} />
           <Field label={t('student360.endDate')} value={student.endDate} />
@@ -404,7 +387,6 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     majors: student?.majors || '',
     contractType: student?.contractType || '',
     communicationPlatform: student?.communicationPlatform || '',
-    chatLink: student?.chatLink || '',
     startDate: student?.startDate || '',
     endDate: student?.endDate || '',
     status: student?.status || '',
@@ -438,7 +420,6 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
       majors: form.majors || undefined,
       contractType: form.contractType || undefined,
       communicationPlatform: form.communicationPlatform || undefined,
-      chatLink: form.chatLink || undefined,
       startDate: form.startDate || undefined,
       endDate: form.endDate || undefined,
       status: form.status || undefined,
@@ -489,17 +470,14 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />
           <LabeledInput label={t('student360.status')} value={form.status} onChange={v => set('status', v)} />
           <LabeledInput label={t('student360.acceptedUni')} value={form.acceptedUni} onChange={v => set('acceptedUni', v)} />
-          <div className="col-span-2 grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">{t('student360.commPlatform')}</Label>
-              <Select value={form.communicationPlatform} onValueChange={v => set('communicationPlatform', v)}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  {COMM_PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <LabeledInput label={t('student360.chatLink')} value={form.chatLink} onChange={v => set('chatLink', v)} />
+          <div>
+            <Label className="text-xs">{t('student360.commPlatform')}</Label>
+            <Select value={form.communicationPlatform} onValueChange={v => set('communicationPlatform', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {COMM_PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="col-span-2 grid grid-cols-2 gap-3">
             <div>

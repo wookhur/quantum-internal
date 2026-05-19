@@ -402,7 +402,6 @@ export interface ServiceStudent {
   majors?: string
   contractType?: string
   communicationPlatform?: string
-  chatLink?: string
   startDate?: string
   endDate?: string
   status?: string
