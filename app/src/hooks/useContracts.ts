@@ -54,8 +54,10 @@ export function useCreateContract() {
       gradeAtContract: string
       contractDate: string
       expiryDate: string
+      leadId?: string
+      phone?: string
     }) => {
-      const { data, error } = await supabase.from('contracts').insert({
+      const row: Record<string, unknown> = {
         contractor_name: contract.contractorName,
         student_name: contract.studentName,
         school_name: contract.schoolName,
@@ -63,11 +65,18 @@ export function useCreateContract() {
         contract_date: contract.contractDate,
         expiry_date: contract.expiryDate,
         status: 'active',
-      }).select().single()
+      }
+      if (contract.leadId) row.lead_id = contract.leadId
+      if (contract.phone) row.phone = contract.phone
+
+      const { data, error } = await supabase.from('contracts').insert(row).select().single()
       if (error) throw error
       return data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contracts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
+    },
   })
 }
 

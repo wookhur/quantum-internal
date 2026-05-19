@@ -567,13 +567,32 @@ export function PipelinePage() {
 
       if (!targetStage || targetStage === draggedLead.pipelineStage) return
 
-      updateLead.mutate({
-        id: draggedLead.id,
-        data: { pipelineStage: targetStage },
-        previousStage: draggedLead.pipelineStage,
-      })
+      const isContractStage = targetStage === 'contract_review' || targetStage === 'contracted'
+
+      updateLead.mutate(
+        {
+          id: draggedLead.id,
+          data: { pipelineStage: targetStage },
+          previousStage: draggedLead.pipelineStage,
+        },
+        {
+          onSuccess: () => {
+            if (isContractStage) {
+              const params = new URLSearchParams({
+                leadId: draggedLead.id,
+                contractorName: draggedLead.parentName || '',
+                studentName: draggedLead.studentName || '',
+                schoolName: draggedLead.currentSchool || '',
+                grade: draggedLead.grade || '',
+                phone: draggedLead.phone || '',
+              })
+              navigate(`/consulting/clients?${params.toString()}`)
+            }
+          },
+        },
+      )
     },
-    [leads, updateLead],
+    [leads, updateLead, navigate],
   )
 
   const handleDragOver = useCallback((_event: DragOverEvent) => {

@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -74,6 +74,7 @@ const INITIAL_CONTRACT_FORM = {
 
 export function ContractsPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const t = useT()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -81,16 +82,46 @@ export function ContractsPage() {
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_CONTRACT_FORM)
   const [expandedContract, setExpandedContract] = useState<string | null>(null)
+  const [fromLead, setFromLead] = useState(false)
   const createContract = useCreateContract()
+
+  // Auto-open create dialog when navigated from lead stage change
+  useEffect(() => {
+    const leadId = searchParams.get('leadId')
+    if (leadId) {
+      leadInfoRef.current = { leadId, phone: searchParams.get('phone') || '' }
+      setForm({
+        contractorName: searchParams.get('contractorName') || '',
+        studentName: searchParams.get('studentName') || '',
+        schoolName: searchParams.get('schoolName') || '',
+        gradeAtContract: searchParams.get('grade') || '',
+        contractDate: new Date().toISOString().slice(0, 10),
+        expiryDate: '',
+      })
+      setFromLead(true)
+      setDialogOpen(true)
+      // Clean URL params without navigation
+      setSearchParams({}, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Preserve lead info for contract creation (survives URL cleanup)
+  const leadInfoRef = useRef<{ leadId: string; phone: string } | null>(null)
 
   const handleCreateContract = () => {
     if (!form.contractorName.trim() || !form.studentName.trim()) return
-    createContract.mutate(form, {
-      onSuccess: () => {
-        setDialogOpen(false)
-        setForm(INITIAL_CONTRACT_FORM)
+    createContract.mutate(
+      { ...form, leadId: leadInfoRef.current?.leadId, phone: leadInfoRef.current?.phone || undefined },
+      {
+        onSuccess: (data) => {
+          setDialogOpen(false)
+          setForm(INITIAL_CONTRACT_FORM)
+          setFromLead(false)
+          // Navigate to the new contract detail page
+          if (data?.id) navigate(`/consulting/clients/${data.id}`)
+        },
       },
-    })
+    )
   }
 
   const { data: contracts = [], isLoading, error } = useContractsWithInstallments({
@@ -137,6 +168,11 @@ export function ContractsPage() {
                 <DialogTitle>{t('contracts.addContract')}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4 pt-2">
+                {fromLead && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                    📋 {t('contracts.fromLeadMessage')}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{t('contracts.parentName')}</Label>

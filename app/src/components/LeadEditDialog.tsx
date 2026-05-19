@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { useUpdateLead } from '@/hooks/useLeads'
 import { PIPELINE_STAGES, SOURCE_CHANNELS, INTEREST_AREAS, REGIONS, GRADES } from '@/types'
@@ -14,6 +15,7 @@ interface LeadEditDialogProps {
 
 export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogProps) {
   const updateLead = useUpdateLead()
+  const navigate = useNavigate()
 
   const [form, setForm] = useState({
     parentName: '',
@@ -65,6 +67,9 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
     setError(null)
 
     try {
+      const stageChanged = lead.pipelineStage !== form.pipelineStage
+      const isContractStage = form.pipelineStage === 'contract_review' || form.pipelineStage === 'contracted'
+
       await updateLead.mutateAsync({
         id: lead.id,
         data: {
@@ -82,9 +87,22 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
           pipelineStage: form.pipelineStage,
           contactChannel: form.contactChannel || undefined,
         },
-        previousStage: lead.pipelineStage !== form.pipelineStage ? lead.pipelineStage : undefined,
+        previousStage: stageChanged ? lead.pipelineStage : undefined,
       })
       onClose()
+
+      // Navigate to contract creation when stage moves to contract_review or contracted
+      if (stageChanged && isContractStage) {
+        const params = new URLSearchParams({
+          leadId: lead.id,
+          contractorName: form.parentName,
+          studentName: form.studentName || '',
+          schoolName: form.currentSchool || '',
+          grade: form.grade || '',
+          phone: form.phone || '',
+        })
+        navigate(`/consulting/clients?${params.toString()}`)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '저장 중 오류가 발생했습니다.')
     }
