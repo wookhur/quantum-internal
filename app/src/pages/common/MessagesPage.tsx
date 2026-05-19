@@ -11,7 +11,6 @@ import {
   useMessageThread,
   useSendMessage,
   useMarkRead,
-  useMessageSubscription,
 } from '@/hooks/useMessages'
 import { useT } from '@/i18n/LanguageContext'
 
@@ -22,7 +21,6 @@ export function MessagesPage() {
   const { data: conversations = [], isLoading: convLoading } = useConversations()
   const sendMessage = useSendMessage()
   const markRead = useMarkRead()
-  useMessageSubscription()
 
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null)
   const [messageText, setMessageText] = useState('')
