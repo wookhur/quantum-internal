@@ -29,6 +29,7 @@ import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
 import { Student360Page } from '@/pages/service/Student360Page'
 import { MessagesPage } from '@/pages/common/MessagesPage'
+import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,6 +46,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/portal/:token" element={<StudentPortalPage />} />
 
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>

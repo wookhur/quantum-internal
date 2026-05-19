@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, User as UserIcon,
-  CalendarDays, FileText, NotebookPen,
+  CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -22,6 +22,9 @@ import {
   useServiceMeetings, useCreateServiceMeeting, useUpdateServiceMeeting, useDeleteServiceMeeting,
   useServiceDiary, useCreateServiceDiary, useUpdateServiceDiary, useDeleteServiceDiary,
 } from '@/hooks/useServiceStudents'
+import {
+  usePortalTokens, useCreatePortalToken, useTogglePortalToken, useDeletePortalToken,
+} from '@/hooks/usePortalTokens'
 import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
 } from '@/types'
@@ -139,6 +142,7 @@ export function Student360Page() {
         ) : (
           <div className="space-y-4">
             <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} />
+            <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} />
             <MeetingsSection studentId={selected.id} createdBy={user?.id} />
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} />
           </div>
@@ -217,6 +221,127 @@ function Field({ icon, label, value }: { icon?: ReactNode; label: string; value?
       <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">{icon}{label}</p>
       <p>{value || '—'}</p>
     </div>
+  )
+}
+
+// ────────────────────────── Portal Links ──────────────────────────
+function PortalLinksSection({ studentId, studentName, createdBy }: {
+  studentId: string
+  studentName: string
+  createdBy?: string
+}) {
+  const t = useT()
+  const { data: tokens = [], isLoading } = usePortalTokens(studentId)
+  const createToken = useCreatePortalToken()
+  const toggleToken = useTogglePortalToken()
+  const deleteToken = useDeletePortalToken()
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const baseUrl = window.location.origin
+
+  const handleCreate = () => {
+    createToken.mutate({
+      studentId,
+      label: `${studentName} ${t('portal.parentLink')}`,
+      createdBy,
+    })
+  }
+
+  const handleCopy = (token: string, id: string) => {
+    navigator.clipboard.writeText(`${baseUrl}/portal/${token}`)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Link2 className="size-5 text-primary" />
+          {t('portal.clientLinks')}
+          <span className="text-muted-foreground font-normal">({tokens.length})</span>
+        </CardTitle>
+        <Button
+          size="sm" variant="outline"
+          onClick={handleCreate}
+          disabled={createToken.isPending}
+        >
+          <Plus className="size-4 mr-1" />
+          {t('portal.generateLink')}
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {isLoading && <p className="text-sm text-muted-foreground">{t('common.loading')}</p>}
+        {!isLoading && tokens.length === 0 && (
+          <p className="text-sm text-muted-foreground">{t('portal.noLinks')}</p>
+        )}
+        {tokens.map((tk) => {
+          const url = `${baseUrl}/portal/${tk.token}`
+          const isCopied = copiedId === tk.id
+          return (
+            <div
+              key={tk.id}
+              className={`rounded-lg border p-3 ${tk.isActive ? '' : 'opacity-50 bg-gray-50'}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    {tk.label && <span className="text-sm font-medium">{tk.label}</span>}
+                    <Badge variant="outline" className={tk.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-100 text-gray-500'}>
+                      {tk.isActive ? t('portal.active') : t('portal.inactive')}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <code className="text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded truncate max-w-[300px]">
+                      {url}
+                    </code>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    {t('portal.createdAt')}: {new Date(tk.createdAt).toLocaleDateString('ko-KR')}
+                    {tk.expiresAt && ` · ${t('portal.expiresAt')}: ${new Date(tk.expiresAt).toLocaleDateString('ko-KR')}`}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => handleCopy(tk.token, tk.id)}
+                    title={t('portal.copyLink')}
+                  >
+                    {isCopied ? <Check className="size-4 text-emerald-500" /> : <Copy className="size-4" />}
+                  </Button>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-gray-100 transition-colors"
+                    title={t('portal.openLink')}
+                  >
+                    <ExternalLink className="size-4 text-muted-foreground" />
+                  </a>
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => toggleToken.mutate({ id: tk.id, studentId, isActive: !tk.isActive })}
+                    title={tk.isActive ? t('portal.deactivate') : t('portal.activate')}
+                  >
+                    <Power className={`size-4 ${tk.isActive ? 'text-emerald-500' : 'text-gray-400'}`} />
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => {
+                      if (confirm(t('portal.confirmDelete'))) {
+                        deleteToken.mutate({ id: tk.id, studentId })
+                      }
+                    }}
+                  >
+                    <Trash2 className="size-4 text-red-400" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
   )
 }
 
