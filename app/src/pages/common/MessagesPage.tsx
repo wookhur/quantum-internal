@@ -67,11 +67,10 @@ export function MessagesPage() {
   }, [otherProfiles, search])
 
   const handleSend = () => {
-    if (!messageText.trim() || !selectedPartnerId) return
-    sendMessage.mutate(
-      { receiverId: selectedPartnerId, content: messageText.trim() },
-      { onSuccess: () => setMessageText('') },
-    )
+    const text = messageText.trim()
+    if (!text || !selectedPartnerId || sendMessage.isPending) return
+    setMessageText('')
+    sendMessage.mutate({ receiverId: selectedPartnerId, content: text })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
