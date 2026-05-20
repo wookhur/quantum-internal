@@ -17,6 +17,7 @@ import {
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp,
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
@@ -77,8 +78,19 @@ const DIARY_FIELDS = [
 export function Student360Page() {
   const t = useT()
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('student'))
+
+  // Keep ?student= in the URL in sync so links from the KPI page (and back/forward) work.
+  useEffect(() => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (selectedId) next.set('student', selectedId)
+      else next.delete('student')
+      return next
+    }, { replace: true })
+  }, [selectedId, setSearchParams])
 
   const { data: students = [], isLoading } = useServiceStudents()
   const { data: studentKpis = {} } = useStudentKpis()
