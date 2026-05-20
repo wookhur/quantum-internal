@@ -429,10 +429,31 @@ export interface ServiceMeeting {
   updatedAt: string
 }
 
+export type ServiceReportCategory =
+  | 'strength_result'
+  | 'strength_report'
+  | 'grade_report'
+  | 'grade_analysis'
+  | 'other'
+
+export interface ServiceReport {
+  id: string
+  studentId: string
+  category: ServiceReportCategory
+  grade?: string
+  label?: string
+  url: string
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ServiceDiaryEntry {
   id: string
   studentId: string
   entryDate?: string
+  prepUrl?: string
+  summaryUrl?: string
   agendaItems?: string
   meetingSummary?: string
   extracurricularNotes?: string

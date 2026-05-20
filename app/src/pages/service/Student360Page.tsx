@@ -23,10 +23,14 @@ import {
   useServiceDiary, useCreateServiceDiary, useUpdateServiceDiary, useDeleteServiceDiary,
 } from '@/hooks/useServiceStudents'
 import {
+  useServiceReports, useCreateServiceReport, useDeleteServiceReport,
+} from '@/hooks/useServiceReports'
+import {
   usePortalTokens, useCreatePortalToken, useTogglePortalToken, useDeletePortalToken,
 } from '@/hooks/usePortalTokens'
 import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
+  ServiceReportCategory,
 } from '@/types'
 
 // Consultant pool + helpers (shared with KPI page)
@@ -161,6 +165,7 @@ export function Student360Page() {
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} />
             <MeetingsSection studentId={selected.id} createdBy={user?.id} />
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} />
+            <ArchiveSection studentId={selected.id} createdBy={user?.id} />
           </div>
         )}
       </div>
@@ -739,6 +744,20 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 </Button>
               </div>
             </div>
+            {(d.prepUrl || d.summaryUrl) && (
+              <div className="mt-2 flex flex-wrap gap-3 text-xs">
+                {d.prepUrl && (
+                  <a href={d.prepUrl} target="_blank" rel="noreferrer" className="text-primary underline">
+                    {t('student360.prepUrl')}
+                  </a>
+                )}
+                {d.summaryUrl && (
+                  <a href={d.summaryUrl} target="_blank" rel="noreferrer" className="text-primary underline">
+                    {t('student360.summaryUrl')}
+                  </a>
+                )}
+              </div>
+            )}
             <div className="mt-2 space-y-2">
               {DIARY_FIELDS.map(f => {
                 const val = d[f.key]
@@ -771,6 +790,8 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
   const update = useUpdateServiceDiary()
   const buildForm = () => ({
     entryDate: entry?.entryDate || new Date().toISOString().slice(0, 10),
+    prepUrl: entry?.prepUrl || '',
+    summaryUrl: entry?.summaryUrl || '',
     agendaItems: entry?.agendaItems || '',
     meetingSummary: entry?.meetingSummary || '',
     extracurricularNotes: entry?.extracurricularNotes || '',
@@ -788,6 +809,8 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
   const submit = () => {
     const payload = {
       entryDate: form.entryDate || undefined,
+      prepUrl: form.prepUrl || undefined,
+      summaryUrl: form.summaryUrl || undefined,
       agendaItems: form.agendaItems || undefined,
       meetingSummary: form.meetingSummary || undefined,
       extracurricularNotes: form.extracurricularNotes || undefined,
@@ -817,6 +840,16 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
             <Label className="text-xs">{t('student360.entryDate')}</Label>
             <Input type="date" value={form.entryDate} onChange={e => setField('entryDate', e.target.value)} />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">{t('student360.prepUrl')}</Label>
+              <Input placeholder="https://..." value={form.prepUrl} onChange={e => setField('prepUrl', e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('student360.summaryUrl')}</Label>
+              <Input placeholder="https://..." value={form.summaryUrl} onChange={e => setField('summaryUrl', e.target.value)} />
+            </div>
+          </div>
           {DIARY_FIELDS.map(f => (
             <div key={f.key}>
               <Label className="text-xs">{t(f.labelKey)}</Label>
@@ -834,5 +867,241 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ────────────────────────── Archive (Required Reports) ──────────────────────────
+type PerGradeCategory = 'strength_result' | 'strength_report' | 'grade_report'
+
+const ARCHIVE_PER_GRADE: { key: PerGradeCategory; labelKey: string }[] = [
+  { key: 'strength_result', labelKey: 'archive.strengthResult' },
+  { key: 'strength_report', labelKey: 'archive.strengthReport' },
+  { key: 'grade_report',    labelKey: 'archive.gradeReport' },
+]
+
+function ArchiveSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
+  const t = useT()
+  const { data: reports = [] } = useServiceReports(studentId)
+
+  const byCategory = (cat: ServiceReportCategory) => reports.filter(r => r.category === cat)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FileText className="size-5 text-primary" />
+          {t('archive.title')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {ARCHIVE_PER_GRADE.map(g => (
+          <PerGradeArchiveBlock
+            key={g.key}
+            studentId={studentId}
+            createdBy={createdBy}
+            category={g.key}
+            title={t(g.labelKey)}
+            rows={byCategory(g.key)}
+          />
+        ))}
+        <GradeAnalysisBlock
+          studentId={studentId}
+          createdBy={createdBy}
+          rows={byCategory('grade_analysis')}
+        />
+        <OtherArchiveBlock
+          studentId={studentId}
+          createdBy={createdBy}
+          rows={byCategory('other')}
+        />
+      </CardContent>
+    </Card>
+  )
+}
+
+function PerGradeArchiveBlock({
+  studentId, createdBy, category, title, rows,
+}: {
+  studentId: string
+  createdBy?: string
+  category: PerGradeCategory
+  title: string
+  rows: { id: string; grade?: string; url: string }[]
+}) {
+  const t = useT()
+  const create = useCreateServiceReport()
+  const del = useDeleteServiceReport()
+  const [adding, setAdding] = useState(false)
+  const [grade, setGrade] = useState('')
+  const [url, setUrl] = useState('')
+
+  const save = () => {
+    if (!url.trim()) return
+    create.mutate(
+      { studentId, category, grade: grade || undefined, url: url.trim(), createdBy },
+      {
+        onError: reportSaveError,
+        onSuccess: () => { setGrade(''); setUrl(''); setAdding(false) },
+      },
+    )
+  }
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="font-medium text-sm">{title}</p>
+        <Button size="sm" variant="ghost" onClick={() => setAdding(v => !v)}>
+          <Plus className="size-4" />
+        </Button>
+      </div>
+      {rows.length === 0 && !adding && (
+        <p className="text-xs text-muted-foreground">{t('archive.empty')}</p>
+      )}
+      <div className="space-y-1.5">
+        {rows.map(r => (
+          <div key={r.id} className="flex items-center gap-2 text-sm">
+            <Badge variant="outline" className="text-[10px] shrink-0">{r.grade || '—'}</Badge>
+            <a href={r.url} target="_blank" rel="noreferrer" className="text-primary underline truncate flex-1">
+              {r.url}
+            </a>
+            <Button
+              size="sm" variant="ghost"
+              onClick={() => { if (confirm(t('student360.confirmDelete'))) del.mutate({ id: r.id, studentId }) }}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      {adding && (
+        <div className="grid grid-cols-[100px_1fr_auto] gap-2 mt-2">
+          <Input placeholder={t('archive.gradePlaceholder')} value={grade} onChange={e => setGrade(e.target.value)} />
+          <Input placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} />
+          <Button size="sm" onClick={save} disabled={!url.trim()}>{t('common.save')}</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GradeAnalysisBlock({
+  studentId, createdBy, rows,
+}: {
+  studentId: string
+  createdBy?: string
+  rows: { id: string; url: string }[]
+}) {
+  const t = useT()
+  const create = useCreateServiceReport()
+  const del = useDeleteServiceReport()
+  const [adding, setAdding] = useState(false)
+  const [url, setUrl] = useState('')
+
+  const save = () => {
+    if (!url.trim()) return
+    create.mutate(
+      { studentId, category: 'grade_analysis', url: url.trim(), createdBy },
+      { onError: reportSaveError, onSuccess: () => { setUrl(''); setAdding(false) } },
+    )
+  }
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="font-medium text-sm flex items-center gap-2">
+          {t('archive.gradeAnalysis')}
+          {rows.length === 0 && (
+            <Badge className="bg-red-100 text-red-700 text-[10px]">{t('archive.required')}</Badge>
+          )}
+        </p>
+        <Button size="sm" variant="ghost" onClick={() => setAdding(v => !v)}>
+          <Plus className="size-4" />
+        </Button>
+      </div>
+      {rows.length === 0 && !adding && (
+        <p className="text-xs text-muted-foreground">{t('archive.empty')}</p>
+      )}
+      <div className="space-y-1.5">
+        {rows.map(r => (
+          <div key={r.id} className="flex items-center gap-2 text-sm">
+            <a href={r.url} target="_blank" rel="noreferrer" className="text-primary underline truncate flex-1">
+              {r.url}
+            </a>
+            <Button
+              size="sm" variant="ghost"
+              onClick={() => { if (confirm(t('student360.confirmDelete'))) del.mutate({ id: r.id, studentId }) }}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      {adding && (
+        <div className="flex gap-2 mt-2">
+          <Input placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} className="flex-1" />
+          <Button size="sm" onClick={save} disabled={!url.trim()}>{t('common.save')}</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OtherArchiveBlock({
+  studentId, createdBy, rows,
+}: {
+  studentId: string
+  createdBy?: string
+  rows: { id: string; label?: string; url: string }[]
+}) {
+  const t = useT()
+  const create = useCreateServiceReport()
+  const del = useDeleteServiceReport()
+  const [adding, setAdding] = useState(false)
+  const [label, setLabel] = useState('')
+  const [url, setUrl] = useState('')
+
+  const save = () => {
+    if (!url.trim()) return
+    create.mutate(
+      { studentId, category: 'other', label: label || undefined, url: url.trim(), createdBy },
+      { onError: reportSaveError, onSuccess: () => { setLabel(''); setUrl(''); setAdding(false) } },
+    )
+  }
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="font-medium text-sm">{t('archive.other')}</p>
+        <Button size="sm" variant="ghost" onClick={() => setAdding(v => !v)}>
+          <Plus className="size-4" />
+        </Button>
+      </div>
+      {rows.length === 0 && !adding && (
+        <p className="text-xs text-muted-foreground">{t('archive.empty')}</p>
+      )}
+      <div className="space-y-1.5">
+        {rows.map(r => (
+          <div key={r.id} className="flex items-center gap-2 text-sm">
+            {r.label && <Badge variant="outline" className="text-[10px] shrink-0">{r.label}</Badge>}
+            <a href={r.url} target="_blank" rel="noreferrer" className="text-primary underline truncate flex-1">
+              {r.url}
+            </a>
+            <Button
+              size="sm" variant="ghost"
+              onClick={() => { if (confirm(t('student360.confirmDelete'))) del.mutate({ id: r.id, studentId }) }}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      {adding && (
+        <div className="grid grid-cols-[140px_1fr_auto] gap-2 mt-2">
+          <Input placeholder={t('archive.labelPlaceholder')} value={label} onChange={e => setLabel(e.target.value)} />
+          <Input placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} />
+          <Button size="sm" onClick={save} disabled={!url.trim()}>{t('common.save')}</Button>
+        </div>
+      )}
+    </div>
   )
 }

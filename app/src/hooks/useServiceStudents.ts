@@ -61,6 +61,8 @@ function mapDiary(row: Record<string, unknown>): ServiceDiaryEntry {
     id: row.id as string,
     studentId: row.student_id as string,
     entryDate: (row.entry_date as string) || undefined,
+    prepUrl: (row.prep_url as string) || undefined,
+    summaryUrl: (row.summary_url as string) || undefined,
     agendaItems: (row.agenda_items as string) || undefined,
     meetingSummary: (row.meeting_summary as string) || undefined,
     extracurricularNotes: (row.extracurricular_notes as string) || undefined,
@@ -339,6 +341,8 @@ export function useCreateServiceDiary() {
     mutationFn: async (d: {
       studentId: string
       entryDate?: string
+      prepUrl?: string
+      summaryUrl?: string
       agendaItems?: string
       meetingSummary?: string
       extracurricularNotes?: string
@@ -354,6 +358,8 @@ export function useCreateServiceDiary() {
       const { data, error } = await supabase.from('service_diary').insert({
         student_id: d.studentId,
         entry_date: d.entryDate || null,
+        prep_url: d.prepUrl,
+        summary_url: d.summaryUrl,
         agenda_items: d.agendaItems,
         meeting_summary: d.meetingSummary,
         extracurricular_notes: d.extracurricularNotes,
@@ -380,6 +386,8 @@ export function useUpdateServiceDiary() {
       id: string
       studentId: string
       entryDate?: string | null
+      prepUrl?: string
+      summaryUrl?: string
       agendaItems?: string
       meetingSummary?: string
       extracurricularNotes?: string
@@ -393,6 +401,8 @@ export function useUpdateServiceDiary() {
       const { id, studentId: _s, ...rest } = payload
       const update: Record<string, unknown> = {}
       if (rest.entryDate !== undefined) update.entry_date = rest.entryDate
+      if (rest.prepUrl !== undefined) update.prep_url = rest.prepUrl
+      if (rest.summaryUrl !== undefined) update.summary_url = rest.summaryUrl
       if (rest.agendaItems !== undefined) update.agenda_items = rest.agendaItems
       if (rest.meetingSummary !== undefined) update.meeting_summary = rest.meetingSummary
       if (rest.extracurricularNotes !== undefined) update.extracurricular_notes = rest.extracurricularNotes
