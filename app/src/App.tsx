@@ -28,6 +28,7 @@ import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
 import { Student360Page } from '@/pages/service/Student360Page'
+import { ConsultantKpiPage } from '@/pages/service/ConsultantKpiPage'
 import { MessagesPage } from '@/pages/common/MessagesPage'
 import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
 
@@ -73,6 +74,7 @@ export default function App() {
                 <Route path="/consulting/collections" element={<MonthlyCollectionPage />} />
 
                 <Route path="/service/student-360" element={<Student360Page />} />
+                <Route path="/service/kpi" element={<ConsultantKpiPage />} />
 
                 <Route path="/planning/overview" element={<PlanningOverviewPage />} />
                 <Route path="/planning/projection" element={<RevenueProjectionPage />} />

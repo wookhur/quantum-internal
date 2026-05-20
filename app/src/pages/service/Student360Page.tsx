@@ -29,19 +29,10 @@ import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
 } from '@/types'
 
-// Shared consultant pool
-const CONSULTANTS = [
-  { id: 'sangbum', name: '한상범' },
-  { id: 'jihyun', name: '김지현' },
-  { id: 'eunyoung', name: '양은영' },
-  { id: 'yeonse', name: '남연서' },
-  { id: 'danny', name: 'Danny' },
-  { id: 'liz', name: '유리즈' },
-] as const
-
-function consultantName(id?: string) {
-  return CONSULTANTS.find(c => c.id === id)?.name || id || '—'
-}
+// Consultant pool + helpers (shared with KPI page)
+import { CONSULTANTS, consultantName } from '@/lib/consultants'
+import { kpiDotColor } from '@/lib/kpi'
+import { useConsultantKpis } from '@/hooks/useConsultantKpis'
 
 const COMM_PLATFORMS = ['KakaoTalk', 'WhatsApp', 'WeChat', 'Email', 'Etc'] as const
 
@@ -77,6 +68,7 @@ export function Student360Page() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const { data: students = [], isLoading } = useServiceStudents()
+  const { data: kpis = {} } = useConsultantKpis()
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -96,7 +88,10 @@ export function Student360Page() {
       {/* ── Student list ── */}
       <div className="lg:w-80 shrink-0 flex flex-col">
         <div className="flex items-center justify-between mb-3">
-          <h1 className="text-lg font-bold">{t('nav.student360')}</h1>
+          <h1 className="text-lg font-bold">
+            {t('nav.student360')}{' '}
+            <span className="text-muted-foreground font-normal">({students.length})</span>
+          </h1>
           <StudentDialog
             trigger={<Button size="sm"><Plus className="size-4 mr-1" />{t('student360.newStudent')}</Button>}
             onSaved={(s) => setSelectedId(s.id)}
@@ -126,9 +121,22 @@ export function Student360Page() {
               }`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-sm truncate">
-                  {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
-                </span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-medium text-sm truncate">
+                    {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
+                  </span>
+                  {s.assignedConsultant && (
+                    <>
+                      <span className="text-xs text-muted-foreground/70 truncate">
+                        {consultantName(s.assignedConsultant)}
+                      </span>
+                      <span
+                        className={`inline-block size-2 rounded-full shrink-0 ${kpiDotColor(kpis[s.assignedConsultant]?.score)}`}
+                        title={kpis[s.assignedConsultant] ? `KPI ${kpis[s.assignedConsultant].score.toFixed(1)} / 10` : 'KPI —'}
+                      />
+                    </>
+                  )}
+                </div>
                 {s.status && (
                   <Badge variant="outline" className="text-[10px] shrink-0">{s.status}</Badge>
                 )}
