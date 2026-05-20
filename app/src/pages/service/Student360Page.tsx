@@ -15,7 +15,7 @@ import {
 import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
-  Sparkles, Loader2,
+  Sparkles, Loader2, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -727,6 +727,7 @@ function DiarySection({ studentId, authorName, createdBy }: {
   const { data: entries = [] } = useServiceDiary(studentId)
   const del = useDeleteServiceDiary()
   const [diarySearch, setDiarySearch] = useState('')
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const visibleEntries = useMemo(() => {
     const q = diarySearch.trim().toLowerCase()
@@ -737,6 +738,16 @@ function DiarySection({ studentId, authorName, createdBy }: {
     )
   }, [entries, diarySearch])
 
+  const toggleOne = (id: string) =>
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  const allCollapsed = visibleEntries.length > 0 && visibleEntries.every(d => collapsed.has(d.id))
+  const setAll = (collapse: boolean) =>
+    setCollapsed(collapse ? new Set(visibleEntries.map(d => d.id)) : new Set())
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -744,10 +755,19 @@ function DiarySection({ studentId, authorName, createdBy }: {
           <NotebookPen className="size-5 text-primary" />
           {t('student360.diary')} <span className="text-muted-foreground font-normal">({entries.length})</span>
         </CardTitle>
-        <DiaryDialog
-          studentId={studentId} authorName={authorName} createdBy={createdBy}
-          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
-        />
+        <div className="flex items-center gap-2">
+          {visibleEntries.length > 1 && (
+            <Button size="sm" variant="outline" onClick={() => setAll(!allCollapsed)}>
+              {allCollapsed
+                ? <><ChevronDown className="size-4 mr-1" />{t('student360.expandAll')}</>
+                : <><ChevronUp className="size-4 mr-1" />{t('student360.collapseAll')}</>}
+            </Button>
+          )}
+          <DiaryDialog
+            studentId={studentId} authorName={authorName} createdBy={createdBy}
+            trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
+          />
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
         <div className="relative">
@@ -763,7 +783,9 @@ function DiarySection({ studentId, authorName, createdBy }: {
         {entries.length > 0 && visibleEntries.length === 0 && (
           <p className="text-sm text-muted-foreground">{t('student360.diaryNoMatch')}</p>
         )}
-        {visibleEntries.map(d => (
+        {visibleEntries.map(d => {
+          const isCollapsed = collapsed.has(d.id)
+          return (
           <div key={d.id} className="rounded-lg border p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -771,6 +793,13 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 {d.authorId && <span className="text-muted-foreground font-normal">{d.authorId}</span>}
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  size="sm" variant="ghost"
+                  onClick={() => toggleOne(d.id)}
+                  title={isCollapsed ? t('student360.expand') : t('student360.collapse')}
+                >
+                  {isCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+                </Button>
                 <DiaryDialog
                   studentId={studentId} entry={d} authorName={authorName} createdBy={createdBy}
                   trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
@@ -783,6 +812,7 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 </Button>
               </div>
             </div>
+            {!isCollapsed && (<>
             {(d.prepUrl || d.summaryUrl) && (
               <div className="mt-2 flex flex-wrap gap-3 text-xs">
                 {d.prepUrl && (
@@ -816,8 +846,10 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 createdBy={createdBy}
               />
             </div>
+            </>)}
           </div>
-        ))}
+          )
+        })}
       </CardContent>
     </Card>
   )
