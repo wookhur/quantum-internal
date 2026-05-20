@@ -47,6 +47,7 @@ function mapMeeting(row: Record<string, unknown>): ServiceMeeting {
     meetingType: (row.meeting_type as string) || undefined,
     consultantId: (row.consultant_id as string) || undefined,
     summary: (row.summary as string) || undefined,
+    prepUrl: (row.prep_url as string) || undefined,
     reportStatus: row.report_status as ServiceReportStatus,
     reportUrl: (row.report_url as string) || undefined,
     reportDate: (row.report_date as string) || undefined,
@@ -254,6 +255,7 @@ export function useCreateServiceMeeting() {
       meetingType?: string
       consultantId?: string
       summary?: string
+      prepUrl?: string
       reportStatus?: ServiceReportStatus
       reportUrl?: string
       reportDate?: string
@@ -265,6 +267,7 @@ export function useCreateServiceMeeting() {
         meeting_type: m.meetingType,
         consultant_id: m.consultantId || null,
         summary: m.summary,
+        prep_url: m.prepUrl,
         report_status: m.reportStatus || 'none',
         report_url: m.reportUrl,
         report_date: m.reportDate || null,
@@ -287,6 +290,7 @@ export function useUpdateServiceMeeting() {
       meetingType?: string
       consultantId?: string | null
       summary?: string
+      prepUrl?: string
       reportStatus?: ServiceReportStatus
       reportUrl?: string
       reportDate?: string | null
@@ -297,6 +301,7 @@ export function useUpdateServiceMeeting() {
       if (rest.meetingType !== undefined) update.meeting_type = rest.meetingType
       if (rest.consultantId !== undefined) update.consultant_id = rest.consultantId
       if (rest.summary !== undefined) update.summary = rest.summary
+      if (rest.prepUrl !== undefined) update.prep_url = rest.prepUrl
       if (rest.reportStatus !== undefined) update.report_status = rest.reportStatus
       if (rest.reportUrl !== undefined) update.report_url = rest.reportUrl
       if (rest.reportDate !== undefined) update.report_date = rest.reportDate

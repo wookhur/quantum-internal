@@ -100,7 +100,8 @@ const koTranslations = {
   'student360.prepUrl': '상담 준비 자료',
   'student360.summaryUrl': '미팅 요약 보고서',
   // ── Archive ──
-  'archive.title': 'Archive (필수 리포트)',
+  'archive.title': 'Archive',
+  'student360.meetingPrepUrl': '상담 준비 자료',
   'archive.strengthResult': '강점분석 결과지',
   'archive.strengthReport': '강점분석 보고서',
   'archive.gradeReport': '성적표',
@@ -1114,7 +1115,8 @@ const enTranslations: Record<string, string> = {
   'student360.prepUrl': 'Prep Materials',
   'student360.summaryUrl': 'Meeting Summary Report',
   // ── Archive ──
-  'archive.title': 'Archive (Required Reports)',
+  'archive.title': 'Archive',
+  'student360.meetingPrepUrl': 'Prep Materials',
   'archive.strengthResult': 'Strength Analysis Result',
   'archive.strengthReport': 'Strength Analysis Report',
   'archive.gradeReport': 'Grade Report',

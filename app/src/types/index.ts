@@ -421,6 +421,7 @@ export interface ServiceMeeting {
   consultantId?: string
   consultantUser?: User
   summary?: string
+  prepUrl?: string
   reportStatus: ServiceReportStatus
   reportUrl?: string
   reportDate?: string
