@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { useT } from '@/i18n/LanguageContext'
 import { CONSULTANTS } from '@/lib/consultants'
 import { kpiDotColor } from '@/lib/kpi'
-import { useConsultantKpis } from '@/hooks/useConsultantKpis'
+import { useConsultantKpis, KPI_MAX } from '@/hooks/useConsultantKpis'
 
 export function ConsultantKpiPage() {
   const t = useT()
@@ -34,7 +34,7 @@ export function ConsultantKpiPage() {
                       <span className="font-medium">{c.name}</span>
                     </div>
                     <Badge variant="outline">
-                      {score !== undefined ? `${score.toFixed(1)} / 10` : '— / 10'}
+                      {score !== undefined ? `${score.toFixed(1)} / ${KPI_MAX}` : `— / ${KPI_MAX}`}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mt-3 text-xs text-muted-foreground">
@@ -44,15 +44,15 @@ export function ConsultantKpiPage() {
                     </div>
                     <div>
                       {t('kpi.meetings30d')}:{' '}
-                      <strong className="text-foreground">{k?.meetings30d ?? 0}</strong> / {k?.expected ?? 0}
+                      <strong className="text-foreground">{k?.meetings30d ?? 0}</strong>
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t space-y-1 text-xs">
-                    <MetricRow label={t('kpi.row.followup')} weight="3" score={k?.followupScore} />
-                    <MetricRow label={t('kpi.row.meetings')} weight="2" score={k?.meetingsScore} />
-                    <MetricRow label={t('kpi.row.prepSummary')} weight="2" score={k?.prepSummaryScore} />
-                    <MetricRow label={t('kpi.row.reports')} weight="2" score={k?.reportsScore} />
-                    <MetricRow label={t('kpi.row.diary')} weight="1" score={k?.diaryScore} />
+                    <MetricRow label={t('kpi.row.meetings')}  max={4} score={k?.meetingsScore} />
+                    <MetricRow label={t('kpi.row.prep')}      max={1} score={k?.prepScore} />
+                    <MetricRow label={t('kpi.row.summary')}   max={2} score={k?.summaryScore} />
+                    <MetricRow label={t('kpi.row.reports')}   max={2} score={k?.reportsScore} />
+                    <MetricRow label={t('kpi.row.followup')}  max={2} score={k?.followupScore} />
                   </div>
                 </div>
               )
@@ -80,12 +80,12 @@ export function ConsultantKpiPage() {
   )
 }
 
-function MetricRow({ label, weight, score }: { label: string; weight: string; score?: number }) {
-  const pct = Math.max(0, Math.min(100, ((score ?? 0) / 10) * 100))
+function MetricRow({ label, max, score }: { label: string; max: number; score?: number }) {
+  const pct = Math.max(0, Math.min(100, ((score ?? 0) / max) * 100))
   return (
     <div className="flex items-center gap-2 text-muted-foreground">
       <span className="w-32 shrink-0">{label}</span>
-      <span className="shrink-0 text-[10px] text-muted-foreground/70">×{weight}</span>
+      <span className="shrink-0 text-[10px] text-muted-foreground/70">/ {max}</span>
       <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
         <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
       </div>

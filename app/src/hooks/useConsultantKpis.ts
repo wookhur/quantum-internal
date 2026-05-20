@@ -3,39 +3,28 @@ import { supabase } from '@/lib/supabase'
 
 export interface ConsultantKpi {
   assigned: number          // students assigned
-  meetings30d: number       // meetings in last 30 days
-  expected: number          // 2 × assigned target (last 30 days)
-  meetingsScore: number     // 0-10 — meeting cadence
-  prepSummaryScore: number  // 0-10 — % of meetings with both prep + summary URL
-  reportsScore: number      // 0-10 — required-report coverage per student
-  followupScore: number     // 0-10 — % of follow-up items marked done
-  diaryScore: number        // 0-10 — diary completeness (9 fields)
-  score: number             // weighted 0-10 total
+  meetings30d: number       // total meetings (consultant) in last 30 days
+  meetingsScore: number     // 0-4 — 2 pts per meeting per student, capped at 2 / student
+  prepScore: number         // 0-1 — % of meetings with prep_url
+  summaryScore: number      // 0-2 — % of meetings with report_url (summary)
+  reportsScore: number      // 0-2 — required-report coverage per student
+  followupScore: number     // 0-2 — % of follow-up items marked done
+  score: number             // total 0-11
 }
+
+export const KPI_MAX = 11
 
 const REQUIRED_REPORT_CATEGORIES = [
   'strength_result', 'strength_report', 'grade_report', 'grade_analysis',
 ] as const
 
-const DIARY_FIELD_KEYS = [
-  'agenda_items', 'meeting_summary', 'extracurricular_notes',
-  'identity_narrative_notes', 'questions_concerns', 'next_meeting_agenda',
-  'follow_up_commitments', 'assignments', 'critical_dates',
-] as const
-
-// Weights (sum = 1)
-const W_FOLLOWUP = 0.30
-const W_MEETINGS = 0.20
-const W_PREP_SUM = 0.20
-const W_REPORTS  = 0.20
-const W_DIARY    = 0.10
-
 /**
- * Per-consultant management score (관리지수, out of 10).
- *
- *   Followup completion 3pts  +  Meeting cadence 2pts  +
- *   Prep & summary uploads 2pts  +  Required reports 2pts  +
- *   Diary completeness 1pt
+ * Per-consultant management score (관리지수, max 11).
+ *   Meeting cadence (2pts × up to 2 meetings/month per student, avg)  = 0..4
+ *   Prep materials uploaded across meetings                            = 0..1
+ *   Summary report uploaded across meetings                            = 0..2
+ *   Required reports complete per student                              = 0..2
+ *   Follow-up completion rate                                          = 0..2
  */
 export function useConsultantKpis() {
   return useQuery({
@@ -45,7 +34,7 @@ export function useConsultantKpis() {
       since30.setDate(since30.getDate() - 30)
       const sinceIso = since30.toISOString().slice(0, 10)
 
-      const [stRes, mtRes, repRes, diaryRes, fupRes] = await Promise.all([
+      const [stRes, mtRes, repRes, fupRes] = await Promise.all([
         supabase.from('service_students').select('id, assigned_consultant'),
         supabase
           .from('service_meetings')
@@ -53,23 +42,16 @@ export function useConsultantKpis() {
           .gte('meeting_date', sinceIso),
         supabase.from('service_reports').select('student_id, category'),
         supabase
-          .from('service_diary')
-          .select('*')
-          .gte('entry_date', sinceIso),
-        supabase
           .from('service_followups')
           .select('id, student_id, diary_id, done, created_at')
           .gte('created_at', `${sinceIso}T00:00:00Z`),
       ])
       if (stRes.error) throw stRes.error
       if (mtRes.error) throw mtRes.error
-      // reports/diary/followups: tables may not exist yet for some users.
-      // Treat missing tables as "no data" rather than fail the whole query.
       const reports = repRes.error ? [] : (repRes.data || [])
-      const diary = diaryRes.error ? [] : (diaryRes.data || [])
       const followups = fupRes.error ? [] : (fupRes.data || [])
 
-      // ── Index by consultant / student ──
+      // ── Index ──
       const studentsByConsultant: Record<string, Set<string>> = {}
       ;(stRes.data || []).forEach((s: { id: string; assigned_consultant: string | null }) => {
         if (!s.assigned_consultant) return
@@ -77,7 +59,12 @@ export function useConsultantKpis() {
         studentsByConsultant[s.assigned_consultant].add(s.id)
       })
 
-      type MeetingRow = { consultant_id: string | null; prep_url: string | null; report_url: string | null }
+      type MeetingRow = {
+        consultant_id: string | null
+        student_id: string | null
+        prep_url: string | null
+        report_url: string | null
+      }
       const meetingsByConsultant: Record<string, MeetingRow[]> = {}
       ;(mtRes.data || []).forEach((m: MeetingRow) => {
         if (!m.consultant_id) return
@@ -90,13 +77,6 @@ export function useConsultantKpis() {
         const row = r as { student_id: string; category: string }
         if (!reportsByStudent[row.student_id]) reportsByStudent[row.student_id] = new Set()
         reportsByStudent[row.student_id].add(row.category)
-      })
-
-      type DiaryRow = Record<string, unknown> & { student_id: string }
-      const diaryByStudent: Record<string, DiaryRow[]> = {}
-      ;(diary as unknown as DiaryRow[]).forEach((row) => {
-        if (!diaryByStudent[row.student_id]) diaryByStudent[row.student_id] = []
-        diaryByStudent[row.student_id].push(row)
       })
 
       const followupsByStudent: Record<string, { done: boolean }[]> = {}
@@ -115,18 +95,34 @@ export function useConsultantKpis() {
       consultantIds.forEach(c => {
         const sids = studentsByConsultant[c] || new Set<string>()
         const assigned = sids.size
-
-        // 1) Meeting cadence
         const ms = meetingsByConsultant[c] || []
         const meetings30d = ms.length
-        const expected = Math.max(2 * assigned, 1)
-        const meetingsScore = Math.max(0, Math.min(10, (meetings30d / expected) * 10))
 
-        // 2) Prep + summary on every meeting
-        const both = ms.filter(m => !!m.prep_url && !!m.report_url).length
-        const prepSummaryScore = ms.length ? (both / ms.length) * 10 : 0
+        // 1) Meeting cadence (per-student, 2pts × min(meetings, 2), averaged)
+        let meetingsScore = 0
+        if (assigned > 0) {
+          const byStudent: Record<string, number> = {}
+          ms.forEach(m => {
+            if (!m.student_id) return
+            byStudent[m.student_id] = (byStudent[m.student_id] || 0) + 1
+          })
+          let sum = 0
+          sids.forEach(sid => {
+            const cnt = byStudent[sid] || 0
+            sum += Math.min(cnt, 2) * 2
+          })
+          meetingsScore = sum / assigned
+        }
 
-        // 3) Required reports coverage
+        // 2) Prep materials coverage (0-1)
+        const prepRate = ms.length ? ms.filter(m => !!m.prep_url).length / ms.length : 0
+        const prepScore = prepRate * 1
+
+        // 3) Summary report coverage (0-2)
+        const summaryRate = ms.length ? ms.filter(m => !!m.report_url).length / ms.length : 0
+        const summaryScore = summaryRate * 2
+
+        // 4) Required reports (0-2)
         let repHit = 0
         let repTotal = 0
         sids.forEach(sid => {
@@ -136,9 +132,9 @@ export function useConsultantKpis() {
             if (cats.has(cat)) repHit += 1
           })
         })
-        const reportsScore = repTotal ? (repHit / repTotal) * 10 : 0
+        const reportsScore = repTotal ? (repHit / repTotal) * 2 : 0
 
-        // 4) Follow-up completion rate
+        // 5) Follow-up completion (0-2)
         let fDone = 0
         let fTotal = 0
         sids.forEach(sid => {
@@ -146,37 +142,13 @@ export function useConsultantKpis() {
           fTotal += fps.length
           fDone += fps.filter(f => f.done).length
         })
-        const followupScore = fTotal ? (fDone / fTotal) * 10 : 0
+        const followupScore = fTotal ? (fDone / fTotal) * 2 : 0
 
-        // 5) Diary completeness
-        let entries = 0
-        let filledRatioSum = 0
-        sids.forEach(sid => {
-          const ds = diaryByStudent[sid] || []
-          ds.forEach(d => {
-            entries += 1
-            const filled = DIARY_FIELD_KEYS.reduce((n, k) => {
-              const v = d[k]
-              return n + (v && String(v).trim().length > 0 ? 1 : 0)
-            }, 0)
-            filledRatioSum += filled / DIARY_FIELD_KEYS.length
-          })
-        })
-        const diaryScore = entries ? (filledRatioSum / entries) * 10 : 0
-
-        const score = Math.max(0, Math.min(10,
-          followupScore * W_FOLLOWUP +
-          meetingsScore * W_MEETINGS +
-          prepSummaryScore * W_PREP_SUM +
-          reportsScore * W_REPORTS +
-          diaryScore * W_DIARY,
+        const score = Math.max(0, Math.min(KPI_MAX,
+          meetingsScore + prepScore + summaryScore + reportsScore + followupScore,
         ))
 
-        out[c] = {
-          assigned, meetings30d, expected,
-          meetingsScore, prepSummaryScore, reportsScore, followupScore, diaryScore,
-          score,
-        }
+        out[c] = { assigned, meetings30d, meetingsScore, prepScore, summaryScore, reportsScore, followupScore, score }
       })
 
       return out
