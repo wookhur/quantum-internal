@@ -43,7 +43,7 @@ import type {
 // Consultant pool + helpers (shared with KPI page)
 import { CONSULTANTS, consultantName } from '@/lib/consultants'
 import { kpiDotColor } from '@/lib/kpi'
-import { useConsultantKpis } from '@/hooks/useConsultantKpis'
+import { useStudentKpis, KPI_MAX } from '@/hooks/useConsultantKpis'
 
 const COMM_PLATFORMS = ['KakaoTalk', 'WhatsApp', 'WeChat', 'Email', 'Etc'] as const
 
@@ -81,7 +81,7 @@ export function Student360Page() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const { data: students = [], isLoading } = useServiceStudents()
-  const { data: kpis = {} } = useConsultantKpis()
+  const { data: studentKpis = {} } = useStudentKpis()
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -139,16 +139,14 @@ export function Student360Page() {
                     {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
                   </span>
                   {s.assignedConsultant && (
-                    <>
-                      <span className="text-xs text-muted-foreground/70 truncate">
-                        {consultantName(s.assignedConsultant)}
-                      </span>
-                      <span
-                        className={`inline-block size-2 rounded-full shrink-0 ${kpiDotColor(kpis[s.assignedConsultant]?.score)}`}
-                        title={kpis[s.assignedConsultant] ? `KPI ${kpis[s.assignedConsultant].score.toFixed(1)} / 10` : 'KPI —'}
-                      />
-                    </>
+                    <span className="text-xs text-muted-foreground/70 truncate">
+                      {consultantName(s.assignedConsultant)}
+                    </span>
                   )}
+                  <span
+                    className={`inline-block size-2 rounded-full shrink-0 ${kpiDotColor(studentKpis[s.id]?.score)}`}
+                    title={studentKpis[s.id] ? `KPI ${studentKpis[s.id].score.toFixed(1)} / ${KPI_MAX}` : 'KPI —'}
+                  />
                 </div>
                 {s.status && (
                   <Badge variant="outline" className="text-[10px] shrink-0">{s.status}</Badge>
