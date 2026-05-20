@@ -110,6 +110,8 @@ const koTranslations = {
   'autoDiary.textLabel': '또는 본문 직접 붙여넣기',
   'autoDiary.textPlaceholder': '미팅 요약 보고서 본문을 여기에 붙여넣으세요...',
   'autoDiary.generate': '자동 생성',
+  // ── Follow-up checklist ──
+  'followup.placeholder': '후속과제를 입력하고 Enter',
   'archive.strengthResult': '강점분석 결과지',
   'archive.strengthReport': '강점분석 보고서',
   'archive.gradeReport': '성적표',
@@ -1133,6 +1135,8 @@ const enTranslations: Record<string, string> = {
   'autoDiary.textLabel': 'Or paste text directly',
   'autoDiary.textPlaceholder': 'Paste the meeting summary report content here...',
   'autoDiary.generate': 'Generate',
+  // ── Follow-up checklist ──
+  'followup.placeholder': 'Type a follow-up item and press Enter',
   'archive.strengthResult': 'Strength Analysis Result',
   'archive.strengthReport': 'Strength Analysis Report',
   'archive.gradeReport': 'Grade Report',

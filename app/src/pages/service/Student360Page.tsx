@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -27,6 +28,10 @@ import {
 import {
   useServiceReports, useCreateServiceReport, useDeleteServiceReport,
 } from '@/hooks/useServiceReports'
+import {
+  useServiceFollowups, useCreateFollowup, useBulkCreateFollowups,
+  useToggleFollowup, useDeleteFollowup, splitFollowupText,
+} from '@/hooks/useServiceFollowups'
 import {
   usePortalTokens, useCreatePortalToken, useTogglePortalToken, useDeletePortalToken,
 } from '@/hooks/usePortalTokens'
@@ -794,6 +799,7 @@ function DiarySection({ studentId, authorName, createdBy }: {
             )}
             <div className="mt-2 space-y-2">
               {DIARY_FIELDS.map(f => {
+                if (f.key === 'followUpCommitments') return null  // shown as checklist below
                 const val = d[f.key]
                 if (!val) return null
                 return (
@@ -803,6 +809,12 @@ function DiarySection({ studentId, authorName, createdBy }: {
                   </div>
                 )
               })}
+              <FollowupChecklist
+                studentId={studentId}
+                diaryId={d.id}
+                fallbackText={d.followUpCommitments}
+                createdBy={createdBy}
+              />
             </div>
           </div>
         ))}
@@ -1083,6 +1095,7 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
 }) {
   const t = useT()
   const create = useCreateServiceDiary()
+  const bulkCreateFollowups = useBulkCreateFollowups()
   const [open, setOpen] = useState(false)
   const [url, setUrl] = useState('')
   const [text, setText] = useState('')
@@ -1141,7 +1154,18 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
           createdBy,
         },
         {
-          onSuccess: () => { setOpen(false) },
+          onSuccess: (created) => {
+            const items = splitFollowupText(d.followUpCommitments || '')
+            if (items.length && created?.id) {
+              bulkCreateFollowups.mutate({
+                studentId,
+                diaryId: created.id,
+                items,
+                createdBy,
+              })
+            }
+            setOpen(false)
+          },
           onError: (e) => setError((e as { message?: string })?.message || String(e)),
         },
       )
@@ -1197,5 +1221,113 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ────────────────────────── Follow-up Checklist ──────────────────────────
+function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy }: {
+  studentId: string
+  diaryId: string
+  fallbackText?: string
+  createdBy?: string
+}) {
+  const t = useT()
+  const { data: all = [] } = useServiceFollowups(studentId)
+  const items = useMemo(
+    () => all.filter(f => f.diaryId === diaryId),
+    [all, diaryId],
+  )
+  const toggle = useToggleFollowup()
+  const create = useCreateFollowup()
+  const del = useDeleteFollowup()
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  // Nothing to render: no structured items AND no raw text
+  if (!items.length && !fallbackText && !adding) {
+    return (
+      <div>
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-muted-foreground">{t('student360.followUpCommitments')}</p>
+          <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
+            <Plus className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const save = () => {
+    const v = draft.trim()
+    if (!v) { setAdding(false); return }
+    create.mutate(
+      { studentId, diaryId, text: v, createdBy },
+      { onSuccess: () => { setDraft(''); setAdding(false) }, onError: reportSaveError },
+    )
+  }
+
+  const doneCount = items.filter(i => i.done).length
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-medium text-muted-foreground">
+          {t('student360.followUpCommitments')}
+          {items.length > 0 && (
+            <span className="ml-1 text-muted-foreground/70">
+              ({doneCount}/{items.length})
+            </span>
+          )}
+        </p>
+        <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
+          <Plus className="size-3.5" />
+        </Button>
+      </div>
+
+      {/* If no structured items yet but there is raw text, show it (one-time fallback) */}
+      {items.length === 0 && fallbackText && (
+        <p className="text-sm whitespace-pre-wrap text-muted-foreground italic">{fallbackText}</p>
+      )}
+
+      <ul className="space-y-1.5">
+        {items.map(f => (
+          <li key={f.id} className="flex items-center gap-2 text-sm">
+            <Switch
+              checked={f.done}
+              onCheckedChange={(v) => toggle.mutate({ id: f.id, studentId, done: !!v })}
+              className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-red-500"
+            />
+            <span className={`flex-1 ${f.done ? 'line-through text-muted-foreground' : ''}`}>
+              {f.text}
+            </span>
+            <Button
+              size="sm" variant="ghost"
+              onClick={() => del.mutate({ id: f.id, studentId })}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </li>
+        ))}
+      </ul>
+
+      {adding && (
+        <div className="flex gap-2 mt-2">
+          <Input
+            placeholder={t('followup.placeholder')}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') save() }}
+            className="flex-1"
+            autoFocus
+          />
+          <Button size="sm" onClick={save} disabled={!draft.trim()}>
+            {t('common.save')}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => { setDraft(''); setAdding(false) }}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }

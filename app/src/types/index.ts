@@ -449,6 +449,19 @@ export interface ServiceReport {
   updatedAt: string
 }
 
+export interface ServiceFollowup {
+  id: string
+  studentId: string
+  diaryId?: string
+  text: string
+  done: boolean
+  doneAt?: string
+  dueDate?: string
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ServiceDiaryEntry {
   id: string
   studentId: string
