@@ -1104,7 +1104,23 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
       const { data, error: fnError } = await supabase.functions.invoke('extract-meeting-diary', {
         body: { url: url || undefined, text: text || undefined },
       })
-      if (fnError) throw new Error(fnError.message || String(fnError))
+      if (fnError) {
+        // The default message ("non-2xx") hides the real reason; read the body.
+        let detail = fnError.message || String(fnError)
+        const ctx = (fnError as { context?: Response }).context
+        if (ctx && typeof ctx.text === 'function') {
+          try {
+            const raw = await ctx.text()
+            try {
+              const parsed = JSON.parse(raw) as { error?: string; message?: string }
+              detail = parsed.error || parsed.message || raw || detail
+            } catch {
+              detail = raw || detail
+            }
+          } catch { /* ignore */ }
+        }
+        throw new Error(detail)
+      }
       if (!data?.ok) throw new Error(data?.error || 'Extraction failed')
 
       const d = data.diary as Record<string, string>
