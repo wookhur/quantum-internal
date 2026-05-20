@@ -102,6 +102,14 @@ const koTranslations = {
   // ── Archive ──
   'archive.title': 'Archive',
   'student360.meetingPrepUrl': '상담 준비 자료',
+  // ── Auto-Diary (AI) ──
+  'autoDiary.tooltip': '미팅 요약으로 다이어리 자동 생성',
+  'autoDiary.title': '미팅 다이어리 자동 생성',
+  'autoDiary.help': '미팅 요약 보고서의 Google Docs / Drive 링크를 넣으면 자동으로 다이어리를 채워줍니다. 링크가 비공개이거나 안 되면 아래 칸에 본문을 직접 붙여넣어도 됩니다. (둘 중 하나만 채우면 OK)',
+  'autoDiary.urlLabel': '요약 보고서 링크',
+  'autoDiary.textLabel': '또는 본문 직접 붙여넣기',
+  'autoDiary.textPlaceholder': '미팅 요약 보고서 본문을 여기에 붙여넣으세요...',
+  'autoDiary.generate': '자동 생성',
   'archive.strengthResult': '강점분석 결과지',
   'archive.strengthReport': '강점분석 보고서',
   'archive.gradeReport': '성적표',
@@ -1117,6 +1125,14 @@ const enTranslations: Record<string, string> = {
   // ── Archive ──
   'archive.title': 'Archive',
   'student360.meetingPrepUrl': 'Prep Materials',
+  // ── Auto-Diary (AI) ──
+  'autoDiary.tooltip': 'Auto-fill diary from meeting summary',
+  'autoDiary.title': 'Auto-generate Meeting Diary',
+  'autoDiary.help': 'Paste the Google Docs / Drive link of the meeting summary report and the diary will be auto-filled. If the link is private or fails, paste the text directly below. (Either is fine.)',
+  'autoDiary.urlLabel': 'Summary Report Link',
+  'autoDiary.textLabel': 'Or paste text directly',
+  'autoDiary.textPlaceholder': 'Paste the meeting summary report content here...',
+  'autoDiary.generate': 'Generate',
   'archive.strengthResult': 'Strength Analysis Result',
   'archive.strengthReport': 'Strength Analysis Report',
   'archive.gradeReport': 'Grade Report',

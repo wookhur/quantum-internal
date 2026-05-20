@@ -14,9 +14,11 @@ import {
 import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
+  Sparkles, Loader2,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 import {
   useServiceStudents, useCreateServiceStudent, useUpdateServiceStudent, useDeleteServiceStudent,
   useServiceMeetings, useCreateServiceMeeting, useUpdateServiceMeeting, useDeleteServiceMeeting,
@@ -165,7 +167,7 @@ export function Student360Page() {
           <div className="space-y-4">
             <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} />
-            <MeetingsSection studentId={selected.id} createdBy={user?.id} />
+            <MeetingsSection studentId={selected.id} createdBy={user?.id} authorName={user?.name} />
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} />
             <ArchiveSection studentId={selected.id} createdBy={user?.id} />
           </div>
@@ -532,7 +534,11 @@ function LabeledInput({ label, value, onChange }: { label: string; value: string
 }
 
 // ────────────────────────── Meetings ──────────────────────────
-function MeetingsSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
+function MeetingsSection({ studentId, createdBy, authorName }: {
+  studentId: string
+  createdBy?: string
+  authorName?: string
+}) {
   const t = useT()
   const { data: meetings = [] } = useServiceMeetings(studentId)
   const del = useDeleteServiceMeeting()
@@ -563,6 +569,12 @@ function MeetingsSection({ studentId, createdBy }: { studentId: string; createdB
                 <Badge className={REPORT_META[m.reportStatus].className}>
                   <FileText className="size-3 mr-1" />{t(REPORT_META[m.reportStatus].labelKey)}
                 </Badge>
+                <AutoDiaryButton
+                  studentId={studentId}
+                  meeting={m}
+                  createdBy={createdBy}
+                  authorName={authorName}
+                />
                 <MeetingDialog
                   studentId={studentId} meeting={m} createdBy={createdBy}
                   trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
@@ -1059,5 +1071,115 @@ function OtherArchiveBlock({
         </div>
       )}
     </div>
+  )
+}
+
+// ────────────────────────── Auto-Diary (AI) ──────────────────────────
+function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
+  studentId: string
+  meeting: ServiceMeeting
+  createdBy?: string
+  authorName?: string
+}) {
+  const t = useT()
+  const create = useCreateServiceDiary()
+  const [open, setOpen] = useState(false)
+  const [url, setUrl] = useState('')
+  const [text, setText] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      setUrl(meeting.reportUrl || '')
+      setText('')
+      setError(null)
+    }
+  }, [open, meeting.reportUrl])
+
+  const run = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('extract-meeting-diary', {
+        body: { url: url || undefined, text: text || undefined },
+      })
+      if (fnError) throw new Error(fnError.message || String(fnError))
+      if (!data?.ok) throw new Error(data?.error || 'Extraction failed')
+
+      const d = data.diary as Record<string, string>
+      create.mutate(
+        {
+          studentId,
+          entryDate: meeting.meetingDate || new Date().toISOString().slice(0, 10),
+          agendaItems: d.agendaItems || undefined,
+          meetingSummary: d.meetingSummary || undefined,
+          extracurricularNotes: d.extracurricularNotes || undefined,
+          identityNarrativeNotes: d.identityNarrativeNotes || undefined,
+          questionsConcerns: d.questionsConcerns || undefined,
+          nextMeetingAgenda: d.nextMeetingAgenda || undefined,
+          followUpCommitments: d.followUpCommitments || undefined,
+          assignments: d.assignments || undefined,
+          criticalDates: d.criticalDates || undefined,
+          authorId: authorName,
+          createdBy,
+        },
+        {
+          onSuccess: () => { setOpen(false) },
+          onError: (e) => setError((e as { message?: string })?.message || String(e)),
+        },
+      )
+    } catch (e) {
+      setError((e as { message?: string })?.message || String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <span onClick={() => setOpen(true)}>
+        <Button size="sm" variant="ghost" title={t('autoDiary.tooltip')}>
+          <Sparkles className="size-3.5" />
+        </Button>
+      </span>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{t('autoDiary.title')}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">{t('autoDiary.help')}</p>
+          <div>
+            <Label className="text-xs">{t('autoDiary.urlLabel')}</Label>
+            <Input
+              placeholder="https://docs.google.com/... or drive.google.com/..."
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label className="text-xs">{t('autoDiary.textLabel')}</Label>
+            <Textarea
+              placeholder={t('autoDiary.textPlaceholder')}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              rows={6}
+            />
+          </div>
+          {error && (
+            <p className="text-xs text-red-600 whitespace-pre-wrap">{error}</p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={run} disabled={loading || (!url && !text)}>
+            {loading ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Sparkles className="size-4 mr-1" />}
+            {t('autoDiary.generate')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
