@@ -40,6 +40,8 @@ import { useConsultantKpis } from '@/hooks/useConsultantKpis'
 
 const COMM_PLATFORMS = ['KakaoTalk', 'WhatsApp', 'WeChat', 'Email', 'Etc'] as const
 
+const MEETING_TYPES = ['1st', '2nd', '3rd', '4th', '5th', 'Regular', 'Complain'] as const
+
 function reportSaveError(e: unknown) {
   const msg = (e as { message?: string })?.message || String(e)
   // Surface the real reason instead of failing silently.
@@ -649,7 +651,15 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
             <Label className="text-xs">{t('student360.meetingDate')}</Label>
             <Input type="date" value={form.meetingDate} onChange={e => set('meetingDate', e.target.value)} />
           </div>
-          <LabeledInput label={t('student360.meetingType')} value={form.meetingType} onChange={v => set('meetingType', v)} />
+          <div>
+            <Label className="text-xs">{t('student360.meetingType')}</Label>
+            <Select value={form.meetingType} onValueChange={v => set('meetingType', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {MEETING_TYPES.map(mt => <SelectItem key={mt} value={mt}>{mt}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <div>
             <Label className="text-xs">{t('student360.consultant')}</Label>
             <Select value={form.consultantId} onValueChange={v => set('consultantId', v)}>
