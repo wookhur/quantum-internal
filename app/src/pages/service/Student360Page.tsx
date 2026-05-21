@@ -50,6 +50,9 @@ const COMM_PLATFORMS = ['KakaoTalk', 'WhatsApp', 'WeChat', 'Email', 'Etc'] as co
 
 const MEETING_TYPES = ['1st', '2nd', '3rd', '4th', '5th', 'Regular', 'Complain'] as const
 
+const ESSAY_EDITORS = ['Somee Park', 'Danny Kim', '한상범+양은영'] as const
+const PARTNERS = ['Ryan Pruitt(BAY)', 'Dr.Lee Woorin(IRIS)', 'Evelyn Jenny Nam', 'Dr.Lee Gwangmi'] as const
+
 function reportSaveError(e: unknown) {
   const msg = (e as { message?: string })?.message || String(e)
   // Surface the real reason instead of failing silently.
@@ -496,8 +499,24 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
               </SelectContent>
             </Select>
           </div>
-          <LabeledInput label={t('student360.essayEditor')} value={form.essayEditor} onChange={v => set('essayEditor', v)} />
-          <LabeledInput label={t('student360.partners')} value={form.partners} onChange={v => set('partners', v)} />
+          <div>
+            <Label className="text-xs">{t('student360.essayEditor')}</Label>
+            <Select value={form.essayEditor} onValueChange={v => set('essayEditor', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {ESSAY_EDITORS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">{t('student360.partners')}</Label>
+            <Select value={form.partners} onValueChange={v => set('partners', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
           <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />
           <LabeledInput label={t('student360.status')} value={form.status} onChange={v => set('status', v)} />
