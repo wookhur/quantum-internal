@@ -156,10 +156,14 @@ export function Student360Page() {
                     {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
                   </span>
                   {statusFlags.missingReports.has(s.id) && (
-                    <Hourglass className="size-3.5 text-red-500 shrink-0" title="미팅일지 미제출" />
+                    <span title="미팅일지 미제출">
+                      <Hourglass className="size-3.5 text-red-500 shrink-0" />
+                    </span>
                   )}
                   {statusFlags.pendingFollowups.has(s.id) && (
-                    <AlertTriangle className="size-3.5 text-red-500 shrink-0" title="미처리 Follow-up" />
+                    <span title="미처리 Follow-up">
+                      <AlertTriangle className="size-3.5 text-red-500 shrink-0" />
+                    </span>
                   )}
                   {s.assignedConsultant && (
                     <span className="text-xs text-muted-foreground/70 truncate">
