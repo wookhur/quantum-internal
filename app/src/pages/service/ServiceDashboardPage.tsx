@@ -396,7 +396,7 @@ function MilestoneDialog({
         <div className="space-y-3 py-1">
           <div className="space-y-1">
             <Label>학생</Label>
-            <Select value={studentId} onValueChange={setStudentId}>
+            <Select value={studentId} onValueChange={v => setStudentId(v ?? '')}>
               <SelectTrigger><SelectValue placeholder="학생 선택" /></SelectTrigger>
               <SelectContent>
                 {students.map(s => (
@@ -934,7 +934,7 @@ export function ServiceDashboardPage() {
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Consultant filter */}
-            <Select value={consultantFilter} onValueChange={setConsultantFilter}>
+            <Select value={consultantFilter} onValueChange={v => setConsultantFilter(v ?? 'all')}>
               <SelectTrigger className="h-8 text-sm w-36">
                 <SelectValue />
               </SelectTrigger>
