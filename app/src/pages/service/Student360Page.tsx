@@ -543,9 +543,10 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           </div>
           <div>
             <Label className="text-xs">{t('student360.essayEditor')}</Label>
-            <Select value={form.essayEditor} onValueChange={v => set('essayEditor', v)}>
+            <Select value={form.essayEditor} onValueChange={v => set('essayEditor', v === '__none__' ? '' : v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">미배정</SelectItem>
                 {ESSAY_EDITORS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
               </SelectContent>
             </Select>
