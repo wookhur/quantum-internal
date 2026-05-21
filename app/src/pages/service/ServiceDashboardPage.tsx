@@ -47,7 +47,32 @@ const MILESTONE_TYPES: { value: MilestoneType; label: string; color: string; dot
 ]
 
 const MEETING_COLOR = 'bg-violet-100 text-violet-700 border-violet-200'
+const GHOST_MEETING_COLOR = 'border-violet-400 text-violet-400 bg-transparent'
 const FOLLOWUP_COLOR = 'bg-yellow-100 text-yellow-700 border-yellow-200'
+
+interface GhostMeeting {
+  studentId: string
+  studentName: string
+  studentConsultant?: string
+  dateStr: string
+  time: string
+}
+
+const DAY_NAME_TO_NUM: Record<string, number> = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 }
+
+function isScheduledMeetingDate(dateStr: string, schedule: string): boolean {
+  const parts = schedule.split('|')
+  if (parts.length < 2) return false
+  const weekPattern = parts[0]
+  const dayStr = parts[1]
+  const d = new Date(dateStr + 'T00:00:00')
+  const targetDay = DAY_NAME_TO_NUM[dayStr]
+  if (targetDay === undefined || d.getDay() !== targetDay) return false
+  const weekOfMonth = Math.ceil(d.getDate() / 7)
+  if (weekPattern === '1/3') return weekOfMonth === 1 || weekOfMonth === 3
+  if (weekPattern === '2/4') return weekOfMonth === 2 || weekOfMonth === 4
+  return false
+}
 
 const MILESTONE_STATUSES: { value: MilestoneStatus; label: string }[] = [
   { value: 'upcoming',  label: '예정' },
@@ -461,6 +486,7 @@ function WeekCalendar({
   meetings,
   milestones,
   followups,
+  ghostMeetings,
   consultantFilter,
   onSelectMeeting,
   onAddMilestone,
@@ -469,6 +495,7 @@ function WeekCalendar({
   meetings: DashboardMeeting[]
   milestones: DashboardMilestone[]
   followups: DashboardFollowup[]
+  ghostMeetings: GhostMeeting[]
   consultantFilter: string
   onSelectMeeting: (m: DashboardMeeting) => void
   onAddMilestone: (dateStr: string) => void
@@ -512,6 +539,7 @@ function WeekCalendar({
           const dateStr = toDateStr(day)
           const isToday = dateStr === today
           const { meetings: dm, milestones: mm, followups: ff } = eventsForDay(dateStr)
+          const gm = ghostMeetings.filter(g => g.dateStr === dateStr && (consultantFilter === 'all' || g.studentConsultant === consultantFilter))
 
           return (
             <div key={dateStr} className={`p-1.5 space-y-1 min-h-64 ${isToday ? 'bg-blue-50/30' : ''}`}>
@@ -520,11 +548,19 @@ function WeekCalendar({
                   key={m.id}
                   onClick={() => onSelectMeeting(m)}
                   className={`w-full text-left text-[11px] px-1.5 py-1 rounded border font-medium truncate hover:opacity-80 transition-opacity ${MEETING_COLOR}`}
-                  title={`${m.studentName} · ${m.meetingType || '미팅'}`}
                 >
                   {m.studentName}
                   {m.meetingType && <span className="opacity-70"> · {m.meetingType}</span>}
                 </button>
+              ))}
+              {gm.map(g => (
+                <div
+                  key={`ghost-${g.studentId}-${g.dateStr}`}
+                  className={`w-full text-[11px] px-1.5 py-1 rounded border border-dashed font-medium truncate ${GHOST_MEETING_COLOR}`}
+                >
+                  {g.studentName}
+                  {g.time && <span className="opacity-60"> · {g.time}</span>}
+                </div>
               ))}
               {mm.map(m => {
                 const cfg = milestoneConfig(m.type)
@@ -547,7 +583,7 @@ function WeekCalendar({
                   {f.studentName} · {f.text}
                 </div>
               ))}
-              {dm.length === 0 && mm.length === 0 && ff.length === 0 && (
+              {dm.length === 0 && gm.length === 0 && mm.length === 0 && ff.length === 0 && (
                 <button
                   onClick={() => onAddMilestone(dateStr)}
                   className="w-full h-8 flex items-center justify-center text-gray-200 hover:text-gray-400 hover:bg-gray-50 rounded transition-colors"
@@ -571,6 +607,7 @@ function MonthCalendar({
   meetings,
   milestones,
   followups,
+  ghostMeetings,
   consultantFilter,
   onSelectMeeting,
 }: {
@@ -579,6 +616,7 @@ function MonthCalendar({
   meetings: DashboardMeeting[]
   milestones: DashboardMilestone[]
   followups: DashboardFollowup[]
+  ghostMeetings: GhostMeeting[]
   consultantFilter: string
   onSelectMeeting: (m: DashboardMeeting) => void
 }) {
@@ -593,10 +631,14 @@ function MonthCalendar({
   const meetingsByDate   = new Map<string, DashboardMeeting[]>()
   const milestonesByDate = new Map<string, DashboardMilestone[]>()
   const followupsByDate  = new Map<string, DashboardFollowup[]>()
+  const ghostsByDate     = new Map<string, GhostMeeting[]>()
 
   filteredMeetings.forEach(m   => { const d = m.meetingDate; if (d) meetingsByDate.set(d, [...(meetingsByDate.get(d) || []), m]) })
   filteredMilestones.forEach(m => { milestonesByDate.set(m.date, [...(milestonesByDate.get(m.date) || []), m]) })
   filteredFollowups.forEach(f  => { const d = f.dueDate; if (d) followupsByDate.set(d, [...(followupsByDate.get(d) || []), f]) })
+  ghostMeetings
+    .filter(g => consultantFilter === 'all' || g.studentConsultant === consultantFilter)
+    .forEach(g => { ghostsByDate.set(g.dateStr, [...(ghostsByDate.get(g.dateStr) || []), g]) })
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -612,6 +654,7 @@ function MonthCalendar({
             const dm = meetingsByDate.get(dateStr) || []
             const mm = milestonesByDate.get(dateStr) || []
             const ff = followupsByDate.get(dateStr) || []
+            const gm = ghostsByDate.get(dateStr) || []
             const dayNum = parseInt(dateStr.slice(8))
 
             return (
@@ -633,6 +676,12 @@ function MonthCalendar({
                       {m.studentName}
                     </button>
                   ))}
+                  {gm.slice(0, Math.max(0, 2 - Math.min(dm.length, 2))).map(g => (
+                    <div key={`ghost-${g.studentId}-${g.dateStr}`}
+                      className={`text-[10px] px-1 py-0.5 rounded border border-dashed truncate font-medium ${GHOST_MEETING_COLOR}`}>
+                      {g.studentName}
+                    </div>
+                  ))}
                   {mm.slice(0, 2).map(m => {
                     const cfg = milestoneConfig(m.type)
                     return (
@@ -646,8 +695,8 @@ function MonthCalendar({
                       {f.studentName}
                     </div>
                   ))}
-                  {(dm.length + mm.length + ff.length) > 3 && (
-                    <p className="text-[10px] text-gray-400 pl-1">+{dm.length + mm.length + ff.length - 3}개</p>
+                  {(dm.length + gm.length + mm.length + ff.length) > 3 && (
+                    <p className="text-[10px] text-gray-400 pl-1">+{dm.length + gm.length + mm.length + ff.length - 3}개</p>
                   )}
                 </div>
               </div>
@@ -879,6 +928,28 @@ export function ServiceDashboardPage() {
 
   const loading = loadingStudents || loadingMeetings || loadingFollowups || loadingMilestones
 
+  // Ghost meetings from regular schedule (future dates only, no existing meeting on that day)
+  const ghostMeetings = useMemo<GhostMeeting[]>(() => {
+    const result: GhostMeeting[] = []
+    const existingKey = new Set(meetings.map(m => `${m.studentId}|${m.meetingDate}`))
+    const dates: string[] = []
+    let d = new Date(viewStartDate + 'T00:00:00')
+    const endD = new Date(viewEndDate + 'T00:00:00')
+    while (d <= endD) { dates.push(toDateStr(d)); d = addDays(d, 1) }
+    students.forEach(s => {
+      if (!s.regularMeetingSchedule) return
+      const time = s.regularMeetingSchedule.split('|')[2] || ''
+      dates.forEach(dateStr => {
+        if (dateStr <= today) return
+        if (existingKey.has(`${s.id}|${dateStr}`)) return
+        if (isScheduledMeetingDate(dateStr, s.regularMeetingSchedule!)) {
+          result.push({ studentId: s.id, studentName: s.name, studentConsultant: s.assignedConsultant, dateStr, time })
+        }
+      })
+    })
+    return result
+  }, [students, meetings, viewStartDate, viewEndDate, today])
+
   // Stats (filtered by consultant)
   const filteredMeetings   = consultantFilter === 'all' ? meetings   : meetings.filter(m   => m.studentConsultant  === consultantFilter)
   const filteredMilestones = consultantFilter === 'all' ? milestones : milestones.filter(m  => m.studentConsultant === consultantFilter)
@@ -1062,6 +1133,10 @@ export function ServiceDashboardPage() {
               <span className="w-3 h-3 rounded bg-violet-200 border border-violet-300" />
               <span className="text-[11px] text-gray-500">학생 미팅</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded border border-dashed border-violet-400" />
+              <span className="text-[11px] text-gray-500">정기 미팅 예정</span>
+            </div>
             {MILESTONE_TYPES.map(t => (
               <div key={t.value} className="flex items-center gap-1.5">
                 <span className={`w-3 h-3 rounded ${t.dot}`} />
@@ -1082,6 +1157,7 @@ export function ServiceDashboardPage() {
             meetings={filteredMeetings}
             milestones={viewMilestones}
             followups={filteredFollowups}
+            ghostMeetings={ghostMeetings}
             consultantFilter={consultantFilter}
             onSelectMeeting={setSelectedMeeting}
             onAddMilestone={dateStr => {
@@ -1100,6 +1176,7 @@ export function ServiceDashboardPage() {
             meetings={filteredMeetings}
             milestones={viewMilestones}
             followups={filteredFollowups}
+            ghostMeetings={ghostMeetings}
             consultantFilter={consultantFilter}
             onSelectMeeting={setSelectedMeeting}
           />
