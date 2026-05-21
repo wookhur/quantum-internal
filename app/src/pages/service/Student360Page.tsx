@@ -248,6 +248,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field label={t('student360.status')} value={student.status} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
         <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
+        <Field label={t('student360.preferredLanguage')} value={student.preferredLanguage} />
         <div className="col-span-2 grid grid-cols-2 gap-x-6 gap-y-3">
           <Field label={t('student360.startDate')} value={student.startDate} />
           <Field label={t('student360.endDate')} value={student.endDate} />
@@ -422,6 +423,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     majors: student?.majors || '',
     contractType: student?.contractType || '',
     communicationPlatform: student?.communicationPlatform || '',
+    preferredLanguage: student?.preferredLanguage || '',
     startDate: student?.startDate || '',
     endDate: student?.endDate || '',
     status: student?.status || '',
@@ -455,6 +457,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
       majors: form.majors || undefined,
       contractType: form.contractType || undefined,
       communicationPlatform: form.communicationPlatform || undefined,
+      preferredLanguage: form.preferredLanguage || undefined,
       startDate: form.startDate || undefined,
       endDate: form.endDate || undefined,
       status: form.status || undefined,
@@ -527,6 +530,15 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
                 {COMM_PLATFORMS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">{t('student360.preferredLanguage')}</Label>
+            <Select value={form.preferredLanguage} onValueChange={v => set('preferredLanguage', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {(['Korean', 'English', 'Both'] as const).map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

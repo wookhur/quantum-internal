@@ -70,7 +70,7 @@ export function useGlobalSearch(query: string) {
         // 3) Service Students
         supabase
           .from('service_students')
-          .select('id, name, korean_name, school, grade, status, assigned_consultant')
+          .select('id, name, korean_name, school, grade, status, assigned_consultant, preferred_language')
           .or(
             `name.ilike.%${trimmed}%,korean_name.ilike.%${trimmed}%,school.ilike.%${trimmed}%`,
           )
@@ -140,7 +140,7 @@ export function useGlobalSearch(query: string) {
             type: 'student',
             id: row.id,
             title: displayName || '학생',
-            subtitle: [row.school, row.grade].filter(Boolean).join(' · '),
+            subtitle: [row.school, row.grade, row.preferred_language ? `🗣 ${row.preferred_language}` : ''].filter(Boolean).join(' · '),
             meta: row.status || undefined,
             stage: row.assigned_consultant || undefined,
             navigateTo: `/service/student-360?studentId=${row.id}`,

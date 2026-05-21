@@ -135,7 +135,7 @@ export function GlobalSearchBar() {
             </div>
           ) : (
             <>
-              {(['lead', 'contract', 'project'] as const).map((type) => {
+              {(['lead', 'contract', 'student', 'project'] as const).map((type) => {
                 const items = grouped[type]
                 if (!items || items.length === 0) return null
                 const config = TYPE_CONFIG[type]

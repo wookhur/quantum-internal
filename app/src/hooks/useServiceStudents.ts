@@ -27,6 +27,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     majors: (row.majors as string) || undefined,
     contractType: (row.contract_type as string) || undefined,
     communicationPlatform: (row.communication_platform as string) || undefined,
+    preferredLanguage: (row.preferred_language as string) || undefined,
     startDate: (row.start_date as string) || undefined,
     endDate: (row.end_date as string) || undefined,
     status: (row.status as string) || undefined,
@@ -115,6 +116,7 @@ export function useCreateServiceStudent() {
       majors?: string
       contractType?: string
       communicationPlatform?: string
+      preferredLanguage?: string
       startDate?: string
       endDate?: string
       status?: string
@@ -140,6 +142,7 @@ export function useCreateServiceStudent() {
         majors: s.majors,
         contract_type: s.contractType,
         communication_platform: s.communicationPlatform,
+        preferred_language: s.preferredLanguage,
         start_date: s.startDate || null,
         end_date: s.endDate || null,
         status: s.status || 'active',
@@ -176,6 +179,7 @@ export function useUpdateServiceStudent() {
       majors?: string
       contractType?: string
       communicationPlatform?: string
+      preferredLanguage?: string
       startDate?: string | null
       endDate?: string | null
       status?: string
@@ -201,6 +205,7 @@ export function useUpdateServiceStudent() {
       if (rest.majors !== undefined) update.majors = rest.majors
       if (rest.contractType !== undefined) update.contract_type = rest.contractType
       if (rest.communicationPlatform !== undefined) update.communication_platform = rest.communicationPlatform
+      if (rest.preferredLanguage !== undefined) update.preferred_language = rest.preferredLanguage
       if (rest.startDate !== undefined) update.start_date = rest.startDate
       if (rest.endDate !== undefined) update.end_date = rest.endDate
       if (rest.status !== undefined) update.status = rest.status
