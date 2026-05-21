@@ -1,5 +1,11 @@
 import { supabase } from './supabase'
 
+export interface ExtractedInstallment {
+  label: string
+  amount: number | null
+  dueDate: string | null
+}
+
 export interface ExtractedContractData {
   contractorName: string | null
   studentName: string | null
@@ -13,6 +19,7 @@ export interface ExtractedContractData {
   currency: 'KRW' | 'USD' | null
   paymentAccount: 'KR' | 'US' | null
   notes: string | null
+  installments: ExtractedInstallment[]
 }
 
 const EMPTY_RESULT: ExtractedContractData = {
@@ -28,6 +35,7 @@ const EMPTY_RESULT: ExtractedContractData = {
   currency: null,
   paymentAccount: null,
   notes: null,
+  installments: [],
 }
 
 /**

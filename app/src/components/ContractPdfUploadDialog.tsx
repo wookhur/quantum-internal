@@ -37,6 +37,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
     currency: null,
     paymentAccount: null,
     notes: null,
+    installments: [],
   })
   const [installmentRows, setInstallmentRows] = useState([
     { label: '계약금', amount: '', dueDate: '' },
@@ -57,6 +58,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
       gradeAtContract: null, contractDate: null, expiryDate: null,
       address: null, phone: null, totalAmount: null,
       currency: null, paymentAccount: null, notes: null,
+      installments: [],
     })
     setInstallmentRows([
       { label: '계약금', amount: '', dueDate: '' },
@@ -101,6 +103,23 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
       }
 
       setForm(extracted)
+
+      // Populate installment rows from AI extraction
+      if (extracted.installments && extracted.installments.length > 0) {
+        setInstallmentRows(extracted.installments.map(inst => ({
+          label: inst.label || '',
+          amount: inst.amount != null ? String(inst.amount) : '',
+          dueDate: inst.dueDate || '',
+        })))
+      } else {
+        // Default rows if AI didn't extract any
+        setInstallmentRows([
+          { label: '계약금', amount: '', dueDate: '' },
+          { label: '중도금', amount: '', dueDate: '' },
+          { label: '잔금', amount: '', dueDate: '' },
+        ])
+      }
+
       setStep('review')
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
