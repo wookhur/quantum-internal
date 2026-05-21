@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Upload, FileText, Loader2, CheckCircle2, AlertCircle, Plus, Trash2 } from 'lucide-react'
 import { extractTextFromPdf, renderPdfPagesToImages } from '@/lib/pdf-extract'
 import { extractContractFields, extractContractFieldsFromImages, type ExtractedContractData } from '@/lib/extract-contract-ai'
 import { useCreateContractFull } from '@/hooks/useContracts'
+import { useCreateInstallments } from '@/hooks/useInstallments'
+import { formatCurrency } from '@/types'
 
 type Step = 'upload' | 'extracting' | 'review' | 'saving' | 'done' | 'error'
 
@@ -36,8 +38,14 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
     paymentAccount: null,
     notes: null,
   })
+  const [installmentRows, setInstallmentRows] = useState([
+    { label: '계약금', amount: '', dueDate: '' },
+    { label: '중도금', amount: '', dueDate: '' },
+    { label: '잔금', amount: '', dueDate: '' },
+  ])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const createContract = useCreateContractFull()
+  const createInstallments = useCreateInstallments()
 
   const reset = useCallback(() => {
     setStep('upload')
@@ -50,6 +58,11 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
       address: null, phone: null, totalAmount: null,
       currency: null, paymentAccount: null, notes: null,
     })
+    setInstallmentRows([
+      { label: '계약금', amount: '', dueDate: '' },
+      { label: '중도금', amount: '', dueDate: '' },
+      { label: '잔금', amount: '', dueDate: '' },
+    ])
   }, [])
 
   const handleClose = useCallback((isOpen: boolean) => {
@@ -124,7 +137,20 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
       paymentAccount: form.paymentAccount || undefined,
       notes: form.notes || undefined,
     }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
+        // Create installments if any have amount
+        const validItems = installmentRows
+          .filter(r => r.label.trim() && Number(r.amount) > 0)
+          .map((r, i) => ({
+            installmentOrder: i + 1,
+            label: r.label.trim(),
+            amount: Number(r.amount),
+            dueDate: r.dueDate || undefined,
+            currency: (form.currency || 'KRW') as 'KRW' | 'USD',
+          }))
+        if (data?.id && validItems.length > 0) {
+          createInstallments.mutate({ contractId: data.id as string, items: validItems })
+        }
         setStep('done')
         setTimeout(() => handleClose(false), 1500)
       },
@@ -133,7 +159,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
         setStep('error')
       },
     })
-  }, [form, createContract, handleClose])
+  }, [form, installmentRows, createContract, createInstallments, handleClose])
 
   const updateField = <K extends keyof ExtractedContractData>(
     key: K,
@@ -341,6 +367,77 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
                 rows={2}
                 className="resize-none"
               />
+            </div>
+
+            {/* Installment Schedule */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">납입 일정</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs gap-1"
+                  onClick={() => setInstallmentRows(rows => [...rows, { label: '', amount: '', dueDate: '' }])}
+                >
+                  <Plus className="size-3" /> 추가
+                </Button>
+              </div>
+              <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
+                <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-[10px] text-muted-foreground font-medium px-0.5">
+                  <span>항목명</span><span>금액</span><span>납입일</span><span className="w-7" />
+                </div>
+                {installmentRows.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+                    <Input
+                      placeholder="계약금"
+                      value={row.label}
+                      onChange={e => {
+                        const next = [...installmentRows]
+                        next[idx] = { ...next[idx], label: e.target.value }
+                        setInstallmentRows(next)
+                      }}
+                      className="h-8 text-xs"
+                    />
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={row.amount}
+                      onChange={e => {
+                        const next = [...installmentRows]
+                        next[idx] = { ...next[idx], amount: e.target.value }
+                        setInstallmentRows(next)
+                      }}
+                      className="h-8 text-xs"
+                    />
+                    <Input
+                      type="date"
+                      value={row.dueDate}
+                      onChange={e => {
+                        const next = [...installmentRows]
+                        next[idx] = { ...next[idx], dueDate: e.target.value }
+                        setInstallmentRows(next)
+                      }}
+                      className="h-8 text-xs"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => setInstallmentRows(rows => rows.filter((_, i) => i !== idx))}
+                      disabled={installmentRows.length <= 1}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                {installmentRows.some(r => Number(r.amount) > 0) && (
+                  <div className="text-[11px] text-muted-foreground pt-1 text-right">
+                    납입 합계: {formatCurrency(installmentRows.reduce((s, r) => s + (Number(r.amount) || 0), 0), (form.currency || 'KRW') as 'KRW' | 'USD')}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex gap-2 pt-2">
