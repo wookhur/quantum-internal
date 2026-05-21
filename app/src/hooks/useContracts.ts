@@ -2,6 +2,45 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Contract, ContractStatus, PaymentInstallment } from '@/types'
 
+/**
+ * Auto-creates a service_student record if one doesn't already exist with the same name.
+ * Called after contract creation so the student appears in Student 360.
+ */
+async function ensureServiceStudent(opts: {
+  studentName: string
+  parentName?: string
+  school?: string
+  grade?: string
+  phone?: string
+  address?: string
+  contractType?: string
+  startDate?: string
+  endDate?: string
+}) {
+  // Check if a service_student with this name already exists
+  const { data: existing } = await supabase
+    .from('service_students')
+    .select('id')
+    .eq('name', opts.studentName)
+    .limit(1)
+
+  if (existing && existing.length > 0) return // Already exists
+
+  // Create a new service_student record
+  await supabase.from('service_students').insert({
+    name: opts.studentName,
+    parent_name: opts.parentName || null,
+    school: opts.school || null,
+    grade: opts.grade || null,
+    contact: opts.phone || null,
+    address: opts.address || null,
+    contract_type: opts.contractType || null,
+    start_date: opts.startDate || null,
+    end_date: opts.endDate || null,
+    status: 'active',
+  })
+}
+
 function mapContract(row: Record<string, unknown>): Contract {
   return {
     id: row.id as string,
@@ -71,11 +110,24 @@ export function useCreateContract() {
 
       const { data, error } = await supabase.from('contracts').insert(row).select().single()
       if (error) throw error
+
+      // Auto-create service_student if not exists
+      await ensureServiceStudent({
+        studentName: contract.studentName,
+        parentName: contract.contractorName,
+        school: contract.schoolName,
+        grade: contract.gradeAtContract,
+        phone: contract.phone,
+        startDate: contract.contractDate,
+        endDate: contract.expiryDate,
+      })
+
       return data
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contracts'] })
       qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
+      qc.invalidateQueries({ queryKey: ['service_students'] })
     },
   })
 }
@@ -120,9 +172,25 @@ export function useCreateContractFull() {
         .select()
         .single()
       if (error) throw error
+
+      // Auto-create service_student if not exists
+      await ensureServiceStudent({
+        studentName: contract.studentName,
+        parentName: contract.contractorName,
+        school: contract.schoolName,
+        grade: contract.gradeAtContract,
+        phone: contract.phone,
+        address: contract.address,
+        startDate: contract.contractDate,
+        endDate: contract.expiryDate,
+      })
+
       return data
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contracts'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['service_students'] })
+    },
   })
 }
 
