@@ -78,6 +78,53 @@ export function useCreateMeeting() {
   })
 }
 
+export function useUpdateMeeting() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: {
+      id: string
+      meetingDate?: string
+      meetingNumber?: number
+      parentName?: string
+      studentName?: string
+      phone?: string
+      currentSchool?: string
+      grade?: string
+      region?: string
+      interestArea?: string
+      sourceChannel?: string
+      memo?: string
+      nextMeetingDate?: string
+      requiredAction?: string
+    }) => {
+      const row: Record<string, unknown> = {}
+      if (updates.meetingDate !== undefined) row.meeting_date = updates.meetingDate
+      if (updates.meetingNumber !== undefined) row.meeting_number = updates.meetingNumber
+      if (updates.parentName !== undefined) row.parent_name = updates.parentName
+      if (updates.studentName !== undefined) row.student_name = updates.studentName || null
+      if (updates.phone !== undefined) row.phone = updates.phone || null
+      if (updates.currentSchool !== undefined) row.current_school = updates.currentSchool || null
+      if (updates.grade !== undefined) row.grade = updates.grade || null
+      if (updates.region !== undefined) row.region = updates.region || null
+      if (updates.interestArea !== undefined) row.interest_area = updates.interestArea || null
+      if (updates.sourceChannel !== undefined) row.source_channel = updates.sourceChannel || null
+      if (updates.memo !== undefined) row.memo = updates.memo || null
+      if (updates.nextMeetingDate !== undefined) row.next_meeting_date = updates.nextMeetingDate || null
+      if (updates.requiredAction !== undefined) row.required_action = updates.requiredAction || null
+
+      const { data, error } = await supabase
+        .from('meetings')
+        .update(row)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['meetings'] }),
+  })
+}
+
 export function useUpdateNoteDelivered() {
   const queryClient = useQueryClient()
   return useMutation({

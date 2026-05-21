@@ -8,8 +8,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { CalendarCheck, FileCheck, Plus, Upload, Loader2 } from 'lucide-react'
-import { useMeetings, useCreateMeeting, useUpdateNoteDelivered } from '@/hooks/useMeetings'
+import { CalendarCheck, FileCheck, Plus, Upload, Loader2, Pencil } from 'lucide-react'
+import { useMeetings, useCreateMeeting, useUpdateMeeting, useUpdateNoteDelivered } from '@/hooks/useMeetings'
+import type { Meeting } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { currentMonthStrKST } from '@/lib/date'
 import { useT } from '@/i18n/LanguageContext'
@@ -46,10 +47,13 @@ export function MeetingsPage() {
   const [dateTo, setDateTo] = useState<string>('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_MEETING_FORM)
+  const [editForm, setEditForm] = useState({ ...INITIAL_MEETING_FORM, id: '', interestArea: '', nextMeetingDate: '', requiredAction: '' })
 
   const { user } = useAuth()
   const createMeeting = useCreateMeeting()
+  const updateMeeting = useUpdateMeeting()
 
   const handleCreateMeeting = () => {
     createMeeting.mutate(
@@ -73,6 +77,48 @@ export function MeetingsPage() {
         },
       },
     )
+  }
+
+  const openEditDialog = (m: Meeting) => {
+    setEditForm({
+      id: m.id,
+      meetingDate: m.meetingDate || '',
+      meetingNumber: String(m.meetingNumber),
+      parentName: m.parentName || '',
+      studentName: m.studentName || '',
+      phone: m.phone || '',
+      currentSchool: m.currentSchool || '',
+      grade: m.grade || '',
+      region: m.region || '',
+      sourceChannel: m.sourceChannel || '',
+      memo: m.memo || '',
+      interestArea: m.interestArea || '',
+      nextMeetingDate: m.nextMeetingDate || '',
+      requiredAction: m.requiredAction || '',
+    })
+    setEditDialogOpen(true)
+  }
+
+  const handleEditMeeting = () => {
+    if (!editForm.id || !editForm.parentName || !editForm.meetingDate) return
+    updateMeeting.mutate({
+      id: editForm.id,
+      meetingDate: editForm.meetingDate,
+      meetingNumber: parseInt(editForm.meetingNumber),
+      parentName: editForm.parentName,
+      studentName: editForm.studentName,
+      phone: editForm.phone,
+      currentSchool: editForm.currentSchool,
+      grade: editForm.grade,
+      region: editForm.region,
+      interestArea: editForm.interestArea,
+      sourceChannel: editForm.sourceChannel,
+      memo: editForm.memo,
+      nextMeetingDate: editForm.nextMeetingDate,
+      requiredAction: editForm.requiredAction,
+    }, {
+      onSuccess: () => setEditDialogOpen(false),
+    })
   }
 
   const { data: meetings = [], isLoading, error } = useMeetings({
@@ -197,6 +243,7 @@ export function MeetingsPage() {
                     <TableHead className="w-[40px] text-center">{t('meetings.col.note')}</TableHead>
                     <TableHead className="hidden xl:table-cell w-[90px]">{t('meetings.col.nextMeeting')}</TableHead>
                     <TableHead className="hidden xl:table-cell max-w-[120px]">{t('meetings.col.requiredAction')}</TableHead>
+                    <TableHead className="w-[40px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -250,6 +297,16 @@ export function MeetingsPage() {
                           {meeting.requiredAction ? (
                             <span className="text-warning font-medium">{meeting.requiredAction}</span>
                           ) : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => openEditDialog(meeting)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     )
@@ -328,6 +385,93 @@ export function MeetingsPage() {
               <Button onClick={handleCreateMeeting} disabled={!form.parentName || !form.meetingDate || createMeeting.isPending}>
                 {createMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
                 {t('common.add')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Meeting Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('meetings.editMeeting')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('meetings.col.meetingDate')} *</Label>
+                <Input type="date" value={editForm.meetingDate} onChange={e => setEditForm(f => ({ ...f, meetingDate: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('meetings.col.meetingNumber')} *</Label>
+                <Select value={editForm.meetingNumber} onValueChange={v => v && setEditForm(f => ({ ...f, meetingNumber: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">{t('meetings.nthMeeting').replace('{n}', '1')}</SelectItem>
+                    <SelectItem value="2">{t('meetings.nthMeeting').replace('{n}', '2')}</SelectItem>
+                    <SelectItem value="3">{t('meetings.nthMeeting').replace('{n}', '3')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('leads.parentName')} *</Label>
+                <Input value={editForm.parentName} onChange={e => setEditForm(f => ({ ...f, parentName: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('leads.studentName')}</Label>
+                <Input value={editForm.studentName} onChange={e => setEditForm(f => ({ ...f, studentName: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('common.phone')}</Label>
+                <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="010-0000-0000" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('common.school')}</Label>
+                <Input value={editForm.currentSchool} onChange={e => setEditForm(f => ({ ...f, currentSchool: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('common.grade')}</Label>
+                <Input value={editForm.grade} onChange={e => setEditForm(f => ({ ...f, grade: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('common.region')}</Label>
+                <Input value={editForm.region} onChange={e => setEditForm(f => ({ ...f, region: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('leads.sourceChannel')}</Label>
+                <Input value={editForm.sourceChannel} onChange={e => setEditForm(f => ({ ...f, sourceChannel: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('meetings.col.interestArea')}</Label>
+              <Input value={editForm.interestArea} onChange={e => setEditForm(f => ({ ...f, interestArea: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t('common.memo')}</Label>
+              <Textarea value={editForm.memo} onChange={e => setEditForm(f => ({ ...f, memo: e.target.value }))} rows={3} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>{t('meetings.col.nextMeeting')}</Label>
+                <Input type="date" value={editForm.nextMeetingDate} onChange={e => setEditForm(f => ({ ...f, nextMeetingDate: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('meetings.col.requiredAction')}</Label>
+                <Input value={editForm.requiredAction} onChange={e => setEditForm(f => ({ ...f, requiredAction: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>{t('common.cancel')}</Button>
+              <Button onClick={handleEditMeeting} disabled={!editForm.parentName || !editForm.meetingDate || updateMeeting.isPending}>
+                {updateMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+                {t('common.save')}
               </Button>
             </div>
           </div>
