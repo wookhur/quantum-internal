@@ -12,10 +12,10 @@ import { Input } from '@/components/ui/input'
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, CreditCard, ExternalLink, Pencil, Trash2,
+  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
-import { useUpdateInstallment } from '@/hooks/useInstallments'
+import { useUpdateInstallment, useCreateInstallments } from '@/hooks/useInstallments'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import { supabase } from '@/lib/supabase'
@@ -263,6 +263,7 @@ export function ContractDetailPage() {
   const updateContract = useUpdateContract()
   const deleteContract = useDeleteContract()
   const updateInstallment = useUpdateInstallment()
+  const createInstallments = useCreateInstallments()
   const STATUS_CONFIG = useStatusConfig()
   const { data: linkedLead } = useLinkedLead(contract?.leadId)
   const { data: leadActivities = [] } = useLeadActivities(contract?.leadId)
@@ -273,6 +274,8 @@ export function ContractDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+  const [addChargeDialogOpen, setAddChargeDialogOpen] = useState(false)
+  const [chargeForm, setChargeForm] = useState({ label: '', amount: '', dueDate: '', notes: '' })
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [selectedInstallment, setSelectedInstallment] = useState<PaymentInstallment | null>(null)
   const [payForm, setPayForm] = useState({
@@ -337,6 +340,26 @@ export function ContractDetailPage() {
       notes: '',
     })
   }, [updateInstallment, t])
+
+  const handleAddCharge = useCallback(() => {
+    if (!id || !chargeForm.label.trim() || !chargeForm.amount) return
+    const nextOrder = (contract?.installments?.length || 0) + 1
+    createInstallments.mutate({
+      contractId: id,
+      items: [{
+        installmentOrder: nextOrder,
+        label: chargeForm.label.trim(),
+        amount: Number(chargeForm.amount),
+        dueDate: chargeForm.dueDate || undefined,
+        currency: contract?.currency || 'KRW',
+      }],
+    }, {
+      onSuccess: () => {
+        setAddChargeDialogOpen(false)
+        setChargeForm({ label: '', amount: '', dueDate: '', notes: '' })
+      },
+    })
+  }, [id, chargeForm, contract, createInstallments])
 
   if (isLoading) {
     return (
@@ -451,10 +474,26 @@ export function ContractDetailPage() {
 
       {/* Installment Timeline */}
       <div>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <DollarSign className="size-5" />
-          {t('contracts.installmentCount').replace('{n}', String(installments.length))}
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <DollarSign className="size-5" />
+            {t('contracts.installmentCount').replace('{n}', String(installments.length))}
+          </h2>
+          {!isCancelled && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => {
+                setChargeForm({ label: '', amount: '', dueDate: '', notes: '' })
+                setAddChargeDialogOpen(true)
+              }}
+            >
+              <Plus className="size-3.5" />
+              {t('contracts.addCharge')}
+            </Button>
+          )}
+        </div>
         {installments.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground text-sm">
@@ -829,6 +868,57 @@ export function ContractDetailPage() {
               disabled={updateInstallment.isPending || !payForm.paidAmount || Number(payForm.paidAmount) <= 0}
             >
               {updateInstallment.isPending ? t('contracts.processing') : t('contracts.confirmPayment')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Charge Dialog */}
+      <Dialog open={addChargeDialogOpen} onOpenChange={setAddChargeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('contracts.addCharge')}</DialogTitle>
+            <DialogDescription>
+              {t('contracts.addChargeDesc')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>{t('contracts.chargeLabel')} <span className="text-destructive">*</span></Label>
+              <Input
+                value={chargeForm.label}
+                onChange={e => setChargeForm(f => ({ ...f, label: e.target.value }))}
+                placeholder={t('contracts.chargeLabelPlaceholder')}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('contracts.amount')} ({contract.currency}) <span className="text-destructive">*</span></Label>
+              <Input
+                type="number"
+                value={chargeForm.amount}
+                onChange={e => setChargeForm(f => ({ ...f, amount: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('contracts.dueAmount')}</Label>
+              <Input
+                type="date"
+                value={chargeForm.dueDate}
+                onChange={e => setChargeForm(f => ({ ...f, dueDate: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddChargeDialogOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={handleAddCharge}
+              disabled={!chargeForm.label.trim() || !chargeForm.amount || Number(chargeForm.amount) <= 0 || createInstallments.isPending}
+            >
+              {createInstallments.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              {t('common.add')}
             </Button>
           </DialogFooter>
         </DialogContent>
