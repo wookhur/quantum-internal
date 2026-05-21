@@ -93,6 +93,8 @@ export function useCreateContract() {
       gradeAtContract: string
       contractDate: string
       expiryDate: string
+      totalAmount?: number
+      currency?: 'KRW' | 'USD'
       leadId?: string
       phone?: string
     }) => {
@@ -105,6 +107,8 @@ export function useCreateContract() {
         expiry_date: contract.expiryDate,
         status: 'active',
       }
+      if (contract.totalAmount) row.total_amount = contract.totalAmount
+      if (contract.currency) row.currency = contract.currency
       if (contract.leadId) row.lead_id = contract.leadId
       if (contract.phone) row.phone = contract.phone
 

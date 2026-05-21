@@ -10,9 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Search, Plus, Loader2, DollarSign, CheckCircle2, AlertTriangle, Clock,
-  Upload, Ban, ChevronRight, ChevronDown, TrendingUp,
+  Upload, Ban, ChevronRight, ChevronDown, TrendingUp, Trash2,
 } from 'lucide-react'
 import { useContractsWithInstallments, useCreateContract } from '@/hooks/useContracts'
+import { useCreateInstallments } from '@/hooks/useInstallments'
 import { ContractPdfUploadDialog } from '@/components/ContractPdfUploadDialog'
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
@@ -63,6 +64,8 @@ function CollectionStatusBadge({ progress, hasOverdue }: { progress: number; has
   return <Badge variant="outline" className="text-[10px] h-5">{t('contracts.status.unpaid')}</Badge>
 }
 
+type InstallmentRow = { label: string; amount: string; dueDate: string }
+
 const INITIAL_CONTRACT_FORM = {
   contractorName: '',
   studentName: '',
@@ -70,7 +73,15 @@ const INITIAL_CONTRACT_FORM = {
   gradeAtContract: '',
   contractDate: '',
   expiryDate: '',
+  totalAmount: '',
+  currency: 'KRW' as 'KRW' | 'USD',
 }
+
+const DEFAULT_INSTALLMENTS: InstallmentRow[] = [
+  { label: '계약금', amount: '', dueDate: '' },
+  { label: '중도금', amount: '', dueDate: '' },
+  { label: '잔금', amount: '', dueDate: '' },
+]
 
 export function ContractsPage() {
   const navigate = useNavigate()
@@ -81,9 +92,11 @@ export function ContractsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_CONTRACT_FORM)
+  const [installmentRows, setInstallmentRows] = useState<InstallmentRow[]>(DEFAULT_INSTALLMENTS.map(r => ({ ...r })))
   const [expandedContract, setExpandedContract] = useState<string | null>(null)
   const [fromLead, setFromLead] = useState(false)
   const createContract = useCreateContract()
+  const createInstallments = useCreateInstallments()
 
   // Auto-open create dialog when navigated from lead stage change
   useEffect(() => {
@@ -97,6 +110,8 @@ export function ContractsPage() {
         gradeAtContract: searchParams.get('grade') || '',
         contractDate: new Date().toISOString().slice(0, 10),
         expiryDate: '',
+        totalAmount: '',
+        currency: 'KRW',
       })
       setFromLead(true)
       setDialogOpen(true)
@@ -111,13 +126,32 @@ export function ContractsPage() {
   const handleCreateContract = () => {
     if (!form.contractorName.trim() || !form.studentName.trim()) return
     createContract.mutate(
-      { ...form, leadId: leadInfoRef.current?.leadId, phone: leadInfoRef.current?.phone || undefined },
+      {
+        ...form,
+        totalAmount: Number(form.totalAmount) || undefined,
+        currency: form.currency,
+        leadId: leadInfoRef.current?.leadId,
+        phone: leadInfoRef.current?.phone || undefined,
+      },
       {
         onSuccess: (data) => {
+          // Create installments if any have amount
+          const validItems = installmentRows
+            .filter(r => r.label.trim() && Number(r.amount) > 0)
+            .map((r, i) => ({
+              installmentOrder: i + 1,
+              label: r.label.trim(),
+              amount: Number(r.amount),
+              dueDate: r.dueDate || undefined,
+              currency: form.currency,
+            }))
+          if (data?.id && validItems.length > 0) {
+            createInstallments.mutate({ contractId: data.id, items: validItems })
+          }
           setDialogOpen(false)
           setForm(INITIAL_CONTRACT_FORM)
+          setInstallmentRows(DEFAULT_INSTALLMENTS.map(r => ({ ...r })))
           setFromLead(false)
-          // Navigate to the new contract detail page
           if (data?.id) navigate(`/consulting/clients/${data.id}`)
         },
       },
@@ -227,6 +261,97 @@ export function ContractsPage() {
                     />
                   </div>
                 </div>
+                {/* Total Amount & Currency */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2 space-y-2">
+                    <Label>{t('contracts.totalContractAmount')}</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={form.totalAmount}
+                      onChange={e => setForm(f => ({ ...f, totalAmount: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('contracts.currency')}</Label>
+                    <Select value={form.currency} onValueChange={v => setForm(f => ({ ...f, currency: (v || 'KRW') as 'KRW' | 'USD' }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="KRW">KRW</SelectItem>
+                        <SelectItem value="USD">USD</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Installment Schedule */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>{t('contracts.installmentSchedule')}</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs gap-1"
+                      onClick={() => setInstallmentRows(rows => [...rows, { label: '', amount: '', dueDate: '' }])}
+                    >
+                      <Plus className="size-3" /> {t('common.add')}
+                    </Button>
+                  </div>
+                  <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
+                    {installmentRows.map((row, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+                        <Input
+                          placeholder={t('contracts.installmentLabel')}
+                          value={row.label}
+                          onChange={e => {
+                            const next = [...installmentRows]
+                            next[idx] = { ...next[idx], label: e.target.value }
+                            setInstallmentRows(next)
+                          }}
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          type="number"
+                          placeholder={t('contracts.amount')}
+                          value={row.amount}
+                          onChange={e => {
+                            const next = [...installmentRows]
+                            next[idx] = { ...next[idx], amount: e.target.value }
+                            setInstallmentRows(next)
+                          }}
+                          className="h-8 text-xs"
+                        />
+                        <Input
+                          type="date"
+                          value={row.dueDate}
+                          onChange={e => {
+                            const next = [...installmentRows]
+                            next[idx] = { ...next[idx], dueDate: e.target.value }
+                            setInstallmentRows(next)
+                          }}
+                          className="h-8 text-xs"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => setInstallmentRows(rows => rows.filter((_, i) => i !== idx))}
+                          disabled={installmentRows.length <= 1}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                    {installmentRows.length > 0 && (
+                      <div className="text-[11px] text-muted-foreground pt-1 text-right">
+                        {t('contracts.installmentTotal')}: {formatCurrency(installmentRows.reduce((s, r) => s + (Number(r.amount) || 0), 0), form.currency)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <Button
                   className="w-full"
                   onClick={handleCreateContract}
