@@ -136,7 +136,7 @@ export function useCreateContract() {
   })
 }
 
-/** Extended mutation that accepts all contract fields (used by PDF extraction) */
+/** Extended mutation that accepts all contract fields (used by PDF extraction & lead conversion) */
 export function useCreateContractFull() {
   const qc = useQueryClient()
   return useMutation({
@@ -153,6 +153,9 @@ export function useCreateContractFull() {
       currency?: 'KRW' | 'USD'
       paymentAccount?: 'KR' | 'US'
       notes?: string
+      leadId?: string
+      salesRep?: string
+      serviceRep?: string
     }) => {
       const row: Record<string, unknown> = {
         contractor_name: contract.contractorName,
@@ -169,6 +172,9 @@ export function useCreateContractFull() {
       if (contract.currency) row.currency = contract.currency
       if (contract.paymentAccount) row.payment_account = contract.paymentAccount
       if (contract.notes) row.notes = contract.notes
+      if (contract.leadId) row.lead_id = contract.leadId
+      if (contract.salesRep) row.sales_rep = contract.salesRep
+      if (contract.serviceRep) row.service_rep = contract.serviceRep
 
       const { data, error } = await supabase
         .from('contracts')
@@ -193,6 +199,8 @@ export function useCreateContractFull() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
+      qc.invalidateQueries({ queryKey: ['linked-contracts'] })
       qc.invalidateQueries({ queryKey: ['service_students'] })
     },
   })

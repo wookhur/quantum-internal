@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import ConsultationBookingDialog from '@/components/ConsultationBookingDialog'
 import LeadEditDialog from '@/components/LeadEditDialog'
+import { CreateContractFromLeadDialog } from '@/components/CreateContractFromLeadDialog'
 
 // ─── Linked data hooks ────────────────────────────────────────────────────
 
@@ -120,6 +121,7 @@ export function LeadDetailPage() {
   const [noteText, setNoteText] = useState('')
   const [bookingOpen, setBookingOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [contractDialogOpen, setContractDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
@@ -277,6 +279,9 @@ export function LeadDetailPage() {
           <ArrowLeft className="size-4" /> {t('leadDetail.leadList')}
         </Link>
         <div className="flex gap-2">
+          <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setContractDialogOpen(true)}>
+            <FileText className="size-3.5" /> {t('leadDetail.createContract')}
+          </Button>
           <Button size="sm" className="gap-1.5 bg-[#0073EA] hover:bg-[#0060C2]" onClick={() => setBookingOpen(true)}>
             <CalendarPlus className="size-3.5" /> {t('leadDetail.bookConsultation')}
           </Button>
@@ -596,6 +601,22 @@ export function LeadDetailPage() {
 
       {/* Lead Edit Dialog */}
       <LeadEditDialog open={editOpen} onClose={() => setEditOpen(false)} lead={lead} />
+
+      {/* Contract Creation Dialog */}
+      <CreateContractFromLeadDialog
+        open={contractDialogOpen}
+        onOpenChange={setContractDialogOpen}
+        lead={{
+          id: lead.id,
+          parentName: lead.parentName,
+          studentName: lead.studentName,
+          phone: lead.phone,
+          currentSchool: lead.currentSchool,
+          grade: lead.grade,
+          region: lead.region,
+          email: lead.email,
+        }}
+      />
 
       {/* Consultation Booking Dialog */}
       <ConsultationBookingDialog
