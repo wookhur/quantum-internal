@@ -15,7 +15,7 @@ import {
 import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
-  Sparkles, Loader2, ChevronDown, ChevronUp,
+  Sparkles, Loader2, ChevronDown, ChevronUp, Flag, CheckSquare,
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -45,6 +45,7 @@ import type {
 import { CONSULTANTS, consultantName } from '@/lib/consultants'
 import { kpiDotColor } from '@/lib/kpi'
 import { useStudentKpis, KPI_MAX } from '@/hooks/useConsultantKpis'
+import { useStudentStatusFlags } from '@/hooks/useServiceDashboard'
 
 const COMM_PLATFORMS = ['KakaoTalk', 'WhatsApp', 'WeChat', 'Email', 'Etc'] as const
 
@@ -97,6 +98,7 @@ export function Student360Page() {
 
   const { data: students = [], isLoading } = useServiceStudents()
   const { data: studentKpis = {} } = useStudentKpis()
+  const statusFlags = useStudentStatusFlags()
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -153,6 +155,12 @@ export function Student360Page() {
                   <span className="font-medium text-sm truncate">
                     {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
                   </span>
+                  {statusFlags.missingReports.has(s.id) && (
+                    <Flag className="size-3.5 text-red-500 shrink-0" title="미팅일지 미제출" />
+                  )}
+                  {statusFlags.pendingFollowups.has(s.id) && (
+                    <CheckSquare className="size-3.5 text-red-500 shrink-0" title="미처리 Follow-up" />
+                  )}
                   {s.assignedConsultant && (
                     <span className="text-xs text-muted-foreground/70 truncate">
                       {consultantName(s.assignedConsultant)}

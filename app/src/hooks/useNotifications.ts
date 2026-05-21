@@ -76,6 +76,26 @@ export function useAppNotifications() {
     },
   })
 
+  // --- Service meetings with missing reports (last 24h) ---
+  const { data: missingReportMeetings = [] } = useQuery({
+    queryKey: ['notifications-missing-reports', user?.id],
+    enabled: !!user?.id,
+    refetchInterval: 5 * 60 * 1000,
+    queryFn: async () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      const today = new Date().toISOString().slice(0, 10)
+      const { data, error } = await supabase
+        .from('service_meetings')
+        .select('id, meeting_date, report_status, service_students!inner(name)')
+        .gte('meeting_date', yesterday)
+        .lte('meeting_date', today)
+        .neq('report_status', 'submitted')
+        .limit(20)
+      if (error) return []
+      return data || []
+    },
+  })
+
   const notifications = useMemo(() => {
     const items: AppNotification[] = []
     const now = new Date().toISOString()
@@ -119,8 +139,28 @@ export function useAppNotifications() {
       })
     }
 
+    // Missing service meeting reports (last 24h)
+    if (!disabledTypes.includes('missing_report') && missingReportMeetings.length > 0) {
+      const names = (missingReportMeetings as Record<string, unknown>[])
+        .map((m) => {
+          const s = m.service_students as Record<string, unknown>
+          const date = m.meeting_date as string
+          return `${(s?.name as string) || '?'} (${date})`
+        })
+        .join(', ')
+      items.push({
+        id: 'missing-reports',
+        type: 'missing_report',
+        title: '미팅일지 미제출 알림',
+        message: `최근 24시간 내 미팅 중 일지 미제출: ${names}`,
+        severity: 'error',
+        link: '/service/student360',
+        createdAt: now,
+      })
+    }
+
     return items
-  }, [neglectedLeads, overduePayments, todayMeetings, disabledTypes])
+  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, disabledTypes])
 
   return notifications
 }
@@ -131,4 +171,5 @@ export const NOTIFICATION_TYPES = [
   { key: 'overdue_payment', label: '미수금 알림', labelEn: 'Overdue Payment Alert' },
   { key: 'today_meeting', label: '오늘 미팅 알림', labelEn: 'Today\'s Meeting Alert' },
   { key: 'new_message', label: '새 메시지 알림', labelEn: 'New Message Alert' },
+  { key: 'missing_report', label: '미팅일지 미제출 알림', labelEn: 'Missing Meeting Report Alert' },
 ] as const
