@@ -484,6 +484,23 @@ export interface ServiceDiaryEntry {
   updatedAt: string
 }
 
+// ============ SERVICE DASHBOARD ============
+export type MilestoneType = 'strategy' | 'essay' | 'application' | 'competition' | 'decision' | 'ec_activity'
+export type MilestoneStatus = 'on_track' | 'behind' | 'urgent' | 'completed' | 'upcoming'
+
+export interface StudentMilestone {
+  id: string
+  studentId: string
+  type: MilestoneType
+  title: string
+  date: string
+  status: MilestoneStatus
+  notes?: string
+  createdBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
 // ============ FORMATTING HELPERS ============
 export function formatCurrency(amount: number, currency: 'KRW' | 'USD' = 'KRW'): string {
   if (currency === 'USD') {

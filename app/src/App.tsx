@@ -27,6 +27,7 @@ import { PlanningOverviewPage } from '@/pages/planning/PlanningOverviewPage'
 import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
+import { ServiceDashboardPage } from '@/pages/service/ServiceDashboardPage'
 import { Student360Page } from '@/pages/service/Student360Page'
 import { ConsultantKpiPage } from '@/pages/service/ConsultantKpiPage'
 import { MessagesPage } from '@/pages/common/MessagesPage'
@@ -75,6 +76,7 @@ export default function App() {
                 <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />
                 <Route path="/consulting/collections" element={<MonthlyCollectionPage />} />
 
+                <Route path="/service/dashboard" element={<ServiceDashboardPage />} />
                 <Route path="/service/student-360" element={<Student360Page />} />
                 <Route path="/service/kpi" element={<ConsultantKpiPage />} />
 
