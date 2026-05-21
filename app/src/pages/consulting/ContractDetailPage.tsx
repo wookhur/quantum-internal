@@ -120,10 +120,16 @@ function InstallmentCard({
         </div>
 
         {/* Payment details */}
-        <div className="mt-3 grid grid-cols-3 gap-4 text-xs">
+        <div className="mt-3 grid grid-cols-4 gap-4 text-xs">
           <div>
-            <span className="text-muted-foreground">{t('contracts.dueAmount')}</span>
+            <span className="text-muted-foreground">{t('contracts.scheduledDate')}</span>
             <p className="font-mono mt-0.5">{installment.dueDate || '-'}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">{t('contracts.actualPaidDate')}</span>
+            <p className={`font-mono mt-0.5 ${isPaid ? 'text-emerald-600' : ''}`}>
+              {installment.paidDate || '-'}
+            </p>
           </div>
           <div>
             <span className="text-muted-foreground">{t('contracts.paidAmount')}</span>
@@ -138,10 +144,9 @@ function InstallmentCard({
             </p>
           </div>
         </div>
-        {installment.paidDate && (
+        {installment.paymentMethod && installment.paidDate && (
           <div className="mt-2 text-xs text-muted-foreground">
-            {t('contracts.paidDateLabel').replace('{date}', installment.paidDate)}
-            {installment.paymentMethod && ` | ${installment.paymentMethod === 'bank_transfer' ? t('contracts.paymentBankTransfer') : installment.paymentMethod === 'card' ? t('contracts.paymentCard') : t('contracts.paymentUsWire')}`}
+            {installment.paymentMethod === 'bank_transfer' ? t('contracts.paymentBankTransfer') : installment.paymentMethod === 'card' ? t('contracts.paymentCard') : t('contracts.paymentUsWire')}
           </div>
         )}
         {installment.notes && (
@@ -287,7 +292,7 @@ export function ContractDetailPage() {
   const [addChargeDialogOpen, setAddChargeDialogOpen] = useState(false)
   const [chargeForm, setChargeForm] = useState({ label: '', amount: '', dueDate: '', notes: '' })
   const [editInstDialogOpen, setEditInstDialogOpen] = useState(false)
-  const [editInstForm, setEditInstForm] = useState({ id: '', label: '', amount: '', dueDate: '', notes: '' })
+  const [editInstForm, setEditInstForm] = useState({ id: '', label: '', amount: '', dueDate: '', paidDate: '', paidAmount: '', paymentMethod: '', notes: '', isPaid: false })
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [selectedInstallment, setSelectedInstallment] = useState<PaymentInstallment | null>(null)
   const [payForm, setPayForm] = useState({
@@ -374,25 +379,37 @@ export function ContractDetailPage() {
   }, [id, chargeForm, contract, createInstallments])
 
   const openEditInstDialog = useCallback((inst: PaymentInstallment) => {
+    const hasPaid = inst.status === 'paid' || inst.status === 'partial'
     setEditInstForm({
       id: inst.id,
       label: inst.label,
       amount: String(inst.amount),
       dueDate: inst.dueDate || '',
+      paidDate: inst.paidDate || '',
+      paidAmount: inst.paidAmount > 0 ? String(inst.paidAmount) : '',
+      paymentMethod: inst.paymentMethod || '',
       notes: inst.notes || '',
+      isPaid: hasPaid,
     })
     setEditInstDialogOpen(true)
   }, [])
 
   const handleEditInstallment = useCallback(() => {
     if (!editInstForm.id || !editInstForm.label.trim() || !editInstForm.amount) return
-    updateInstallment.mutate({
+    const payload: Parameters<typeof updateInstallment.mutate>[0] = {
       id: editInstForm.id,
       label: editInstForm.label.trim(),
       amount: Number(editInstForm.amount),
-      dueDate: editInstForm.dueDate || undefined,
+      dueDate: editInstForm.dueDate || '',
       notes: editInstForm.notes || undefined,
-    }, {
+    }
+    // If paid fields are present, update them too
+    if (editInstForm.isPaid) {
+      payload.paidDate = editInstForm.paidDate || ''
+      payload.paidAmount = Number(editInstForm.paidAmount) || 0
+      if (editInstForm.paymentMethod) payload.paymentMethod = editInstForm.paymentMethod
+    }
+    updateInstallment.mutate(payload, {
       onSuccess: () => {
         setEditInstDialogOpen(false)
       },
@@ -528,7 +545,7 @@ export function ContractDetailPage() {
               }}
             >
               <Plus className="size-3.5" />
-              {t('contracts.addCharge')}
+              {t('contracts.addInstallment')}
             </Button>
           )}
         </div>
@@ -869,7 +886,7 @@ export function ContractDetailPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>{t('contracts.paymentDate')}</Label>
+              <Label>{t('contracts.actualPaidDate')}</Label>
               <Input
                 type="date"
                 value={payForm.paidDate}
@@ -912,22 +929,22 @@ export function ContractDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Charge Dialog */}
+      {/* Add Installment Dialog */}
       <Dialog open={addChargeDialogOpen} onOpenChange={setAddChargeDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('contracts.addCharge')}</DialogTitle>
+            <DialogTitle>{t('contracts.addInstallment')}</DialogTitle>
             <DialogDescription>
-              {t('contracts.addChargeDesc')}
+              {t('contracts.addInstallmentDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>{t('contracts.chargeLabel')} <span className="text-destructive">*</span></Label>
+              <Label>{t('contracts.installmentLabel')} <span className="text-destructive">*</span></Label>
               <Input
                 value={chargeForm.label}
                 onChange={e => setChargeForm(f => ({ ...f, label: e.target.value }))}
-                placeholder={t('contracts.chargeLabelPlaceholder')}
+                placeholder={t('contracts.installmentLabelPlaceholder')}
               />
             </div>
             <div className="space-y-2">
@@ -940,7 +957,7 @@ export function ContractDetailPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>{t('contracts.dueAmount')}</Label>
+              <Label>{t('contracts.scheduledDate')}</Label>
               <Input
                 type="date"
                 value={chargeForm.dueDate}
@@ -981,23 +998,61 @@ export function ContractDetailPage() {
                 placeholder="계약금, 중도금, 잔금 등"
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('contracts.amount')} ({contract.currency}) <span className="text-destructive">*</span></Label>
-              <Input
-                type="number"
-                value={editInstForm.amount}
-                onChange={e => setEditInstForm(f => ({ ...f, amount: e.target.value }))}
-                placeholder="0"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>{t('contracts.amount')} ({contract.currency}) <span className="text-destructive">*</span></Label>
+                <Input
+                  type="number"
+                  value={editInstForm.amount}
+                  onChange={e => setEditInstForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('contracts.scheduledDate')}</Label>
+                <Input
+                  type="date"
+                  value={editInstForm.dueDate}
+                  onChange={e => setEditInstForm(f => ({ ...f, dueDate: e.target.value }))}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>{t('contracts.dueAmount')}</Label>
-              <Input
-                type="date"
-                value={editInstForm.dueDate}
-                onChange={e => setEditInstForm(f => ({ ...f, dueDate: e.target.value }))}
-              />
-            </div>
+            {editInstForm.isPaid && (
+              <>
+                <div className="border-t pt-3">
+                  <p className="text-xs text-muted-foreground mb-3">{t('contracts.paidInfo')}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>{t('contracts.actualPaidDate')}</Label>
+                    <Input
+                      type="date"
+                      value={editInstForm.paidDate}
+                      onChange={e => setEditInstForm(f => ({ ...f, paidDate: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('contracts.paidAmount')}</Label>
+                    <Input
+                      type="number"
+                      value={editInstForm.paidAmount}
+                      onChange={e => setEditInstForm(f => ({ ...f, paidAmount: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('contracts.paymentMethod')}</Label>
+                  <Select value={editInstForm.paymentMethod || 'bank_transfer'} onValueChange={v => setEditInstForm(f => ({ ...f, paymentMethod: v || '' }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank_transfer">{t('contracts.paymentBankTransfer')}</SelectItem>
+                      <SelectItem value="card">{t('contracts.paymentCard')}</SelectItem>
+                      <SelectItem value="us_wire">{t('contracts.paymentUsWire')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <div className="space-y-2">
               <Label>{t('common.notes')}</Label>
               <Input
