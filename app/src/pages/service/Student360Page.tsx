@@ -15,7 +15,7 @@ import {
 import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
-  Sparkles, Loader2, ChevronDown, ChevronUp, FlagTriangleRight, ToggleLeft,
+  Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle,
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -156,10 +156,10 @@ export function Student360Page() {
                     {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
                   </span>
                   {statusFlags.missingReports.has(s.id) && (
-                    <FlagTriangleRight className="size-3.5 text-red-500 shrink-0" title="미팅일지 미제출" />
+                    <Hourglass className="size-3.5 text-red-500 shrink-0" title="미팅일지 미제출" />
                   )}
                   {statusFlags.pendingFollowups.has(s.id) && (
-                    <ToggleLeft className="size-4 text-red-500 shrink-0" title="미처리 Follow-up" />
+                    <AlertTriangle className="size-3.5 text-red-500 shrink-0" title="미처리 Follow-up" />
                   )}
                   {s.assignedConsultant && (
                     <span className="text-xs text-muted-foreground/70 truncate">
