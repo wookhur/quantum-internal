@@ -553,9 +553,10 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           </div>
           <div>
             <Label className="text-xs">{t('student360.partners')}</Label>
-            <Select value={form.partners} onValueChange={v => set('partners', v)}>
+            <Select value={form.partners} onValueChange={v => set('partners', v === '__none__' ? '' : v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">미배정</SelectItem>
                 {PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
