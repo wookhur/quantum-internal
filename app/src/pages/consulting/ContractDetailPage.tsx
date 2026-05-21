@@ -47,10 +47,12 @@ function InstallmentCard({
   installment,
   currency,
   onMarkPaid,
+  onRevertPaid,
 }: {
   installment: PaymentInstallment
   currency: 'KRW' | 'USD'
   onMarkPaid: (inst: PaymentInstallment) => void
+  onRevertPaid: (inst: PaymentInstallment) => void
 }) {
   const t = useT()
   const INSTALLMENT_STATUS_CONFIG = useInstallmentStatusConfig()
@@ -81,17 +83,30 @@ function InstallmentCard({
             </div>
           </div>
 
-          {!isPaid && (
-            <Button
-              size="sm"
-              variant={isOverdue ? 'destructive' : 'outline'}
-              className="gap-1.5"
-              onClick={() => onMarkPaid(installment)}
-            >
-              <CreditCard className="size-3.5" />
-              {t('contracts.markPaid')}
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {isPaid && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-amber-600 border-amber-300 hover:bg-amber-50"
+                onClick={() => onRevertPaid(installment)}
+              >
+                <AlertTriangle className="size-3.5" />
+                {t('contracts.revertPaid')}
+              </Button>
+            )}
+            {!isPaid && (
+              <Button
+                size="sm"
+                variant={isOverdue ? 'destructive' : 'outline'}
+                className="gap-1.5"
+                onClick={() => onMarkPaid(installment)}
+              >
+                <CreditCard className="size-3.5" />
+                {t('contracts.markPaid')}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Payment details */}
@@ -311,6 +326,18 @@ export function ContractDetailPage() {
     })
   }, [selectedInstallment, payForm, updateInstallment])
 
+  const handleRevertPaid = useCallback((inst: PaymentInstallment) => {
+    if (!confirm(t('contracts.revertPaidConfirm').replace('{label}', inst.label))) return
+    updateInstallment.mutate({
+      id: inst.id,
+      paidAmount: 0,
+      paidDate: '',
+      status: 'pending',
+      paymentMethod: '',
+      notes: '',
+    })
+  }, [updateInstallment, t])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -442,6 +469,7 @@ export function ContractDetailPage() {
                 installment={inst}
                 currency={contract.currency}
                 onMarkPaid={openPayDialog}
+                onRevertPaid={handleRevertPaid}
               />
             ))}
           </div>
