@@ -738,6 +738,7 @@ const koTranslations = {
   'contracts.leadStage': '리드 단계',
   'contracts.leadMemo': '상담 메모',
   'contracts.leadActivityHistory': '상담 이력',
+  'contracts.customerJourney': '고객 여정',
 
   // ── Monthly Collection ──
   'collection.title': '월별 수금',
@@ -982,6 +983,7 @@ const koTranslations = {
   'search.placeholder': '이름, 전화번호, 학교 검색...',
   'search.lead': '리드',
   'search.contract': '계약',
+  'search.student': '학생',
   'search.project': '프로젝트',
   'search.noResults': '검색 결과가 없습니다.',
   'search.searching': '검색 중...',
@@ -1777,6 +1779,7 @@ const enTranslations: Record<string, string> = {
   'contracts.leadStage': 'Lead Stage',
   'contracts.leadMemo': 'Consultation Memo',
   'contracts.leadActivityHistory': 'Consultation History',
+  'contracts.customerJourney': 'Customer Journey',
 
   // ── Monthly Collection ──
   'collection.title': 'Monthly Collection',
@@ -2021,6 +2024,7 @@ const enTranslations: Record<string, string> = {
   'search.placeholder': 'Search name, phone, school...',
   'search.lead': 'Lead',
   'search.contract': 'Contract',
+  'search.student': 'Student',
   'search.project': 'Project',
   'search.noResults': 'No results found.',
   'search.searching': 'Searching...',

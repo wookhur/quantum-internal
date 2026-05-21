@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { Lead } from '@/types'
 
 export interface GlobalSearchResult {
-  type: 'lead' | 'contract' | 'project'
+  type: 'lead' | 'contract' | 'project' | 'student'
   id: string
   title: string
   subtitle: string
@@ -45,8 +45,8 @@ export function useGlobalSearch(query: string) {
     queryFn: async () => {
       if (!trimmed) return []
 
-      // Search leads, contracts, and projects (todos) in parallel
-      const [leadsRes, contractsRes, projectsRes] = await Promise.all([
+      // Search leads, contracts, students, and projects (todos) in parallel
+      const [leadsRes, contractsRes, studentsRes, projectsRes] = await Promise.all([
         // 1) Leads
         supabase
           .from('leads')
@@ -67,7 +67,17 @@ export function useGlobalSearch(query: string) {
           .order('updated_at', { ascending: false })
           .limit(5),
 
-        // 3) Projects (todos)
+        // 3) Service Students
+        supabase
+          .from('service_students')
+          .select('id, name, korean_name, school, grade, status, assigned_consultant')
+          .or(
+            `name.ilike.%${trimmed}%,korean_name.ilike.%${trimmed}%,school.ilike.%${trimmed}%`,
+          )
+          .order('updated_at', { ascending: false })
+          .limit(5),
+
+        // 4) Projects (todos)
         supabase
           .from('todos')
           .select('id, title, description, status, priority, due_date')
@@ -117,6 +127,23 @@ export function useGlobalSearch(query: string) {
             meta: `${Number(row.total_amount).toLocaleString()} ${row.currency}`,
             stage: statusLabel[row.status] || row.status,
             navigateTo: `/consulting/clients/${row.id}`,
+            raw: row,
+          })
+        }
+      }
+
+      // Map students
+      if (studentsRes.data) {
+        for (const row of studentsRes.data) {
+          const displayName = [row.name, row.korean_name].filter(Boolean).join(' / ')
+          results.push({
+            type: 'student',
+            id: row.id,
+            title: displayName || '학생',
+            subtitle: [row.school, row.grade].filter(Boolean).join(' · '),
+            meta: row.status || undefined,
+            stage: row.assigned_consultant || undefined,
+            navigateTo: `/service/student-360?studentId=${row.id}`,
             raw: row,
           })
         }

@@ -12,14 +12,14 @@ import { Input } from '@/components/ui/input'
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, CreditCard, ExternalLink, Megaphone, MessageSquare,
+  UserCircle, CreditCard, ExternalLink,
 } from 'lucide-react'
 import { useContract, useCancelContract } from '@/hooks/useContracts'
 import { useUpdateInstallment } from '@/hooks/useInstallments'
-import { formatCurrency, formatPhone, getStageConfig } from '@/types'
+import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import { supabase } from '@/lib/supabase'
-import type { PaymentInstallment, ContractStatus, Lead } from '@/types'
+import type { PaymentInstallment, ContractStatus } from '@/types'
 
 function useStatusConfig() {
   const t = useT()
@@ -129,7 +129,7 @@ function InstallmentCard({
   )
 }
 
-// ─── Linked Lead hooks ──────────────────────────────────────────────────
+// ─── Linked data hooks ──────────────────────────────────────────────────
 
 function useLinkedLead(leadId: string | undefined) {
   return useQuery({
@@ -171,11 +171,72 @@ function useLeadActivities(leadId: string | undefined) {
         .select('*, profiles:profiles!lead_activities_created_by_fkey(name)')
         .eq('lead_id', leadId!)
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(30)
       if (error) return []
       return (data || []) as (Record<string, unknown> & { profiles: { name: string } | null })[]
     },
   })
+}
+
+/** Sales meetings linked to the lead */
+function useSalesMeetings(leadId: string | undefined, parentName: string | undefined) {
+  return useQuery({
+    queryKey: ['sales-meetings-for-contract', leadId, parentName],
+    enabled: !!(leadId || parentName),
+    queryFn: async () => {
+      const conditions: string[] = []
+      if (leadId) conditions.push(`lead_id.eq.${leadId}`)
+      if (parentName) conditions.push(`parent_name.ilike.%${parentName}%`)
+      if (conditions.length === 0) return []
+
+      const { data, error } = await supabase
+        .from('meetings')
+        .select('*, profiles:profiles!meetings_created_by_fkey(name)')
+        .or(conditions.join(','))
+        .order('meeting_date', { ascending: false })
+      if (error) return []
+      return (data || []) as (Record<string, unknown> & { profiles: { name: string } | null })[]
+    },
+  })
+}
+
+/** Service student meetings matched by student name */
+function useServiceStudentMeetings(studentName: string | undefined) {
+  return useQuery({
+    queryKey: ['service-meetings-for-contract', studentName],
+    enabled: !!studentName,
+    queryFn: async () => {
+      if (!studentName) return { student: null, meetings: [] }
+
+      // Find matching service student
+      const { data: students } = await supabase
+        .from('service_students')
+        .select('id, name, korean_name')
+        .or(`name.ilike.%${studentName}%,korean_name.ilike.%${studentName}%`)
+        .limit(1)
+
+      const student = students?.[0] || null
+      if (!student) return { student: null, meetings: [] }
+
+      // Fetch their meetings
+      const { data: meetings } = await supabase
+        .from('service_meetings')
+        .select('*')
+        .eq('student_id', student.id)
+        .order('meeting_date', { ascending: false })
+
+      return {
+        student: { id: student.id as string, name: (student.name || student.korean_name) as string },
+        meetings: (meetings || []) as Record<string, unknown>[],
+      }
+    },
+  })
+}
+
+// ─── Consultant name lookup ─────────────────────────────────────────────
+const CONSULTANTS: Record<string, string> = {
+  sangbum: '한상범', jihyun: '김지현', eunyoung: '양은영',
+  yeonse: '남연서', danny: 'Danny', liz: '유리즈',
 }
 
 export function ContractDetailPage() {
@@ -188,6 +249,8 @@ export function ContractDetailPage() {
   const STATUS_CONFIG = useStatusConfig()
   const { data: linkedLead } = useLinkedLead(contract?.leadId)
   const { data: leadActivities = [] } = useLeadActivities(contract?.leadId)
+  const { data: salesMeetings = [] } = useSalesMeetings(contract?.leadId, contract?.contractorName)
+  const { data: serviceData } = useServiceStudentMeetings(contract?.studentName)
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
@@ -411,87 +474,184 @@ export function ContractDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Linked Lead Info */}
-      {linkedLead && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Megaphone className="size-4" />
-              {t('contracts.leadInfo')}
-              <Link
-                to={`/sales/leads/${contract.leadId}`}
-                className="ml-auto text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 font-normal"
-              >
-                {t('contracts.viewLeadDetail')} <ExternalLink className="size-3" />
-              </Link>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-y-3 gap-x-8 text-sm">
-              <div>
-                <span className="text-muted-foreground text-xs">{t('contracts.leadSourceChannel')}</span>
-                <p className="font-medium">{linkedLead.sourceChannel || '-'}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground text-xs">{t('contracts.leadDate')}</span>
-                <p className="font-mono text-xs">{linkedLead.leadDate || '-'}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground text-xs">{t('contracts.leadInterestArea')}</span>
-                <p className="font-medium">{linkedLead.interestArea || '-'}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground text-xs">{t('contracts.leadRegion')}</span>
-                <p className="font-medium">{linkedLead.region || '-'}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground text-xs">{t('contracts.leadAssignedTo')}</span>
-                <p className="font-medium">{linkedLead.assignedUser || '-'}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground text-xs">{t('contracts.leadStage')}</span>
-                <Badge variant="outline" className="text-[10px] h-5 mt-0.5">
-                  {getStageConfig(linkedLead.pipelineStage as Lead['pipelineStage']).label}
-                </Badge>
-              </div>
-            </div>
-            {linkedLead.memo && (
-              <div className="p-3 bg-muted/50 rounded-lg text-sm">
-                <span className="text-xs text-muted-foreground">{t('contracts.leadMemo')}</span>
-                <p className="mt-1">{linkedLead.memo}</p>
-              </div>
-            )}
+      {/* ── Customer Journey (unified timeline) ────────────────────────── */}
+      {(() => {
+        // Build unified timeline from all sources
+        type TimelineItem = { id: string; date: string; phase: 'lead' | 'sales' | 'service'; badge: string; badgeColor: string; title: string; desc?: string; person?: string }
+        const items: TimelineItem[] = []
 
-            {/* Lead Activity Timeline */}
-            {leadActivities.length > 0 && (
-              <div className="border-t pt-3">
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2 flex items-center gap-1.5">
-                  <MessageSquare className="size-3" />
-                  {t('contracts.leadActivityHistory')}
-                </h4>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {leadActivities.map((act) => (
-                    <div key={act.id as string} className="flex gap-2 text-xs">
-                      <div className="text-muted-foreground shrink-0 w-[72px] font-mono">
-                        {(act.created_at as string).slice(0, 10)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium">{act.title as string}</span>
-                        {typeof act.content === 'string' && act.content && (
-                          <span className="text-muted-foreground ml-1">— {act.content}</span>
-                        )}
-                        {act.profiles?.name && (
-                          <span className="text-muted-foreground ml-1">({act.profiles.name})</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+        // 1) Lead info summary as first event
+        if (linkedLead) {
+          items.push({
+            id: 'lead-start',
+            date: linkedLead.leadDate || '',
+            phase: 'lead',
+            badge: t('contracts.leadSourceChannel'),
+            badgeColor: 'bg-violet-100 text-violet-700',
+            title: `${linkedLead.sourceChannel || '유입'} → ${linkedLead.interestArea || '관심분야 미입력'}`,
+            desc: linkedLead.memo || undefined,
+            person: linkedLead.assignedUser,
+          })
+        }
+
+        // 2) Lead activities (calls, notes, consultations, stage changes)
+        for (const act of leadActivities) {
+          const typeLabels: Record<string, string> = {
+            note: '메모', call: '전화', katalk: '카톡', email: '이메일',
+            meeting: '미팅', consultation: '상담', stage_change: '단계 변경',
+            assignment_change: '담당자 변경', system: '시스템',
+          }
+          const typeColors: Record<string, string> = {
+            call: 'bg-orange-100 text-orange-700', consultation: 'bg-green-100 text-green-700',
+            stage_change: 'bg-blue-100 text-blue-700', katalk: 'bg-yellow-100 text-yellow-700',
+          }
+          items.push({
+            id: `act-${act.id as string}`,
+            date: act.created_at as string,
+            phase: 'lead',
+            badge: typeLabels[act.activity_type as string] || (act.activity_type as string),
+            badgeColor: typeColors[act.activity_type as string] || 'bg-gray-100 text-gray-600',
+            title: act.title as string,
+            desc: typeof act.content === 'string' ? act.content : undefined,
+            person: act.profiles?.name,
+          })
+        }
+
+        // 3) Sales meetings
+        for (const m of salesMeetings) {
+          items.push({
+            id: `smtg-${m.id as string}`,
+            date: (m.meeting_date as string) || (m.created_at as string),
+            phase: 'sales',
+            badge: `${m.meeting_number || ''}차 상담`,
+            badgeColor: 'bg-green-100 text-green-700',
+            title: `${m.parent_name}${m.student_name ? ` / ${m.student_name}` : ''} 상담`,
+            desc: typeof m.memo === 'string' ? m.memo : undefined,
+            person: m.profiles?.name,
+          })
+        }
+
+        // 4) Contract event itself
+        items.push({
+          id: `contract-${contract.id}`,
+          date: contract.contractDate,
+          phase: 'sales',
+          badge: '계약 체결',
+          badgeColor: 'bg-emerald-100 text-emerald-700',
+          title: `${contract.contractorName} / ${contract.studentName} 계약`,
+          desc: contract.totalAmount > 0 ? formatCurrency(contract.totalAmount, contract.currency) : undefined,
+        })
+
+        // 5) Service student meetings (post-contract)
+        const svcMeetings = serviceData?.meetings || []
+        for (const sm of svcMeetings) {
+          const consultant = CONSULTANTS[sm.consultant_id as string] || (sm.consultant_id as string) || ''
+          const reportBadge = sm.report_status === 'submitted' ? ' ✓리포트' : sm.report_status === 'pending' ? ' ⏳리포트' : ''
+          items.push({
+            id: `svc-${sm.id as string}`,
+            date: (sm.meeting_date as string) || (sm.created_at as string),
+            phase: 'service',
+            badge: `${(sm.meeting_type as string) || '미팅'}${reportBadge}`,
+            badgeColor: 'bg-blue-100 text-blue-700',
+            title: `${contract.studentName} 서비스 미팅`,
+            desc: typeof sm.summary === 'string' ? sm.summary : undefined,
+            person: consultant,
+          })
+        }
+
+        // Sort by date ascending (chronological journey)
+        items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+        const hasAnyData = items.length > 1 // more than just the contract event itself
+
+        if (!hasAnyData && !linkedLead) return null
+
+        const phaseColors = { lead: 'border-l-violet-400', sales: 'border-l-green-400', service: 'border-l-blue-400' }
+        const phaseLabels = { lead: '리드/세일즈', sales: '상담/계약', service: '서비스' }
+
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock className="size-4" />
+                {t('contracts.customerJourney')}
+                <span className="text-muted-foreground font-normal text-xs ml-1">
+                  ({items.length}건)
+                </span>
+                {linkedLead && (
+                  <Link
+                    to={`/sales/leads/${contract.leadId}`}
+                    className="ml-auto text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 font-normal"
+                  >
+                    {t('contracts.viewLeadDetail')} <ExternalLink className="size-3" />
+                  </Link>
+                )}
+                {serviceData?.student && (
+                  <Link
+                    to={`/service/student-360?studentId=${serviceData.student.id}`}
+                    className={`text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 font-normal ${linkedLead ? '' : 'ml-auto'}`}
+                  >
+                    Student 360 <ExternalLink className="size-3" />
+                  </Link>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {/* Lead summary row */}
+              {linkedLead && (
+                <div className="grid grid-cols-4 gap-3 text-xs mb-4 p-3 bg-muted/50 rounded-lg">
+                  <div><span className="text-muted-foreground">{t('contracts.leadSourceChannel')}</span><p className="font-medium mt-0.5">{linkedLead.sourceChannel || '-'}</p></div>
+                  <div><span className="text-muted-foreground">{t('contracts.leadInterestArea')}</span><p className="font-medium mt-0.5">{linkedLead.interestArea || '-'}</p></div>
+                  <div><span className="text-muted-foreground">{t('contracts.leadRegion')}</span><p className="font-medium mt-0.5">{linkedLead.region || '-'}</p></div>
+                  <div><span className="text-muted-foreground">{t('contracts.leadAssignedTo')}</span><p className="font-medium mt-0.5">{linkedLead.assignedUser || '-'}</p></div>
                 </div>
+              )}
+
+              {/* Phase legend */}
+              <div className="flex gap-4 mb-3 text-[10px]">
+                {(['lead', 'sales', 'service'] as const).map(p => {
+                  const count = items.filter(i => i.phase === p).length
+                  if (count === 0) return null
+                  return (
+                    <span key={p} className="flex items-center gap-1">
+                      <span className={`w-2 h-2 rounded-full ${p === 'lead' ? 'bg-violet-400' : p === 'sales' ? 'bg-green-400' : 'bg-blue-400'}`} />
+                      {phaseLabels[p]} ({count})
+                    </span>
+                  )
+                })}
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+
+              {/* Timeline */}
+              <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                {items.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`flex gap-3 text-xs border-l-2 pl-3 py-1.5 ${phaseColors[item.phase]}`}
+                  >
+                    <div className="text-muted-foreground shrink-0 w-[68px] font-mono">
+                      {item.date?.slice(0, 10) || '—'}
+                    </div>
+                    <div className="shrink-0">
+                      <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${item.badgeColor}`}>
+                        {item.badge}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium">{item.title}</span>
+                      {item.desc && (
+                        <p className="text-muted-foreground mt-0.5 line-clamp-2">{item.desc}</p>
+                      )}
+                    </div>
+                    {item.person && (
+                      <span className="text-muted-foreground shrink-0">{item.person}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {/* Cancel Dialog */}
       <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>

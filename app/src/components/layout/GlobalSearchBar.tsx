@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, User, FileText, FolderKanban, Loader2 } from 'lucide-react'
+import { Search, User, FileText, FolderKanban, GraduationCap, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useGlobalSearch, type GlobalSearchResult } from '@/hooks/useGlobalSearch'
 import { useT } from '@/i18n/LanguageContext'
@@ -10,6 +10,7 @@ import type { PipelineStage } from '@/types'
 const TYPE_CONFIG = {
   lead: { icon: User, labelKey: 'search.lead' as const, color: 'text-blue-600', bg: 'bg-blue-50' },
   contract: { icon: FileText, labelKey: 'search.contract' as const, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  student: { icon: GraduationCap, labelKey: 'search.student' as const, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   project: { icon: FolderKanban, labelKey: 'search.project' as const, color: 'text-violet-600', bg: 'bg-violet-50' },
 } as const
 
