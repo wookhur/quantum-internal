@@ -693,6 +693,8 @@ const koTranslations = {
   'contracts.paidDate': '납부: {date}',
   // Contract detail page
   'contracts.cancelContract': '계약 취소',
+  'contracts.editContract': '계약 정보 수정',
+  'contracts.currency': '통화',
   'contracts.totalContractAmount': '총 계약금액',
   'contracts.collectionRate': '수금률',
   'contracts.installmentSchedule': '납입 일정',
@@ -1734,6 +1736,8 @@ const enTranslations: Record<string, string> = {
   'contracts.dueDate': 'Due: {date}',
   'contracts.paidDate': 'Paid: {date}',
   // Contract detail page
+  'contracts.editContract': 'Edit Contract',
+  'contracts.currency': 'Currency',
   'contracts.cancelContract': 'Cancel Contract',
   'contracts.totalContractAmount': 'Total Contract Amount',
   'contracts.collectionRate': 'Collection Rate',

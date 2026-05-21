@@ -194,6 +194,53 @@ export function useCreateContractFull() {
   })
 }
 
+/** Update an existing contract */
+export function useUpdateContract() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: {
+      id: string
+      contractorName?: string
+      studentName?: string
+      schoolName?: string
+      gradeAtContract?: string
+      contractDate?: string
+      expiryDate?: string
+      address?: string
+      phone?: string
+      totalAmount?: number
+      currency?: 'KRW' | 'USD'
+      paymentAccount?: 'KR' | 'US'
+      notes?: string
+      status?: ContractStatus
+    }) => {
+      const { id, ...rest } = payload
+      const update: Record<string, unknown> = {}
+      if (rest.contractorName !== undefined) update.contractor_name = rest.contractorName
+      if (rest.studentName !== undefined) update.student_name = rest.studentName
+      if (rest.schoolName !== undefined) update.school_name = rest.schoolName
+      if (rest.gradeAtContract !== undefined) update.grade_at_contract = rest.gradeAtContract
+      if (rest.contractDate !== undefined) update.contract_date = rest.contractDate
+      if (rest.expiryDate !== undefined) update.expiry_date = rest.expiryDate
+      if (rest.address !== undefined) update.address = rest.address
+      if (rest.phone !== undefined) update.phone = rest.phone
+      if (rest.totalAmount !== undefined) update.total_amount = rest.totalAmount
+      if (rest.currency !== undefined) update.currency = rest.currency
+      if (rest.paymentAccount !== undefined) update.payment_account = rest.paymentAccount
+      if (rest.notes !== undefined) update.notes = rest.notes
+      if (rest.status !== undefined) update.status = rest.status
+
+      const { error } = await supabase.from('contracts').update(update).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contracts', v.id] })
+      qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
+    },
+  })
+}
+
 /** Fetch a single contract by ID with installments */
 export function useContract(id: string | undefined) {
   return useQuery({

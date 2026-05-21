@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,14 +12,14 @@ import { Input } from '@/components/ui/input'
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, CreditCard, ExternalLink,
+  UserCircle, CreditCard, ExternalLink, Pencil,
 } from 'lucide-react'
-import { useContract, useCancelContract } from '@/hooks/useContracts'
+import { useContract, useCancelContract, useUpdateContract } from '@/hooks/useContracts'
 import { useUpdateInstallment } from '@/hooks/useInstallments'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import { supabase } from '@/lib/supabase'
-import type { PaymentInstallment, ContractStatus } from '@/types'
+import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
 
 function useStatusConfig() {
   const t = useT()
@@ -245,6 +245,7 @@ export function ContractDetailPage() {
   const t = useT()
   const { data: contract, isLoading, error } = useContract(id)
   const cancelContract = useCancelContract()
+  const updateContract = useUpdateContract()
   const updateInstallment = useUpdateInstallment()
   const STATUS_CONFIG = useStatusConfig()
   const { data: linkedLead } = useLinkedLead(contract?.leadId)
@@ -252,6 +253,7 @@ export function ContractDetailPage() {
   const { data: salesMeetings = [] } = useSalesMeetings(contract?.leadId, contract?.contractorName)
   const { data: serviceData } = useServiceStudentMeetings(contract?.studentName)
 
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [payDialogOpen, setPayDialogOpen] = useState(false)
@@ -348,16 +350,28 @@ export function ContractDetailPage() {
             {contract.studentName} | {contract.schoolName} {contract.gradeAtContract || ''}
           </p>
         </div>
-        {!isCancelled && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
-            onClick={() => setCancelDialogOpen(true)}
-          >
-            <Ban className="size-3.5" /> {t('contracts.cancelContract')}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isCancelled && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setEditDialogOpen(true)}
+            >
+              <Pencil className="size-3.5" /> {t('common.edit')}
+            </Button>
+          )}
+          {!isCancelled && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+              onClick={() => setCancelDialogOpen(true)}
+            >
+              <Ban className="size-3.5" /> {t('contracts.cancelContract')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Payment Progress */}
@@ -750,6 +764,170 @@ export function ContractDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Contract Dialog */}
+      <ContractEditDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        contract={contract}
+        onSave={(data) => {
+          updateContract.mutate({ id: contract.id, ...data }, {
+            onSuccess: () => setEditDialogOpen(false),
+          })
+        }}
+        isPending={updateContract.isPending}
+      />
     </div>
+  )
+}
+
+// ─── Contract Edit Dialog ──────────────────────────────────────────────────
+
+function ContractEditDialog({
+  open,
+  onOpenChange,
+  contract,
+  onSave,
+  isPending,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  contract: Contract
+  onSave: (data: {
+    contractorName: string
+    studentName: string
+    schoolName: string
+    gradeAtContract: string
+    contractDate: string
+    expiryDate: string
+    address: string
+    phone: string
+    totalAmount: number
+    currency: 'KRW' | 'USD'
+    paymentAccount: 'KR' | 'US'
+    notes: string
+  }) => void
+  isPending: boolean
+}) {
+  const t = useT()
+  const buildForm = useCallback(() => ({
+    contractorName: contract.contractorName || '',
+    studentName: contract.studentName || '',
+    schoolName: contract.schoolName || '',
+    gradeAtContract: contract.gradeAtContract || '',
+    contractDate: contract.contractDate || '',
+    expiryDate: contract.expiryDate || '',
+    address: contract.address || '',
+    phone: contract.phone || '',
+    totalAmount: contract.totalAmount ? String(contract.totalAmount) : '',
+    currency: (contract.currency || 'KRW') as 'KRW' | 'USD',
+    paymentAccount: (contract.paymentAccount || 'KR') as 'KR' | 'US',
+    notes: contract.notes || '',
+  }), [contract])
+
+  const [form, setForm] = useState(buildForm)
+
+  // Reset form whenever dialog opens
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => { if (open) setForm(buildForm()) }, [open])
+  /* eslint-enable react-hooks/exhaustive-deps */
+
+  const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const submit = () => {
+    onSave({
+      contractorName: form.contractorName,
+      studentName: form.studentName,
+      schoolName: form.schoolName,
+      gradeAtContract: form.gradeAtContract,
+      contractDate: form.contractDate,
+      expiryDate: form.expiryDate,
+      address: form.address,
+      phone: form.phone,
+      totalAmount: Number(form.totalAmount) || 0,
+      currency: form.currency,
+      paymentAccount: form.paymentAccount,
+      notes: form.notes,
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{t('contracts.editContract')}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.col.contractor')}</Label>
+            <Input value={form.contractorName} onChange={e => set('contractorName', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.col.student')}</Label>
+            <Input value={form.studentName} onChange={e => set('studentName', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.school')}</Label>
+            <Input value={form.schoolName} onChange={e => set('schoolName', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('common.grade')}</Label>
+            <Input value={form.gradeAtContract} onChange={e => set('gradeAtContract', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.contractDate')}</Label>
+            <Input type="date" value={form.contractDate} onChange={e => set('contractDate', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.expiryDate')}</Label>
+            <Input type="date" value={form.expiryDate} onChange={e => set('expiryDate', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.contact')}</Label>
+            <Input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="010-0000-0000" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.address')}</Label>
+            <Input value={form.address} onChange={e => set('address', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.totalContractAmount')}</Label>
+            <Input type="number" value={form.totalAmount} onChange={e => set('totalAmount', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.currency')}</Label>
+            <Select value={form.currency} onValueChange={v => set('currency', v || 'KRW')}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="KRW">KRW (원)</SelectItem>
+                <SelectItem value="USD">USD ($)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2 space-y-1">
+            <Label className="text-xs">{t('contracts.depositAccount')}</Label>
+            <Select value={form.paymentAccount} onValueChange={v => set('paymentAccount', v || 'KR')}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="KR">{t('contracts.krAccount')}</SelectItem>
+                <SelectItem value="US">{t('contracts.usAccount')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="col-span-2 space-y-1">
+            <Label className="text-xs">{t('contracts.memo')}</Label>
+            <Textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={3} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={submit} disabled={isPending || !form.contractorName || !form.studentName}>
+            {isPending ? t('common.saving') : t('common.save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
