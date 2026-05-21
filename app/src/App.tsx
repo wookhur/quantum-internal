@@ -30,6 +30,7 @@ import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePag
 import { Student360Page } from '@/pages/service/Student360Page'
 import { ConsultantKpiPage } from '@/pages/service/ConsultantKpiPage'
 import { MessagesPage } from '@/pages/common/MessagesPage'
+import { PersonProfilePage } from '@/pages/common/PersonProfilePage'
 import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
 
 const queryClient = new QueryClient({
@@ -55,6 +56,7 @@ export default function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/todos" element={<TodosPage />} />
                 <Route path="/messages" element={<MessagesPage />} />
+                <Route path="/person" element={<PersonProfilePage />} />
 
                 <Route path="/sales/leads" element={<LeadsPage />} />
                 <Route path="/sales/leads/:id" element={<LeadDetailPage />} />

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, User, FileText, FolderKanban, GraduationCap, Loader2 } from 'lucide-react'
+import { Search, User, FileText, FolderKanban, GraduationCap, Loader2, UserCircle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useGlobalSearch, type GlobalSearchResult } from '@/hooks/useGlobalSearch'
 import { useT } from '@/i18n/LanguageContext'
@@ -135,6 +135,27 @@ export function GlobalSearchBar() {
             </div>
           ) : (
             <>
+              {/* Unified Profile link */}
+              <button
+                onClick={() => {
+                  navigate(`/person?q=${encodeURIComponent(query.trim())}`)
+                  setQuery('')
+                  setOpen(false)
+                  inputRef.current?.blur()
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left bg-gradient-to-r from-violet-50 to-blue-50 hover:from-violet-100 hover:to-blue-100 transition-colors border-b"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                  <UserCircle className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm font-medium text-violet-700">
+                    "{query.trim()}" {t('search.viewUnified')}
+                  </span>
+                </div>
+                <Search className="size-3.5 text-violet-400" />
+              </button>
+
               {(['lead', 'contract', 'student', 'project'] as const).map((type) => {
                 const items = grouped[type]
                 if (!items || items.length === 0) return null

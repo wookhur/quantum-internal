@@ -997,6 +997,17 @@ const koTranslations = {
   'search.searching': '검색 중...',
   'search.inputPlaceholder': '이름, 학교, 연락처, 프로젝트 검색...',
   'search.resultCount': '{n}건',
+  'search.viewUnified': '통합 프로필 보기',
+
+  // ── Person Profile ──
+  'person.searchResults': '통합 프로필',
+  'person.foundSummary': '리드 {leads}건 · 계약 {contracts}건 · 학생 {students}건 · 타임라인 {timeline}건',
+  'person.leadInfo': '리드 정보',
+  'person.contractInfo': '계약 정보',
+  'person.studentInfo': '학생 정보',
+  'person.timeline': '통합 타임라인',
+  'person.noResults': '검색 결과가 없습니다.',
+  'person.enterSearch': '검색어를 입력해주세요.',
 
   // ── Game ──
   'game.title': 'T-Rex Runner',
@@ -2046,6 +2057,17 @@ const enTranslations: Record<string, string> = {
   'search.searching': 'Searching...',
   'search.inputPlaceholder': 'Search name, school, phone, project...',
   'search.resultCount': '{n}',
+  'search.viewUnified': 'View Unified Profile',
+
+  // ── Person Profile ──
+  'person.searchResults': 'Unified Profile',
+  'person.foundSummary': 'Leads {leads} · Contracts {contracts} · Students {students} · Timeline {timeline}',
+  'person.leadInfo': 'Lead Info',
+  'person.contractInfo': 'Contract Info',
+  'person.studentInfo': 'Student Info',
+  'person.timeline': 'Unified Timeline',
+  'person.noResults': 'No results found.',
+  'person.enterSearch': 'Please enter a search term.',
 
   // ── Game ──
   'game.title': 'T-Rex Runner',
