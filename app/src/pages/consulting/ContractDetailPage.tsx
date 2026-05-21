@@ -12,9 +12,9 @@ import { Input } from '@/components/ui/input'
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, CreditCard, ExternalLink, Pencil,
+  UserCircle, CreditCard, ExternalLink, Pencil, Trash2,
 } from 'lucide-react'
-import { useContract, useCancelContract, useUpdateContract } from '@/hooks/useContracts'
+import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment } from '@/hooks/useInstallments'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
@@ -246,6 +246,7 @@ export function ContractDetailPage() {
   const { data: contract, isLoading, error } = useContract(id)
   const cancelContract = useCancelContract()
   const updateContract = useUpdateContract()
+  const deleteContract = useDeleteContract()
   const updateInstallment = useUpdateInstallment()
   const STATUS_CONFIG = useStatusConfig()
   const { data: linkedLead } = useLinkedLead(contract?.leadId)
@@ -254,6 +255,7 @@ export function ContractDetailPage() {
   const { data: serviceData } = useServiceStudentMeetings(contract?.studentName)
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [payDialogOpen, setPayDialogOpen] = useState(false)
@@ -371,6 +373,14 @@ export function ContractDetailPage() {
               <Ban className="size-3.5" /> {t('contracts.cancelContract')}
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2 className="size-3.5" /> {t('contracts.deleteContract')}
+          </Button>
         </div>
       </div>
 
@@ -698,6 +708,37 @@ export function ContractDetailPage() {
               disabled={cancelContract.isPending}
             >
               {cancelContract.isPending ? t('contracts.processing') : t('contracts.cancelContract')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Contract Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('contracts.deleteContract')}</DialogTitle>
+            <DialogDescription>
+              {t('contracts.deleteConfirm')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            {contract.contractorName} / {contract.studentName} — {formatCurrency(contract.totalAmount, contract.currency)}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                deleteContract.mutate(contract.id, {
+                  onSuccess: () => navigate('/consulting/clients'),
+                })
+              }}
+              disabled={deleteContract.isPending}
+            >
+              {deleteContract.isPending ? t('contracts.processing') : t('contracts.deleteContract')}
             </Button>
           </DialogFooter>
         </DialogContent>

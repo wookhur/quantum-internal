@@ -241,6 +241,25 @@ export function useUpdateContract() {
   })
 }
 
+/** Permanently delete a contract and its installments */
+export function useDeleteContract() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Delete installments first (foreign key)
+      await supabase.from('payment_installments').delete().eq('contract_id', id)
+      // Delete the contract
+      const { error } = await supabase.from('contracts').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
+      qc.invalidateQueries({ queryKey: ['installments'] })
+    },
+  })
+}
+
 /** Fetch a single contract by ID with installments */
 export function useContract(id: string | undefined) {
   return useQuery({

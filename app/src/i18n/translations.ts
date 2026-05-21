@@ -694,6 +694,8 @@ const koTranslations = {
   // Contract detail page
   'contracts.cancelContract': '계약 취소',
   'contracts.editContract': '계약 정보 수정',
+  'contracts.deleteContract': '계약 삭제',
+  'contracts.deleteConfirm': '이 계약을 완전히 삭제하시겠습니까? 관련 납부 내역도 함께 삭제되며, 이 작업은 되돌릴 수 없습니다.',
   'contracts.currency': '통화',
   'contracts.totalContractAmount': '총 계약금액',
   'contracts.collectionRate': '수금률',
@@ -1737,6 +1739,8 @@ const enTranslations: Record<string, string> = {
   'contracts.paidDate': 'Paid: {date}',
   // Contract detail page
   'contracts.editContract': 'Edit Contract',
+  'contracts.deleteContract': 'Delete Contract',
+  'contracts.deleteConfirm': 'Are you sure you want to permanently delete this contract? All related payment records will also be deleted. This cannot be undone.',
   'contracts.currency': 'Currency',
   'contracts.cancelContract': 'Cancel Contract',
   'contracts.totalContractAmount': 'Total Contract Amount',
