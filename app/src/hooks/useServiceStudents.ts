@@ -34,6 +34,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     notes: (row.notes as string) || undefined,
     acceptedUni: (row.accepted_uni as string) || undefined,
     address: (row.address as string) || undefined,
+    regularMeetingSchedule: (row.regular_meeting_schedule as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -123,6 +124,7 @@ export function useCreateServiceStudent() {
       notes?: string
       acceptedUni?: string
       address?: string
+      regularMeetingSchedule?: string
       createdBy?: string
     }) => {
       const { data, error } = await supabase.from('service_students').insert({
@@ -149,6 +151,7 @@ export function useCreateServiceStudent() {
         notes: s.notes,
         accepted_uni: s.acceptedUni,
         address: s.address,
+        regular_meeting_schedule: s.regularMeetingSchedule,
         created_by: s.createdBy || null,
       }).select().single()
       if (error) throw error
@@ -186,6 +189,7 @@ export function useUpdateServiceStudent() {
       notes?: string
       acceptedUni?: string
       address?: string
+      regularMeetingSchedule?: string
     }) => {
       const { id, ...rest } = payload
       const update: Record<string, unknown> = {}
@@ -212,6 +216,7 @@ export function useUpdateServiceStudent() {
       if (rest.notes !== undefined) update.notes = rest.notes
       if (rest.acceptedUni !== undefined) update.accepted_uni = rest.acceptedUni
       if (rest.address !== undefined) update.address = rest.address
+      if (rest.regularMeetingSchedule !== undefined) update.regular_meeting_schedule = rest.regularMeetingSchedule
       const { error } = await supabase.from('service_students').update(update).eq('id', id)
       if (error) throw error
     },

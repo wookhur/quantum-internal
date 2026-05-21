@@ -266,6 +266,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
           <Field label={t('student360.endDate')} value={student.endDate} />
         </div>
         <Field label={t('student360.address')} value={student.address} />
+        <Field icon={<CalendarDays className="size-4" />} label={t('student360.regularMeetingSchedule')} value={student.regularMeetingSchedule} />
         {student.notes && (
           <div className="col-span-2">
             <p className="text-xs text-muted-foreground mb-1">{t('student360.notes')}</p>
@@ -442,6 +443,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     notes: student?.notes || '',
     acceptedUni: student?.acceptedUni || '',
     address: student?.address || '',
+    regularMeetingSchedule: student?.regularMeetingSchedule || '',
   })
   const [form, setForm] = useState(buildForm)
 
@@ -476,6 +478,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
       notes: form.notes || undefined,
       acceptedUni: form.acceptedUni || undefined,
       address: form.address || undefined,
+      regularMeetingSchedule: form.regularMeetingSchedule || undefined,
     }
     if (student) {
       update.mutate({ id: student.id, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
@@ -567,6 +570,14 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           <div className="col-span-2">
             <Label className="text-xs">{t('student360.address')}</Label>
             <Input value={form.address} onChange={e => set('address', e.target.value)} />
+          </div>
+          <div className="col-span-2">
+            <Label className="text-xs">{t('student360.regularMeetingSchedule')}</Label>
+            <Input
+              value={form.regularMeetingSchedule}
+              onChange={e => set('regularMeetingSchedule', e.target.value)}
+              placeholder="예: 매주 화요일 3pm KST"
+            />
           </div>
           <div className="col-span-2">
             <Label className="text-xs">{t('student360.notes')}</Label>

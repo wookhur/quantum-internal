@@ -409,6 +409,7 @@ export interface ServiceStudent {
   notes?: string
   acceptedUni?: string
   address?: string
+  regularMeetingSchedule?: string
   createdBy?: string
   createdAt: string
   updatedAt: string
