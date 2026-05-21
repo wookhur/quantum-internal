@@ -48,11 +48,13 @@ function InstallmentCard({
   currency,
   onMarkPaid,
   onRevertPaid,
+  onEdit,
 }: {
   installment: PaymentInstallment
   currency: 'KRW' | 'USD'
   onMarkPaid: (inst: PaymentInstallment) => void
   onRevertPaid: (inst: PaymentInstallment) => void
+  onEdit: (inst: PaymentInstallment) => void
 }) {
   const t = useT()
   const INSTALLMENT_STATUS_CONFIG = useInstallmentStatusConfig()
@@ -84,6 +86,14 @@ function InstallmentCard({
           </div>
 
           <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1 text-muted-foreground hover:text-foreground"
+              onClick={() => onEdit(installment)}
+            >
+              <Pencil className="size-3.5" />
+            </Button>
             {isPaid && (
               <Button
                 size="sm"
@@ -276,6 +286,8 @@ export function ContractDetailPage() {
   const [cancelReason, setCancelReason] = useState('')
   const [addChargeDialogOpen, setAddChargeDialogOpen] = useState(false)
   const [chargeForm, setChargeForm] = useState({ label: '', amount: '', dueDate: '', notes: '' })
+  const [editInstDialogOpen, setEditInstDialogOpen] = useState(false)
+  const [editInstForm, setEditInstForm] = useState({ id: '', label: '', amount: '', dueDate: '', notes: '' })
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [selectedInstallment, setSelectedInstallment] = useState<PaymentInstallment | null>(null)
   const [payForm, setPayForm] = useState({
@@ -360,6 +372,32 @@ export function ContractDetailPage() {
       },
     })
   }, [id, chargeForm, contract, createInstallments])
+
+  const openEditInstDialog = useCallback((inst: PaymentInstallment) => {
+    setEditInstForm({
+      id: inst.id,
+      label: inst.label,
+      amount: String(inst.amount),
+      dueDate: inst.dueDate || '',
+      notes: inst.notes || '',
+    })
+    setEditInstDialogOpen(true)
+  }, [])
+
+  const handleEditInstallment = useCallback(() => {
+    if (!editInstForm.id || !editInstForm.label.trim() || !editInstForm.amount) return
+    updateInstallment.mutate({
+      id: editInstForm.id,
+      label: editInstForm.label.trim(),
+      amount: Number(editInstForm.amount),
+      dueDate: editInstForm.dueDate || undefined,
+      notes: editInstForm.notes || undefined,
+    }, {
+      onSuccess: () => {
+        setEditInstDialogOpen(false)
+      },
+    })
+  }, [editInstForm, updateInstallment])
 
   if (isLoading) {
     return (
@@ -509,6 +547,7 @@ export function ContractDetailPage() {
                 currency={contract.currency}
                 onMarkPaid={openPayDialog}
                 onRevertPaid={handleRevertPaid}
+                onEdit={openEditInstDialog}
               />
             ))}
           </div>
@@ -919,6 +958,65 @@ export function ContractDetailPage() {
             >
               {createInstallments.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
               {t('common.add')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Installment Dialog */}
+      <Dialog open={editInstDialogOpen} onOpenChange={setEditInstDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('contracts.editInstallment')}</DialogTitle>
+            <DialogDescription>
+              {t('contracts.editInstallmentDesc')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>{t('contracts.installmentLabel')} <span className="text-destructive">*</span></Label>
+              <Input
+                value={editInstForm.label}
+                onChange={e => setEditInstForm(f => ({ ...f, label: e.target.value }))}
+                placeholder="계약금, 중도금, 잔금 등"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('contracts.amount')} ({contract.currency}) <span className="text-destructive">*</span></Label>
+              <Input
+                type="number"
+                value={editInstForm.amount}
+                onChange={e => setEditInstForm(f => ({ ...f, amount: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('contracts.dueAmount')}</Label>
+              <Input
+                type="date"
+                value={editInstForm.dueDate}
+                onChange={e => setEditInstForm(f => ({ ...f, dueDate: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('common.notes')}</Label>
+              <Input
+                value={editInstForm.notes}
+                onChange={e => setEditInstForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder={t('contracts.memoPlaceholder')}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditInstDialogOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={handleEditInstallment}
+              disabled={!editInstForm.label.trim() || !editInstForm.amount || Number(editInstForm.amount) <= 0 || updateInstallment.isPending}
+            >
+              {updateInstallment.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              {t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

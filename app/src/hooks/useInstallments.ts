@@ -76,6 +76,9 @@ export function useUpdateInstallment() {
   return useMutation({
     mutationFn: async ({ id, ...updates }: {
       id: string
+      label?: string
+      amount?: number
+      dueDate?: string
       status?: InstallmentStatus
       paidAmount?: number
       paidDate?: string
@@ -83,6 +86,9 @@ export function useUpdateInstallment() {
       notes?: string
     }) => {
       const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (updates.label !== undefined) row.label = updates.label
+      if (updates.amount !== undefined) row.amount = updates.amount
+      if (updates.dueDate !== undefined) row.due_date = updates.dueDate || null
       if (updates.status !== undefined) row.status = updates.status
       if (updates.paidAmount !== undefined) row.paid_amount = updates.paidAmount
       if (updates.paidDate !== undefined) row.paid_date = updates.paidDate
