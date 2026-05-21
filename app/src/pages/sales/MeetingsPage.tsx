@@ -8,11 +8,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { CalendarCheck, FileCheck, Plus, Loader2 } from 'lucide-react'
+import { CalendarCheck, FileCheck, Plus, Upload, Loader2 } from 'lucide-react'
 import { useMeetings, useCreateMeeting, useUpdateNoteDelivered } from '@/hooks/useMeetings'
 import { useAuth } from '@/contexts/AuthContext'
 import { currentMonthStrKST } from '@/lib/date'
 import { useT } from '@/i18n/LanguageContext'
+import { MeetingPdfUploadDialog } from '@/components/MeetingPdfUploadDialog'
 
 function getMeetingBadge(num: number, t: (key: string, params?: Record<string, string | number>) => string) {
   const classNames: Record<number, string> = {
@@ -44,6 +45,7 @@ export function MeetingsPage() {
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_MEETING_FORM)
 
   const { user } = useAuth()
@@ -107,9 +109,14 @@ export function MeetingsPage() {
             {isLoading ? t('common.loading') : t('meetings.totalMeetings').replace('{n}', String(meetings.length))}
           </p>
         </div>
-        <Button className="gap-2 shrink-0" size="sm" onClick={() => setDialogOpen(true)}>
-          <Plus className="size-4" /> <span className="hidden sm:inline">{t('meetings.addMeeting')}</span>
-        </Button>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" className="gap-2" size="sm" onClick={() => setPdfDialogOpen(true)}>
+            <Upload className="size-4" /> <span className="hidden sm:inline">{t('meetings.uploadPdf')}</span>
+          </Button>
+          <Button className="gap-2" size="sm" onClick={() => setDialogOpen(true)}>
+            <Plus className="size-4" /> <span className="hidden sm:inline">{t('meetings.addMeeting')}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -326,6 +333,9 @@ export function MeetingsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* PDF Upload Dialog */}
+      <MeetingPdfUploadDialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen} />
     </div>
   )
 }

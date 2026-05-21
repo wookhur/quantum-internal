@@ -53,7 +53,7 @@ export function useCreateMeeting() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (meeting: Partial<Meeting>) => {
-      const { data, error } = await supabase.from('meetings').insert({
+      const row: Record<string, unknown> = {
         meeting_date: meeting.meetingDate,
         meeting_number: meeting.meetingNumber,
         parent_name: meeting.parentName,
@@ -66,7 +66,11 @@ export function useCreateMeeting() {
         memo: meeting.memo,
         note_delivered: false,
         created_by: meeting.createdBy,
-      }).select().single()
+      }
+      if (meeting.interestArea !== undefined) row.interest_area = meeting.interestArea
+      if (meeting.nextMeetingDate !== undefined) row.next_meeting_date = meeting.nextMeetingDate
+      if (meeting.requiredAction !== undefined) row.required_action = meeting.requiredAction
+      const { data, error } = await supabase.from('meetings').insert(row).select().single()
       if (error) throw error
       return data
     },
