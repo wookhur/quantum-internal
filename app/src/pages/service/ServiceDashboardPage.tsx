@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -38,12 +38,12 @@ import type { MilestoneType, MilestoneStatus, StudentMilestone } from '@/types'
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const MILESTONE_TYPES: { value: MilestoneType; label: string; color: string; dot: string }[] = [
-  { value: 'strategy',    label: '전략',     color: 'bg-slate-100 text-slate-700 border-slate-200',   dot: 'bg-slate-500' },
-  { value: 'essay',       label: '에세이',   color: 'bg-indigo-100 text-indigo-700 border-indigo-200', dot: 'bg-indigo-600' },
-  { value: 'application', label: '원서',     color: 'bg-red-100 text-red-700 border-red-200',          dot: 'bg-red-500' },
-  { value: 'competition', label: '대회',     color: 'bg-emerald-100 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
-  { value: 'decision',    label: '결과',     color: 'bg-amber-100 text-amber-700 border-amber-200',    dot: 'bg-amber-500' },
-  { value: 'ec_activity', label: 'EC 활동',  color: 'bg-purple-100 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
+  { value: 'strategy',    label: 'Strategy',    color: 'bg-slate-100 text-slate-700 border-slate-200',      dot: 'bg-slate-500' },
+  { value: 'essay',       label: 'Essay',       color: 'bg-indigo-100 text-indigo-700 border-indigo-200',   dot: 'bg-indigo-600' },
+  { value: 'application', label: 'Application', color: 'bg-red-100 text-red-700 border-red-200',            dot: 'bg-red-500' },
+  { value: 'competition', label: 'Competition', color: 'bg-emerald-100 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
+  { value: 'decision',    label: 'Decision',    color: 'bg-amber-100 text-amber-700 border-amber-200',      dot: 'bg-amber-500' },
+  { value: 'ec_activity', label: 'EC Activity', color: 'bg-purple-100 text-purple-700 border-purple-200',   dot: 'bg-purple-500' },
 ]
 
 const MEETING_COLOR = 'bg-violet-100 text-violet-700 border-violet-200'
@@ -399,6 +399,18 @@ function MilestoneDialog({
   const [date,      setDate]      = useState(editing?.date ?? defaultDate ?? todayKST())
   const [status,    setStatus]    = useState<MilestoneStatus>(editing?.status ?? 'upcoming')
   const [notes,     setNotes]     = useState(editing?.notes ?? '')
+
+  // Reset state every time the dialog opens
+  useEffect(() => {
+    if (open) {
+      setStudentId(editing?.studentId ?? defaultStudentId ?? '')
+      setType(editing?.type ?? 'application')
+      setTitle(editing?.title ?? '')
+      setDate(editing?.date ?? defaultDate ?? todayKST())
+      setStatus(editing?.status ?? 'upcoming')
+      setNotes(editing?.notes ?? '')
+    }
+  }, [open])
 
   const saving = createMilestone.isPending || updateMilestone.isPending
 
