@@ -416,12 +416,17 @@ function MilestoneDialog({
 
   async function handleSave() {
     if (!studentId || !title || !date) return
-    if (editing) {
-      await updateMilestone.mutateAsync({ id: editing.id, studentId, type, title, date, status, notes: notes || undefined })
-    } else {
-      await createMilestone.mutateAsync({ studentId, type, title, date, status, notes: notes || undefined, createdBy: user?.id })
+    try {
+      if (editing) {
+        await updateMilestone.mutateAsync({ id: editing.id, studentId, type, title, date, status, notes: notes || undefined })
+      } else {
+        await createMilestone.mutateAsync({ studentId, type, title, date, status, notes: notes || undefined, createdBy: user?.id })
+      }
+      onClose()
+    } catch (e) {
+      const msg = (e as { message?: string })?.message || String(e)
+      alert(`저장 실패: ${msg}`)
     }
-    onClose()
   }
 
   return (
