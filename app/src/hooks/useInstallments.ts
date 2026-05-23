@@ -91,9 +91,9 @@ export function useUpdateInstallment() {
       if (updates.dueDate !== undefined) row.due_date = updates.dueDate || null
       if (updates.status !== undefined) row.status = updates.status
       if (updates.paidAmount !== undefined) row.paid_amount = updates.paidAmount
-      if (updates.paidDate !== undefined) row.paid_date = updates.paidDate
-      if (updates.paymentMethod !== undefined) row.payment_method = updates.paymentMethod
-      if (updates.notes !== undefined) row.notes = updates.notes
+      if (updates.paidDate !== undefined) row.paid_date = updates.paidDate || null
+      if (updates.paymentMethod !== undefined) row.payment_method = updates.paymentMethod || null
+      if (updates.notes !== undefined) row.notes = updates.notes || null
 
       const { data, error } = await supabase
         .from('payment_installments')
