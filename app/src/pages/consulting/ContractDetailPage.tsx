@@ -69,11 +69,17 @@ function InstallmentCard({
   const t = useT()
   const pmLabel = usePaymentMethodLabel()
   const INSTALLMENT_STATUS_CONFIG = useInstallmentStatusConfig()
-  const config = INSTALLMENT_STATUS_CONFIG[installment.status] || INSTALLMENT_STATUS_CONFIG.pending
-  const StatusIcon = config.icon
-  const isPaid = installment.status === 'paid'
-  const isOverdue = installment.status === 'overdue'
+  // Derive actual status from amounts — DB status may be stale
   const remaining = installment.amount - installment.paidAmount
+  const derivedStatus: string =
+    installment.paidAmount > 0 && remaining <= 0 ? 'paid'
+    : installment.paidAmount > 0 && remaining > 0 ? 'partial'
+    : installment.status === 'overdue' ? 'overdue'
+    : 'pending'
+  const config = INSTALLMENT_STATUS_CONFIG[derivedStatus] || INSTALLMENT_STATUS_CONFIG.pending
+  const StatusIcon = config.icon
+  const isPaid = derivedStatus === 'paid'
+  const isOverdue = derivedStatus === 'overdue'
 
   return (
     <Card className={`${isOverdue ? 'border-red-200 bg-red-50/30' : ''} ${isPaid ? 'border-emerald-200 bg-emerald-50/30' : ''}`}>
