@@ -79,10 +79,11 @@ function InstallmentCard({
   const config = INSTALLMENT_STATUS_CONFIG[derivedStatus] || INSTALLMENT_STATUS_CONFIG.pending
   const StatusIcon = config.icon
   const isPaid = derivedStatus === 'paid'
+  const isPartial = derivedStatus === 'partial'
   const isOverdue = derivedStatus === 'overdue'
 
   return (
-    <Card className={`${isOverdue ? 'border-red-200 bg-red-50/30' : ''} ${isPaid ? 'border-emerald-200 bg-emerald-50/30' : ''}`}>
+    <Card className={`${isOverdue ? 'border-red-200 bg-red-50/30' : ''} ${isPaid ? 'border-emerald-200 bg-emerald-50/30' : ''} ${isPartial ? 'border-amber-200 bg-amber-50/30' : ''}`}>
       <CardContent className="py-4">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -111,7 +112,7 @@ function InstallmentCard({
             >
               <Pencil className="size-3.5" />
             </Button>
-            {isPaid && (
+            {(isPaid || isPartial) && (
               <Button
                 size="sm"
                 variant="outline"
@@ -130,7 +131,7 @@ function InstallmentCard({
                 onClick={() => onMarkPaid(installment)}
               >
                 <CreditCard className="size-3.5" />
-                {t('contracts.markPaid')}
+                {isPartial ? t('contracts.payRemaining') : t('contracts.markPaid')}
               </Button>
             )}
           </div>
