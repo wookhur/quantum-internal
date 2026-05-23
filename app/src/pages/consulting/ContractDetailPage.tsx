@@ -21,6 +21,16 @@ import { useT } from '@/i18n/LanguageContext'
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
 
+function usePaymentMethodLabel() {
+  const t = useT()
+  return (method: string) => {
+    if (method === 'bank_transfer') return t('contracts.paymentBankTransfer')
+    if (method === 'card') return t('contracts.paymentCard')
+    if (method === 'us_wire') return t('contracts.paymentUsWire')
+    return method || t('common.select')
+  }
+}
+
 function useStatusConfig() {
   const t = useT()
   const STATUS_CONFIG: Record<ContractStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
@@ -57,6 +67,7 @@ function InstallmentCard({
   onEdit: (inst: PaymentInstallment) => void
 }) {
   const t = useT()
+  const pmLabel = usePaymentMethodLabel()
   const INSTALLMENT_STATUS_CONFIG = useInstallmentStatusConfig()
   const config = INSTALLMENT_STATUS_CONFIG[installment.status] || INSTALLMENT_STATUS_CONFIG.pending
   const StatusIcon = config.icon
@@ -146,7 +157,7 @@ function InstallmentCard({
         </div>
         {installment.paymentMethod && installment.paidDate && (
           <div className="mt-2 text-xs text-muted-foreground">
-            {installment.paymentMethod === 'bank_transfer' ? t('contracts.paymentBankTransfer') : installment.paymentMethod === 'card' ? t('contracts.paymentCard') : t('contracts.paymentUsWire')}
+            {pmLabel(installment.paymentMethod || '')}
           </div>
         )}
         {installment.notes && (
@@ -273,6 +284,7 @@ export function ContractDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const t = useT()
+  const pmLabel = usePaymentMethodLabel()
   const { data: contract, isLoading, error } = useContract(id)
   const cancelContract = useCancelContract()
   const updateContract = useUpdateContract()
@@ -897,7 +909,7 @@ export function ContractDetailPage() {
               <Label>{t('contracts.paymentMethod')}</Label>
               <Select value={payForm.paymentMethod} onValueChange={(v) => setPayForm(f => ({ ...f, paymentMethod: v || 'bank_transfer' }))}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>{pmLabel(payForm.paymentMethod)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="bank_transfer">{t('contracts.paymentBankTransfer')}</SelectItem>
@@ -1043,7 +1055,7 @@ export function ContractDetailPage() {
                 <div className="space-y-2">
                   <Label>{t('contracts.paymentMethod')}</Label>
                   <Select value={editInstForm.paymentMethod || 'bank_transfer'} onValueChange={v => setEditInstForm(f => ({ ...f, paymentMethod: v || '' }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger><SelectValue>{pmLabel(editInstForm.paymentMethod || 'bank_transfer')}</SelectValue></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="bank_transfer">{t('contracts.paymentBankTransfer')}</SelectItem>
                       <SelectItem value="card">{t('contracts.paymentCard')}</SelectItem>
