@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Trash2, AlertTriangle } from 'lucide-react'
 import { useCreateContractFull } from '@/hooks/useContracts'
 import { useCreateInstallments } from '@/hooks/useInstallments'
 import { useProfiles } from '@/hooks/useProfiles'
@@ -345,14 +345,28 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
                   </Button>
                 </div>
               ))}
-              {installmentRows.some(r => Number(r.amount) > 0) && (
-                <div className="text-[11px] text-muted-foreground pt-1 text-right">
-                  {t('contracts.installmentTotal')}: {formatCurrency(
-                    installmentRows.reduce((s, r) => s + (Number(r.amount) || 0), 0),
-                    form.currency,
-                  )}
-                </div>
-              )}
+              {installmentRows.some(r => Number(r.amount) > 0) && (() => {
+                const instTotal = installmentRows.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+                const contractAmt = Number(form.totalAmount) || 0
+                const mismatch = contractAmt > 0 && instTotal !== contractAmt
+                return (
+                  <>
+                    <div className="text-[11px] text-muted-foreground pt-1 text-right">
+                      {t('contracts.installmentTotal')}: {formatCurrency(instTotal, form.currency)}
+                    </div>
+                    {mismatch && (
+                      <div className="flex items-center gap-1.5 mt-2 p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[11px]">
+                        <AlertTriangle className="size-3.5 shrink-0" />
+                        <span>
+                          {t('contracts.amountMismatchWarning')
+                            .replace('{instTotal}', formatCurrency(instTotal, form.currency))
+                            .replace('{contractTotal}', formatCurrency(contractAmt, form.currency))}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           </div>
 

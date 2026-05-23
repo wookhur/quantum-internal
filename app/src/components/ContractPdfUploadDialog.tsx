@@ -451,11 +451,26 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
                     </Button>
                   </div>
                 ))}
-                {installmentRows.some(r => Number(r.amount) > 0) && (
-                  <div className="text-[11px] text-muted-foreground pt-1 text-right">
-                    납입 합계: {formatCurrency(installmentRows.reduce((s, r) => s + (Number(r.amount) || 0), 0), (form.currency || 'KRW') as 'KRW' | 'USD')}
-                  </div>
-                )}
+                {installmentRows.some(r => Number(r.amount) > 0) && (() => {
+                  const instTotal = installmentRows.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+                  const curr = (form.currency || 'KRW') as 'KRW' | 'USD'
+                  const mismatch = form.totalAmount != null && form.totalAmount > 0 && instTotal !== form.totalAmount
+                  return (
+                    <>
+                      <div className="text-[11px] text-muted-foreground pt-1 text-right">
+                        납입 합계: {formatCurrency(instTotal, curr)}
+                      </div>
+                      {mismatch && (
+                        <div className="flex items-center gap-1.5 mt-2 p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[11px]">
+                          <AlertCircle className="size-3.5 shrink-0" />
+                          <span>
+                            납입 일정 합계({formatCurrency(instTotal, curr)})가 계약 금액({formatCurrency(form.totalAmount!, curr)})과 일치하지 않습니다.
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             </div>
 
