@@ -15,7 +15,7 @@ import {
   UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
-import { useUpdateInstallment, useCreateInstallments } from '@/hooks/useInstallments'
+import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import { supabase } from '@/lib/supabase'
@@ -59,12 +59,14 @@ function InstallmentCard({
   onMarkPaid,
   onRevertPaid,
   onEdit,
+  onDelete,
 }: {
   installment: PaymentInstallment
   currency: 'KRW' | 'USD'
   onMarkPaid: (inst: PaymentInstallment) => void
   onRevertPaid: (inst: PaymentInstallment) => void
   onEdit: (inst: PaymentInstallment) => void
+  onDelete: (inst: PaymentInstallment) => void
 }) {
   const t = useT()
   const pmLabel = usePaymentMethodLabel()
@@ -111,6 +113,14 @@ function InstallmentCard({
               onClick={() => onEdit(installment)}
             >
               <Pencil className="size-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="gap-1 text-muted-foreground hover:text-destructive"
+              onClick={() => onDelete(installment)}
+            >
+              <Trash2 className="size-3.5" />
             </Button>
             {(isPaid || isPartial) && (
               <Button
@@ -297,6 +307,7 @@ export function ContractDetailPage() {
   const updateContract = useUpdateContract()
   const deleteContract = useDeleteContract()
   const updateInstallment = useUpdateInstallment()
+  const deleteInstallment = useDeleteInstallment()
   const createInstallments = useCreateInstallments()
   const STATUS_CONFIG = useStatusConfig()
   const { data: linkedLead } = useLinkedLead(contract?.leadId)
@@ -376,6 +387,11 @@ export function ContractDetailPage() {
       notes: '',
     })
   }, [updateInstallment, t])
+
+  const handleDeleteInstallment = useCallback((inst: PaymentInstallment) => {
+    if (!confirm(t('contracts.deleteInstallmentConfirm').replace('{label}', inst.label))) return
+    deleteInstallment.mutate(inst.id)
+  }, [deleteInstallment, t])
 
   const handleAddCharge = useCallback(() => {
     if (!id || !chargeForm.label.trim() || !chargeForm.amount) return
@@ -584,6 +600,7 @@ export function ContractDetailPage() {
                 onMarkPaid={openPayDialog}
                 onRevertPaid={handleRevertPaid}
                 onEdit={openEditInstDialog}
+                onDelete={handleDeleteInstallment}
               />
             ))}
           </div>

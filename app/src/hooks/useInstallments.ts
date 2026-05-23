@@ -114,6 +114,27 @@ export function useUpdateInstallment() {
   })
 }
 
+/** Delete a single installment */
+export function useDeleteInstallment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('payment_installments')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['installments'] })
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
+      qc.invalidateQueries({ queryKey: ['revenue-projection'] })
+      qc.invalidateQueries({ queryKey: ['payments'] })
+    },
+  })
+}
+
 /** Create installments for a contract (batch insert) */
 export function useCreateInstallments() {
   const qc = useQueryClient()
