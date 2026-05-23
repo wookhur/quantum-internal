@@ -312,14 +312,17 @@ export function useContract(id: string | undefined) {
       }))
 
       const paidAmount = installments.reduce((s, i) => s + i.paidAmount, 0)
-      const totalInstallmentAmount = installments.reduce((s, i) => s + i.amount, 0)
+      // Use contract totalAmount as base; fall back to installment sum if not set
+      const baseAmount = contract.totalAmount > 0
+        ? contract.totalAmount
+        : installments.reduce((s, i) => s + i.amount, 0)
 
       return {
         ...contract,
         installments,
         paidAmount,
-        outstandingAmount: totalInstallmentAmount - paidAmount,
-        paymentProgress: totalInstallmentAmount > 0 ? Math.round((paidAmount / totalInstallmentAmount) * 100) : 0,
+        outstandingAmount: Math.max(baseAmount - paidAmount, 0),
+        paymentProgress: baseAmount > 0 ? Math.min(Math.round((paidAmount / baseAmount) * 100), 100) : 0,
       }
     },
     enabled: !!id,
@@ -421,13 +424,15 @@ export function useContractsWithInstallments(filters?: { status?: ContractStatus
       return contracts.map(c => {
         const installments = installmentMap.get(c.id) || []
         const paidAmount = installments.reduce((s, i) => s + i.paidAmount, 0)
-        const totalInstAmount = installments.reduce((s, i) => s + i.amount, 0)
+        const baseAmount = c.totalAmount > 0
+          ? c.totalAmount
+          : installments.reduce((s, i) => s + i.amount, 0)
         return {
           ...c,
           installments,
           paidAmount,
-          outstandingAmount: totalInstAmount - paidAmount,
-          paymentProgress: totalInstAmount > 0 ? Math.round((paidAmount / totalInstAmount) * 100) : 0,
+          outstandingAmount: Math.max(baseAmount - paidAmount, 0),
+          paymentProgress: baseAmount > 0 ? Math.min(Math.round((paidAmount / baseAmount) * 100), 100) : 0,
         }
       })
     },
