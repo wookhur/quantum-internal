@@ -6,6 +6,7 @@ import type {
   ServiceReportStatus,
   ServiceDiaryEntry,
 } from '@/types'
+import { createNotificationsForUsers } from './useUserNotifications'
 
 // ─── Mappers ───
 function mapStudent(row: Record<string, unknown>): ServiceStudent {
@@ -219,8 +220,37 @@ export function useUpdateServiceStudent() {
       if (rest.regularMeetingSchedule !== undefined) update.regular_meeting_schedule = rest.regularMeetingSchedule
       const { error } = await supabase.from('service_students').update(update).eq('id', id)
       if (error) throw error
+
+      // If consultant was assigned, notify them
+      if (rest.assignedConsultant) {
+        // Look up the consultant's profile by name to get their user ID
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, name')
+          .eq('name', rest.assignedConsultant)
+          .limit(1)
+        if (profiles && profiles.length > 0) {
+          // Get student name for the notification
+          const { data: student } = await supabase
+            .from('service_students')
+            .select('name')
+            .eq('id', id)
+            .single()
+          const studentName = (student?.name as string) || '학생'
+          createNotificationsForUsers([profiles[0].id as string], {
+            type: 'consultant_assigned',
+            title: '고객 배정 알림',
+            message: `${studentName} 학생이 배정되었습니다.`,
+            link: `/service/student-360?student=${id}`,
+            metadata: { studentId: id, studentName, consultantName: rest.assignedConsultant },
+          })
+        }
+      }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['service_students'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['service_students'] })
+      qc.invalidateQueries({ queryKey: ['user-notifications'] })
+    },
   })
 }
 

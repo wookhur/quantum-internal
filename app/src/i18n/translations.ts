@@ -1066,6 +1066,10 @@ const koTranslations = {
   'notif.noNotifications': '새로운 알림이 없습니다.',
   'notif.viewDetail': '자세히 보기',
   'notif.dontShowAgain': '다시 표시하지 않기',
+  'notif.markAllRead': '모두 확인',
+  'notif.confirmRead': '확인 완료',
+  'notif.viewFirstToConfirm': '상세 내용을 먼저 확인해주세요',
+  'notif.systemAlerts': '시스템 알림',
 
   // ── Account Settings ──
   'account.settings': '계정 설정',
@@ -2160,6 +2164,10 @@ const enTranslations: Record<string, string> = {
   'notif.noNotifications': 'No new notifications.',
   'notif.viewDetail': 'View Details',
   'notif.dontShowAgain': 'Don\'t show again',
+  'notif.markAllRead': 'Mark all read',
+  'notif.confirmRead': 'Confirm read',
+  'notif.viewFirstToConfirm': 'View details first to confirm',
+  'notif.systemAlerts': 'System alerts',
 
   // ── Account Settings ──
   'account.settings': 'Account Settings',

@@ -172,4 +172,6 @@ export const NOTIFICATION_TYPES = [
   { key: 'today_meeting', label: '오늘 미팅 알림', labelEn: 'Today\'s Meeting Alert' },
   { key: 'new_message', label: '새 메시지 알림', labelEn: 'New Message Alert' },
   { key: 'missing_report', label: '미팅일지 미제출 알림', labelEn: 'Missing Meeting Report Alert' },
+  { key: 'new_contract', label: '새 계약 등록 알림', labelEn: 'New Contract Alert' },
+  { key: 'consultant_assigned', label: '고객 배정 알림', labelEn: 'Client Assignment Alert' },
 ] as const

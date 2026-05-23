@@ -1,6 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Contract, ContractStatus, PaymentInstallment } from '@/types'
+import { createNotificationsForUsers, getContractNotificationRecipients } from './useUserNotifications'
+
+/** Fire-and-forget: notify sales manager, CEO, service manager about new contract */
+function sendContractNotification(studentName: string, contractorName: string, contractId: string) {
+  getContractNotificationRecipients().then((recipientIds) => {
+    if (recipientIds.length === 0) return
+    createNotificationsForUsers(recipientIds, {
+      type: 'new_contract',
+      title: '새 계약 등록',
+      message: `${studentName} (${contractorName}) 학생의 새 계약이 등록되었습니다.`,
+      link: `/consulting/clients/${contractId}`,
+      metadata: { contractId, studentName, contractorName },
+    })
+  })
+}
 
 /**
  * Auto-creates a service_student record if one doesn't already exist with the same name.
@@ -126,12 +141,16 @@ export function useCreateContract() {
         endDate: contract.expiryDate,
       })
 
+      // Send notifications to sales manager, CEO, service manager
+      sendContractNotification(contract.studentName, contract.contractorName, data.id as string)
+
       return data
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contracts'] })
       qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
       qc.invalidateQueries({ queryKey: ['service_students'] })
+      qc.invalidateQueries({ queryKey: ['user-notifications'] })
     },
   })
 }
@@ -195,6 +214,9 @@ export function useCreateContractFull() {
         endDate: contract.expiryDate,
       })
 
+      // Send notifications to sales manager, CEO, service manager
+      sendContractNotification(contract.studentName, contract.contractorName, data.id as string)
+
       return data
     },
     onSuccess: () => {
@@ -202,6 +224,7 @@ export function useCreateContractFull() {
       qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
       qc.invalidateQueries({ queryKey: ['linked-contracts'] })
       qc.invalidateQueries({ queryKey: ['service_students'] })
+      qc.invalidateQueries({ queryKey: ['user-notifications'] })
     },
   })
 }
