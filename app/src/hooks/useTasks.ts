@@ -1,6 +1,57 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Task, TaskComment, TaskAttachment, TaskStatus, TaskPriority } from '@/types'
+import type { Task, TaskComment, TaskAttachment, TaskStatus, TaskPriority, TodoStatus, TodoPriority } from '@/types'
+
+// ─── Task ↔ Todo Sync ──────────────────────────────────────────────────
+
+const TASK_TO_TODO_STATUS: Record<TaskStatus, TodoStatus> = {
+  requested: 'todo',
+  in_progress: 'in_progress',
+  completed: 'done',
+  cancelled: 'done',
+}
+
+const TASK_TO_TODO_PRIORITY: Record<TaskPriority, TodoPriority> = {
+  urgent: 'high',
+  normal: 'medium',
+  low: 'low',
+}
+
+/** Create a linked todo when a task is created */
+async function syncTaskToTodo(task: Task) {
+  if (!task.assigneeId) return
+  await supabase.from('todos').insert({
+    title: `[요청] ${task.title}`,
+    description: task.description || null,
+    assigned_to: task.assigneeId,
+    owner_id: task.assigneeId,
+    assignees: [task.assigneeId],
+    priority: TASK_TO_TODO_PRIORITY[task.priority],
+    due_date: task.dueDate || null,
+    status: 'todo',
+    team: (task.department as 'management' | 'sales' | 'marketing' | 'finance' | 'service') || null,
+    created_by: task.requesterId,
+    linked_task_id: task.id,
+  })
+}
+
+/** Sync task status change to linked todo */
+async function syncTaskStatusToTodo(taskId: string, newStatus: TaskStatus) {
+  const todoStatus = TASK_TO_TODO_STATUS[newStatus]
+  await supabase
+    .from('todos')
+    .update({ status: todoStatus, updated_at: new Date().toISOString() })
+    .eq('linked_task_id', taskId)
+}
+
+/** Sync task assignee change to linked todo */
+async function syncTaskAssigneeToTodo(taskId: string, assigneeId: string | undefined) {
+  if (!assigneeId) return
+  await supabase
+    .from('todos')
+    .update({ assigned_to: assigneeId, owner_id: assigneeId, assignees: [assigneeId] })
+    .eq('linked_task_id', taskId)
+}
 
 function mapTask(row: Record<string, unknown>): Task {
   const requester = row.requester as Record<string, unknown> | null
@@ -268,11 +319,15 @@ export function useCreateTask() {
         .select('*, requester:profiles!tasks_requester_id_fkey(id, name), assignee:profiles!tasks_assignee_id_fkey(id, name)')
         .single()
       if (error) throw error
-      return mapTask(data as Record<string, unknown>)
+      const task = mapTask(data as Record<string, unknown>)
+      // Sync: create linked todo for assignee
+      syncTaskToTodo(task).catch(() => {})
+      return task
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       qc.invalidateQueries({ queryKey: ['task-stats'] })
+      qc.invalidateQueries({ queryKey: ['todos'] })
     },
   })
 }
@@ -316,12 +371,18 @@ export function useUpdateTask() {
         .select('*, requester:profiles!tasks_requester_id_fkey(id, name), assignee:profiles!tasks_assignee_id_fkey(id, name)')
         .single()
       if (error) throw error
+
+      // Sync status/assignee to linked todo
+      if (updates.status) syncTaskStatusToTodo(id, updates.status).catch(() => {})
+      if (updates.assigneeId !== undefined) syncTaskAssigneeToTodo(id, updates.assigneeId).catch(() => {})
+
       return mapTask(data as Record<string, unknown>)
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       qc.invalidateQueries({ queryKey: ['task', vars.id] })
       qc.invalidateQueries({ queryKey: ['task-stats'] })
+      qc.invalidateQueries({ queryKey: ['todos'] })
     },
   })
 }

@@ -1,6 +1,30 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Todo, TodoStatus, TodoPriority, ProjectTeam } from '@/types'
+import type { Todo, TodoStatus, TodoPriority, ProjectTeam, TaskStatus } from '@/types'
+
+const TODO_TO_TASK_STATUS: Record<TodoStatus, TaskStatus> = {
+  todo: 'requested',
+  in_progress: 'in_progress',
+  done: 'completed',
+}
+
+/** Reverse sync: when todo status changes, update linked task */
+async function syncTodoStatusToTask(todoId: string, newStatus: TodoStatus) {
+  // Find linked task
+  const { data: todo } = await supabase
+    .from('todos')
+    .select('linked_task_id')
+    .eq('id', todoId)
+    .single()
+  if (!todo?.linked_task_id) return
+
+  const taskStatus = TODO_TO_TASK_STATUS[newStatus]
+  const update: Record<string, unknown> = { status: taskStatus, updated_at: new Date().toISOString() }
+  if (taskStatus === 'completed') update.completed_at = new Date().toISOString()
+  if (taskStatus !== 'completed') update.completed_at = null
+
+  await supabase.from('tasks').update(update).eq('id', todo.linked_task_id)
+}
 
 function mapTodo(row: Record<string, unknown>): Todo {
   return {
@@ -16,6 +40,7 @@ function mapTodo(row: Record<string, unknown>): Todo {
     dueDate: row.due_date as string,
     linkedEntityType: row.linked_entity_type as Todo['linkedEntityType'],
     linkedEntityId: row.linked_entity_id as string,
+    linkedTaskId: row.linked_task_id as string | undefined,
     createdBy: row.created_by as string,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -106,8 +131,14 @@ export function useUpdateTodo() {
 
       const { error } = await supabase.from('todos').update(update).eq('id', id)
       if (error) throw error
+      // Reverse sync status to linked task
+      if (rest.status) syncTodoStatusToTask(id, rest.status).catch(() => {})
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['todos'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['todos'] })
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task-stats'] })
+    },
   })
 }
 
@@ -118,7 +149,13 @@ export function useUpdateTodoStatus() {
     mutationFn: async ({ id, status }: { id: string; status: TodoStatus }) => {
       const { error } = await supabase.from('todos').update({ status }).eq('id', id)
       if (error) throw error
+      // Reverse sync status to linked task
+      syncTodoStatusToTask(id, status).catch(() => {})
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['todos'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['todos'] })
+      qc.invalidateQueries({ queryKey: ['tasks'] })
+      qc.invalidateQueries({ queryKey: ['task-stats'] })
+    },
   })
 }

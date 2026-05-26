@@ -238,6 +238,7 @@ export interface Todo {
   dueDate?: string
   linkedEntityType?: 'lead' | 'contract' | 'event' | 'video'
   linkedEntityId?: string
+  linkedTaskId?: string    // linked task board item
   createdBy: string
   createdAt: string
   updatedAt: string
