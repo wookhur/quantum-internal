@@ -950,7 +950,7 @@ export function ContractDetailPage() {
             title: `${contract.studentName} 서비스 미팅`,
             desc: typeof sm.summary === 'string' ? sm.summary : undefined,
             person: consultant,
-            link: serviceData?.student ? `/service/student-360?studentId=${serviceData.student.id}` : undefined,
+            link: serviceData?.student ? `/service/student-360?student=${serviceData.student.id}` : undefined,
           })
         }
 
@@ -983,7 +983,7 @@ export function ContractDetailPage() {
                 )}
                 {serviceData?.student && (
                   <Link
-                    to={`/service/student-360?studentId=${serviceData.student.id}`}
+                    to={`/service/student-360?student=${serviceData.student.id}`}
                     className={`text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1 font-normal ${linkedLead ? '' : 'ml-auto'}`}
                   >
                     Student 360 <ExternalLink className="size-3" />
