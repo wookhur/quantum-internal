@@ -8,8 +8,11 @@ import { supabase } from '@/lib/supabase'
 export interface ContractIncentive {
   id: string
   contractId: string
-  profileId: string
+  profileId: string | null
   profileName: string
+  customName: string | null
+  /** Resolved display name: profileName or customName */
+  displayName: string
   incentiveType: 'partner_sales' | 'partner_fee' | 'cold_call' | 'total_revenue'
   percentage: number
   createdAt: string
@@ -39,11 +42,15 @@ export type IncentiveType = keyof typeof INCENTIVE_TYPES
 
 function mapIncentive(row: Record<string, unknown>): ContractIncentive {
   const profile = row.profiles as Record<string, unknown> | null
+  const profileName = (profile?.name as string) || ''
+  const customName = (row.custom_name as string) || null
   return {
     id: row.id as string,
     contractId: row.contract_id as string,
-    profileId: row.profile_id as string,
-    profileName: (profile?.name as string) || '',
+    profileId: (row.profile_id as string) || null,
+    profileName,
+    customName,
+    displayName: profileName || customName || '',
     incentiveType: row.incentive_type as ContractIncentive['incentiveType'],
     percentage: Number(row.percentage) || 0,
     createdAt: row.created_at as string,
@@ -114,13 +121,21 @@ export function useCreateIncentive() {
   return useMutation({
     mutationFn: async (input: {
       contract_id: string
-      profile_id: string
+      profile_id?: string | null
+      custom_name?: string | null
       incentive_type: IncentiveType
       percentage: number
     }) => {
+      const row: Record<string, unknown> = {
+        contract_id: input.contract_id,
+        incentive_type: input.incentive_type,
+        percentage: input.percentage,
+      }
+      if (input.profile_id) row.profile_id = input.profile_id
+      if (input.custom_name) row.custom_name = input.custom_name
       const { data, error } = await supabase
         .from('contract_incentives')
-        .insert(input)
+        .insert(row)
         .select()
         .single()
 

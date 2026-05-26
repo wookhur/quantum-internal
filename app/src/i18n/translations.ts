@@ -6,6 +6,7 @@ const koTranslations = {
   'common.loading': '로딩 중...',
   'common.saving': '저장 중...',
   'common.save': '저장',
+  'common.or': '또는',
   'common.cancel': '취소',
   'common.confirm': '확인',
   'common.delete': '삭제',
@@ -85,6 +86,7 @@ const koTranslations = {
   'nav.wireInvoice': '해외송금 인보이스',
   'nav.incentiveByContract': '인센티브 (계약별)',
   'nav.incentiveByPerson': '인센티브 (인원별)',
+  'nav.incentives': '세일즈 인센티브',
   'nav.service': '서비스',
   'nav.serviceDashboard': 'Service Dashboard',
   'nav.student360': 'Student 360',
@@ -1191,6 +1193,8 @@ const koTranslations = {
   'incentive.addIncentive': '인센티브 추가',
   'incentive.noIncentives': '설정된 인센티브가 없습니다.',
   'incentive.deleteConfirm': '이 인센티브를 삭제하시겠습니까?',
+  'incentive.customName': '직접 입력',
+  'incentive.customNamePlaceholder': '이름 입력',
 
   // ── Tasks ──
   'nav.taskBoard': '업무 요청',
@@ -1255,6 +1259,7 @@ const enTranslations: Record<string, string> = {
   'common.loading': 'Loading...',
   'common.saving': 'Saving...',
   'common.save': 'Save',
+  'common.or': 'or',
   'common.cancel': 'Cancel',
   'common.confirm': 'Confirm',
   'common.delete': 'Delete',
@@ -1334,6 +1339,7 @@ const enTranslations: Record<string, string> = {
   'nav.wireInvoice': 'Wire Invoice',
   'nav.incentiveByContract': 'Incentives (by Contract)',
   'nav.incentiveByPerson': 'Incentives (by Person)',
+  'nav.incentives': 'Sales Incentives',
   'nav.service': 'Service',
   'nav.serviceDashboard': 'Service Dashboard',
   'nav.student360': 'Student 360',
@@ -2439,6 +2445,8 @@ const enTranslations: Record<string, string> = {
   'incentive.addIncentive': 'Add Incentive',
   'incentive.noIncentives': 'No incentives configured.',
   'incentive.deleteConfirm': 'Delete this incentive?',
+  'incentive.customName': 'Custom Name',
+  'incentive.customNamePlaceholder': 'Enter name',
 
   // ── Tasks ──
   'nav.taskBoard': 'Task Board',

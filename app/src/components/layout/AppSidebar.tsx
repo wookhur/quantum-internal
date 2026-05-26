@@ -104,8 +104,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.invoices', to: '/finance/invoices', icon: FileText },
       { labelKey: 'nav.receipts', to: '/finance/receipts', icon: Receipt },
       { labelKey: 'nav.wireInvoice', to: '/finance/wire-invoice', icon: FileText },
-      { labelKey: 'nav.incentiveByContract', to: '/finance/incentives/by-contract', icon: Percent },
-      { labelKey: 'nav.incentiveByPerson', to: '/finance/incentives/by-person', icon: Percent },
+      { labelKey: 'nav.incentives', to: '/finance/incentives/by-contract', icon: Percent },
     ],
   },
   {

@@ -57,8 +57,9 @@ interface ContractDetail {
 }
 
 interface PersonGroup {
-  profileId: string
-  profileName: string
+  /** Unique key: profileId or custom name */
+  groupKey: string
+  displayName: string
   contracts: ContractDetail[]
   contractCount: number
   /** Amount breakdown per incentive type */
@@ -92,16 +93,17 @@ export function IncentiveByPersonPage() {
     [allIncentives, currentMonth],
   )
 
-  // Group by profileId
+  // Group by person (profileId or custom_name)
   const personGroups = useMemo(() => {
     const map = new Map<string, PersonGroup>()
 
     for (const inc of filtered) {
-      let group = map.get(inc.profileId)
+      const groupKey = inc.profileId || `custom:${inc.displayName}`
+      let group = map.get(groupKey)
       if (!group) {
         group = {
-          profileId: inc.profileId,
-          profileName: inc.profileName,
+          groupKey,
+          displayName: inc.displayName,
           contracts: [],
           contractCount: 0,
           amountByType: {} as Record<IncentiveType, number>,
@@ -111,7 +113,7 @@ export function IncentiveByPersonPage() {
         for (const key of Object.keys(INCENTIVE_TYPES) as IncentiveType[]) {
           group.amountByType[key] = 0
         }
-        map.set(inc.profileId, group)
+        map.set(groupKey, group)
       }
 
       const incentiveAmount = Math.round(inc.totalAmount * inc.percentage / 100)
@@ -206,7 +208,7 @@ export function IncentiveByPersonPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('incentive.totalPersons')}</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('incentive.targetCount')}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -255,18 +257,18 @@ export function IncentiveByPersonPage() {
                 {personGroups.map((group) => (
                   <>
                     <TableRow
-                      key={group.profileId}
+                      key={group.groupKey}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => toggleExpand(group.profileId)}
+                      onClick={() => toggleExpand(group.groupKey)}
                     >
                       <TableCell>
-                        {expandedPerson === group.profileId ? (
+                        {expandedPerson === group.groupKey ? (
                           <ChevronUp className="h-4 w-4 text-muted-foreground" />
                         ) : (
                           <ChevronDown className="h-4 w-4 text-muted-foreground" />
                         )}
                       </TableCell>
-                      <TableCell className="font-medium">{group.profileName}</TableCell>
+                      <TableCell className="font-medium">{group.displayName}</TableCell>
                       <TableCell className="text-right">{group.contractCount}</TableCell>
                       {activeTypes.map((type) => (
                         <TableCell key={type} className="text-right whitespace-nowrap">
@@ -281,10 +283,10 @@ export function IncentiveByPersonPage() {
                     </TableRow>
 
                     {/* Expanded contract details */}
-                    {expandedPerson === group.profileId &&
+                    {expandedPerson === group.groupKey &&
                       group.contracts.map((c, idx) => (
                         <TableRow
-                          key={`${group.profileId}-${c.contractId}-${idx}`}
+                          key={`${group.groupKey}-${c.contractId}-${idx}`}
                           className="bg-muted/30"
                         >
                           <TableCell />

@@ -388,7 +388,7 @@ export function ContractDetailPage() {
   const createIncentive = useCreateIncentive()
   const deleteIncentive = useDeleteIncentive()
   const { data: allProfiles = [] } = useProfiles()
-  const [incentiveForm, setIncentiveForm] = useState({ profileId: '', incentiveType: '' as string })
+  const [incentiveForm, setIncentiveForm] = useState({ profileId: '', customName: '', incentiveType: '' as string })
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -887,7 +887,7 @@ export function ContractDetailPage() {
                         <Badge variant="outline" className="text-orange-700 border-orange-200 bg-orange-100 text-xs">
                           {t(typeCfg.labelKey)}
                         </Badge>
-                        <span className="text-sm font-medium">{inc.profileName}</span>
+                        <span className="text-sm font-medium">{inc.displayName}</span>
                         <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
                         {contract && (
                           <span className="text-sm font-mono text-orange-700">{formatCurrency(amount)}</span>
@@ -917,10 +917,13 @@ export function ContractDetailPage() {
 
             {/* Add incentive form */}
             {!isCancelled && (
-              <div className="flex items-end gap-2 pt-2 border-t">
-                <div className="flex-1 space-y-1">
+              <div className="flex items-end gap-2 pt-2 border-t flex-wrap">
+                <div className="flex-1 min-w-[140px] space-y-1">
                   <label className="text-xs text-muted-foreground">{t('incentive.selectPerson')}</label>
-                  <Select value={incentiveForm.profileId} onValueChange={(v) => setIncentiveForm(f => ({ ...f, profileId: v || '' }))}>
+                  <Select
+                    value={incentiveForm.profileId}
+                    onValueChange={(v) => setIncentiveForm(f => ({ ...f, profileId: v || '', customName: '' }))}
+                  >
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder={t('incentive.selectPerson')} />
                     </SelectTrigger>
@@ -931,7 +934,17 @@ export function ContractDetailPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex-1 space-y-1">
+                <span className="text-xs text-muted-foreground pb-2">{t('common.or')}</span>
+                <div className="flex-1 min-w-[120px] space-y-1">
+                  <label className="text-xs text-muted-foreground">{t('incentive.customName')}</label>
+                  <Input
+                    className="h-9"
+                    placeholder={t('incentive.customNamePlaceholder')}
+                    value={incentiveForm.customName}
+                    onChange={(e) => setIncentiveForm(f => ({ ...f, customName: e.target.value, profileId: '' }))}
+                  />
+                </div>
+                <div className="flex-1 min-w-[140px] space-y-1">
                   <label className="text-xs text-muted-foreground">{t('incentive.selectType')}</label>
                   <Select value={incentiveForm.incentiveType} onValueChange={(v) => setIncentiveForm(f => ({ ...f, incentiveType: v || '' }))}>
                     <SelectTrigger className="h-9">
@@ -947,17 +960,19 @@ export function ContractDetailPage() {
                 <Button
                   size="sm"
                   className="h-9 gap-1"
-                  disabled={!incentiveForm.profileId || !incentiveForm.incentiveType || createIncentive.isPending}
+                  disabled={(!incentiveForm.profileId && !incentiveForm.customName.trim()) || !incentiveForm.incentiveType || createIncentive.isPending}
                   onClick={() => {
-                    if (!id || !incentiveForm.profileId || !incentiveForm.incentiveType) return
+                    if (!id || !incentiveForm.incentiveType) return
+                    if (!incentiveForm.profileId && !incentiveForm.customName.trim()) return
                     const typKey = incentiveForm.incentiveType as IncentiveType
                     createIncentive.mutate({
                       contract_id: id,
-                      profile_id: incentiveForm.profileId,
+                      profile_id: incentiveForm.profileId || null,
+                      custom_name: incentiveForm.customName.trim() || null,
                       incentive_type: typKey,
                       percentage: INCENTIVE_TYPES[typKey].defaultPct,
                     }, {
-                      onSuccess: () => setIncentiveForm({ profileId: '', incentiveType: '' }),
+                      onSuccess: () => setIncentiveForm({ profileId: '', customName: '', incentiveType: '' }),
                     })
                   }}
                 >

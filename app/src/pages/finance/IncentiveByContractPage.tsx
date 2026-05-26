@@ -222,7 +222,7 @@ export function IncentiveByContractPage() {
                       <div className="flex flex-wrap gap-1">
                         {group.incentives.map((inc) => (
                           <Badge key={inc.id} variant="secondary" className="text-xs">
-                            {inc.profileName}
+                            {inc.displayName}
                           </Badge>
                         ))}
                       </div>
