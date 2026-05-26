@@ -17,6 +17,8 @@ import {
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
 import { useRevenueSharesByInstallments, useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare } from '@/hooks/useRevenueShares'
+import { useContractIncentives, useCreateIncentive, useDeleteIncentive, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
+import { useProfiles } from '@/hooks/useProfiles'
 import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
@@ -382,6 +384,11 @@ export function ContractDetailPage() {
   const { data: serviceData } = useServiceStudentMeetings(contract?.studentName)
   const extraInstIds = (contract?.installments || []).filter(i => i.category === 'extra').map(i => i.id)
   const { data: revenueShares = [] } = useRevenueSharesByInstallments(extraInstIds)
+  const { data: contractIncentives = [] } = useContractIncentives(id)
+  const createIncentive = useCreateIncentive()
+  const deleteIncentive = useDeleteIncentive()
+  const { data: allProfiles = [] } = useProfiles()
+  const [incentiveForm, setIncentiveForm] = useState({ profileId: '', incentiveType: '' as string })
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -851,6 +858,116 @@ export function ContractDetailPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Incentive Settings */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <DollarSign className="size-5 text-orange-500" />
+            {t('incentive.assign')}
+            {contractIncentives.length > 0 && (
+              <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50">
+                {contractIncentives.length}
+              </Badge>
+            )}
+          </h2>
+        </div>
+        <Card>
+          <CardContent className="py-4 space-y-4">
+            {/* Existing incentives */}
+            {contractIncentives.length > 0 ? (
+              <div className="space-y-2">
+                {contractIncentives.map((inc) => {
+                  const typeCfg = INCENTIVE_TYPES[inc.incentiveType]
+                  const amount = contract ? Math.round(contract.totalAmount * inc.percentage / 100) : 0
+                  return (
+                    <div key={inc.id} className="flex items-center justify-between p-3 rounded-lg bg-orange-50/50 border border-orange-100">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="text-orange-700 border-orange-200 bg-orange-100 text-xs">
+                          {t(typeCfg.labelKey)}
+                        </Badge>
+                        <span className="text-sm font-medium">{inc.profileName}</span>
+                        <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
+                        {contract && (
+                          <span className="text-sm font-mono text-orange-700">{formatCurrency(amount)}</span>
+                        )}
+                      </div>
+                      {!isCancelled && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                          onClick={() => {
+                            if (confirm(t('incentive.deleteConfirm'))) {
+                              deleteIncentive.mutate(inc.id)
+                            }
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">{t('incentive.noIncentives')}</p>
+            )}
+
+            {/* Add incentive form */}
+            {!isCancelled && (
+              <div className="flex items-end gap-2 pt-2 border-t">
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs text-muted-foreground">{t('incentive.selectPerson')}</label>
+                  <Select value={incentiveForm.profileId} onValueChange={(v) => setIncentiveForm(f => ({ ...f, profileId: v || '' }))}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder={t('incentive.selectPerson')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allProfiles.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label className="text-xs text-muted-foreground">{t('incentive.selectType')}</label>
+                  <Select value={incentiveForm.incentiveType} onValueChange={(v) => setIncentiveForm(f => ({ ...f, incentiveType: v || '' }))}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder={t('incentive.selectType')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.entries(INCENTIVE_TYPES) as [IncentiveType, typeof INCENTIVE_TYPES[IncentiveType]][]).map(([key, cfg]) => (
+                        <SelectItem key={key} value={key}>{t(cfg.labelKey)} ({cfg.defaultPct}%)</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-9 gap-1"
+                  disabled={!incentiveForm.profileId || !incentiveForm.incentiveType || createIncentive.isPending}
+                  onClick={() => {
+                    if (!id || !incentiveForm.profileId || !incentiveForm.incentiveType) return
+                    const typKey = incentiveForm.incentiveType as IncentiveType
+                    createIncentive.mutate({
+                      contract_id: id,
+                      profile_id: incentiveForm.profileId,
+                      incentive_type: typKey,
+                      percentage: INCENTIVE_TYPES[typKey].defaultPct,
+                    }, {
+                      onSuccess: () => setIncentiveForm({ profileId: '', incentiveType: '' }),
+                    })
+                  }}
+                >
+                  {createIncentive.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+                  {t('incentive.addIncentive')}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Contract Info */}

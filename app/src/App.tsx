@@ -21,6 +21,8 @@ import { MonthlyCollectionPage } from '@/pages/consulting/MonthlyCollectionPage'
 import { InvoicesPage } from '@/pages/finance/InvoicesPage'
 import { ReceiptsPage } from '@/pages/finance/ReceiptsPage'
 import { WireInvoicePage } from '@/pages/finance/WireInvoicePage'
+import { IncentiveByContractPage } from '@/pages/finance/IncentiveByContractPage'
+import { IncentiveByPersonPage } from '@/pages/finance/IncentiveByPersonPage'
 import { MarketingMetricsPage } from '@/pages/marketing/MarketingMetricsPage'
 import { AdCampaignsPage } from '@/pages/marketing/AdCampaignsPage'
 import { EventsPage } from '@/pages/marketing/EventsPage'
@@ -83,6 +85,8 @@ export default function App() {
                 <Route path="/finance/invoices" element={<InvoicesPage />} />
                 <Route path="/finance/receipts" element={<ReceiptsPage />} />
                 <Route path="/finance/wire-invoice" element={<WireInvoicePage />} />
+                <Route path="/finance/incentives/by-contract" element={<IncentiveByContractPage />} />
+                <Route path="/finance/incentives/by-person" element={<IncentiveByPersonPage />} />
 
                 <Route path="/service/dashboard" element={<ServiceDashboardPage />} />
                 <Route path="/service/student-360" element={<Student360Page />} />
