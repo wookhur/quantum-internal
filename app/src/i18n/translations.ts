@@ -797,7 +797,7 @@ const koTranslations = {
   'contracts.leadStage': '리드 단계',
   'contracts.leadMemo': '상담 메모',
   'contracts.leadActivityHistory': '상담 이력',
-  'contracts.customerJourney': '고객 여정',
+  'contracts.customerJourney': '고객 히스토리',
 
   // ── Monthly Collection ──
   'collection.title': '월별 수금',
@@ -2011,7 +2011,7 @@ const enTranslations: Record<string, string> = {
   'contracts.leadStage': 'Lead Stage',
   'contracts.leadMemo': 'Consultation Memo',
   'contracts.leadActivityHistory': 'Consultation History',
-  'contracts.customerJourney': 'Customer Journey',
+  'contracts.customerJourney': 'Customer History',
 
   // ── Monthly Collection ──
   'collection.title': 'Monthly Collection',

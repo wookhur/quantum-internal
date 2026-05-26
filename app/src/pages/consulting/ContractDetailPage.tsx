@@ -868,7 +868,7 @@ export function ContractDetailPage() {
       {/* ── Customer Journey (unified timeline) ────────────────────────── */}
       {(() => {
         // Build unified timeline from all sources
-        type TimelineItem = { id: string; date: string; phase: 'lead' | 'sales' | 'service'; badge: string; badgeColor: string; title: string; desc?: string; person?: string }
+        type TimelineItem = { id: string; date: string; phase: 'lead' | 'sales' | 'service'; badge: string; badgeColor: string; title: string; desc?: string; person?: string; link?: string }
         const items: TimelineItem[] = []
 
         // 1) Lead info summary as first event
@@ -882,6 +882,7 @@ export function ContractDetailPage() {
             title: `${linkedLead.sourceChannel || '유입'} → ${linkedLead.interestArea || '관심분야 미입력'}`,
             desc: linkedLead.memo || undefined,
             person: linkedLead.assignedUser,
+            link: contract.leadId ? `/sales/leads/${contract.leadId}` : undefined,
           })
         }
 
@@ -905,6 +906,7 @@ export function ContractDetailPage() {
             title: act.title as string,
             desc: typeof act.content === 'string' ? act.content : undefined,
             person: act.profiles?.name,
+            link: contract.leadId ? `/sales/leads/${contract.leadId}` : undefined,
           })
         }
 
@@ -919,6 +921,7 @@ export function ContractDetailPage() {
             title: `${m.parent_name}${m.student_name ? ` / ${m.student_name}` : ''} 상담`,
             desc: typeof m.memo === 'string' ? m.memo : undefined,
             person: m.profiles?.name,
+            link: '/sales/meetings',
           })
         }
 
@@ -947,6 +950,7 @@ export function ContractDetailPage() {
             title: `${contract.studentName} 서비스 미팅`,
             desc: typeof sm.summary === 'string' ? sm.summary : undefined,
             person: consultant,
+            link: serviceData?.student ? `/service/student-360?studentId=${serviceData.student.id}` : undefined,
           })
         }
 
@@ -1017,24 +1021,28 @@ export function ContractDetailPage() {
                 {items.map((item) => (
                   <div
                     key={item.id}
-                    className={`flex gap-3 text-xs border-l-2 pl-3 py-1.5 ${phaseColors[item.phase]}`}
+                    className={`flex gap-3 text-xs border-l-2 pl-3 py-1.5 ${phaseColors[item.phase]} ${item.link ? 'cursor-pointer hover:bg-muted/50 rounded-r transition-colors' : ''}`}
+                    onClick={item.link ? () => navigate(item.link!) : undefined}
                   >
-                    <div className="text-muted-foreground shrink-0 w-[68px] font-mono">
+                    <div className="text-muted-foreground shrink-0 w-[82px] font-mono whitespace-nowrap">
                       {item.date?.slice(0, 10) || '—'}
                     </div>
                     <div className="shrink-0">
-                      <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${item.badgeColor}`}>
+                      <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap ${item.badgeColor}`}>
                         {item.badge}
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="font-medium">{item.title}</span>
+                      <span className={`font-medium ${item.link ? 'text-blue-600 hover:underline' : ''}`}>{item.title}</span>
                       {item.desc && (
                         <p className="text-muted-foreground mt-0.5 line-clamp-2">{item.desc}</p>
                       )}
                     </div>
                     {item.person && (
-                      <span className="text-muted-foreground shrink-0">{item.person}</span>
+                      <span className="text-muted-foreground shrink-0 whitespace-nowrap">{item.person}</span>
+                    )}
+                    {item.link && (
+                      <ExternalLink className="size-3 text-muted-foreground shrink-0 mt-0.5" />
                     )}
                   </div>
                 ))}

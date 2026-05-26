@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -65,6 +66,7 @@ function isPast(dateStr: string): boolean {
 
 export function MonthlyCollectionPage() {
   const t = useT()
+  const navigate = useNavigate()
   const { data: installments = [], isLoading, error } = useInstallments()
   const [currentMonth, setCurrentMonth] = useState(() => getMonthKey(new Date()))
   const STATUS_CONFIG = useStatusConfig()
@@ -239,7 +241,8 @@ export function MonthlyCollectionPage() {
                     return (
                       <TableRow
                         key={inst.id}
-                        className={`${today ? 'bg-blue-50/50' : ''} ${past && inst.status === 'overdue' ? 'bg-red-50/30' : ''}`}
+                        className={`cursor-pointer hover:bg-muted/50 ${today ? 'bg-blue-50/50' : ''} ${past && inst.status === 'overdue' ? 'bg-red-50/30' : ''}`}
+                        onClick={() => navigate(`/consulting/clients/${inst.contractId}`)}
                       >
                         {/* Date - only show for first item in group */}
                         <TableCell className={`font-mono text-xs ${today ? 'text-blue-600 font-semibold' : 'text-muted-foreground'}`}>
