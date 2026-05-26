@@ -172,6 +172,9 @@ export function useCreateInstallments() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['installments'] })
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
+      qc.invalidateQueries({ queryKey: ['revenue-projection'] })
       qc.invalidateQueries({ queryKey: ['payments'] })
     },
   })
