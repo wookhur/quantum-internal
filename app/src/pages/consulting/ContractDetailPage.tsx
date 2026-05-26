@@ -59,7 +59,7 @@ function useInstallmentStatusConfig() {
   return INSTALLMENT_STATUS_CONFIG
 }
 
-/** Dropdown that shows profiles + saved external recipients + inline add */
+/** Unified dropdown: profiles + saved recipients in one flat list + inline add */
 function IncentivePersonSelect({
   profiles,
   recipients,
@@ -84,6 +84,8 @@ function IncentivePersonSelect({
   const [isAdding, setIsAdding] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
 
   // Close on outside click
   useEffect(() => {
@@ -95,13 +97,31 @@ function IncentivePersonSelect({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
 
+  // Position dropdown using fixed positioning to avoid overflow clipping
+  useEffect(() => {
+    if (!open || !triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    setDropdownStyle({
+      position: 'fixed',
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    })
+  }, [open])
+
   const displayLabel = value
     ? profiles.find(p => p.id === value)?.name || ''
     : customName || ''
 
-  // Deduplicate: exclude recipients whose name matches a profile
+  // Build unified list: profiles first, then external recipients (deduplicated)
   const profileNames = new Set(profiles.map(p => p.name.toLowerCase()))
-  const externalRecipients = recipients.filter(r => !profileNames.has(r.name.toLowerCase()))
+  const externalOnly = recipients.filter(r => !profileNames.has(r.name.toLowerCase()))
+  type ListItem = { type: 'profile'; id: string; name: string } | { type: 'recipient'; id: string; name: string }
+  const allItems: ListItem[] = [
+    ...profiles.map(p => ({ type: 'profile' as const, id: p.id, name: p.name })),
+    ...externalOnly.map(r => ({ type: 'recipient' as const, id: r.id, name: r.name })),
+  ]
 
   const handleAddNew = () => {
     if (!newName.trim()) return
@@ -113,8 +133,9 @@ function IncentivePersonSelect({
   }
 
   return (
-    <div className="relative" ref={wrapperRef}>
+    <div ref={wrapperRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => { setOpen(!open); setIsAdding(false); setNewName('') }}
         className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -128,45 +149,30 @@ function IncentivePersonSelect({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border bg-popover shadow-md max-h-[260px] overflow-y-auto">
-          {/* Internal profiles */}
-          {profiles.length > 0 && (
-            <div className="px-2 pt-2 pb-1">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">직원</span>
-            </div>
-          )}
-          {profiles.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${value === p.id && !customName ? 'bg-accent font-medium' : ''}`}
-              onClick={() => { onChange(p.id, ''); setOpen(false) }}
-            >
-              {p.name}
-            </button>
-          ))}
-
-          {/* External saved recipients */}
-          {externalRecipients.length > 0 && (
-            <>
-              <div className="px-2 pt-2 pb-1 border-t">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">외부 대상자</span>
-              </div>
-              {externalRecipients.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${customName === r.name && !value ? 'bg-accent font-medium' : ''}`}
-                  onClick={() => { onChange('', r.name); setOpen(false) }}
-                >
-                  {r.name}
-                </button>
-              ))}
-            </>
-          )}
+        <div style={dropdownStyle} className="rounded-md border bg-popover shadow-md max-h-[280px] overflow-y-auto">
+          {/* Unified list */}
+          {allItems.map((item) => {
+            const isSelected = item.type === 'profile'
+              ? (value === item.id && !customName)
+              : (customName === item.name && !value)
+            return (
+              <button
+                key={`${item.type}-${item.id}`}
+                type="button"
+                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${isSelected ? 'bg-accent font-medium' : ''}`}
+                onClick={() => {
+                  if (item.type === 'profile') onChange(item.id, '')
+                  else onChange('', item.name)
+                  setOpen(false)
+                }}
+              >
+                {item.name}
+              </button>
+            )
+          })}
 
           {/* Add new */}
-          <div className="border-t">
+          <div className={allItems.length > 0 ? 'border-t' : ''}>
             {!isAdding ? (
               <button
                 type="button"
