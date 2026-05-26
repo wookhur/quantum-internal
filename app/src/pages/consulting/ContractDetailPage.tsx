@@ -443,6 +443,7 @@ export function ContractDetailPage() {
         amount: Number(chargeForm.amount),
         dueDate: chargeForm.dueDate || undefined,
         currency: contract?.currency || 'KRW',
+        category: 'extra',
       }],
     }, {
       onSuccess: () => {
@@ -512,6 +513,11 @@ export function ContractDetailPage() {
   const statusCfg = STATUS_CONFIG[contract.status] || STATUS_CONFIG.active
   const isCancelled = contract.status === 'cancelled'
   const installments = contract.installments || []
+  const baseInstallments = installments.filter(i => i.category !== 'extra')
+  const extraInstallments = installments.filter(i => i.category === 'extra')
+  const basePaid = baseInstallments.reduce((s, i) => s + i.paidAmount, 0)
+  const extraTotal = extraInstallments.reduce((s, i) => s + i.amount, 0)
+  const extraPaid = extraInstallments.reduce((s, i) => s + i.paidAmount, 0)
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -566,6 +572,7 @@ export function ContractDetailPage() {
       {/* Payment Progress */}
       <Card>
         <CardContent className="py-5">
+          {/* Base contract amounts */}
           <div className="grid grid-cols-4 gap-6">
             <div>
               <div className="text-xs text-muted-foreground mb-1">{t('contracts.totalContractAmount')}</div>
@@ -576,43 +583,116 @@ export function ContractDetailPage() {
             <div>
               <div className="text-xs text-muted-foreground mb-1">{t('contracts.collectionComplete')}</div>
               <div className="text-xl font-bold font-mono text-emerald-600">
-                {formatCurrency(contract.paidAmount || 0, contract.currency)}
+                {formatCurrency(basePaid, contract.currency)}
               </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground mb-1">{t('contracts.outstanding')}</div>
-              <div className={`text-xl font-bold font-mono ${(contract.outstandingAmount || 0) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                {formatCurrency(contract.outstandingAmount || 0, contract.currency)}
+              <div className={`text-xl font-bold font-mono ${(contract.totalAmount - basePaid) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                {formatCurrency(Math.max(0, contract.totalAmount - basePaid), contract.currency)}
               </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground mb-1">{t('contracts.collectionRate')}</div>
               <div className="text-xl font-bold">
-                {contract.paymentProgress || 0}%
+                {contract.totalAmount > 0 ? Math.round((basePaid / contract.totalAmount) * 100) : 0}%
               </div>
               <div className="mt-1.5 h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-emerald-500 rounded-full transition-all"
-                  style={{ width: `${contract.paymentProgress || 0}%` }}
+                  style={{ width: `${contract.totalAmount > 0 ? Math.min(100, Math.round((basePaid / contract.totalAmount) * 100)) : 0}%` }}
                 />
               </div>
             </div>
           </div>
+          {/* Extra charges summary (only show if there are extra charges) */}
+          {extraInstallments.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-dashed border-gray-200">
+              <div className="grid grid-cols-4 gap-6">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">{t('contracts.extraChargesTotal')}</div>
+                  <div className="text-lg font-bold font-mono text-violet-700">
+                    {formatCurrency(extraTotal, contract.currency)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">{t('contracts.extraChargesPaid')}</div>
+                  <div className="text-lg font-bold font-mono text-emerald-600">
+                    {formatCurrency(extraPaid, contract.currency)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">{t('contracts.extraChargesOutstanding')}</div>
+                  <div className={`text-lg font-bold font-mono ${(extraTotal - extraPaid) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                    {formatCurrency(Math.max(0, extraTotal - extraPaid), contract.currency)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">{t('contracts.extraChargesRate')}</div>
+                  <div className="text-lg font-bold">
+                    {extraTotal > 0 ? Math.round((extraPaid / extraTotal) * 100) : 0}%
+                  </div>
+                  <div className="mt-1.5 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-violet-500 rounded-full transition-all"
+                      style={{ width: `${extraTotal > 0 ? Math.min(100, Math.round((extraPaid / extraTotal) * 100)) : 0}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Installment Timeline */}
+      {/* Base Installment Timeline */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <DollarSign className="size-5" />
-            {t('contracts.installmentCount').replace('{n}', String(installments.length))}
+            {t('contracts.baseInstallments')} ({baseInstallments.length})
+          </h2>
+        </div>
+        {baseInstallments.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground text-sm">
+              {t('contracts.noInstallments')}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {baseInstallments.map((inst) => (
+              <InstallmentCard
+                key={inst.id}
+                installment={inst}
+                currency={contract.currency}
+                onMarkPaid={openPayDialog}
+                onRevertPaid={handleRevertPaid}
+                onEdit={openEditInstDialog}
+                onDelete={handleDeleteInstallment}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Extra Charges */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Plus className="size-5 text-violet-600" />
+            <span>{t('contracts.extraCharges')}</span>
+            {extraInstallments.length > 0 && (
+              <Badge variant="outline" className="text-violet-600 border-violet-200 bg-violet-50">
+                {extraInstallments.length}
+              </Badge>
+            )}
           </h2>
           {!isCancelled && (
             <Button
               size="sm"
               variant="outline"
-              className="gap-1.5"
+              className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50"
               onClick={() => {
                 setChargeForm({ label: '', amount: '', dueDate: '', notes: '' })
                 setAddChargeDialogOpen(true)
@@ -623,15 +703,15 @@ export function ContractDetailPage() {
             </Button>
           )}
         </div>
-        {installments.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground text-sm">
-              {t('contracts.noInstallments')}
+        {extraInstallments.length === 0 ? (
+          <Card className="border-dashed border-violet-200">
+            <CardContent className="py-8 text-center text-muted-foreground text-sm">
+              {t('contracts.noExtraCharges')}
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-3">
-            {installments.map((inst) => (
+            {extraInstallments.map((inst) => (
               <InstallmentCard
                 key={inst.id}
                 installment={inst}

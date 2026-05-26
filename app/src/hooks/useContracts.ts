@@ -328,17 +328,20 @@ export function useContract(id: string | undefined) {
         paidAmount: (r.paid_amount as number) || 0,
         status: r.status as PaymentInstallment['status'],
         currency: (r.currency as 'KRW' | 'USD') || 'KRW',
+        category: (r.category as 'base' | 'extra') || 'base',
         paymentMethod: r.payment_method as PaymentInstallment['paymentMethod'],
         notes: r.notes as string | undefined,
         createdAt: r.created_at as string,
         updatedAt: r.updated_at as string,
       }))
 
-      const paidAmount = installments.reduce((s, i) => s + i.paidAmount, 0)
-      // Use contract totalAmount as base; fall back to installment sum if not set
+      // Only count base installments toward contract total progress
+      const baseInst = installments.filter(i => i.category !== 'extra')
+      const paidAmount = baseInst.reduce((s, i) => s + i.paidAmount, 0)
+      // Use contract totalAmount as base; fall back to base installment sum if not set
       const baseAmount = contract.totalAmount > 0
         ? contract.totalAmount
-        : installments.reduce((s, i) => s + i.amount, 0)
+        : baseInst.reduce((s, i) => s + i.amount, 0)
 
       return {
         ...contract,
@@ -436,6 +439,7 @@ export function useContractsWithInstallments(filters?: { status?: ContractStatus
           paidAmount: (r.paid_amount as number) || 0,
           status: r.status as PaymentInstallment['status'],
           currency: (r.currency as 'KRW' | 'USD') || 'KRW',
+          category: (r.category as 'base' | 'extra') || 'base',
           paymentMethod: r.payment_method as PaymentInstallment['paymentMethod'],
           notes: r.notes as string | undefined,
           createdAt: r.created_at as string,
@@ -443,13 +447,14 @@ export function useContractsWithInstallments(filters?: { status?: ContractStatus
         })
       }
 
-      // Merge
+      // Merge — only base installments count toward contract total
       return contracts.map(c => {
         const installments = installmentMap.get(c.id) || []
-        const paidAmount = installments.reduce((s, i) => s + i.paidAmount, 0)
+        const baseInst = installments.filter(i => i.category !== 'extra')
+        const paidAmount = baseInst.reduce((s, i) => s + i.paidAmount, 0)
         const baseAmount = c.totalAmount > 0
           ? c.totalAmount
-          : installments.reduce((s, i) => s + i.amount, 0)
+          : baseInst.reduce((s, i) => s + i.amount, 0)
         return {
           ...c,
           installments,

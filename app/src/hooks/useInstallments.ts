@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { PaymentInstallment, InstallmentStatus } from '@/types'
+import type { PaymentInstallment, InstallmentStatus, InstallmentCategory } from '@/types'
 
 function mapInstallment(row: Record<string, unknown>): PaymentInstallment {
   const contract = row.contracts as Record<string, unknown> | null
@@ -15,6 +15,7 @@ function mapInstallment(row: Record<string, unknown>): PaymentInstallment {
     paidAmount: (row.paid_amount as number) || 0,
     status: row.status as InstallmentStatus,
     currency: (row.currency as 'KRW' | 'USD') || 'KRW',
+    category: (row.category as InstallmentCategory) || 'base',
     paymentMethod: row.payment_method as PaymentInstallment['paymentMethod'],
     notes: row.notes as string | undefined,
     createdAt: row.created_at as string,
@@ -147,6 +148,7 @@ export function useCreateInstallments() {
         amount: number
         dueDate?: string
         currency: 'KRW' | 'USD'
+        category?: InstallmentCategory
       }[]
     }) => {
       const rows = installments.items.map((item) => ({
@@ -156,6 +158,7 @@ export function useCreateInstallments() {
         amount: item.amount,
         due_date: item.dueDate || null,
         currency: item.currency,
+        category: item.category || 'base',
         status: 'pending' as const,
         paid_amount: 0,
       }))

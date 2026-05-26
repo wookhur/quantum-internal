@@ -181,6 +181,8 @@ export interface Contract {
 export type InstallmentStatus = 'pending' | 'paid' | 'overdue' | 'partial'
 export type PaymentMethod = 'bank_transfer' | 'card' | 'us_wire'
 
+export type InstallmentCategory = 'base' | 'extra'
+
 export interface PaymentInstallment {
   id: string
   contractId: string
@@ -192,6 +194,7 @@ export interface PaymentInstallment {
   paidAmount: number
   status: InstallmentStatus
   currency: 'KRW' | 'USD'
+  category: InstallmentCategory
   paymentMethod?: PaymentMethod
   notes?: string
   createdAt: string
