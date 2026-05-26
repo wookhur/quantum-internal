@@ -1195,6 +1195,7 @@ const koTranslations = {
   'incentive.deleteConfirm': '이 인센티브를 삭제하시겠습니까?',
   'incentive.customName': '직접 입력',
   'incentive.customNamePlaceholder': '이름 입력',
+  'incentive.addNewPerson': '새 대상자 추가',
 
   // ── Tasks ──
   'nav.taskBoard': '업무 요청',
@@ -2447,6 +2448,7 @@ const enTranslations: Record<string, string> = {
   'incentive.deleteConfirm': 'Delete this incentive?',
   'incentive.customName': 'Custom Name',
   'incentive.customNamePlaceholder': 'Enter name',
+  'incentive.addNewPerson': 'Add new person',
 
   // ── Tasks ──
   'nav.taskBoard': 'Task Board',

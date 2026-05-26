@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -57,6 +57,123 @@ function useInstallmentStatusConfig() {
     partial: { label: t('contracts.partialPayment'), className: 'bg-amber-50 text-amber-700 border-amber-200', icon: DollarSign },
   }
   return INSTALLMENT_STATUS_CONFIG
+}
+
+/** Dropdown that shows existing profiles + inline "add new" input */
+function IncentivePersonSelect({
+  profiles,
+  value,
+  customName,
+  onChange,
+  placeholder,
+  addNewLabel,
+}: {
+  profiles: { id: string; name: string }[]
+  value: string
+  customName: string
+  onChange: (profileId: string, customName: string) => void
+  placeholder: string
+  addNewLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [isAdding, setIsAdding] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const displayLabel = value
+    ? profiles.find(p => p.id === value)?.name || ''
+    : customName || ''
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setIsAdding(false); setNewName('') }}
+        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      >
+        <span className={displayLabel ? 'text-foreground' : 'text-muted-foreground'}>
+          {displayLabel || placeholder}
+        </span>
+        <svg className="size-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border bg-popover shadow-md max-h-[220px] overflow-y-auto">
+          {/* Profile list */}
+          {profiles.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={`w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors ${value === p.id ? 'bg-accent font-medium' : ''}`}
+              onClick={() => {
+                onChange(p.id, '')
+                setOpen(false)
+                setIsAdding(false)
+              }}
+            >
+              {p.name}
+            </button>
+          ))}
+
+          {/* Divider + add new */}
+          <div className="border-t">
+            {!isAdding ? (
+              <button
+                type="button"
+                className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-1.5 font-medium"
+                onClick={() => {
+                  setIsAdding(true)
+                  setTimeout(() => inputRef.current?.focus(), 50)
+                }}
+              >
+                <Plus className="size-3.5" />
+                {addNewLabel}
+              </button>
+            ) : (
+              <div className="flex items-center gap-1 p-1.5">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  className="flex-1 h-8 rounded-md border px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  placeholder={addNewLabel}
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newName.trim()) {
+                      onChange('', newName.trim())
+                      setOpen(false)
+                      setIsAdding(false)
+                      setNewName('')
+                    }
+                    if (e.key === 'Escape') {
+                      setIsAdding(false)
+                      setNewName('')
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="h-8 px-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
+                  disabled={!newName.trim()}
+                  onClick={() => {
+                    if (!newName.trim()) return
+                    onChange('', newName.trim())
+                    setOpen(false)
+                    setIsAdding(false)
+                    setNewName('')
+                  }}
+                >
+                  확인
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function InstallmentCard({
@@ -918,30 +1035,15 @@ export function ContractDetailPage() {
             {/* Add incentive form */}
             {!isCancelled && (
               <div className="flex items-end gap-2 pt-2 border-t flex-wrap">
-                <div className="flex-1 min-w-[140px] space-y-1">
+                <div className="flex-1 min-w-[160px] space-y-1">
                   <label className="text-xs text-muted-foreground">{t('incentive.selectPerson')}</label>
-                  <Select
+                  <IncentivePersonSelect
+                    profiles={allProfiles}
                     value={incentiveForm.profileId}
-                    onValueChange={(v) => setIncentiveForm(f => ({ ...f, profileId: v || '', customName: '' }))}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder={t('incentive.selectPerson')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allProfiles.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <span className="text-xs text-muted-foreground pb-2">{t('common.or')}</span>
-                <div className="flex-1 min-w-[120px] space-y-1">
-                  <label className="text-xs text-muted-foreground">{t('incentive.customName')}</label>
-                  <Input
-                    className="h-9"
-                    placeholder={t('incentive.customNamePlaceholder')}
-                    value={incentiveForm.customName}
-                    onChange={(e) => setIncentiveForm(f => ({ ...f, customName: e.target.value, profileId: '' }))}
+                    customName={incentiveForm.customName}
+                    onChange={(profileId, customName) => setIncentiveForm(f => ({ ...f, profileId, customName }))}
+                    placeholder={t('incentive.selectPerson')}
+                    addNewLabel={t('incentive.addNewPerson')}
                   />
                 </div>
                 <div className="flex-1 min-w-[140px] space-y-1">
