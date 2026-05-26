@@ -8,7 +8,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { CalendarCheck, FileCheck, Plus, Upload, Loader2, Pencil } from 'lucide-react'
+import {
+  CalendarCheck, FileCheck, Plus, Upload, Loader2, Pencil,
+  X, Phone, School, MapPin, Calendar, FileText, ArrowRight, User,
+} from 'lucide-react'
 import { useMeetings, useCreateMeeting, useUpdateMeeting, useUpdateNoteDelivered } from '@/hooks/useMeetings'
 import type { Meeting } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
@@ -41,6 +44,120 @@ const INITIAL_MEETING_FORM = {
   memo: '',
 }
 
+function MeetingDetail({ meeting, onEdit, onClose, onNoteToggle, t }: {
+  meeting: Meeting
+  onEdit: (m: Meeting) => void
+  onClose: () => void
+  onNoteToggle: (id: string, current: boolean) => void
+  t: (key: string, params?: Record<string, string | number>) => string
+}) {
+  const badge = getMeetingBadge(meeting.meetingNumber, t)
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/20">
+      <CardContent className="py-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className={`text-xs ${badge.className}`}>
+              {badge.label}
+            </Badge>
+            <h3 className="font-semibold text-base">{meeting.parentName}</h3>
+            {meeting.studentName && (
+              <span className="text-sm text-muted-foreground">/ {meeting.studentName}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(meeting)}>
+              <Pencil className="size-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+              <X className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Info grid */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="flex items-center gap-2">
+            <Calendar className="size-3.5 text-muted-foreground shrink-0" />
+            <span className="text-muted-foreground">{t('meetings.col.meetingDate')}</span>
+            <span className="font-mono font-medium">{meeting.meetingDate || '-'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Phone className="size-3.5 text-muted-foreground shrink-0" />
+            <span className="text-muted-foreground">{t('common.phone')}</span>
+            <span className="font-mono">{meeting.phone || '-'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <School className="size-3.5 text-muted-foreground shrink-0" />
+            <span className="text-muted-foreground">{t('common.school')}</span>
+            <span>{meeting.currentSchool || '-'} {meeting.grade || ''}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <MapPin className="size-3.5 text-muted-foreground shrink-0" />
+            <span className="text-muted-foreground">{t('common.region')}</span>
+            <span>{meeting.region || '-'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <User className="size-3.5 text-muted-foreground shrink-0" />
+            <span className="text-muted-foreground">{t('leads.sourceChannel')}</span>
+            <span>{meeting.sourceChannel || '-'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <FileText className="size-3.5 text-muted-foreground shrink-0" />
+            <span className="text-muted-foreground">{t('meetings.col.interestArea')}</span>
+            <span>{meeting.interestArea || '-'}</span>
+          </div>
+        </div>
+
+        {/* Memo */}
+        {meeting.memo && (
+          <div className="p-3 bg-white rounded-lg border text-sm">
+            <span className="text-xs text-muted-foreground block mb-1">{t('common.memo')}</span>
+            <p className="whitespace-pre-wrap">{meeting.memo}</p>
+          </div>
+        )}
+
+        {/* Bottom row */}
+        <div className="flex items-center justify-between pt-2 border-t">
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">{t('meetings.col.note')}</span>
+              <button
+                onClick={() => onNoteToggle(meeting.id, meeting.noteDelivered)}
+                className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
+                  meeting.noteDelivered
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-input hover:border-primary'
+                }`}
+              >
+                {meeting.noteDelivered && (
+                  <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
+            </div>
+            {meeting.nextMeetingDate && (
+              <div className="flex items-center gap-2">
+                <ArrowRight className="size-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">{t('meetings.col.nextMeeting')}</span>
+                <span className="font-mono">{meeting.nextMeetingDate}</span>
+              </div>
+            )}
+          </div>
+          {meeting.requiredAction && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+              {meeting.requiredAction}
+            </Badge>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function MeetingsPage() {
   const t = useT()
   const [dateFrom, setDateFrom] = useState<string>('')
@@ -48,6 +165,7 @@ export function MeetingsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)
   const [form, setForm] = useState(INITIAL_MEETING_FORM)
   const [editForm, setEditForm] = useState({ ...INITIAL_MEETING_FORM, id: '', interestArea: '', nextMeetingDate: '', requiredAction: '' })
 
@@ -132,7 +250,6 @@ export function MeetingsPage() {
     updateNoteDelivered.mutate({ id, noteDelivered: !current })
   }
 
-  // Summary: meetings this month
   const currentMonth = currentMonthStrKST()
 
   const thisMonthMeetings = useMemo(() => {
@@ -145,13 +262,15 @@ export function MeetingsPage() {
     return (delivered / thisMonthMeetings.length) * 100
   }, [thisMonthMeetings])
 
+  const selectedMeeting = meetings.find(m => m.id === selectedMeetingId)
+
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-4">
       {/* Page Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-lg md:text-2xl font-bold tracking-tight">{t('meetings.title')}</h1>
-          <p className="text-sm text-muted-foreground truncate">
+          <h1 className="text-2xl font-bold tracking-tight">{t('meetings.title')}</h1>
+          <p className="text-sm text-muted-foreground">
             {isLoading ? t('common.loading') : t('meetings.totalMeetings').replace('{n}', String(meetings.length))}
           </p>
         </div>
@@ -191,23 +310,34 @@ export function MeetingsPage() {
       <Card>
         <CardContent className="py-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">{t('meetings.period')}</span>
+            <span className="text-sm text-muted-foreground whitespace-nowrap">{t('meetings.period')}</span>
             <Input
               type="date"
-              className="w-full sm:w-[160px] h-9"
+              className="w-[150px] h-8"
               value={dateFrom}
               onChange={e => setDateFrom(e.target.value)}
             />
-            <span className="text-sm text-muted-foreground hidden sm:inline">~</span>
+            <span className="text-sm text-muted-foreground">~</span>
             <Input
               type="date"
-              className="w-full sm:w-[160px] h-9"
+              className="w-[150px] h-8"
               value={dateTo}
               onChange={e => setDateTo(e.target.value)}
             />
           </div>
         </CardContent>
       </Card>
+
+      {/* Selected Meeting Detail */}
+      {selectedMeeting && (
+        <MeetingDetail
+          meeting={selectedMeeting}
+          onEdit={openEditDialog}
+          onClose={() => setSelectedMeetingId(null)}
+          onNoteToggle={handleNoteToggle}
+          t={t}
+        />
+      )}
 
       {/* Table */}
       <Card>
@@ -225,95 +355,76 @@ export function MeetingsPage() {
               {t('meetings.noMeetings')}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[70px]">{t('meetings.col.meetingDate')}</TableHead>
-                    <TableHead className="w-[50px]">{t('meetings.col.meetingNumber')}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t('meetings.col.parent')}</TableHead>
-                    <TableHead>{t('meetings.col.student')}</TableHead>
-                    <TableHead className="hidden lg:table-cell">{t('common.phone')}</TableHead>
-                    <TableHead className="hidden sm:table-cell">{t('common.school')}</TableHead>
-                    <TableHead className="hidden lg:table-cell w-[50px]">{t('common.grade')}</TableHead>
-                    <TableHead className="hidden xl:table-cell">{t('common.region')}</TableHead>
-                    <TableHead className="hidden xl:table-cell">{t('meetings.col.interestArea')}</TableHead>
-                    <TableHead className="hidden xl:table-cell">{t('meetings.col.sourceChannel')}</TableHead>
-                    <TableHead className="hidden xl:table-cell max-w-[150px]">{t('common.memo')}</TableHead>
-                    <TableHead className="w-[40px] text-center">{t('meetings.col.note')}</TableHead>
-                    <TableHead className="hidden xl:table-cell w-[90px]">{t('meetings.col.nextMeeting')}</TableHead>
-                    <TableHead className="hidden xl:table-cell max-w-[120px]">{t('meetings.col.requiredAction')}</TableHead>
-                    <TableHead className="w-[40px]" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {meetings.map((meeting) => {
-                    const badge = getMeetingBadge(meeting.meetingNumber, t)
-                    return (
-                      <TableRow key={meeting.id}>
-                        <TableCell className="text-xs text-muted-foreground font-mono">
-                          {meeting.meetingDate?.replace('2026-', '').replace('2025-', '')}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`text-xs ${badge.className}`}>
-                            {badge.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell font-medium text-sm">{meeting.parentName}</TableCell>
-                        <TableCell className="text-sm">{meeting.studentName || '-'}</TableCell>
-                        <TableCell className="hidden lg:table-cell text-xs text-muted-foreground font-mono">{meeting.phone || '-'}</TableCell>
-                        <TableCell className="hidden sm:table-cell text-sm">{meeting.currentSchool || '-'}</TableCell>
-                        <TableCell className="hidden lg:table-cell text-sm">{meeting.grade || '-'}</TableCell>
-                        <TableCell className="hidden xl:table-cell text-sm text-muted-foreground">{meeting.region || '-'}</TableCell>
-                        <TableCell className="hidden xl:table-cell text-sm max-w-[120px] truncate">{meeting.interestArea || '-'}</TableCell>
-                        <TableCell className="hidden xl:table-cell">
-                          {meeting.sourceChannel ? (
-                            <Badge variant="outline" className="text-xs font-normal">{meeting.sourceChannel}</Badge>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell className="hidden xl:table-cell text-xs max-w-[150px] truncate text-muted-foreground">
-                          {meeting.memo || '-'}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <button
-                            onClick={() => handleNoteToggle(meeting.id, meeting.noteDelivered)}
-                            className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
-                              meeting.noteDelivered
-                                ? 'bg-primary border-primary text-primary-foreground'
-                                : 'border-input hover:border-primary'
-                            }`}
-                          >
-                            {meeting.noteDelivered && (
-                              <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                            )}
-                          </button>
-                        </TableCell>
-                        <TableCell className="hidden xl:table-cell text-xs text-muted-foreground font-mono">
-                          {meeting.nextMeetingDate?.replace('2026-', '').replace('2025-', '') || '-'}
-                        </TableCell>
-                        <TableCell className="hidden xl:table-cell text-sm max-w-[120px] truncate">
-                          {meeting.requiredAction ? (
-                            <span className="text-warning font-medium">{meeting.requiredAction}</span>
-                          ) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => openEditDialog(meeting)}
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[90px]">{t('meetings.col.meetingDate')}</TableHead>
+                  <TableHead className="w-[70px]">{t('meetings.col.meetingNumber')}</TableHead>
+                  <TableHead>{t('meetings.col.parent')}</TableHead>
+                  <TableHead>{t('meetings.col.student')}</TableHead>
+                  <TableHead>{t('common.school')}</TableHead>
+                  <TableHead>{t('common.region')}</TableHead>
+                  <TableHead className="max-w-[180px]">{t('common.memo')}</TableHead>
+                  <TableHead className="w-[50px] text-center">{t('meetings.col.note')}</TableHead>
+                  <TableHead className="w-[40px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {meetings.map((meeting) => {
+                  const badge = getMeetingBadge(meeting.meetingNumber, t)
+                  const isSelected = meeting.id === selectedMeetingId
+                  return (
+                    <TableRow
+                      key={meeting.id}
+                      className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : 'hover:bg-muted/50'}`}
+                      onClick={() => setSelectedMeetingId(isSelected ? null : meeting.id)}
+                    >
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {meeting.meetingDate}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-[10px] ${badge.className}`}>
+                          {badge.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium text-sm">{meeting.parentName}</TableCell>
+                      <TableCell className="text-sm">{meeting.studentName || '-'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{meeting.currentSchool || '-'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{meeting.region || '-'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">
+                        {meeting.memo || '-'}
+                      </TableCell>
+                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleNoteToggle(meeting.id, meeting.noteDelivered)}
+                          className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
+                            meeting.noteDelivered
+                              ? 'bg-primary border-primary text-primary-foreground'
+                              : 'border-input hover:border-primary'
+                          }`}
+                        >
+                          {meeting.noteDelivered && (
+                            <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          onClick={() => openEditDialog(meeting)}
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>
