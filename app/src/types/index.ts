@@ -538,3 +538,54 @@ export function formatPhone(phone: string): string {
   }
   return phone // return as-is for international numbers
 }
+
+// ============ TASKS ============
+export type TaskStatus = 'requested' | 'in_progress' | 'completed' | 'cancelled'
+export type TaskPriority = 'urgent' | 'normal' | 'low'
+
+export interface Task {
+  id: string
+  title: string
+  description?: string
+  status: TaskStatus
+  priority: TaskPriority
+  requesterId: string
+  assigneeId?: string
+  department?: string
+  dueDate?: string
+  completedAt?: string
+  parentTaskId?: string
+  isRecurring: boolean
+  recurrenceRule?: string
+  tags?: string[]
+  createdAt: string
+  updatedAt: string
+  // Joined
+  requester?: { id: string; name: string }
+  assignee?: { id: string; name: string }
+  subtasks?: Task[]
+  commentCount?: number
+  attachmentCount?: number
+}
+
+export interface TaskComment {
+  id: string
+  taskId: string
+  authorId: string
+  content: string
+  createdAt: string
+  // Joined
+  author?: { id: string; name: string }
+}
+
+export interface TaskAttachment {
+  id: string
+  taskId: string
+  fileName: string
+  fileUrl: string
+  fileSize?: number
+  uploadedBy: string
+  createdAt: string
+  // Joined
+  uploader?: { id: string; name: string }
+}

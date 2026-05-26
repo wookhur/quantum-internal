@@ -34,6 +34,7 @@ import { ServiceDashboardPage } from '@/pages/service/ServiceDashboardPage'
 import { Student360Page } from '@/pages/service/Student360Page'
 import { ConsultantKpiPage } from '@/pages/service/ConsultantKpiPage'
 import { MessagesPage } from '@/pages/common/MessagesPage'
+import { TaskBoardPage } from '@/pages/common/TaskBoardPage'
 import { PersonProfilePage } from '@/pages/common/PersonProfilePage'
 import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
 
@@ -60,6 +61,7 @@ export default function App() {
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/todos" element={<TodosPage />} />
                 <Route path="/messages" element={<MessagesPage />} />
+                <Route path="/tasks" element={<TaskBoardPage />} />
                 <Route path="/person" element={<PersonProfilePage />} />
 
                 <Route path="/sales/leads" element={<LeadsPage />} />
