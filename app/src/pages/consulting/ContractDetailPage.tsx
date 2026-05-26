@@ -1480,6 +1480,7 @@ export function ContractDetailPage() {
                       <SelectItem value="bank_transfer">{t('contracts.paymentBankTransfer')}</SelectItem>
                       <SelectItem value="card">{t('contracts.paymentCard')}</SelectItem>
                       <SelectItem value="us_wire">{t('contracts.paymentUsWire')}</SelectItem>
+                      <SelectItem value="us_wire_us">{t('contracts.paymentUsWireUs')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
