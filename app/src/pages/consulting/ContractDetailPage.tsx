@@ -17,7 +17,7 @@ import {
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
 import { useRevenueSharesByInstallments, useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare } from '@/hooks/useRevenueShares'
-import { useContractIncentives, useCreateIncentive, useDeleteIncentive, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
+import { useContractIncentives, useCreateIncentive, useDeleteIncentive, useIncentiveRecipients, useCreateIncentiveRecipient, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
 import { useProfiles } from '@/hooks/useProfiles'
 import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
 import { formatCurrency, formatPhone } from '@/types'
@@ -59,19 +59,23 @@ function useInstallmentStatusConfig() {
   return INSTALLMENT_STATUS_CONFIG
 }
 
-/** Dropdown that shows existing profiles + inline "add new" input */
+/** Dropdown that shows profiles + saved external recipients + inline add */
 function IncentivePersonSelect({
   profiles,
+  recipients,
   value,
   customName,
   onChange,
+  onAddRecipient,
   placeholder,
   addNewLabel,
 }: {
   profiles: { id: string; name: string }[]
+  recipients: { id: string; name: string }[]
   value: string
   customName: string
   onChange: (profileId: string, customName: string) => void
+  onAddRecipient: (name: string) => void
   placeholder: string
   addNewLabel: string
 }) {
@@ -79,13 +83,37 @@ function IncentivePersonSelect({
   const [newName, setNewName] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
 
   const displayLabel = value
     ? profiles.find(p => p.id === value)?.name || ''
     : customName || ''
 
+  // Deduplicate: exclude recipients whose name matches a profile
+  const profileNames = new Set(profiles.map(p => p.name.toLowerCase()))
+  const externalRecipients = recipients.filter(r => !profileNames.has(r.name.toLowerCase()))
+
+  const handleAddNew = () => {
+    if (!newName.trim()) return
+    onAddRecipient(newName.trim())
+    onChange('', newName.trim())
+    setOpen(false)
+    setIsAdding(false)
+    setNewName('')
+  }
+
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapperRef}>
       <button
         type="button"
         onClick={() => { setOpen(!open); setIsAdding(false); setNewName('') }}
@@ -100,24 +128,44 @@ function IncentivePersonSelect({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border bg-popover shadow-md max-h-[220px] overflow-y-auto">
-          {/* Profile list */}
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border bg-popover shadow-md max-h-[260px] overflow-y-auto">
+          {/* Internal profiles */}
+          {profiles.length > 0 && (
+            <div className="px-2 pt-2 pb-1">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">직원</span>
+            </div>
+          )}
           {profiles.map((p) => (
             <button
               key={p.id}
               type="button"
-              className={`w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors ${value === p.id ? 'bg-accent font-medium' : ''}`}
-              onClick={() => {
-                onChange(p.id, '')
-                setOpen(false)
-                setIsAdding(false)
-              }}
+              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${value === p.id && !customName ? 'bg-accent font-medium' : ''}`}
+              onClick={() => { onChange(p.id, ''); setOpen(false) }}
             >
               {p.name}
             </button>
           ))}
 
-          {/* Divider + add new */}
+          {/* External saved recipients */}
+          {externalRecipients.length > 0 && (
+            <>
+              <div className="px-2 pt-2 pb-1 border-t">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">외부 대상자</span>
+              </div>
+              {externalRecipients.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${customName === r.name && !value ? 'bg-accent font-medium' : ''}`}
+                  onClick={() => { onChange('', r.name); setOpen(false) }}
+                >
+                  {r.name}
+                </button>
+              ))}
+            </>
+          )}
+
+          {/* Add new */}
           <div className="border-t">
             {!isAdding ? (
               <button
@@ -141,29 +189,15 @@ function IncentivePersonSelect({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newName.trim()) {
-                      onChange('', newName.trim())
-                      setOpen(false)
-                      setIsAdding(false)
-                      setNewName('')
-                    }
-                    if (e.key === 'Escape') {
-                      setIsAdding(false)
-                      setNewName('')
-                    }
+                    if (e.key === 'Enter') { e.preventDefault(); handleAddNew() }
+                    if (e.key === 'Escape') { setIsAdding(false); setNewName('') }
                   }}
                 />
                 <button
                   type="button"
                   className="h-8 px-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
                   disabled={!newName.trim()}
-                  onClick={() => {
-                    if (!newName.trim()) return
-                    onChange('', newName.trim())
-                    setOpen(false)
-                    setIsAdding(false)
-                    setNewName('')
-                  }}
+                  onClick={handleAddNew}
                 >
                   확인
                 </button>
@@ -505,6 +539,8 @@ export function ContractDetailPage() {
   const createIncentive = useCreateIncentive()
   const deleteIncentive = useDeleteIncentive()
   const { data: allProfiles = [] } = useProfiles()
+  const { data: incentiveRecipients = [] } = useIncentiveRecipients()
+  const createRecipient = useCreateIncentiveRecipient()
   const [incentiveForm, setIncentiveForm] = useState({ profileId: '', customName: '', incentiveType: '' as string })
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
@@ -1039,9 +1075,11 @@ export function ContractDetailPage() {
                   <label className="text-xs text-muted-foreground">{t('incentive.selectPerson')}</label>
                   <IncentivePersonSelect
                     profiles={allProfiles}
+                    recipients={incentiveRecipients}
                     value={incentiveForm.profileId}
                     customName={incentiveForm.customName}
                     onChange={(profileId, customName) => setIncentiveForm(f => ({ ...f, profileId, customName }))}
+                    onAddRecipient={(name) => createRecipient.mutate(name)}
                     placeholder={t('incentive.selectPerson')}
                     addNewLabel={t('incentive.addNewPerson')}
                   />
