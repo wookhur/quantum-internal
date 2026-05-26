@@ -201,6 +201,22 @@ export interface PaymentInstallment {
   updatedAt: string
   // Joined
   contract?: Contract
+  revenueShares?: RevenueShare[]
+}
+
+export interface RevenueShare {
+  id: string
+  installmentId: string
+  recipientName: string
+  recipientProfileId?: string
+  amount: number
+  percentage?: number
+  role?: string
+  notes?: string
+  isPaid: boolean
+  paidDate?: string
+  createdAt: string
+  updatedAt: string
 }
 
 // ============ PROJECTS (formerly TODOS) ============

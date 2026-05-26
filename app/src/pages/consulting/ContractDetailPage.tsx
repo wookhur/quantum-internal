@@ -12,10 +12,11 @@ import { Input } from '@/components/ui/input'
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus,
+  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus, Users, X,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
+import { useRevenueSharesByInstallments, useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare } from '@/hooks/useRevenueShares'
 import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
@@ -62,6 +63,9 @@ function InstallmentCard({
   onRevertPaid,
   onEdit,
   onDelete,
+  revenueShares,
+  onToggleSharePaid,
+  onDeleteShare,
 }: {
   installment: PaymentInstallment
   currency: 'KRW' | 'USD'
@@ -69,6 +73,9 @@ function InstallmentCard({
   onRevertPaid: (inst: PaymentInstallment) => void
   onEdit: (inst: PaymentInstallment) => void
   onDelete: (inst: PaymentInstallment) => void
+  revenueShares?: import('@/types').RevenueShare[]
+  onToggleSharePaid?: (shareId: string, isPaid: boolean) => void
+  onDeleteShare?: (shareId: string) => void
 }) {
   const t = useT()
   const pmLabel = usePaymentMethodLabel()
@@ -182,6 +189,58 @@ function InstallmentCard({
         {installment.notes && (
           <div className="mt-2 text-xs text-muted-foreground bg-muted/50 rounded p-2">
             {installment.notes}
+          </div>
+        )}
+        {/* Revenue Shares */}
+        {revenueShares && revenueShares.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-dashed">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Users className="size-3.5 text-violet-500" />
+              <span className="text-xs font-medium text-violet-700">{t('contracts.revenueShare')}</span>
+            </div>
+            <div className="space-y-1.5">
+              {revenueShares.map(share => (
+                <div key={share.id} className="flex items-center justify-between text-xs bg-violet-50/50 rounded px-2.5 py-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-medium ${share.isPaid ? 'text-emerald-700' : 'text-gray-800'}`}>
+                      {share.recipientName}
+                    </span>
+                    {share.role && (
+                      <span className="text-[10px] text-violet-500 bg-violet-100 rounded px-1.5 py-0.5">
+                        {share.role}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-medium">
+                      {formatCurrency(share.amount, currency)}
+                    </span>
+                    {share.isPaid ? (
+                      <Badge variant="outline" className="text-[10px] h-4 bg-emerald-50 text-emerald-700 border-emerald-200">
+                        {t('contracts.status.fullyPaid')}
+                      </Badge>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-[10px] text-violet-600 hover:text-violet-800 font-medium"
+                        onClick={() => onToggleSharePaid?.(share.id, true)}
+                      >
+                        {t('contracts.markPaid')}
+                      </button>
+                    )}
+                    {onDeleteShare && (
+                      <button
+                        type="button"
+                        className="text-gray-400 hover:text-red-500"
+                        onClick={() => onDeleteShare(share.id)}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
@@ -313,10 +372,15 @@ export function ContractDetailPage() {
   const deleteInstallment = useDeleteInstallment()
   const createInstallments = useCreateInstallments()
   const STATUS_CONFIG = useStatusConfig()
+  const createRevenueShares = useCreateRevenueShares()
+  const updateRevenueShare = useUpdateRevenueShare()
+  const deleteRevenueShare = useDeleteRevenueShare()
   const { data: linkedLead } = useLinkedLead(contract?.leadId)
   const { data: leadActivities = [] } = useLeadActivities(contract?.leadId)
   const { data: salesMeetings = [] } = useSalesMeetings(contract?.leadId, contract?.contractorName)
   const { data: serviceData } = useServiceStudentMeetings(contract?.studentName)
+  const extraInstIds = (contract?.installments || []).filter(i => i.category === 'extra').map(i => i.id)
+  const { data: revenueShares = [] } = useRevenueSharesByInstallments(extraInstIds)
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -324,6 +388,7 @@ export function ContractDetailPage() {
   const [cancelReason, setCancelReason] = useState('')
   const [addChargeDialogOpen, setAddChargeDialogOpen] = useState(false)
   const [chargeForm, setChargeForm] = useState({ label: '', amount: '', dueDate: '', notes: '' })
+  const [revenueShareRows, setRevenueShareRows] = useState<{ name: string; amount: string; role: string }[]>([])
   const [editInstDialogOpen, setEditInstDialogOpen] = useState(false)
   const [editInstForm, setEditInstForm] = useState({ id: '', label: '', amount: '', dueDate: '', paidDate: '', paidAmount: '', paymentMethod: '', notes: '', isPaid: false })
   const [payDialogOpen, setPayDialogOpen] = useState(false)
@@ -435,6 +500,7 @@ export function ContractDetailPage() {
   const handleAddCharge = useCallback(() => {
     if (!id || !chargeForm.label.trim() || !chargeForm.amount) return
     const nextOrder = (contract?.installments?.length || 0) + 1
+    const validShares = revenueShareRows.filter(r => r.name.trim() && Number(r.amount) > 0)
     createInstallments.mutate({
       contractId: id,
       items: [{
@@ -446,12 +512,25 @@ export function ContractDetailPage() {
         category: 'extra',
       }],
     }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
+        // Create revenue shares if any were added
+        if (validShares.length > 0 && data && data.length > 0) {
+          const newInstId = (data[0] as Record<string, unknown>).id as string
+          createRevenueShares.mutate({
+            installmentId: newInstId,
+            shares: validShares.map(r => ({
+              recipientName: r.name.trim(),
+              amount: Number(r.amount),
+              role: r.role.trim() || undefined,
+            })),
+          })
+        }
         setAddChargeDialogOpen(false)
         setChargeForm({ label: '', amount: '', dueDate: '', notes: '' })
+        setRevenueShareRows([])
       },
     })
-  }, [id, chargeForm, contract, createInstallments])
+  }, [id, chargeForm, revenueShareRows, contract, createInstallments, createRevenueShares])
 
   const openEditInstDialog = useCallback((inst: PaymentInstallment) => {
     const hasPaid = inst.status === 'paid' || inst.status === 'partial'
@@ -695,6 +774,7 @@ export function ContractDetailPage() {
               className="gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50"
               onClick={() => {
                 setChargeForm({ label: '', amount: '', dueDate: '', notes: '' })
+                setRevenueShareRows([])
                 setAddChargeDialogOpen(true)
               }}
             >
@@ -720,6 +800,15 @@ export function ContractDetailPage() {
                 onRevertPaid={handleRevertPaid}
                 onEdit={openEditInstDialog}
                 onDelete={handleDeleteInstallment}
+                revenueShares={revenueShares.filter(s => s.installmentId === inst.id)}
+                onToggleSharePaid={(shareId, isPaid) => {
+                  updateRevenueShare.mutate({
+                    id: shareId,
+                    isPaid,
+                    paidDate: isPaid ? new Date().toISOString().slice(0, 10) : undefined,
+                  })
+                }}
+                onDeleteShare={(shareId) => deleteRevenueShare.mutate(shareId)}
               />
             ))}
           </div>
@@ -1146,6 +1235,68 @@ export function ContractDetailPage() {
                 value={chargeForm.dueDate}
                 onChange={e => setChargeForm(f => ({ ...f, dueDate: e.target.value }))}
               />
+            </div>
+
+            {/* Revenue Share Section */}
+            <div className="space-y-2 pt-2 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1.5">
+                  <Users className="size-3.5 text-violet-500" />
+                  {t('contracts.revenueShare')}
+                </Label>
+                <button
+                  type="button"
+                  className="text-xs text-violet-600 hover:text-violet-800 font-medium"
+                  onClick={() => setRevenueShareRows(r => [...r, { name: '', amount: '', role: '' }])}
+                >
+                  + {t('contracts.addRecipient')}
+                </button>
+              </div>
+              {revenueShareRows.length === 0 && (
+                <p className="text-xs text-muted-foreground">{t('contracts.noRevenueShareDesc')}</p>
+              )}
+              {revenueShareRows.map((row, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input
+                    className="flex-1"
+                    placeholder={t('contracts.recipientName')}
+                    value={row.name}
+                    onChange={e => {
+                      const updated = [...revenueShareRows]
+                      updated[idx] = { ...updated[idx], name: e.target.value }
+                      setRevenueShareRows(updated)
+                    }}
+                  />
+                  <Input
+                    className="w-24"
+                    type="number"
+                    placeholder={t('contracts.shareAmount')}
+                    value={row.amount}
+                    onChange={e => {
+                      const updated = [...revenueShareRows]
+                      updated[idx] = { ...updated[idx], amount: e.target.value }
+                      setRevenueShareRows(updated)
+                    }}
+                  />
+                  <Input
+                    className="w-24"
+                    placeholder={t('contracts.roleOptional')}
+                    value={row.role}
+                    onChange={e => {
+                      const updated = [...revenueShareRows]
+                      updated[idx] = { ...updated[idx], role: e.target.value }
+                      setRevenueShareRows(updated)
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="text-gray-400 hover:text-red-500 p-1"
+                    onClick={() => setRevenueShareRows(r => r.filter((_, i) => i !== idx))}
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
           <DialogFooter>
