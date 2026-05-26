@@ -16,8 +16,10 @@ import {
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
+import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
 
@@ -301,6 +303,7 @@ export function ContractDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const t = useT()
+  const { user } = useAuth()
   const pmLabel = usePaymentMethodLabel()
   const { data: contract, isLoading, error } = useContract(id)
   const cancelContract = useCancelContract()
@@ -354,7 +357,7 @@ export function ContractDetailPage() {
   }, [])
 
   const handleMarkPaid = useCallback(() => {
-    if (!selectedInstallment) return
+    if (!selectedInstallment || !contract) return
     const amount = Number(payForm.paidAmount) || 0
     if (amount <= 0) return
 
@@ -372,9 +375,45 @@ export function ContractDetailPage() {
       onSuccess: () => {
         setPayDialogOpen(false)
         setSelectedInstallment(null)
+
+        // Auto-issue receipt and send to customer email
+        autoIssueReceipt({
+          contractId: contract.id,
+          installmentId: selectedInstallment.id,
+          studentName: contract.studentName,
+          contractorName: contract.contractorName,
+          recipientEmail: undefined, // Will be looked up from service_students
+          amount,
+          currency: contract.currency || 'KRW',
+          paymentMethod: payForm.paymentMethod,
+          paidDate: payForm.paidDate,
+          label: selectedInstallment.label,
+          createdBy: user?.id,
+        }).then(async (doc) => {
+          // Try to find customer email from service_students or leads
+          if (doc && !doc.recipient_email) {
+            const { data: student } = await supabase
+              .from('service_students')
+              .select('parent_email, email')
+              .eq('name', contract.studentName)
+              .limit(1)
+              .single()
+            const email = student?.parent_email || student?.email
+            if (email) {
+              await supabase
+                .from('invoices_receipts')
+                .update({ recipient_email: email })
+                .eq('id', doc.id as string)
+              // Send the email
+              await supabase.functions.invoke('send-document', {
+                body: { documentId: doc.id },
+              })
+            }
+          }
+        })
       },
     })
-  }, [selectedInstallment, payForm, updateInstallment])
+  }, [selectedInstallment, payForm, updateInstallment, contract, user?.id])
 
   const handleRevertPaid = useCallback((inst: PaymentInstallment) => {
     if (!confirm(t('contracts.revertPaidConfirm').replace('{label}', inst.label))) return

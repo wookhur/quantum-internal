@@ -18,6 +18,8 @@ import { GamePage } from '@/pages/common/GamePage'
 import { ContractsPage } from '@/pages/consulting/ContractsPage'
 import { ContractDetailPage } from '@/pages/consulting/ContractDetailPage'
 import { MonthlyCollectionPage } from '@/pages/consulting/MonthlyCollectionPage'
+import { InvoicesPage } from '@/pages/finance/InvoicesPage'
+import { ReceiptsPage } from '@/pages/finance/ReceiptsPage'
 import { MarketingMetricsPage } from '@/pages/marketing/MarketingMetricsPage'
 import { AdCampaignsPage } from '@/pages/marketing/AdCampaignsPage'
 import { EventsPage } from '@/pages/marketing/EventsPage'
@@ -75,6 +77,8 @@ export default function App() {
                 <Route path="/consulting/clients" element={<ContractsPage />} />
                 <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />
                 <Route path="/consulting/collections" element={<MonthlyCollectionPage />} />
+                <Route path="/finance/invoices" element={<InvoicesPage />} />
+                <Route path="/finance/receipts" element={<ReceiptsPage />} />
 
                 <Route path="/service/dashboard" element={<ServiceDashboardPage />} />
                 <Route path="/service/student-360" element={<Student360Page />} />

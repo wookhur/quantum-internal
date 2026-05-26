@@ -35,6 +35,7 @@ import {
   UserSearch,
   MessageSquare,
   Settings,
+  Receipt,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -98,6 +99,8 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     items: [
       { labelKey: 'nav.contractManagement', to: '/consulting/clients', icon: FileText },
       { labelKey: 'nav.monthlyCollection', to: '/consulting/collections', icon: CalendarDays },
+      { labelKey: 'nav.invoices', to: '/finance/invoices', icon: FileText },
+      { labelKey: 'nav.receipts', to: '/finance/receipts', icon: Receipt },
     ],
   },
   {
