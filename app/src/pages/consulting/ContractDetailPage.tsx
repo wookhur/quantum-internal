@@ -579,7 +579,7 @@ export function ContractDetailPage() {
       label: editInstForm.label.trim(),
       amount: Number(editInstForm.amount),
       dueDate: editInstForm.dueDate || '',
-      notes: editInstForm.notes || undefined,
+      notes: editInstForm.notes,
     }
     // If paid fields are present, update them too
     if (editInstForm.isPaid) {
