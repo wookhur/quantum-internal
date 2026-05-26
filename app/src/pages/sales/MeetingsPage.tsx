@@ -355,76 +355,78 @@ export function MeetingsPage() {
               {t('meetings.noMeetings')}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[90px]">{t('meetings.col.meetingDate')}</TableHead>
-                  <TableHead className="w-[70px]">{t('meetings.col.meetingNumber')}</TableHead>
-                  <TableHead>{t('meetings.col.parent')}</TableHead>
-                  <TableHead>{t('meetings.col.student')}</TableHead>
-                  <TableHead>{t('common.school')}</TableHead>
-                  <TableHead>{t('common.region')}</TableHead>
-                  <TableHead className="max-w-[180px]">{t('common.memo')}</TableHead>
-                  <TableHead className="w-[50px] text-center">{t('meetings.col.note')}</TableHead>
-                  <TableHead className="w-[40px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {meetings.map((meeting) => {
-                  const badge = getMeetingBadge(meeting.meetingNumber, t)
-                  const isSelected = meeting.id === selectedMeetingId
-                  return (
-                    <TableRow
-                      key={meeting.id}
-                      className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : 'hover:bg-muted/50'}`}
-                      onClick={() => setSelectedMeetingId(isSelected ? null : meeting.id)}
-                    >
-                      <TableCell className="text-xs text-muted-foreground font-mono">
-                        {meeting.meetingDate}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={`text-[10px] ${badge.className}`}>
-                          {badge.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium text-sm">{meeting.parentName}</TableCell>
-                      <TableCell className="text-sm">{meeting.studentName || '-'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{meeting.currentSchool || '-'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{meeting.region || '-'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">
-                        {meeting.memo || '-'}
-                      </TableCell>
-                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => handleNoteToggle(meeting.id, meeting.noteDelivered)}
-                          className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
-                            meeting.noteDelivered
-                              ? 'bg-primary border-primary text-primary-foreground'
-                              : 'border-input hover:border-primary'
-                          }`}
-                        >
-                          {meeting.noteDelivered && (
-                            <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          )}
-                        </button>
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                          onClick={() => openEditDialog(meeting)}
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+            <div className="w-full">
+              <Table className="table-fixed w-full">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[88px]">{t('meetings.col.meetingDate')}</TableHead>
+                    <TableHead className="w-[52px]">{t('meetings.col.meetingNumber')}</TableHead>
+                    <TableHead className="w-[72px]">{t('meetings.col.parent')}</TableHead>
+                    <TableHead className="w-[72px]">{t('meetings.col.student')}</TableHead>
+                    <TableHead className="w-[14%]">{t('common.school')}</TableHead>
+                    <TableHead className="w-[60px]">{t('common.region')}</TableHead>
+                    <TableHead>{t('common.memo')}</TableHead>
+                    <TableHead className="w-[40px] text-center">{t('meetings.col.note')}</TableHead>
+                    <TableHead className="w-[36px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {meetings.map((meeting) => {
+                    const badge = getMeetingBadge(meeting.meetingNumber, t)
+                    const isSelected = meeting.id === selectedMeetingId
+                    return (
+                      <TableRow
+                        key={meeting.id}
+                        className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : 'hover:bg-muted/50'}`}
+                        onClick={() => setSelectedMeetingId(isSelected ? null : meeting.id)}
+                      >
+                        <TableCell className="text-xs text-muted-foreground font-mono truncate">
+                          {meeting.meetingDate}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-[10px] ${badge.className}`}>
+                            {badge.label}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium text-sm truncate">{meeting.parentName}</TableCell>
+                        <TableCell className="text-sm truncate">{meeting.studentName || '-'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground truncate">{meeting.currentSchool || '-'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground truncate">{meeting.region || '-'}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground truncate">
+                          {meeting.memo || '-'}
+                        </TableCell>
+                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleNoteToggle(meeting.id, meeting.noteDelivered)}
+                            className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
+                              meeting.noteDelivered
+                                ? 'bg-primary border-primary text-primary-foreground'
+                                : 'border-input hover:border-primary'
+                            }`}
+                          >
+                            {meeting.noteDelivered && (
+                              <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </button>
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => openEditDialog(meeting)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
