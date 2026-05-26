@@ -30,6 +30,7 @@ function usePaymentMethodLabel() {
     if (method === 'bank_transfer') return t('contracts.paymentBankTransfer')
     if (method === 'card') return t('contracts.paymentCard')
     if (method === 'us_wire') return t('contracts.paymentUsWire')
+    if (method === 'us_wire_us') return t('contracts.paymentUsWireUs')
     return method || t('common.select')
   }
 }
@@ -1192,6 +1193,7 @@ export function ContractDetailPage() {
                   <SelectItem value="bank_transfer">{t('contracts.paymentBankTransfer')}</SelectItem>
                   <SelectItem value="card">{t('contracts.paymentCard')}</SelectItem>
                   <SelectItem value="us_wire">{t('contracts.paymentUsWire')}</SelectItem>
+                  <SelectItem value="us_wire_us">{t('contracts.paymentUsWireUs')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
