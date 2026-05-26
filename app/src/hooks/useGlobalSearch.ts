@@ -11,6 +11,68 @@ export interface GlobalSearchResult {
   stage?: string
   navigateTo: string
   raw: unknown
+  /** Names associated with this result for person-level grouping */
+  personNames?: string[]
+}
+
+export interface PersonGroup {
+  displayName: string
+  records: GlobalSearchResult[]
+}
+
+/** Group results by person identity (matching names across types) */
+export function groupByPerson(results: GlobalSearchResult[]): {
+  personGroups: PersonGroup[]
+  ungrouped: GlobalSearchResult[]
+} {
+  // Separate person-related results from non-person (projects)
+  const personResults = results.filter(r => r.type !== 'project')
+  const ungrouped = results.filter(r => r.type === 'project')
+
+  // Build a union-find-like grouping by shared names
+  const groups: GlobalSearchResult[][] = []
+  const assigned = new Set<string>()
+
+  for (let i = 0; i < personResults.length; i++) {
+    if (assigned.has(personResults[i].id)) continue
+
+    const group = [personResults[i]]
+    assigned.add(personResults[i].id)
+    const namesA = personResults[i].personNames || []
+
+    for (let j = i + 1; j < personResults.length; j++) {
+      if (assigned.has(personResults[j].id)) continue
+      const namesB = personResults[j].personNames || []
+
+      // Check if any name matches (case-insensitive, ignoring empty)
+      const hasCommon = namesA.some(
+        a => a && namesB.some(b => b && a.trim().toLowerCase() === b.trim().toLowerCase())
+      )
+      if (hasCommon) {
+        group.push(personResults[j])
+        assigned.add(personResults[j].id)
+      }
+    }
+    groups.push(group)
+  }
+
+  // Only create person groups for results that actually merged (2+ records)
+  // Single results stay in their type sections
+  const personGroups: PersonGroup[] = []
+  const singleResults: GlobalSearchResult[] = []
+
+  for (const group of groups) {
+    if (group.length > 1) {
+      // Pick the most representative name
+      const allNames = group.flatMap(r => r.personNames || []).filter(Boolean)
+      const displayName = allNames[0] || group[0].title.split(' / ')[0]
+      personGroups.push({ displayName, records: group })
+    } else {
+      singleResults.push(group[0])
+    }
+  }
+
+  return { personGroups, ungrouped: [...singleResults, ...ungrouped] }
 }
 
 function mapLead(row: Record<string, unknown>): Lead {
@@ -106,6 +168,7 @@ export function useGlobalSearch(query: string) {
             stage: lead.pipelineStage,
             navigateTo: `/sales/leads/${lead.id}`,
             raw: lead,
+            personNames: [lead.parentName, lead.studentName].filter(Boolean),
           })
         }
       }
@@ -128,6 +191,7 @@ export function useGlobalSearch(query: string) {
             stage: statusLabel[row.status] || row.status,
             navigateTo: `/consulting/clients/${row.id}`,
             raw: row,
+            personNames: [row.contractor_name as string, row.student_name as string].filter(Boolean),
           })
         }
       }
@@ -143,8 +207,9 @@ export function useGlobalSearch(query: string) {
             subtitle: [row.school, row.grade, row.preferred_language ? `🗣 ${row.preferred_language}` : ''].filter(Boolean).join(' · '),
             meta: row.status || undefined,
             stage: row.assigned_consultant || undefined,
-            navigateTo: `/service/student-360?studentId=${row.id}`,
+            navigateTo: `/service/student-360?student=${row.id}`,
             raw: row,
+            personNames: [row.name as string, row.korean_name as string].filter(Boolean),
           })
         }
       }

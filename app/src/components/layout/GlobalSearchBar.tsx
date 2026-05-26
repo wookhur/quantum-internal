@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, User, FileText, FolderKanban, GraduationCap, Loader2, UserCircle } from 'lucide-react'
+import { Search, User, FileText, FolderKanban, GraduationCap, Loader2, UserCircle, Users } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { useGlobalSearch, type GlobalSearchResult } from '@/hooks/useGlobalSearch'
+import { useGlobalSearch, groupByPerson, type GlobalSearchResult } from '@/hooks/useGlobalSearch'
 import { useT } from '@/i18n/LanguageContext'
 import { getStageConfig } from '@/types'
 import type { PipelineStage } from '@/types'
@@ -93,8 +93,11 @@ export function GlobalSearchBar() {
 
   const showDropdown = open && query.trim().length >= 1
 
-  // Group results by type
-  const grouped = results.reduce<Record<string, GlobalSearchResult[]>>((acc, item) => {
+  // Group results by person identity, then by type for remaining
+  const { personGroups, ungrouped } = groupByPerson(results)
+
+  // Group ungrouped items by type for rendering
+  const ungroupedByType = ungrouped.reduce<Record<string, GlobalSearchResult[]>>((acc, item) => {
     if (!acc[item.type]) acc[item.type] = []
     acc[item.type].push(item)
     return acc
@@ -156,8 +159,63 @@ export function GlobalSearchBar() {
                 <Search className="size-3.5 text-violet-400" />
               </button>
 
+              {/* Person-grouped results (merged across types) */}
+              {personGroups.map((group) => (
+                <div key={`person-${group.displayName}`}>
+                  <div className="px-3 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Users className="size-3 text-violet-500" />
+                    {highlightMatch(group.displayName, query)}
+                    <span className="text-gray-300 mx-0.5">·</span>
+                    {group.records.map(r => t(TYPE_CONFIG[r.type].labelKey)).join(' + ')}
+                  </div>
+                  {group.records.map((item) => {
+                    const config = TYPE_CONFIG[item.type]
+                    const Icon = config.icon
+                    const currentIdx = flatIdx++
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => handleSelect(item)}
+                        onMouseEnter={() => setSelectedIdx(currentIdx)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                          currentIdx === selectedIdx
+                            ? 'bg-blue-50'
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${config.bg} ${config.color}`}>
+                          <Icon className="size-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 shrink-0">
+                              {t(config.labelKey)}
+                            </span>
+                            <span className="text-sm font-medium text-gray-900 truncate">
+                              {highlightMatch(item.title, query)}
+                            </span>
+                            {item.stage && (
+                              <StageBadge type={item.type} stage={item.stage} />
+                            )}
+                          </div>
+                          {(item.subtitle || item.meta) && (
+                            <p className="text-xs text-gray-500 truncate mt-0.5">
+                              {highlightMatch(
+                                [item.subtitle, item.meta].filter(Boolean).join(' · '),
+                                query,
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
+
+              {/* Ungrouped results by type */}
               {(['lead', 'contract', 'student', 'project'] as const).map((type) => {
-                const items = grouped[type]
+                const items = ungroupedByType[type]
                 if (!items || items.length === 0) return null
                 const config = TYPE_CONFIG[type]
                 const Icon = config.icon

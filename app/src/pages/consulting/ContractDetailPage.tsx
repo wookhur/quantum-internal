@@ -387,6 +387,8 @@ export function ContractDetailPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [addChargeDialogOpen, setAddChargeDialogOpen] = useState(false)
+  const [addBaseDialogOpen, setAddBaseDialogOpen] = useState(false)
+  const [baseForm, setBaseForm] = useState({ label: '', amount: '', dueDate: '' })
   const [chargeForm, setChargeForm] = useState({ label: '', amount: '', dueDate: '', notes: '' })
   const [revenueShareRows, setRevenueShareRows] = useState<{ name: string; amount: string; role: string }[]>([])
   const [editInstDialogOpen, setEditInstDialogOpen] = useState(false)
@@ -531,6 +533,27 @@ export function ContractDetailPage() {
       },
     })
   }, [id, chargeForm, revenueShareRows, contract, createInstallments, createRevenueShares])
+
+  const handleAddBase = useCallback(() => {
+    if (!id || !baseForm.label.trim() || !baseForm.amount || Number(baseForm.amount) <= 0) return
+    const baseCount = (contract?.installments || []).filter(i => i.category !== 'extra').length
+    createInstallments.mutate({
+      contractId: id,
+      items: [{
+        installmentOrder: baseCount + 1,
+        label: baseForm.label.trim(),
+        amount: Number(baseForm.amount),
+        dueDate: baseForm.dueDate || undefined,
+        currency: contract?.currency || 'KRW',
+        category: 'base',
+      }],
+    }, {
+      onSuccess: () => {
+        setAddBaseDialogOpen(false)
+        setBaseForm({ label: '', amount: '', dueDate: '' })
+      },
+    })
+  }, [id, baseForm, contract, createInstallments])
 
   const openEditInstDialog = useCallback((inst: PaymentInstallment) => {
     const hasPaid = inst.status === 'paid' || inst.status === 'partial'
@@ -731,6 +754,20 @@ export function ContractDetailPage() {
             <DollarSign className="size-5" />
             {t('contracts.baseInstallments')} ({baseInstallments.length})
           </h2>
+          {!isCancelled && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => {
+                setBaseForm({ label: '', amount: '', dueDate: '' })
+                setAddBaseDialogOpen(true)
+              }}
+            >
+              <Plus className="size-3.5" />
+              {t('contracts.addInstallment')}
+            </Button>
+          )}
         </div>
         {baseInstallments.length === 0 ? (
           <Card>
@@ -1181,7 +1218,58 @@ export function ContractDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Installment Dialog */}
+      {/* Add Base Installment Dialog */}
+      <Dialog open={addBaseDialogOpen} onOpenChange={setAddBaseDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('contracts.addInstallment')}</DialogTitle>
+            <DialogDescription>
+              {t('contracts.addInstallmentDesc')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>{t('contracts.installmentLabel')}</Label>
+              <Input
+                value={baseForm.label}
+                onChange={(e) => setBaseForm(f => ({ ...f, label: e.target.value }))}
+                placeholder="계약금, 중도금, 잔금 등"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('contracts.amount')}</Label>
+              <Input
+                type="number"
+                value={baseForm.amount}
+                onChange={(e) => setBaseForm(f => ({ ...f, amount: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('contracts.dueDate')}</Label>
+              <Input
+                type="date"
+                value={baseForm.dueDate}
+                onChange={(e) => setBaseForm(f => ({ ...f, dueDate: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddBaseDialogOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={handleAddBase}
+              disabled={!baseForm.label.trim() || !baseForm.amount || Number(baseForm.amount) <= 0 || createInstallments.isPending}
+            >
+              {createInstallments.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              {t('common.add')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Extra Charge Dialog */}
       <Dialog open={addChargeDialogOpen} onOpenChange={setAddChargeDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
