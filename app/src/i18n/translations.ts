@@ -82,6 +82,7 @@ const koTranslations = {
   'nav.monthlyCollection': '월별 수금',
   'nav.invoices': '인보이스 발행',
   'nav.receipts': '영수증 발행',
+  'nav.wireInvoice': '해외송금 인보이스',
   'nav.service': '서비스',
   'nav.serviceDashboard': 'Service Dashboard',
   'nav.student360': 'Student 360',
@@ -1109,6 +1110,11 @@ const koTranslations = {
   'receipt.recipientEmail': '수신 이메일',
   'receipt.description': '설명',
   'receipt.descriptionPlaceholder': '계약금 납부, 중도금 납부 등',
+  'wireInvoice.title': '해외송금 인보이스',
+  'wireInvoice.subtitle': '해외 고객 Wire Transfer 인보이스 발행',
+  'wireInvoice.create': '인보이스 발행',
+  'wireInvoice.createAndSend': '발행 및 발송',
+  'wireInvoice.noInvoices': '발행된 해외송금 인보이스가 없습니다.',
 
   // ── Account Settings ──
   'account.settings': '계정 설정',
@@ -1220,6 +1226,7 @@ const enTranslations: Record<string, string> = {
   'nav.monthlyCollection': 'Monthly Collection',
   'nav.invoices': 'Invoices',
   'nav.receipts': 'Receipts',
+  'nav.wireInvoice': 'Wire Invoice',
   'nav.service': 'Service',
   'nav.serviceDashboard': 'Service Dashboard',
   'nav.student360': 'Student 360',
@@ -2246,6 +2253,11 @@ const enTranslations: Record<string, string> = {
   'receipt.recipientEmail': 'Recipient Email',
   'receipt.description': 'Description',
   'receipt.descriptionPlaceholder': 'Deposit payment, installment, etc.',
+  'wireInvoice.title': 'Wire Invoice',
+  'wireInvoice.subtitle': 'Wire transfer invoices for overseas clients',
+  'wireInvoice.create': 'Create Invoice',
+  'wireInvoice.createAndSend': 'Create & Send',
+  'wireInvoice.noInvoices': 'No wire invoices yet.',
 
   // ── Account Settings ──
   'account.settings': 'Account Settings',
