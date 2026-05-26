@@ -619,7 +619,7 @@ export function ContractDetailPage() {
               }}
             >
               <Plus className="size-3.5" />
-              {t('contracts.addInstallment')}
+              {t('contracts.addCharge')}
             </Button>
           )}
         </div>
@@ -1008,18 +1008,46 @@ export function ContractDetailPage() {
       <Dialog open={addChargeDialogOpen} onOpenChange={setAddChargeDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('contracts.addInstallment')}</DialogTitle>
+            <DialogTitle>{t('contracts.addCharge')}</DialogTitle>
             <DialogDescription>
-              {t('contracts.addInstallmentDesc')}
+              {t('contracts.addChargeDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Quick preset buttons */}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{t('contracts.quickPresets')}</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: '대회 참가비', labelEn: 'Competition Fee' },
+                  { label: '리서치 페이퍼', labelEn: 'Research Paper' },
+                  { label: '인턴십 프로그램', labelEn: 'Internship Program' },
+                  { label: 'EC 활동비', labelEn: 'EC Activity Fee' },
+                  { label: '캡스톤 프로젝트', labelEn: 'Capstone Project' },
+                  { label: '에세이 에디팅', labelEn: 'Essay Editing' },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                      chargeForm.label === preset.label
+                        ? 'bg-blue-100 border-blue-300 text-blue-700'
+                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                    }`}
+                    onClick={() => setChargeForm(f => ({ ...f, label: preset.label }))}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>{t('contracts.installmentLabel')} <span className="text-destructive">*</span></Label>
               <Input
                 value={chargeForm.label}
                 onChange={e => setChargeForm(f => ({ ...f, label: e.target.value }))}
-                placeholder={t('contracts.installmentLabelPlaceholder')}
+                placeholder={t('contracts.chargeLabelPlaceholder')}
               />
             </div>
             <div className="space-y-2">
