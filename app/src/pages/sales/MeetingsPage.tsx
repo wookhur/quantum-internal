@@ -355,19 +355,30 @@ export function MeetingsPage() {
               {t('meetings.noMeetings')}
             </div>
           ) : (
-            <div className="w-full">
+            <div className="w-full overflow-hidden">
               <Table className="table-fixed w-full">
+                <colgroup>
+                  <col style={{ width: '9%' }} />   {/* 미팅일 */}
+                  <col style={{ width: '5%' }} />   {/* 회차 */}
+                  <col style={{ width: '8%' }} />   {/* 학부모 */}
+                  <col style={{ width: '8%' }} />   {/* 학생 */}
+                  <col style={{ width: '15%' }} />  {/* 학교 */}
+                  <col style={{ width: '5%' }} />   {/* 지역 */}
+                  <col style={{ width: '42%' }} />  {/* 메모 */}
+                  <col style={{ width: '4%' }} />   {/* 노트 */}
+                  <col style={{ width: '4%' }} />   {/* 편집 */}
+                </colgroup>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[88px]">{t('meetings.col.meetingDate')}</TableHead>
-                    <TableHead className="w-[52px]">{t('meetings.col.meetingNumber')}</TableHead>
-                    <TableHead className="w-[72px]">{t('meetings.col.parent')}</TableHead>
-                    <TableHead className="w-[72px]">{t('meetings.col.student')}</TableHead>
-                    <TableHead className="w-[14%]">{t('common.school')}</TableHead>
-                    <TableHead className="w-[60px]">{t('common.region')}</TableHead>
-                    <TableHead>{t('common.memo')}</TableHead>
-                    <TableHead className="w-[40px] text-center">{t('meetings.col.note')}</TableHead>
-                    <TableHead className="w-[36px]" />
+                    <TableHead className="px-1.5">{t('meetings.col.meetingDate')}</TableHead>
+                    <TableHead className="px-1">{t('meetings.col.meetingNumber')}</TableHead>
+                    <TableHead className="px-1.5">{t('meetings.col.parent')}</TableHead>
+                    <TableHead className="px-1.5">{t('meetings.col.student')}</TableHead>
+                    <TableHead className="px-1.5">{t('common.school')}</TableHead>
+                    <TableHead className="px-1">{t('common.region')}</TableHead>
+                    <TableHead className="px-1.5">{t('common.memo')}</TableHead>
+                    <TableHead className="px-0 text-center">{t('meetings.col.note')}</TableHead>
+                    <TableHead className="px-0" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -380,22 +391,22 @@ export function MeetingsPage() {
                         className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : 'hover:bg-muted/50'}`}
                         onClick={() => setSelectedMeetingId(isSelected ? null : meeting.id)}
                       >
-                        <TableCell className="text-xs text-muted-foreground font-mono truncate">
+                        <TableCell className="px-1.5 text-xs text-muted-foreground font-mono truncate">
                           {meeting.meetingDate}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-1">
                           <Badge variant="outline" className={`text-[10px] ${badge.className}`}>
                             {badge.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-medium text-sm truncate">{meeting.parentName}</TableCell>
-                        <TableCell className="text-sm truncate">{meeting.studentName || '-'}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground truncate">{meeting.currentSchool || '-'}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground truncate">{meeting.region || '-'}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground truncate">
+                        <TableCell className="px-1.5 font-medium text-sm truncate">{meeting.parentName}</TableCell>
+                        <TableCell className="px-1.5 text-sm truncate">{meeting.studentName || '-'}</TableCell>
+                        <TableCell className="px-1.5 text-sm text-muted-foreground truncate">{meeting.currentSchool || '-'}</TableCell>
+                        <TableCell className="px-1 text-sm text-muted-foreground truncate">{meeting.region || '-'}</TableCell>
+                        <TableCell className="px-1.5 text-xs text-muted-foreground truncate">
                           {meeting.memo || '-'}
                         </TableCell>
-                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="px-0 text-center" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleNoteToggle(meeting.id, meeting.noteDelivered)}
                             className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
@@ -411,7 +422,7 @@ export function MeetingsPage() {
                             )}
                           </button>
                         </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="px-0 text-center" onClick={(e) => e.stopPropagation()}>
                           <Button
                             variant="ghost"
                             size="icon"
