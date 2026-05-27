@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -85,13 +86,20 @@ function IncentivePersonSelect({
   const inputRef = useRef<HTMLInputElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
 
-  // Close on outside click
+  // Close on outside click (check both trigger wrapper and portal dropdown)
   useEffect(() => {
     if (!open) return
     function handleClick(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (
+        wrapperRef.current && !wrapperRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
+        setOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
@@ -148,8 +156,8 @@ function IncentivePersonSelect({
         </svg>
       </button>
 
-      {open && (
-        <div style={dropdownStyle} className="rounded-md border bg-popover shadow-md max-h-[280px] overflow-y-auto">
+      {open && createPortal(
+        <div ref={dropdownRef} style={dropdownStyle} className="rounded-md border bg-popover shadow-md max-h-[280px] overflow-y-auto">
           {/* Unified list */}
           {allItems.map((item) => {
             const isSelected = item.type === 'profile'
@@ -210,7 +218,8 @@ function IncentivePersonSelect({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
