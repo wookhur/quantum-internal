@@ -13,7 +13,7 @@ export interface ContractIncentive {
   customName: string | null
   /** Resolved display name: profileName or customName */
   displayName: string
-  incentiveType: 'partner_sales' | 'partner_fee' | 'cold_call' | 'total_revenue'
+  incentiveType: 'partner_sales' | 'partner_fee' | 'cold_call' | 'total_revenue' | 'external_fee'
   percentage: number
   /** When set, this incentive applies only to that specific installment (extra payments) */
   installmentId: string | null
@@ -61,6 +61,7 @@ export const INCENTIVE_TYPES = {
   partner_fee: { labelKey: 'incentive.partnerFee', defaultPct: 10 },
   cold_call: { labelKey: 'incentive.coldCall', defaultPct: 4 },
   total_revenue: { labelKey: 'incentive.totalRevenue', defaultPct: 2 },
+  external_fee: { labelKey: 'incentive.externalFee', defaultPct: 0 },
 } as const
 
 export type IncentiveType = keyof typeof INCENTIVE_TYPES
@@ -267,6 +268,62 @@ export function useIncentivesByInstallment() {
             percentage: inc.percentage,
             incentiveAmount,
           })
+        }
+      }
+
+      // 5. Also include revenue shares (external fees) from extra installments
+      //    These show as external_fee type entries in the finance views
+      const allContractIds = [...new Set(data.map((r) => r.contract_id as string))]
+      // Fetch extra installments for all contracts
+      const { data: extraInsts } = await supabase
+        .from('payment_installments')
+        .select('id, contract_id, label, installment_order, paid_amount, paid_date, status, category')
+        .in('contract_id', allContractIds)
+        .eq('category', 'extra')
+        .eq('status', 'paid')
+
+      if (extraInsts && extraInsts.length > 0) {
+        const extraIds = extraInsts.map(e => e.id as string)
+        const { data: shares } = await supabase
+          .from('installment_revenue_shares')
+          .select('*')
+          .in('installment_id', extraIds)
+
+        if (shares && shares.length > 0) {
+          // Build a lookup: installmentId -> installment + contract info
+          const extraLookup = new Map<string, { inst: typeof extraInsts[0]; contract: Record<string, unknown> | null }>()
+          for (const ei of extraInsts) {
+            // Find the matching contract from the incentive data
+            const matchingRow = data.find(r => (r.contract_id as string) === (ei.contract_id as string))
+            const contract = matchingRow ? (matchingRow as Record<string, unknown>).contracts as Record<string, unknown> | null : null
+            extraLookup.set(ei.id as string, { inst: ei, contract })
+          }
+
+          for (const s of shares) {
+            const lookup = extraLookup.get(s.installment_id as string)
+            if (!lookup) continue
+            const { inst, contract } = lookup
+            results.push({
+              key: `rs-${s.id}`,
+              incentiveId: s.id as string,
+              contractId: inst.contract_id as string,
+              installmentId: inst.id as string,
+              installmentLabel: inst.label as string,
+              installmentOrder: (inst.installment_order as number) || 99,
+              paidDate: (inst.paid_date as string) || '',
+              paidAmount: Number(inst.paid_amount) || 0,
+              currency: ((contract?.currency as string) || 'KRW') as 'KRW' | 'USD',
+              contractDate: (contract?.contract_date as string) || '',
+              contractorName: (contract?.contractor_name as string) || '',
+              studentName: (contract?.student_name as string) || '',
+              totalAmount: Number(contract?.total_amount) || 0,
+              profileId: (s.recipient_profile_id as string) || null,
+              displayName: (s.recipient_name as string) || '',
+              incentiveType: 'external_fee' as IncentiveType,
+              percentage: Number(s.percentage) || 0,
+              incentiveAmount: Number(s.amount) || 0,
+            })
+          }
         }
       }
 
