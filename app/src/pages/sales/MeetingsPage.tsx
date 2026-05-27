@@ -267,19 +267,19 @@ export function MeetingsPage() {
   return (
     <div className="space-y-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">{t('meetings.title')}</h1>
           <p className="text-sm text-muted-foreground">
             {isLoading ? t('common.loading') : t('meetings.totalMeetings').replace('{n}', String(meetings.length))}
           </p>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <Button variant="outline" className="gap-2" size="sm" onClick={() => setPdfDialogOpen(true)}>
-            <Upload className="size-4" /> <span className="hidden sm:inline">{t('meetings.uploadPdf')}</span>
+        <div className="flex gap-1.5">
+          <Button variant="outline" className="gap-1.5" size="sm" onClick={() => setPdfDialogOpen(true)}>
+            <Upload className="size-4" /> {t('meetings.uploadPdf')}
           </Button>
-          <Button className="gap-2" size="sm" onClick={() => setDialogOpen(true)}>
-            <Plus className="size-4" /> <span className="hidden sm:inline">{t('meetings.addMeeting')}</span>
+          <Button className="gap-1.5" size="sm" onClick={() => setDialogOpen(true)}>
+            <Plus className="size-4" /> {t('meetings.addMeeting')}
           </Button>
         </div>
       </div>
