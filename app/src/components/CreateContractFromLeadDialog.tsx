@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Loader2, Plus, Trash2, AlertTriangle } from 'lucide-react'
 import { useCreateContractFull } from '@/hooks/useContracts'
 import { useCreateInstallments } from '@/hooks/useInstallments'
@@ -223,7 +223,7 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
             <div className="space-y-1.5">
               <Label className="text-xs">{t('contracts.currency')}</Label>
               <Select value={form.currency} onValueChange={v => set('currency', (v || 'KRW') as 'KRW' | 'USD')}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><span>{form.currency === 'USD' ? 'USD ($)' : 'KRW (원)'}</span></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="KRW">KRW (원)</SelectItem>
                   <SelectItem value="USD">USD ($)</SelectItem>
@@ -233,7 +233,7 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
             <div className="space-y-1.5">
               <Label className="text-xs">{t('contracts.depositAccount')}</Label>
               <Select value={form.paymentAccount} onValueChange={v => set('paymentAccount', (v || 'KR') as 'KR' | 'US')}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><span>{form.paymentAccount === 'US' ? t('contracts.usAccount') : t('contracts.krAccount')}</span></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="KR">{t('contracts.krAccount')}</SelectItem>
                   <SelectItem value="US">{t('contracts.usAccount')}</SelectItem>
@@ -247,7 +247,9 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
             <div className="space-y-1.5">
               <Label className="text-xs">{t('leadDetail.salesRep')}</Label>
               <Select value={form.salesRep} onValueChange={v => set('salesRep', v || '')}>
-                <SelectTrigger><SelectValue placeholder={t('common.select')} /></SelectTrigger>
+                <SelectTrigger>
+                  <span>{profiles.find(p => p.id === form.salesRep)?.name || t('common.select')}</span>
+                </SelectTrigger>
                 <SelectContent>
                   {profiles.map(p => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
@@ -258,7 +260,9 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
             <div className="space-y-1.5">
               <Label className="text-xs">{t('leadDetail.serviceRep')}</Label>
               <Select value={form.serviceRep} onValueChange={v => set('serviceRep', v || '')}>
-                <SelectTrigger><SelectValue placeholder={t('common.select')} /></SelectTrigger>
+                <SelectTrigger>
+                  <span>{profiles.find(p => p.id === form.serviceRep)?.name || t('common.select')}</span>
+                </SelectTrigger>
                 <SelectContent>
                   {profiles.map(p => (
                     <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
