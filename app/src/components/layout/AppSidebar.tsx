@@ -16,7 +16,6 @@ import {
   LogOut,
   LayoutDashboard,
   Calendar,
-  CheckSquare,
   Users,
   BarChart3,
   ClipboardList,
@@ -59,7 +58,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     items: [
       { labelKey: 'nav.dashboard', to: '/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.calendar', to: '/calendar', icon: Calendar },
-      { labelKey: 'nav.projects', to: '/todos', icon: CheckSquare },
       { labelKey: 'nav.taskBoard', to: '/tasks', icon: ClipboardList },
       { labelKey: 'nav.messages', to: '/messages', icon: MessageSquare },
     ],

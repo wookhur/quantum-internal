@@ -12,7 +12,7 @@ import { PipelinePage } from '@/pages/sales/PipelinePage'
 import { SalesPerformancePage } from '@/pages/sales/SalesPerformancePage'
 import { MeetingsPage } from '@/pages/sales/MeetingsPage'
 import { ColdCallPage } from '@/pages/sales/ColdCallPage'
-import { TodosPage } from '@/pages/common/TodosPage'
+// TodosPage merged into TaskBoardPage
 import { CalendarPage } from '@/pages/common/CalendarPage'
 import { GamePage } from '@/pages/common/GamePage'
 import { ContractsPage } from '@/pages/consulting/ContractsPage'
@@ -61,7 +61,7 @@ export default function App() {
               <Route element={<AppLayout />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
-                <Route path="/todos" element={<TodosPage />} />
+                <Route path="/todos" element={<Navigate to="/tasks" replace />} />
                 <Route path="/messages" element={<MessagesPage />} />
                 <Route path="/tasks" element={<TaskBoardPage />} />
                 <Route path="/person" element={<PersonProfilePage />} />

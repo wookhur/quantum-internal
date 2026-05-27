@@ -955,6 +955,15 @@ const koTranslations = {
   'dept.finance': '재무',
   'dept.service': '서비스',
 
+  // ── Projects (in Task Board) ──
+  'projects.title': '프로젝트',
+  'projects.addProject': '프로젝트 추가',
+  'projects.addProjectTitle': '새 프로젝트',
+  'projects.addProjectDesc': '프로젝트를 만들면 담당자에게 업무 요청이 자동 생성됩니다.',
+  'projects.editProjectTitle': '프로젝트 수정',
+  'projects.noProjects': '진행 중인 프로젝트가 없습니다.',
+  'projects.autoTaskHint': '(추가 시 업무 요청 자동 생성)',
+
   // ── Todos / Projects ──
   'todos.title': '프로젝트',
   'todos.statusTodo': '대기',
@@ -2218,6 +2227,15 @@ const enTranslations: Record<string, string> = {
   'dept.marketing': 'Marketing',
   'dept.finance': 'Finance',
   'dept.service': 'Service',
+
+  // ── Projects (in Task Board) ──
+  'projects.title': 'Projects',
+  'projects.addProject': 'Add Project',
+  'projects.addProjectTitle': 'New Project',
+  'projects.addProjectDesc': 'Creating a project automatically generates task requests for assignees.',
+  'projects.editProjectTitle': 'Edit Project',
+  'projects.noProjects': 'No active projects.',
+  'projects.autoTaskHint': '(auto-creates task requests)',
 
   // ── Todos / Projects ──
   'todos.title': 'Projects',

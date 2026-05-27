@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,9 +11,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import {
   Plus, Search, Loader2, AlertTriangle, Clock, CheckCircle2,
   Ban, Send, Calendar, Paperclip, MessageSquare,
-  ChevronDown, LayoutList, Columns3,
+  ChevronDown, ChevronUp, LayoutList, Columns3,
   ListTodo, Trash2, X, CircleDot,
+  FolderKanban, Users, User as UserIcon, Circle, ChevronRight,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import {
@@ -23,9 +30,11 @@ import {
   useTaskStats,
   type TaskFilters,
 } from '@/hooks/useTasks'
+import { useTodos, useCreateTodo, useUpdateTodo, useUpdateTodoStatus } from '@/hooks/useTodos'
+import { useProjectComments, useCreateComment, useDeleteComment } from '@/hooks/useProjectComments'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import { useT } from '@/i18n/LanguageContext'
-import type { Task, TaskStatus, TaskPriority } from '@/types'
+import type { Task, TaskStatus, TaskPriority, Todo, TodoStatus, TodoPriority, ProjectTeam, User } from '@/types'
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -50,6 +59,20 @@ function useStatusConfig() {
   }
 }
 
+const TODO_STATUS_CONFIG: Record<TodoStatus, { labelKey: string; icon: typeof Circle; color: string }> = {
+  todo: { labelKey: 'todos.statusTodo', icon: Circle, color: 'text-muted-foreground' },
+  in_progress: { labelKey: 'todos.statusInProgress', icon: Clock, color: 'text-blue-500' },
+  done: { labelKey: 'todos.statusDone', icon: CheckCircle2, color: 'text-emerald-500' },
+}
+
+const TEAM_CONFIG: Record<ProjectTeam, { labelKey: string; color: string }> = {
+  management: { labelKey: 'dept.management', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+  sales: { labelKey: 'dept.sales', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  marketing: { labelKey: 'dept.marketing', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+  finance: { labelKey: 'dept.finance', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  service: { labelKey: 'dept.service', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+}
+
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
@@ -66,6 +89,19 @@ function isOverdue(task: Task): boolean {
   if (!task.dueDate) return false
   if (task.status === 'completed' || task.status === 'cancelled') return false
   return task.dueDate < new Date().toISOString().slice(0, 10)
+}
+
+function PersonChip({ userId, profiles }: { userId: string; profiles: User[] }) {
+  const user = profiles.find(p => p.id === userId)
+  if (!user) return <span className="text-xs text-muted-foreground">?</span>
+  return (
+    <span className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded-full px-2 py-0.5">
+      <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold shrink-0">
+        {user.name.charAt(0)}
+      </span>
+      {user.name}
+    </span>
+  )
 }
 
 // ─── Task Card ──────────────────────────────────────────────────────────
@@ -155,7 +191,6 @@ function TaskDetailDialog({
 }) {
   const t = useT()
   const { user } = useAuth()
-  const priorityCfg = usePriorityConfig()
   const statusCfg = useStatusConfig()
   const { data: task, isLoading } = useTask(taskId || undefined)
   const { data: comments = [] } = useTaskComments(taskId || undefined)
@@ -177,52 +212,32 @@ function TaskDetailDialog({
   const handleStatusChange = useCallback((newStatus: string | null) => {
     if (!taskId || !newStatus) return
     updateTask.mutate({ id: taskId, status: newStatus as TaskStatus })
-    // Notify requester when task is completed
-    if (newStatus === 'completed' && task && user) {
-      createNotificationsForUsers([task.requesterId], {
-        type: 'task_completed',
-        title: '업무 완료',
-        message: `"${task.title}" 업무가 완료되었습니다.`,
-        link: `/tasks?open=${taskId}`,
-        metadata: { taskId },
-      }).catch(() => {})
-    }
-  }, [taskId, task, user, updateTask])
+  }, [taskId, updateTask])
+
+  const handleAssigneeChange = useCallback((newAssignee: string | null) => {
+    if (!taskId) return
+    updateTask.mutate({ id: taskId, assigneeId: newAssignee || undefined })
+  }, [taskId, updateTask])
+
+  const handlePriorityChange = useCallback((newPriority: string | null) => {
+    if (!taskId || !newPriority) return
+    updateTask.mutate({ id: taskId, priority: newPriority as TaskPriority })
+  }, [taskId, updateTask])
 
   const handleSubmitComment = useCallback(() => {
     if (!taskId || !user || !commentText.trim()) return
-    addComment.mutate({
-      taskId,
-      authorId: user.id,
-      content: commentText.trim(),
-    }, {
-      onSuccess: () => {
-        setCommentText('')
-        // Notify relevant parties
-        if (task) {
-          const recipients = [task.requesterId, task.assigneeId].filter(Boolean).filter(id => id !== user.id) as string[]
-          if (recipients.length > 0) {
-            createNotificationsForUsers(recipients, {
-              type: 'task_comment',
-              title: '업무 댓글',
-              message: `${user.name}: "${commentText.trim().slice(0, 60)}"`,
-              link: `/tasks?open=${taskId}`,
-              metadata: { taskId },
-            }).catch(() => {})
-          }
-        }
-      },
-    })
-  }, [taskId, user, commentText, task, addComment])
+    addComment.mutate({ taskId, authorId: user.id, content: commentText.trim() })
+    setCommentText('')
+  }, [taskId, user, commentText, addComment])
 
   const handleAddSubtask = useCallback(() => {
     if (!taskId || !user || !subtaskTitle.trim()) return
     createSubTask.mutate({
       title: subtaskTitle.trim(),
+      priority: 'normal',
       requesterId: user.id,
       assigneeId: subtaskAssignee || undefined,
       parentTaskId: taskId,
-      priority: 'normal',
     }, {
       onSuccess: () => {
         setSubtaskTitle('')
@@ -234,63 +249,71 @@ function TaskDetailDialog({
 
   const handleDelete = useCallback(() => {
     if (!taskId) return
-    deleteTask.mutate(taskId, { onSuccess: () => { setDeleteConfirm(false); onClose() } })
+    deleteTask.mutate(taskId, { onSuccess: () => onClose() })
   }, [taskId, deleteTask, onClose])
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!taskId || !user || !e.target.files?.[0]) return
+    const file = e.target.files[0]
+    const fileUrl = URL.createObjectURL(file)
+    addAttachment.mutate({
+      taskId,
+      fileName: file.name,
+      fileUrl,
+      fileSize: file.size,
+      uploadedBy: user.id,
+    })
+  }, [taskId, user, addAttachment])
 
   if (!open) return null
 
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         {isLoading || !task ? (
           <div className="py-12 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
         ) : (
           <>
             <DialogHeader>
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant="outline" className={`text-[10px] h-4 ${priorityCfg[task.priority].className}`}>
-                  {priorityCfg[task.priority].label}
-                </Badge>
-                {isOverdue(task) && (
-                  <Badge variant="outline" className="text-[10px] h-4 bg-red-100 text-red-700 border-red-300">
-                    {t('tasks.overdue')}
-                  </Badge>
-                )}
-              </div>
               <DialogTitle className="text-lg">{task.title}</DialogTitle>
               {task.description && (
-                <DialogDescription className="text-sm whitespace-pre-wrap mt-1">
-                  {task.description}
-                </DialogDescription>
+                <DialogDescription className="whitespace-pre-wrap">{task.description}</DialogDescription>
               )}
             </DialogHeader>
 
-            {/* Meta Grid */}
-            <div className="grid grid-cols-2 gap-3 text-sm border rounded-lg p-3 bg-muted/30">
-              <div>
-                <span className="text-xs text-muted-foreground">{t('tasks.status')}</span>
+            {/* Meta row */}
+            <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">{t('tasks.statusLabel')}</Label>
                 <Select value={task.status} onValueChange={handleStatusChange}>
-                  <SelectTrigger className="h-8 mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {STATUS_ORDER.map(s => (
-                      <SelectItem key={s} value={s}>
-                        <span className="flex items-center gap-1.5">
-                          <span className={`size-2 rounded-full ${
-                            s === 'requested' ? 'bg-amber-500' :
-                            s === 'in_progress' ? 'bg-blue-500' :
-                            s === 'completed' ? 'bg-emerald-500' : 'bg-gray-400'
-                          }`} />
-                          {statusCfg[s].label}
-                        </span>
-                      </SelectItem>
+                      <SelectItem key={s} value={s}>{statusCfg[s].label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <span className="text-xs text-muted-foreground">{t('tasks.priority')}</span>
-                <Select value={task.priority} onValueChange={v => v && updateTask.mutate({ id: task.id, priority: v as TaskPriority })}>
-                  <SelectTrigger className="h-8 mt-1"><SelectValue /></SelectTrigger>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">{t('tasks.assignee')}</Label>
+                <Select value={task.assigneeId || '_none'} onValueChange={v => handleAssigneeChange(v === '_none' ? null : v)}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder={t('tasks.unassigned')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">{t('tasks.unassigned')}</SelectItem>
+                    {profiles.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">{t('tasks.priority')}</Label>
+                <Select value={task.priority} onValueChange={handlePriorityChange}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="urgent">{t('tasks.urgent')}</SelectItem>
                     <SelectItem value="normal">{t('tasks.normal')}</SelectItem>
@@ -298,145 +321,99 @@ function TaskDetailDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <span className="text-xs text-muted-foreground">{t('tasks.requester')}</span>
-                <p className="mt-1 font-medium">{task.requester?.name || '-'}</p>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground">{t('tasks.assignee')}</span>
-                <Select
-                  value={task.assigneeId || '__none__'}
-                  onValueChange={v => updateTask.mutate({ id: task.id, assigneeId: v === '__none__' ? '' : (v || '') })}
-                >
-                  <SelectTrigger className="h-8 mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">{t('tasks.unassigned')}</SelectItem>
-                    {profiles.map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground">{t('tasks.dueDate')}</span>
-                <Input
-                  type="date"
-                  className="h-8 mt-1"
-                  value={task.dueDate || ''}
-                  onChange={e => updateTask.mutate({ id: task.id, dueDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <span className="text-xs text-muted-foreground">{t('tasks.createdAt')}</span>
-                <p className="mt-1 text-muted-foreground text-xs">{formatRelativeTime(task.createdAt)}</p>
-              </div>
+            </div>
+
+            {/* Info */}
+            <div className="text-xs text-muted-foreground space-y-1">
+              <div>{t('tasks.requester')}: {task.requester?.name || '-'}</div>
+              {task.dueDate && <div>{t('tasks.dueDate')}: {task.dueDate}</div>}
+              <div>{t('tasks.createdAt')}: {formatRelativeTime(task.createdAt)}</div>
             </div>
 
             {/* Subtasks */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                  <ListTodo className="size-4" /> {t('tasks.subtasks')} ({task.subtasks?.length || 0})
-                </h4>
-                <button
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                  onClick={() => setShowSubtaskForm(!showSubtaskForm)}
-                >
-                  + {t('tasks.addSubtask')}
-                </button>
-              </div>
-              {task.subtasks && task.subtasks.length > 0 && (
+            {(task.subtasks && task.subtasks.length > 0) && (
+              <div className="space-y-2">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <ListTodo className="size-3.5" /> {t('tasks.subtasks')} ({task.subtasks.length})
+                </Label>
                 <div className="space-y-1">
-                  {task.subtasks.map(sub => {
-                    const done = sub.status === 'completed'
+                  {task.subtasks.map(st => {
+                    const isDone = st.status === 'completed'
                     return (
-                      <div key={sub.id} className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-muted/50">
-                        <button
-                          className={`size-4 rounded border flex items-center justify-center shrink-0 ${
-                            done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300'
-                          }`}
-                          onClick={() => updateTask.mutate({ id: sub.id, status: done ? 'requested' : 'completed' })}
-                        >
-                          {done && <CheckCircle2 className="size-3" />}
-                        </button>
-                        <span className={`flex-1 ${done ? 'line-through text-muted-foreground' : ''}`}>{sub.title}</span>
-                        <span className="text-[10px] text-muted-foreground">{sub.assignee?.name}</span>
+                      <div key={st.id} className="flex items-center gap-2 text-sm pl-2">
+                        <span className={`size-4 rounded-full border flex items-center justify-center text-[9px] ${isDone ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300'}`}>
+                          {isDone && '✓'}
+                        </span>
+                        <span className={isDone ? 'line-through text-muted-foreground' : ''}>{st.title}</span>
+                        {st.assignee && <span className="text-xs text-muted-foreground ml-auto">{st.assignee.name}</span>}
                       </div>
                     )
                   })}
                 </div>
-              )}
-              {showSubtaskForm && (
-                <div className="flex items-center gap-2">
-                  <Input
-                    className="flex-1 h-8"
-                    placeholder={t('tasks.subtaskPlaceholder')}
-                    value={subtaskTitle}
+              </div>
+            )}
+
+            {/* Add subtask */}
+            {showSubtaskForm ? (
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Input className="h-8 text-sm" placeholder={t('tasks.subtaskPlaceholder')} value={subtaskTitle}
                     onChange={e => setSubtaskTitle(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleAddSubtask()}
                   />
-                  <Select value={subtaskAssignee} onValueChange={v => setSubtaskAssignee(v || '')}>
-                    <SelectTrigger className="w-32 h-8"><SelectValue placeholder={t('tasks.assignee')} /></SelectTrigger>
-                    <SelectContent>
-                      {profiles.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button size="sm" className="h-8" onClick={handleAddSubtask} disabled={!subtaskTitle.trim()}>
-                    {t('common.add')}
-                  </Button>
                 </div>
-              )}
-            </div>
+                <Select value={subtaskAssignee || '_none'} onValueChange={v => setSubtaskAssignee(!v || v === '_none' ? '' : v)}>
+                  <SelectTrigger className="w-28 h-8 text-xs"><SelectValue placeholder={t('tasks.assignee')} /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">{t('tasks.unassigned')}</SelectItem>
+                    {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" className="h-8" onClick={handleAddSubtask} disabled={!subtaskTitle.trim()}>
+                  <Plus className="size-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowSubtaskForm(false)}>
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <Button variant="ghost" size="sm" className="w-fit text-xs gap-1" onClick={() => setShowSubtaskForm(true)}>
+                <Plus className="size-3" /> {t('tasks.addSubtask')}
+              </Button>
+            )}
 
             {/* Attachments */}
             <div className="space-y-2">
-              <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <Paperclip className="size-4" /> {t('tasks.attachments')} ({attachments.length})
-              </h4>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <Paperclip className="size-3.5" /> {t('tasks.attachments')} ({attachments.length})
+                </Label>
+                <label className="cursor-pointer text-xs text-blue-600 hover:underline">
+                  + {t('tasks.addAttachment')}
+                  <input type="file" className="hidden" onChange={handleFileUpload} />
+                </label>
+              </div>
               {attachments.length > 0 && (
                 <div className="space-y-1">
-                  {attachments.map(att => (
-                    <div key={att.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-muted/30">
-                      <a href={att.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
-                        <Paperclip className="size-3" />{att.fileName}
-                      </a>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">{att.uploader?.name}</span>
-                        <button className="text-gray-400 hover:text-red-500" onClick={() => deleteAttachment.mutate({ id: att.id, taskId: att.taskId })}>
-                          <X className="size-3" />
-                        </button>
-                      </div>
+                  {attachments.map(a => (
+                    <div key={a.id} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1.5">
+                      <span className="truncate">{a.fileName}</span>
+                      <Button variant="ghost" size="sm" className="h-5 px-1" onClick={() => deleteAttachment.mutate({ id: a.id, taskId: task.id })}>
+                        <X className="size-3" />
+                      </Button>
                     </div>
                   ))}
                 </div>
               )}
-              <div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 text-xs h-7"
-                  onClick={() => {
-                    const url = prompt(t('tasks.attachUrlPrompt'))
-                    if (url && user) {
-                      const name = prompt(t('tasks.attachNamePrompt')) || url.split('/').pop() || 'file'
-                      addAttachment.mutate({ taskId: task.id, fileName: name, fileUrl: url, uploadedBy: user.id })
-                    }
-                  }}
-                >
-                  <Paperclip className="size-3" />{t('tasks.addAttachment')}
-                </Button>
-              </div>
             </div>
 
             {/* Comments */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <MessageSquare className="size-4" /> {t('tasks.comments')} ({comments.length})
-              </h4>
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1.5">
+                <MessageSquare className="size-3.5" /> {t('tasks.comments')} ({comments.length})
+              </Label>
               {comments.length > 0 && (
-                <div className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
                   {comments.map(c => (
                     <div key={c.id} className="flex gap-2">
                       <Avatar className="h-6 w-6 shrink-0 mt-0.5">
@@ -498,6 +475,527 @@ function TaskDetailDialog({
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── Project Comments Section ───────────────────────────────────────────
+
+function ProjectCommentsSection({ todoId }: { todoId: string }) {
+  const { user } = useAuth()
+  const t = useT()
+  const { data: comments = [], isLoading } = useProjectComments(todoId)
+  const createComment = useCreateComment()
+  const deleteComment = useDeleteComment()
+  const [newComment, setNewComment] = useState('')
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [comments.length])
+
+  const handleSubmit = () => {
+    if (!newComment.trim() || !user) return
+    createComment.mutate({ todoId, userId: user.id, content: newComment.trim() })
+    setNewComment('')
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs flex items-center gap-1.5">
+        <MessageSquare className="size-3.5" /> {t('todos.comments')} ({comments.length})
+      </Label>
+      <div className="max-h-40 overflow-y-auto space-y-2 border rounded-md p-2">
+        {isLoading ? (
+          <div className="text-center py-3"><Loader2 className="size-4 animate-spin mx-auto text-muted-foreground" /></div>
+        ) : comments.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-2">{t('todos.noComments')}</p>
+        ) : (
+          comments.map(c => (
+            <div key={c.id} className="group flex gap-2 text-sm">
+              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[9px] font-bold shrink-0 mt-0.5">
+                {c.user?.name?.charAt(0) || '?'}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-medium">{c.user?.name}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {new Date(c.createdAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {c.userId === user?.id && (
+                    <button
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteComment.mutate({ id: c.id, todoId })}
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs whitespace-pre-wrap break-words">{c.content}</p>
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={bottomRef} />
+      </div>
+      <div className="flex gap-2">
+        <Input
+          className="text-sm h-8"
+          placeholder={t('todos.commentPlaceholder')}
+          value={newComment}
+          onChange={e => setNewComment(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSubmit()}
+        />
+        <Button size="sm" className="h-8 shrink-0" onClick={handleSubmit} disabled={!newComment.trim() || createComment.isPending}>
+          <Send className="size-3.5" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Project Form Fields ────────────────────────────────────────────────
+
+interface ProjectFormData {
+  title: string
+  description: string
+  priority: TodoPriority
+  dueDate: string
+  team: string
+  ownerId: string
+  assignees: string[]
+}
+
+const EMPTY_PROJECT_FORM: ProjectFormData = {
+  title: '', description: '', priority: 'medium', dueDate: '', team: '', ownerId: '', assignees: [],
+}
+
+function ProjectFormFields({
+  form,
+  setForm,
+  profiles,
+}: {
+  form: ProjectFormData
+  setForm: React.Dispatch<React.SetStateAction<ProjectFormData>>
+  profiles: User[]
+}) {
+  const t = useT()
+  const ownerName = form.ownerId ? profiles.find(p => p.id === form.ownerId)?.name : null
+
+  const toggleAssignee = (uid: string) => {
+    setForm(f => ({
+      ...f,
+      assignees: f.assignees.includes(uid)
+        ? f.assignees.filter(a => a !== uid)
+        : [...f.assignees, uid],
+    }))
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label>{t('todos.formTitle')}</Label>
+        <Input placeholder={t('todos.formTitlePlaceholder')} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+      </div>
+      <div className="space-y-2">
+        <Label>{t('todos.formDescription')}</Label>
+        <Textarea placeholder={t('todos.formDescriptionPlaceholder')} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-2">
+          <Label>{t('todos.formTeam')}</Label>
+          <Select value={form.team || '_none'} onValueChange={v => setForm(f => ({ ...f, team: !v || v === '_none' ? '' : v }))}>
+            <SelectTrigger><SelectValue placeholder={t('todos.formTeamPlaceholder')} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_none">{t('todos.formTeamNone')}</SelectItem>
+              <SelectItem value="management">{t('dept.management')}</SelectItem>
+              <SelectItem value="sales">{t('dept.sales')}</SelectItem>
+              <SelectItem value="marketing">{t('dept.marketing')}</SelectItem>
+              <SelectItem value="finance">{t('dept.finance')}</SelectItem>
+              <SelectItem value="service">{t('dept.service')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>{t('todos.formPriority')}</Label>
+          <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v as TodoPriority }))}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="high">{t('todos.priorityHigh')}</SelectItem>
+              <SelectItem value="medium">{t('todos.priorityMedium')}</SelectItem>
+              <SelectItem value="low">{t('todos.priorityLow')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>{t('todos.formDueDate')}</Label>
+          <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+        </div>
+      </div>
+
+      {/* Owner (책임자) */}
+      <div className="space-y-2">
+        <Label className="flex items-center gap-1.5"><UserIcon className="size-3.5" /> {t('todos.formOwner')}</Label>
+        <Select value={form.ownerId || '_none'} onValueChange={v => setForm(f => ({ ...f, ownerId: !v || v === '_none' ? '' : v }))}>
+          <SelectTrigger>
+            {ownerName ? (
+              <span className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold shrink-0">{ownerName.charAt(0)}</span>
+                {ownerName}
+              </span>
+            ) : (
+              <SelectValue placeholder={t('todos.formOwnerPlaceholder')} />
+            )}
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_none">{t('todos.formOwnerNone')}</SelectItem>
+            {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name} {p.position ? `(${p.position})` : ''}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Assignees (담당자 - 복수) */}
+      <div className="space-y-2">
+        <Label className="flex items-center gap-1.5">
+          <Users className="size-3.5" /> {t('todos.formAssignees')}
+          <span className="text-[10px] text-muted-foreground font-normal ml-1">{t('projects.autoTaskHint')}</span>
+        </Label>
+        <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1">
+          {profiles.map(p => {
+            const selected = form.assignees.includes(p.id)
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => toggleAssignee(p.id)}
+                className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${
+                  selected ? 'bg-blue-50 text-blue-700' : 'hover:bg-muted/50'
+                }`}
+              >
+                <span className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
+                  selected ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-300'
+                }`}>
+                  {selected && '✓'}
+                </span>
+                <span>{p.name}</span>
+                {p.department && (
+                  <span className="text-[10px] text-muted-foreground ml-auto">
+                    {TEAM_CONFIG[p.department as ProjectTeam] ? t(TEAM_CONFIG[p.department as ProjectTeam].labelKey as any) : p.department}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+        {form.assignees.length > 0 && (
+          <p className="text-xs text-muted-foreground">{t('todos.formAssigneesCount', { n: form.assignees.length })}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Project Section ────────────────────────────────────────────────────
+
+function ProjectSection({ profiles }: { profiles: User[] }) {
+  const t = useT()
+  const { user } = useAuth()
+  const { data: todos = [], isLoading: todosLoading } = useTodos()
+  const createTodo = useCreateTodo()
+  const updateTodo = useUpdateTodo()
+  const updateStatus = useUpdateTodoStatus()
+  const createTask = useCreateTask()
+
+  const [expanded, setExpanded] = useState(true)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
+  const [form, setForm] = useState<ProjectFormData>({ ...EMPTY_PROJECT_FORM })
+
+  // Active projects (not done)
+  const activeProjects = useMemo(() => todos.filter(t => t.status !== 'done'), [todos])
+
+
+  const openCreate = () => {
+    setForm({ ...EMPTY_PROJECT_FORM })
+    setCreateOpen(true)
+  }
+
+  const handleCreate = () => {
+    if (!form.title.trim() || !user) return
+    createTodo.mutate(
+      {
+        title: form.title,
+        description: form.description || undefined,
+        priority: form.priority,
+        dueDate: form.dueDate || undefined,
+        team: (form.team || undefined) as ProjectTeam | undefined,
+        ownerId: form.ownerId || undefined,
+        assignees: form.assignees.length > 0 ? form.assignees : undefined,
+        assignedTo: form.ownerId || user.id,
+        createdBy: user.id,
+      },
+      {
+        onSuccess: () => {
+          // Auto-create tasks for each assignee
+          if (form.assignees.length > 0) {
+            for (const assigneeId of form.assignees) {
+              createTask.mutate({
+                title: form.title,
+                description: form.description || undefined,
+                priority: form.priority === 'high' ? 'urgent' : form.priority === 'low' ? 'low' : 'normal',
+                requesterId: user.id,
+                assigneeId,
+                department: form.team || undefined,
+                dueDate: form.dueDate || undefined,
+              }, {
+                onSuccess: (created) => {
+                  if (assigneeId !== user.id) {
+                    createNotificationsForUsers([assigneeId], {
+                      type: 'task_assigned',
+                      title: '새 프로젝트 업무 요청',
+                      message: `${user.name}님이 프로젝트 "${form.title}"의 업무를 요청했습니다.`,
+                      link: `/tasks?open=${created.id}`,
+                      metadata: { taskId: created.id },
+                    }).catch(() => {})
+                  }
+                },
+              })
+            }
+          }
+          setCreateOpen(false)
+          setForm({ ...EMPTY_PROJECT_FORM })
+        },
+      },
+    )
+  }
+
+  const openEdit = (todo: Todo) => {
+    setForm({
+      title: todo.title,
+      description: todo.description || '',
+      priority: todo.priority,
+      dueDate: todo.dueDate || '',
+      team: todo.team || '',
+      ownerId: todo.ownerId || '',
+      assignees: todo.assignees || [],
+    })
+    setEditingTodo(todo)
+  }
+
+  const handleEdit = () => {
+    if (!editingTodo || !form.title.trim() || !user) return
+    // Detect newly added assignees
+    const prevAssignees = editingTodo.assignees || []
+    const newAssignees = form.assignees.filter(a => !prevAssignees.includes(a))
+
+    updateTodo.mutate(
+      {
+        id: editingTodo.id,
+        title: form.title,
+        description: form.description || undefined,
+        priority: form.priority,
+        dueDate: form.dueDate || undefined,
+        team: form.team ? (form.team as ProjectTeam) : null,
+        ownerId: form.ownerId || null,
+        assignees: form.assignees,
+      },
+      {
+        onSuccess: () => {
+          // Auto-create tasks for NEWLY added assignees
+          if (newAssignees.length > 0) {
+            for (const assigneeId of newAssignees) {
+              createTask.mutate({
+                title: form.title,
+                description: form.description || undefined,
+                priority: form.priority === 'high' ? 'urgent' : form.priority === 'low' ? 'low' : 'normal',
+                requesterId: user.id,
+                assigneeId,
+                department: form.team || undefined,
+                dueDate: form.dueDate || undefined,
+              }, {
+                onSuccess: (created) => {
+                  if (assigneeId !== user.id) {
+                    createNotificationsForUsers([assigneeId], {
+                      type: 'task_assigned',
+                      title: '새 프로젝트 업무 요청',
+                      message: `${user.name}님이 프로젝트 "${form.title}"의 업무를 요청했습니다.`,
+                      link: `/tasks?open=${created.id}`,
+                      metadata: { taskId: created.id },
+                    }).catch(() => {})
+                  }
+                },
+              })
+            }
+          }
+          setEditingTodo(null)
+          setForm({ ...EMPTY_PROJECT_FORM })
+        },
+      },
+    )
+  }
+
+  const handleToggleStatus = (id: string, status: TodoStatus) => {
+    updateStatus.mutate({ id, status })
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <button
+          className="flex items-center gap-2 text-lg font-bold hover:text-primary transition-colors"
+          onClick={() => setExpanded(v => !v)}
+        >
+          <FolderKanban className="size-5 text-purple-500" />
+          {t('projects.title')}
+          <Badge variant="secondary" className="text-xs">{activeProjects.length}</Badge>
+          {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+        </button>
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={openCreate}>
+          <Plus className="size-3.5" /> {t('projects.addProject')}
+        </Button>
+      </div>
+
+      {/* Project list */}
+      {expanded && (
+        <Card>
+          <CardContent className="p-3">
+            {todosLoading ? (
+              <div className="py-6 flex justify-center"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>
+            ) : activeProjects.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">{t('projects.noProjects')}</div>
+            ) : (
+              <div className="space-y-1">
+                {activeProjects.map(todo => {
+                  const isDone = todo.status === 'done'
+                  const statusCfg = TODO_STATUS_CONFIG[todo.status]
+                  const StatusIcon = statusCfg.icon
+                  return (
+                    <div
+                      key={todo.id}
+                      className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors hover:bg-muted/30 cursor-pointer group ${isDone ? 'opacity-50' : ''}`}
+                      onClick={() => openEdit(todo)}
+                    >
+                      {/* Status icon */}
+                      <div onClick={e => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="shrink-0 focus:outline-none">
+                            <StatusIcon className={`size-5 ${statusCfg.color}`} />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-32">
+                            {(Object.entries(TODO_STATUS_CONFIG) as [TodoStatus, typeof TODO_STATUS_CONFIG.todo][]).map(([key, cfg]) => {
+                              const Icon = cfg.icon
+                              return (
+                                <DropdownMenuItem key={key} onClick={() => handleToggleStatus(todo.id, key)} className={todo.status === key ? 'bg-muted font-medium' : ''}>
+                                  <Icon className={`size-4 mr-2 ${cfg.color}`} />
+                                  {t(cfg.labelKey as any)}
+                                </DropdownMenuItem>
+                              )
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium truncate">{todo.title}</span>
+                          {todo.team && TEAM_CONFIG[todo.team] && (
+                            <Badge variant="outline" className={`text-[10px] h-4 px-1.5 ${TEAM_CONFIG[todo.team].color}`}>
+                              {t(TEAM_CONFIG[todo.team].labelKey as any)}
+                            </Badge>
+                          )}
+                          {todo.dueDate && (
+                            <span className="text-[10px] text-muted-foreground">{todo.dueDate.slice(5)}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          {todo.ownerId && (
+                            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <UserIcon className="size-3" />
+                              <PersonChip userId={todo.ownerId} profiles={profiles} />
+                            </span>
+                          )}
+                          {todo.assignees && todo.assignees.length > 0 && (
+                            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <Users className="size-3" />
+                              {todo.assignees.slice(0, 3).map(uid => (
+                                <PersonChip key={uid} userId={uid} profiles={profiles} />
+                              ))}
+                              {todo.assignees.length > 3 && <span className="text-[10px]">+{todo.assignees.length - 3}</span>}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="size-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Create Project Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('projects.addProjectTitle')}</DialogTitle>
+            <DialogDescription>{t('projects.addProjectDesc')}</DialogDescription>
+          </DialogHeader>
+          <ProjectFormFields form={form} setForm={setForm} profiles={profiles} />
+          <Button className="w-full" onClick={handleCreate} disabled={!form.title.trim() || createTodo.isPending}>
+            {createTodo.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : <Plus className="size-4 mr-1" />}
+            {t('projects.addProject')}
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Project Dialog */}
+      <Dialog open={!!editingTodo} onOpenChange={open => { if (!open) setEditingTodo(null) }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('projects.editProjectTitle')}</DialogTitle>
+          </DialogHeader>
+          <ProjectFormFields form={form} setForm={setForm} profiles={profiles} />
+
+          {/* Status change */}
+          {editingTodo && (
+            <div className="space-y-2">
+              <Label>{t('common.status')}</Label>
+              <div className="flex gap-2">
+                {(Object.entries(TODO_STATUS_CONFIG) as [TodoStatus, typeof TODO_STATUS_CONFIG.todo][]).map(([key, cfg]) => {
+                  const Icon = cfg.icon
+                  const isActive = editingTodo.status === key
+                  return (
+                    <Button
+                      key={key}
+                      variant={isActive ? 'default' : 'outline'}
+                      size="sm"
+                      className={`gap-1.5 ${isActive ? '' : 'text-muted-foreground'}`}
+                      onClick={() => {
+                        handleToggleStatus(editingTodo.id, key)
+                        setEditingTodo({ ...editingTodo, status: key })
+                      }}
+                    >
+                      <Icon className={`size-3.5 ${isActive ? '' : cfg.color}`} />
+                      {t(cfg.labelKey as any)}
+                    </Button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Comments */}
+          {editingTodo && <ProjectCommentsSection todoId={editingTodo.id} />}
+
+          <Button className="w-full" onClick={handleEdit} disabled={!form.title.trim() || updateTodo.isPending}>
+            {updateTodo.isPending ? t('common.saving') : t('common.save')}
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 
@@ -572,162 +1070,168 @@ export function TaskBoardPage() {
   }, [user, newTask, createTask])
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{t('tasks.title')}</h1>
-          <p className="text-sm text-muted-foreground">{t('tasks.description')}</p>
-        </div>
-        <Button className="gap-1.5" onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="size-4" /> {t('tasks.createTask')}
-        </Button>
-      </div>
+    <div className="space-y-6">
+      {/* ═══ Project Section ═══ */}
+      <ProjectSection profiles={profiles} />
 
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-4 gap-3">
-          <Card className="border-l-[3px] border-l-amber-400">
-            <CardContent className="py-3 px-4">
-              <div className="text-xs text-muted-foreground">{t('tasks.myAssigned')}</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-bold">{stats.assigned.total - stats.assigned.completed}</span>
-                <span className="text-xs text-muted-foreground">{t('tasks.pending')}</span>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-[3px] border-l-blue-400">
-            <CardContent className="py-3 px-4">
-              <div className="text-xs text-muted-foreground">{t('tasks.myRequested')}</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-bold">{stats.requested.total - stats.requested.completed}</span>
-                <span className="text-xs text-muted-foreground">{t('tasks.inProgressLabel')}</span>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-[3px] border-l-red-400">
-            <CardContent className="py-3 px-4">
-              <div className="text-xs text-muted-foreground">{t('tasks.overdueLabel')}</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-bold text-red-500">{stats.overdue}</span>
-                <span className="text-xs text-muted-foreground">{t('tasks.tasks')}</span>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-l-[3px] border-l-emerald-400">
-            <CardContent className="py-3 px-4">
-              <div className="text-xs text-muted-foreground">{t('tasks.completedLabel')}</div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-bold text-emerald-600">{stats.assigned.completed + stats.requested.completed}</span>
-                <span className="text-xs text-muted-foreground">{t('tasks.total')}</span>
-              </div>
-            </CardContent>
-          </Card>
+      {/* ═══ Task Section ═══ */}
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">{t('tasks.title')}</h1>
+            <p className="text-sm text-muted-foreground">{t('tasks.description')}</p>
+          </div>
+          <Button className="gap-1.5" onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="size-4" /> {t('tasks.createTask')}
+          </Button>
         </div>
-      )}
 
-      {/* Filters & Search */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
-          <Input
-            className="pl-9 h-9"
-            placeholder={t('tasks.searchPlaceholder')}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
-        </div>
-        <Select value={filters.status || 'all'} onValueChange={v => setFilters(f => ({ ...f, status: (v || 'all') as TaskStatus | 'all' }))}>
-          <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('tasks.allStatus')}</SelectItem>
-            {STATUS_ORDER.map(s => (
-              <SelectItem key={s} value={s}>{statusCfg[s].label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filters.priority || 'all'} onValueChange={v => setFilters(f => ({ ...f, priority: (v || 'all') as TaskPriority | 'all' }))}>
-          <SelectTrigger className="w-28 h-9"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('tasks.allPriority')}</SelectItem>
-            <SelectItem value="urgent">{t('tasks.urgent')}</SelectItem>
-            <SelectItem value="normal">{t('tasks.normal')}</SelectItem>
-            <SelectItem value="low">{t('tasks.low')}</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filters.assigneeId || 'all'} onValueChange={v => setFilters(f => ({ ...f, assigneeId: v === 'all' || !v ? undefined : v }))}>
-          <SelectTrigger className="w-32 h-9"><SelectValue placeholder={t('tasks.assignee')} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t('tasks.allMembers')}</SelectItem>
-            {user && <SelectItem value={user.id}>{t('tasks.myTasks')}</SelectItem>}
-            {profiles.filter(p => p.id !== user?.id).map(p => (
-              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="ml-auto flex items-center gap-1 bg-muted rounded-lg p-0.5">
-          <button
-            className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${viewMode === 'board' ? 'bg-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setViewMode('board')}
-          >
-            <Columns3 className="size-3.5 inline mr-1" />{t('tasks.boardView')}
-          </button>
-          <button
-            className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-            onClick={() => setViewMode('list')}
-          >
-            <LayoutList className="size-3.5 inline mr-1" />{t('tasks.listView')}
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      {isLoading ? (
-        <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
-      ) : viewMode === 'board' ? (
-        /* Board View */
-        <div className="grid grid-cols-4 gap-4">
-          {STATUS_ORDER.filter(s => s !== 'cancelled').map(status => {
-            const col = boardColumns[status]
-            const scfg = statusCfg[status]
-            const SIcon = scfg.icon
-            return (
-              <div key={status} className="space-y-2">
-                <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${scfg.className}`}>
-                  <SIcon className="size-3.5" />
-                  <span className="text-xs font-semibold">{scfg.label}</span>
-                  <span className="text-xs opacity-70">({col.length})</span>
+        {/* Stats Cards */}
+        {stats && (
+          <div className="grid grid-cols-4 gap-3">
+            <Card className="border-l-[3px] border-l-amber-400">
+              <CardContent className="py-3 px-4">
+                <div className="text-xs text-muted-foreground">{t('tasks.myAssigned')}</div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-bold">{stats.assigned.total - stats.assigned.completed}</span>
+                  <span className="text-xs text-muted-foreground">{t('tasks.pending')}</span>
                 </div>
-                <div className="space-y-2 min-h-[200px]">
-                  {col.map(task => (
-                    <TaskCard key={task.id} task={task} onClick={() => setSelectedTaskId(task.id)} />
-                  ))}
-                  {col.length === 0 && (
-                    <div className="text-xs text-muted-foreground text-center py-8">
-                      {t('tasks.emptyColumn')}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        /* List View */
-        <div className="space-y-2">
-          {tasks.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground text-sm">
-                {t('tasks.noTasks')}
               </CardContent>
             </Card>
-          ) : (
-            tasks.map(task => (
-              <TaskCard key={task.id} task={task} onClick={() => setSelectedTaskId(task.id)} />
-            ))
-          )}
+            <Card className="border-l-[3px] border-l-blue-400">
+              <CardContent className="py-3 px-4">
+                <div className="text-xs text-muted-foreground">{t('tasks.myRequested')}</div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-bold">{stats.requested.total - stats.requested.completed}</span>
+                  <span className="text-xs text-muted-foreground">{t('tasks.inProgressLabel')}</span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-l-[3px] border-l-red-400">
+              <CardContent className="py-3 px-4">
+                <div className="text-xs text-muted-foreground">{t('tasks.overdueLabel')}</div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-bold text-red-500">{stats.overdue}</span>
+                  <span className="text-xs text-muted-foreground">{t('tasks.tasks')}</span>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-l-[3px] border-l-emerald-400">
+              <CardContent className="py-3 px-4">
+                <div className="text-xs text-muted-foreground">{t('tasks.completedLabel')}</div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-bold text-emerald-600">{stats.assigned.completed + stats.requested.completed}</span>
+                  <span className="text-xs text-muted-foreground">{t('tasks.total')}</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Filters & Search */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
+            <Input
+              className="pl-9 h-9"
+              placeholder={t('tasks.searchPlaceholder')}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <Select value={filters.status || 'all'} onValueChange={v => setFilters(f => ({ ...f, status: (v || 'all') as TaskStatus | 'all' }))}>
+            <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('tasks.allStatus')}</SelectItem>
+              {STATUS_ORDER.map(s => (
+                <SelectItem key={s} value={s}>{statusCfg[s].label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filters.priority || 'all'} onValueChange={v => setFilters(f => ({ ...f, priority: (v || 'all') as TaskPriority | 'all' }))}>
+            <SelectTrigger className="w-28 h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('tasks.allPriority')}</SelectItem>
+              <SelectItem value="urgent">{t('tasks.urgent')}</SelectItem>
+              <SelectItem value="normal">{t('tasks.normal')}</SelectItem>
+              <SelectItem value="low">{t('tasks.low')}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filters.assigneeId || 'all'} onValueChange={v => setFilters(f => ({ ...f, assigneeId: v === 'all' || !v ? undefined : v }))}>
+            <SelectTrigger className="w-32 h-9"><SelectValue placeholder={t('tasks.assignee')} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('tasks.allMembers')}</SelectItem>
+              {user && <SelectItem value={user.id}>{t('tasks.myTasks')}</SelectItem>}
+              {profiles.filter(p => p.id !== user?.id).map(p => (
+                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="ml-auto flex items-center gap-1 bg-muted rounded-lg p-0.5">
+            <button
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${viewMode === 'board' ? 'bg-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setViewMode('board')}
+            >
+              <Columns3 className="size-3.5 inline mr-1" />{t('tasks.boardView')}
+            </button>
+            <button
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setViewMode('list')}
+            >
+              <LayoutList className="size-3.5 inline mr-1" />{t('tasks.listView')}
+            </button>
+          </div>
         </div>
-      )}
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+        ) : viewMode === 'board' ? (
+          /* Board View */
+          <div className="grid grid-cols-4 gap-4">
+            {STATUS_ORDER.filter(s => s !== 'cancelled').map(status => {
+              const col = boardColumns[status]
+              const scfg = statusCfg[status]
+              const SIcon = scfg.icon
+              return (
+                <div key={status} className="space-y-2">
+                  <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${scfg.className}`}>
+                    <SIcon className="size-3.5" />
+                    <span className="text-xs font-semibold">{scfg.label}</span>
+                    <span className="text-xs opacity-70">({col.length})</span>
+                  </div>
+                  <div className="space-y-2 min-h-[200px]">
+                    {col.map(task => (
+                      <TaskCard key={task.id} task={task} onClick={() => setSelectedTaskId(task.id)} />
+                    ))}
+                    {col.length === 0 && (
+                      <div className="text-xs text-muted-foreground text-center py-8">
+                        {t('tasks.emptyColumn')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          /* List View */
+          <div className="space-y-2">
+            {tasks.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground text-sm">
+                  {t('tasks.noTasks')}
+                </CardContent>
+              </Card>
+            ) : (
+              tasks.map(task => (
+                <TaskCard key={task.id} task={task} onClick={() => setSelectedTaskId(task.id)} />
+              ))
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Task Detail Dialog */}
       <TaskDetailDialog
