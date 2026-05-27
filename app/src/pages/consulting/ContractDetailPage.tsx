@@ -184,6 +184,81 @@ function IncentivePersonSelect({
   )
 }
 
+/** Inline form to add an incentive scoped to a specific extra installment */
+function ExtraIncentiveAddForm({
+  contractId,
+  installmentId,
+  profiles,
+  recipients,
+  onAddRecipient,
+}: {
+  contractId: string
+  installmentId: string
+  profiles: Array<{ id: string; name: string }>
+  recipients: Array<{ id: string; name: string }>
+  onAddRecipient: (name: string) => void
+}) {
+  const t = useT()
+  const createIncentive = useCreateIncentive()
+  const [form, setForm] = useState({ profileId: '', customName: '', incentiveType: '' })
+
+  return (
+    <div className="flex items-end gap-2 flex-wrap pt-1">
+      <div className="flex-1 min-w-[140px] space-y-1">
+        <IncentivePersonSelect
+          profiles={profiles}
+          recipients={recipients}
+          value={form.profileId}
+          customName={form.customName}
+          onChange={(profileId, customName) => setForm(f => ({ ...f, profileId, customName }))}
+          onAddRecipient={onAddRecipient}
+          placeholder={t('incentive.selectPerson')}
+          addNewLabel={t('incentive.addNewPerson')}
+        />
+      </div>
+      <div className="flex-1 min-w-[120px] space-y-1">
+        <Select value={form.incentiveType} onValueChange={(v) => setForm(f => ({ ...f, incentiveType: v || '' }))}>
+          <SelectTrigger className="h-8 text-xs">
+            <span>
+              {form.incentiveType && INCENTIVE_TYPES[form.incentiveType as IncentiveType]
+                ? `${t(INCENTIVE_TYPES[form.incentiveType as IncentiveType].labelKey)} (${INCENTIVE_TYPES[form.incentiveType as IncentiveType].defaultPct}%)`
+                : t('incentive.selectType')}
+            </span>
+          </SelectTrigger>
+          <SelectContent className="min-w-[280px]">
+            {(Object.entries(INCENTIVE_TYPES) as [IncentiveType, typeof INCENTIVE_TYPES[IncentiveType]][]).map(([key, cfg]) => (
+              <SelectItem key={key} value={key}>{t(cfg.labelKey)} ({cfg.defaultPct}%)</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Button
+        size="sm"
+        className="h-8 gap-1 text-xs"
+        disabled={(!form.profileId && !form.customName.trim()) || !form.incentiveType || createIncentive.isPending}
+        onClick={() => {
+          if (!form.incentiveType) return
+          if (!form.profileId && !form.customName.trim()) return
+          const typKey = form.incentiveType as IncentiveType
+          createIncentive.mutate({
+            contract_id: contractId,
+            profile_id: form.profileId || null,
+            custom_name: form.customName.trim() || null,
+            incentive_type: typKey,
+            percentage: INCENTIVE_TYPES[typKey].defaultPct,
+            installment_id: installmentId,
+          }, {
+            onSuccess: () => setForm({ profileId: '', customName: '', incentiveType: '' }),
+          })
+        }}
+      >
+        {createIncentive.isPending ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+        {t('common.add')}
+      </Button>
+    </div>
+  )
+}
+
 function InstallmentCard({
   installment,
   currency,
@@ -1002,76 +1077,61 @@ export function ContractDetailPage() {
         </div>
         <Card>
           <CardContent className="py-4 space-y-4">
-            {/* Existing incentives */}
-            {contractIncentives.length > 0 ? (
-              <div className="space-y-3">
-                {contractIncentives.map((inc) => {
-                  const typeCfg = INCENTIVE_TYPES[inc.incentiveType]
-                  return (
-                    <div key={inc.id} className="p-3 rounded-lg bg-orange-50/50 border border-orange-100 space-y-3">
-                      {/* Header: type, name, percentage, delete */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Badge variant="outline" className="text-orange-700 border-orange-200 bg-orange-100 text-xs">
-                            {t(typeCfg.labelKey)}
-                          </Badge>
-                          <span className="text-sm font-medium">{inc.displayName}</span>
-                          <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
+            {/* ── Base contract incentives ── */}
+            {(() => {
+              const baseIncentives = contractIncentives.filter(inc => !inc.installmentId)
+              return baseIncentives.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('incentive.baseContract')}</div>
+                  {baseIncentives.map((inc) => {
+                    const typeCfg = INCENTIVE_TYPES[inc.incentiveType]
+                    return (
+                      <div key={inc.id} className="p-3 rounded-lg bg-orange-50/50 border border-orange-100 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="text-orange-700 border-orange-200 bg-orange-100 text-xs">
+                              {t(typeCfg.labelKey)}
+                            </Badge>
+                            <span className="text-sm font-medium">{inc.displayName}</span>
+                            <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
+                          </div>
+                          {!isCancelled && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                              onClick={() => { if (confirm(t('incentive.deleteConfirm'))) deleteIncentive.mutate(inc.id) }}>
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          )}
                         </div>
-                        {!isCancelled && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                            onClick={() => {
-                              if (confirm(t('incentive.deleteConfirm'))) {
-                                deleteIncentive.mutate(inc.id)
-                              }
-                            }}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
+                        {baseInstallments.length > 0 && (
+                          <div className="space-y-1.5">
+                            {baseInstallments.map((inst) => {
+                              const isPaid = inst.paidAmount > 0
+                              const amountExVat = Math.round(inst.paidAmount / 1.1)
+                              const instInc = isPaid ? Math.round(amountExVat * inc.percentage / 100) : 0
+                              return (
+                                <div key={inst.id} className={`flex items-center justify-between px-3 py-1.5 rounded text-sm ${isPaid ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`font-medium ${isPaid ? 'text-green-800' : 'text-gray-400'}`}>{inst.label}</span>
+                                    {isPaid && <span className="text-xs text-green-600">({formatCurrency(amountExVat)} × {inc.percentage}%)</span>}
+                                  </div>
+                                  <span className={`font-mono font-semibold ${isPaid ? 'text-green-700' : 'text-gray-400'}`}>
+                                    {isPaid ? formatCurrency(instInc) : t('incentive.unpaid')}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
                         )}
                       </div>
-                      {/* Per-installment breakdown — each row shows label, paid amount, incentive */}
-                      {baseInstallments.length > 0 && (
-                        <div className="space-y-1.5">
-                          {baseInstallments.map((inst) => {
-                            const isPaid = inst.paidAmount > 0
-                            const amountExVat = Math.round(inst.paidAmount / 1.1)
-                            const instInc = isPaid ? Math.round(amountExVat * inc.percentage / 100) : 0
-                            return (
-                              <div
-                                key={inst.id}
-                                className={`flex items-center justify-between px-3 py-1.5 rounded text-sm ${isPaid ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className={`font-medium ${isPaid ? 'text-green-800' : 'text-gray-400'}`}>
-                                    {inst.label}
-                                  </span>
-                                  {isPaid && (
-                                    <span className="text-xs text-green-600">
-                                      ({formatCurrency(amountExVat)} × {inc.percentage}%)
-                                    </span>
-                                  )}
-                                </div>
-                                <span className={`font-mono font-semibold ${isPaid ? 'text-green-700' : 'text-gray-400'}`}>
-                                  {isPaid ? formatCurrency(instInc) : t('incentive.unpaid')}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">{t('incentive.noIncentives')}</p>
-            )}
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">{t('incentive.noIncentives')}</p>
+              )
+            })()}
 
-            {/* Add incentive form */}
+            {/* Add base incentive form */}
             {!isCancelled && (
               <div className="flex items-end gap-2 pt-2 border-t flex-wrap">
                 <div className="flex-1 min-w-[160px] space-y-1">
@@ -1126,6 +1186,72 @@ export function ContractDetailPage() {
                   {createIncentive.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
                   {t('incentive.addIncentive')}
                 </Button>
+              </div>
+            )}
+
+            {/* ── Extra installment incentives ── */}
+            {extraInstallments.length > 0 && (
+              <div className="space-y-3 pt-3 border-t">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('incentive.extraPayments')}</div>
+                {extraInstallments.map((extInst) => {
+                  const extIncentives = contractIncentives.filter(inc => inc.installmentId === extInst.id)
+                  const isPaid = extInst.paidAmount > 0
+                  const amountExVat = isPaid ? Math.round(extInst.paidAmount / 1.1) : 0
+                  return (
+                    <div key={extInst.id} className="p-3 rounded-lg bg-purple-50/50 border border-purple-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-purple-700 border-purple-200 bg-purple-100 text-xs">{t('contracts.extraCharges')}</Badge>
+                          <span className="text-sm font-medium">{extInst.label}</span>
+                          <span className={`text-xs ${isPaid ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {isPaid ? formatCurrency(extInst.paidAmount) : formatCurrency(extInst.amount)}
+                          </span>
+                          {isPaid && <Badge className="bg-green-100 text-green-700 text-[10px] h-4">{t('contracts.status.fullyPaid')}</Badge>}
+                        </div>
+                      </div>
+                      {/* Existing incentives for this extra installment */}
+                      {extIncentives.length > 0 && (
+                        <div className="space-y-1.5">
+                          {extIncentives.map((inc) => {
+                            const typeCfg = INCENTIVE_TYPES[inc.incentiveType]
+                            const extIncAmt = isPaid ? Math.round(amountExVat * inc.percentage / 100) : 0
+                            return (
+                              <div key={inc.id} className={`flex items-center justify-between px-3 py-1.5 rounded text-sm ${isPaid ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-orange-700 border-orange-200 bg-orange-100 text-[10px] h-4 px-1">{t(typeCfg.labelKey)}</Badge>
+                                  <span className="font-medium text-sm">{inc.displayName}</span>
+                                  <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
+                                  {isPaid && <span className="text-xs text-green-600">({formatCurrency(amountExVat)} × {inc.percentage}%)</span>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-mono font-semibold ${isPaid ? 'text-green-700' : 'text-gray-400'}`}>
+                                    {isPaid ? formatCurrency(extIncAmt) : t('incentive.unpaid')}
+                                  </span>
+                                  {!isCancelled && (
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500"
+                                      onClick={() => { if (confirm(t('incentive.deleteConfirm'))) deleteIncentive.mutate(inc.id) }}>
+                                      <Trash2 className="size-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      {/* Add incentive for this extra installment */}
+                      {!isCancelled && (
+                        <ExtraIncentiveAddForm
+                          contractId={id!}
+                          installmentId={extInst.id}
+                          profiles={allProfiles}
+                          recipients={incentiveRecipients}
+                          onAddRecipient={(name) => createRecipient.mutate(name)}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </CardContent>

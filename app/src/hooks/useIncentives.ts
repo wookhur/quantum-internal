@@ -15,6 +15,8 @@ export interface ContractIncentive {
   displayName: string
   incentiveType: 'partner_sales' | 'partner_fee' | 'cold_call' | 'total_revenue'
   percentage: number
+  /** When set, this incentive applies only to that specific installment (extra payments) */
+  installmentId: string | null
   createdAt: string
 }
 
@@ -80,6 +82,7 @@ function mapIncentive(row: Record<string, unknown>): ContractIncentive {
     displayName: profileName || customName || '',
     incentiveType: row.incentive_type as ContractIncentive['incentiveType'],
     percentage: Number(row.percentage) || 0,
+    installmentId: (row.installment_id as string) || null,
     createdAt: row.created_at as string,
   }
 }
@@ -188,7 +191,7 @@ export function useIncentivesByInstallment() {
 
       const { data: installments } = await supabase
         .from('payment_installments')
-        .select('id, contract_id, label, installment_order, paid_amount, paid_date, status')
+        .select('id, contract_id, label, installment_order, paid_amount, paid_date, status, category')
         .in('contract_id', contractIds)
         .eq('status', 'paid')
 
@@ -201,6 +204,7 @@ export function useIncentivesByInstallment() {
         installmentOrder: number
         paidAmount: number
         paidDate: string
+        category: string
       }>>()
 
       for (const inst of installments) {
@@ -212,10 +216,13 @@ export function useIncentivesByInstallment() {
           installmentOrder: (inst.installment_order as number) || 0,
           paidAmount: Number(inst.paid_amount) || 0,
           paidDate: (inst.paid_date as string) || '',
+          category: (inst.category as string) || 'base',
         })
       }
 
-      // 4. Cross-join: each incentive definition × each paid installment = IncentiveByInstallment
+      // 4. Cross-join with scoping:
+      //    - Base incentives (installmentId=null): apply only to base installments
+      //    - Installment-specific incentives: apply only to their specific installment
       const results: IncentiveByInstallment[] = []
 
       for (const row of data) {
@@ -229,6 +236,14 @@ export function useIncentivesByInstallment() {
 
         const paidInsts = instMap.get(inc.contractId) || []
         for (const pi of paidInsts) {
+          // Scope matching: base incentives → base installments only,
+          // installment-specific incentives → that installment only
+          if (inc.installmentId) {
+            if (pi.id !== inc.installmentId) continue
+          } else {
+            if (pi.category !== 'base') continue
+          }
+
           // 부가세 10% 제외 후 인센티브 계산
           const amountExVat = Math.round(pi.paidAmount / 1.1)
           const incentiveAmount = Math.round(amountExVat * inc.percentage / 100)
@@ -272,6 +287,7 @@ export function useCreateIncentive() {
       custom_name?: string | null
       incentive_type: IncentiveType
       percentage: number
+      installment_id?: string | null
     }) => {
       const row: Record<string, unknown> = {
         contract_id: input.contract_id,
@@ -280,6 +296,7 @@ export function useCreateIncentive() {
       }
       if (input.profile_id) row.profile_id = input.profile_id
       if (input.custom_name) row.custom_name = input.custom_name
+      if (input.installment_id) row.installment_id = input.installment_id
       const { data, error } = await supabase
         .from('contract_incentives')
         .insert(row)
