@@ -109,11 +109,19 @@ function IncentivePersonSelect({
   useEffect(() => {
     if (!open || !triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
+    const dropdownMaxH = 280
+    const spaceBelow = window.innerHeight - rect.bottom - 8
+    const spaceAbove = rect.top - 8
+    // Open upward if not enough space below but enough above
+    const openUp = spaceBelow < dropdownMaxH && spaceAbove > spaceBelow
     setDropdownStyle({
       position: 'fixed',
-      top: rect.bottom + 4,
+      ...(openUp
+        ? { bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 }),
       left: rect.left,
       width: rect.width,
+      maxHeight: Math.min(dropdownMaxH, openUp ? spaceAbove : spaceBelow),
       zIndex: 9999,
     })
   }, [open])
@@ -157,7 +165,7 @@ function IncentivePersonSelect({
       </button>
 
       {open && createPortal(
-        <div ref={dropdownRef} style={dropdownStyle} className="rounded-md border bg-popover shadow-md max-h-[280px] overflow-y-auto">
+        <div ref={dropdownRef} style={dropdownStyle} className="rounded-md border bg-popover shadow-md overflow-y-auto">
           {/* Unified list */}
           {allItems.map((item) => {
             const isSelected = item.type === 'profile'
