@@ -24,7 +24,7 @@ import {
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import {
-  useAllIncentives,
+  useIncentivesByInstallment,
   INCENTIVE_TYPES,
   type IncentiveType,
 } from '@/hooks/useIncentives'
@@ -44,12 +44,14 @@ function shiftMonth(ym: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-interface ContractDetail {
+interface InstallmentDetail {
+  key: string
   contractId: string
   contractDate: string
   contractorName: string
   studentName: string
-  totalAmount: number
+  installmentLabel: string
+  paidDate: string
   paidAmount: number
   currency: 'KRW' | 'USD'
   incentiveType: IncentiveType
@@ -58,12 +60,11 @@ interface ContractDetail {
 }
 
 interface PersonGroup {
-  /** Unique key: profileId or custom name */
   groupKey: string
   displayName: string
-  contracts: ContractDetail[]
-  contractCount: number
-  /** Amount breakdown per incentive type */
+  details: InstallmentDetail[]
+  /** Unique payment count */
+  paymentCount: number
   amountByType: Record<IncentiveType, number>
   totalIncentiveAmount: number
 }
@@ -76,7 +77,7 @@ export function IncentiveByPersonPage() {
   const t = useT()
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: allIncentives = [], isLoading } = useAllIncentives()
+  const { data: allEntries = [], isLoading } = useIncentivesByInstallment()
 
   const [currentMonth, setCurrentMonth] = useState<string>(getCurrentMonth)
   const [expandedPerson, setExpandedPerson] = useState<string | null>(null)
@@ -84,64 +85,63 @@ export function IncentiveByPersonPage() {
   const isCurrentMonth = currentMonth === getCurrentMonth()
   const [year, month] = currentMonth.split('-').map(Number)
 
-  // Filter incentives whose contract_date falls in the selected month
+  // Filter entries whose paidDate falls in the selected month
   const filtered = useMemo(
     () =>
-      allIncentives.filter((inc) => {
-        if (!inc.contractDate) return false
-        return inc.contractDate.startsWith(currentMonth)
+      allEntries.filter((entry) => {
+        if (!entry.paidDate) return false
+        return entry.paidDate.startsWith(currentMonth)
       }),
-    [allIncentives, currentMonth],
+    [allEntries, currentMonth],
   )
 
-  // Group by person (profileId or custom_name)
+  // Group by person (profileId or displayName)
   const personGroups = useMemo(() => {
     const map = new Map<string, PersonGroup>()
 
-    for (const inc of filtered) {
-      const groupKey = inc.profileId || `custom:${inc.displayName}`
+    for (const entry of filtered) {
+      const groupKey = entry.profileId || `custom:${entry.displayName}`
       let group = map.get(groupKey)
       if (!group) {
         group = {
           groupKey,
-          displayName: inc.displayName,
-          contracts: [],
-          contractCount: 0,
+          displayName: entry.displayName,
+          details: [],
+          paymentCount: 0,
           amountByType: {} as Record<IncentiveType, number>,
           totalIncentiveAmount: 0,
         }
-        // Initialize all type amounts to 0
         for (const key of Object.keys(INCENTIVE_TYPES) as IncentiveType[]) {
           group.amountByType[key] = 0
         }
         map.set(groupKey, group)
       }
 
-      const incentiveAmount = Math.round(inc.paidAmount * inc.percentage / 100)
-
-      group.contracts.push({
-        contractId: inc.contractId,
-        contractDate: inc.contractDate,
-        contractorName: inc.contractorName,
-        studentName: inc.studentName,
-        totalAmount: inc.totalAmount,
-        paidAmount: inc.paidAmount,
-        currency: inc.currency,
-        incentiveType: inc.incentiveType,
-        percentage: inc.percentage,
-        incentiveAmount,
+      group.details.push({
+        key: entry.key,
+        contractId: entry.contractId,
+        contractDate: entry.contractDate,
+        contractorName: entry.contractorName,
+        studentName: entry.studentName,
+        installmentLabel: entry.installmentLabel,
+        paidDate: entry.paidDate,
+        paidAmount: entry.paidAmount,
+        currency: entry.currency,
+        incentiveType: entry.incentiveType,
+        percentage: entry.percentage,
+        incentiveAmount: entry.incentiveAmount,
       })
 
-      group.amountByType[inc.incentiveType] = (group.amountByType[inc.incentiveType] || 0) + incentiveAmount
-      group.totalIncentiveAmount += incentiveAmount
+      group.amountByType[entry.incentiveType] = (group.amountByType[entry.incentiveType] || 0) + entry.incentiveAmount
+      group.totalIncentiveAmount += entry.incentiveAmount
     }
 
-    // Compute unique contract count per person
+    // Compute unique payment count per person
     for (const group of map.values()) {
-      const uniqueContracts = new Set(group.contracts.map((c) => c.contractId))
-      group.contractCount = uniqueContracts.size
-      // Sort contracts by date descending
-      group.contracts.sort((a, b) => (b.contractDate || '').localeCompare(a.contractDate || ''))
+      const uniqueInstallments = new Set(group.details.map((d) => `${d.contractId}-${d.installmentLabel}`))
+      group.paymentCount = uniqueInstallments.size
+      // Sort details by date descending
+      group.details.sort((a, b) => (b.paidDate || '').localeCompare(a.paidDate || ''))
     }
 
     // Sort persons by total incentive amount descending
@@ -154,8 +154,8 @@ export function IncentiveByPersonPage() {
 
   const isPersonView = location.pathname.includes('by-person')
 
-  const toggleExpand = (profileId: string) => {
-    setExpandedPerson((prev) => (prev === profileId ? null : profileId))
+  const toggleExpand = (key: string) => {
+    setExpandedPerson((prev) => (prev === key ? null : key))
   }
 
   // Collect which incentive types are actually present this month
@@ -246,7 +246,7 @@ export function IncentiveByPersonPage() {
                 <TableRow>
                   <TableHead className="w-8" />
                   <TableHead>{t('incentive.personName')}</TableHead>
-                  <TableHead className="text-right">{t('incentive.relatedContracts')}</TableHead>
+                  <TableHead className="text-right">{t('incentive.paymentCount')}</TableHead>
                   {activeTypes.map((type) => (
                     <TableHead key={type} className="text-right">
                       {t(INCENTIVE_TYPES[type].labelKey)}
@@ -271,7 +271,7 @@ export function IncentiveByPersonPage() {
                         )}
                       </TableCell>
                       <TableCell className="font-medium">{group.displayName}</TableCell>
-                      <TableCell className="text-right">{group.contractCount}</TableCell>
+                      <TableCell className="text-right">{group.paymentCount}</TableCell>
                       {activeTypes.map((type) => (
                         <TableCell key={type} className="text-right whitespace-nowrap">
                           {group.amountByType[type] > 0
@@ -284,29 +284,32 @@ export function IncentiveByPersonPage() {
                       </TableCell>
                     </TableRow>
 
-                    {/* Expanded contract details */}
+                    {/* Expanded installment details */}
                     {expandedPerson === group.groupKey &&
-                      group.contracts.map((c, idx) => (
+                      group.details.map((d) => (
                         <TableRow
-                          key={`${group.groupKey}-${c.contractId}-${idx}`}
+                          key={d.key}
                           className="bg-muted/30"
                         >
                           <TableCell />
                           <TableCell className="pl-8">
                             <div className="text-sm">
-                              <span className="text-muted-foreground">{c.contractDate}</span>
+                              <span className="text-muted-foreground">{d.paidDate}</span>
                               {' '}
-                              {c.contractorName} / {c.studentName}
+                              {d.contractorName} / {d.studentName}
+                              <Badge variant="outline" className="ml-2 text-xs">
+                                {d.installmentLabel}
+                              </Badge>
                             </div>
                           </TableCell>
                           <TableCell className="text-right text-sm text-muted-foreground">
-                            {formatCurrency(c.paidAmount)}
+                            {formatCurrency(d.paidAmount)}
                           </TableCell>
                           {activeTypes.map((type) => (
                             <TableCell key={type} className="text-right text-sm">
-                              {c.incentiveType === type ? (
+                              {d.incentiveType === type ? (
                                 <Badge variant="outline" className="text-xs">
-                                  {c.percentage}% = {formatCurrency(c.incentiveAmount)}
+                                  {d.percentage}% = {formatCurrency(d.incentiveAmount)}
                                 </Badge>
                               ) : (
                                 ''
@@ -314,7 +317,7 @@ export function IncentiveByPersonPage() {
                             </TableCell>
                           ))}
                           <TableCell className="text-right text-sm whitespace-nowrap">
-                            {formatCurrency(c.incentiveAmount)}
+                            {formatCurrency(d.incentiveAmount)}
                           </TableCell>
                         </TableRow>
                       ))}

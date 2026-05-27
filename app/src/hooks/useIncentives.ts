@@ -29,6 +29,31 @@ export interface IncentiveWithContract extends ContractIncentive {
   contractStatus: string
 }
 
+/** Per-installment incentive entry for finance views */
+export interface IncentiveByInstallment {
+  /** Unique key: incentiveId + installmentId */
+  key: string
+  incentiveId: string
+  contractId: string
+  installmentId: string
+  installmentLabel: string  // 계약금, 중도금, 잔금
+  installmentOrder: number
+  paidDate: string
+  paidAmount: number
+  currency: 'KRW' | 'USD'
+  contractDate: string
+  contractorName: string
+  studentName: string
+  totalAmount: number
+  /** Incentive definition */
+  profileId: string | null
+  displayName: string
+  incentiveType: IncentiveType
+  percentage: number
+  /** Computed: paidAmount * percentage / 100 */
+  incentiveAmount: number
+}
+
 export const INCENTIVE_TYPES = {
   partner_sales: { labelKey: 'incentive.partnerSales', defaultPct: 20 },
   partner_fee: { labelKey: 'incentive.partnerFee', defaultPct: 10 },
@@ -134,6 +159,103 @@ export function useAllIncentives() {
       // Sort by contract_date descending
       mapped.sort((a, b) => (b.contractDate || '').localeCompare(a.contractDate || ''))
       return mapped
+    },
+  })
+}
+
+/**
+ * Fetch per-installment incentive entries for finance views.
+ * Each paid installment × each incentive definition = one entry.
+ * Grouped/filtered by paidDate month in UI.
+ */
+export function useIncentivesByInstallment() {
+  return useQuery({
+    queryKey: ['incentives', 'by-installment'],
+    queryFn: async () => {
+      // 1. Fetch all incentive definitions with contract info
+      const { data, error } = await supabase
+        .from('contract_incentives')
+        .select(
+          '*, profiles:profile_id(id, name), contracts:contract_id(id, contractor_name, student_name, total_amount, currency, contract_date, status)',
+        )
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      if (!data || data.length === 0) return []
+
+      // 2. Fetch ALL paid installments for those contracts
+      const contractIds = [...new Set(data.map((r) => r.contract_id as string))]
+
+      const { data: installments } = await supabase
+        .from('payment_installments')
+        .select('id, contract_id, label, installment_order, paid_amount, paid_date, status')
+        .in('contract_id', contractIds)
+        .eq('status', 'paid')
+
+      if (!installments || installments.length === 0) return []
+
+      // 3. Build per-installment map: contractId -> paid installments[]
+      const instMap = new Map<string, Array<{
+        id: string
+        label: string
+        installmentOrder: number
+        paidAmount: number
+        paidDate: string
+      }>>()
+
+      for (const inst of installments) {
+        const cid = inst.contract_id as string
+        if (!instMap.has(cid)) instMap.set(cid, [])
+        instMap.get(cid)!.push({
+          id: inst.id as string,
+          label: inst.label as string,
+          installmentOrder: (inst.installment_order as number) || 0,
+          paidAmount: Number(inst.paid_amount) || 0,
+          paidDate: (inst.paid_date as string) || '',
+        })
+      }
+
+      // 4. Cross-join: each incentive definition × each paid installment = IncentiveByInstallment
+      const results: IncentiveByInstallment[] = []
+
+      for (const row of data) {
+        const inc = mapIncentive(row as Record<string, unknown>)
+        const contract = (row as Record<string, unknown>).contracts as Record<string, unknown> | null
+        const contractorName = (contract?.contractor_name as string) || ''
+        const studentName = (contract?.student_name as string) || ''
+        const totalAmount = Number(contract?.total_amount) || 0
+        const currency = ((contract?.currency as string) || 'KRW') as 'KRW' | 'USD'
+        const contractDate = (contract?.contract_date as string) || ''
+
+        const paidInsts = instMap.get(inc.contractId) || []
+        for (const pi of paidInsts) {
+          const incentiveAmount = Math.round(pi.paidAmount * inc.percentage / 100)
+          results.push({
+            key: `${inc.id}-${pi.id}`,
+            incentiveId: inc.id,
+            contractId: inc.contractId,
+            installmentId: pi.id,
+            installmentLabel: pi.label,
+            installmentOrder: pi.installmentOrder,
+            paidDate: pi.paidDate,
+            paidAmount: pi.paidAmount,
+            currency,
+            contractDate,
+            contractorName,
+            studentName,
+            totalAmount,
+            profileId: inc.profileId,
+            displayName: inc.displayName,
+            incentiveType: inc.incentiveType,
+            percentage: inc.percentage,
+            incentiveAmount,
+          })
+        }
+      }
+
+      // Sort by paidDate descending
+      results.sort((a, b) => (b.paidDate || '').localeCompare(a.paidDate || ''))
+      return results
     },
   })
 }

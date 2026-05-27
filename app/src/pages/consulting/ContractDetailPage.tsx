@@ -1004,35 +1004,56 @@ export function ContractDetailPage() {
           <CardContent className="py-4 space-y-4">
             {/* Existing incentives */}
             {contractIncentives.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {contractIncentives.map((inc) => {
                   const typeCfg = INCENTIVE_TYPES[inc.incentiveType]
-                  const amount = contract ? Math.round(basePaid * inc.percentage / 100) : 0
+                  // Per-installment breakdown
+                  const paidInstallments = baseInstallments.filter(i => i.paidAmount > 0)
+                  const totalIncAmount = paidInstallments.reduce((sum, i) => sum + Math.round(i.paidAmount * inc.percentage / 100), 0)
                   return (
-                    <div key={inc.id} className="flex items-center justify-between p-3 rounded-lg bg-orange-50/50 border border-orange-100">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="text-orange-700 border-orange-200 bg-orange-100 text-xs">
-                          {t(typeCfg.labelKey)}
-                        </Badge>
-                        <span className="text-sm font-medium">{inc.displayName}</span>
-                        <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
-                        {contract && (
-                          <span className="text-sm font-mono text-orange-700">{formatCurrency(amount)}</span>
+                    <div key={inc.id} className="p-3 rounded-lg bg-orange-50/50 border border-orange-100 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline" className="text-orange-700 border-orange-200 bg-orange-100 text-xs">
+                            {t(typeCfg.labelKey)}
+                          </Badge>
+                          <span className="text-sm font-medium">{inc.displayName}</span>
+                          <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
+                          {contract && (
+                            <span className="text-sm font-mono text-orange-700 font-semibold">{formatCurrency(totalIncAmount)}</span>
+                          )}
+                        </div>
+                        {!isCancelled && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                            onClick={() => {
+                              if (confirm(t('incentive.deleteConfirm'))) {
+                                deleteIncentive.mutate(inc.id)
+                              }
+                            }}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
                         )}
                       </div>
-                      {!isCancelled && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                          onClick={() => {
-                            if (confirm(t('incentive.deleteConfirm'))) {
-                              deleteIncentive.mutate(inc.id)
-                            }
-                          }}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
+                      {/* Per-installment breakdown */}
+                      {baseInstallments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pl-1">
+                          {baseInstallments.map((inst) => {
+                            const instInc = inst.paidAmount > 0 ? Math.round(inst.paidAmount * inc.percentage / 100) : 0
+                            const isPaid = inst.paidAmount > 0
+                            return (
+                              <span
+                                key={inst.id}
+                                className={`text-xs px-2 py-0.5 rounded ${isPaid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}
+                              >
+                                {inst.label} {isPaid ? formatCurrency(instInc) : t('incentive.unpaid')}
+                              </span>
+                            )
+                          })}
+                        </div>
                       )}
                     </div>
                   )

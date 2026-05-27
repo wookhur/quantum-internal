@@ -15,9 +15,9 @@ import { Loader2, ChevronLeft, ChevronRight, Calendar, DollarSign, TrendingUp } 
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import {
-  useAllIncentives,
+  useIncentivesByInstallment,
   INCENTIVE_TYPES,
-  type IncentiveWithContract,
+  type IncentiveByInstallment,
 } from '@/hooks/useIncentives'
 
 // ---------------------------------------------------------------------------
@@ -35,15 +35,19 @@ function shiftMonth(ym: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-interface ContractGroup {
+interface ContractInstallmentGroup {
+  /** contractId + installmentId */
+  groupKey: string
   contractId: string
   contractDate: string
   contractorName: string
   studentName: string
-  totalAmount: number
+  installmentLabel: string
+  installmentOrder: number
+  paidDate: string
   paidAmount: number
   currency: 'KRW' | 'USD'
-  incentives: IncentiveWithContract[]
+  entries: IncentiveByInstallment[]
   totalPct: number
   incentiveAmount: number
 }
@@ -56,63 +60,69 @@ export function IncentiveByContractPage() {
   const t = useT()
   const navigate = useNavigate()
   const location = useLocation()
-  const { data: allIncentives = [], isLoading } = useAllIncentives()
+  const { data: allEntries = [], isLoading } = useIncentivesByInstallment()
 
   const [currentMonth, setCurrentMonth] = useState<string>(getCurrentMonth)
 
   const isCurrentMonth = currentMonth === getCurrentMonth()
   const [year, month] = currentMonth.split('-').map(Number)
 
-  // Filter incentives whose contract_date falls in the selected month
+  // Filter entries whose paidDate falls in the selected month
   const filtered = useMemo(
     () =>
-      allIncentives.filter((inc) => {
-        if (!inc.contractDate) return false
-        return inc.contractDate.startsWith(currentMonth)
+      allEntries.filter((entry) => {
+        if (!entry.paidDate) return false
+        return entry.paidDate.startsWith(currentMonth)
       }),
-    [allIncentives, currentMonth],
+    [allEntries, currentMonth],
   )
 
-  // Group by contractId
-  const contractGroups = useMemo(() => {
-    const map = new Map<string, ContractGroup>()
+  // Group by contractId + installmentId
+  const groups = useMemo(() => {
+    const map = new Map<string, ContractInstallmentGroup>()
 
-    for (const inc of filtered) {
-      let group = map.get(inc.contractId)
+    for (const entry of filtered) {
+      const groupKey = `${entry.contractId}-${entry.installmentId}`
+      let group = map.get(groupKey)
       if (!group) {
         group = {
-          contractId: inc.contractId,
-          contractDate: inc.contractDate,
-          contractorName: inc.contractorName,
-          studentName: inc.studentName,
-          totalAmount: inc.totalAmount,
-          paidAmount: inc.paidAmount,
-          currency: inc.currency,
-          incentives: [],
+          groupKey,
+          contractId: entry.contractId,
+          contractDate: entry.contractDate,
+          contractorName: entry.contractorName,
+          studentName: entry.studentName,
+          installmentLabel: entry.installmentLabel,
+          installmentOrder: entry.installmentOrder,
+          paidDate: entry.paidDate,
+          paidAmount: entry.paidAmount,
+          currency: entry.currency,
+          entries: [],
           totalPct: 0,
           incentiveAmount: 0,
         }
-        map.set(inc.contractId, group)
+        map.set(groupKey, group)
       }
-      group.incentives.push(inc)
+      group.entries.push(entry)
     }
 
-    // Compute totals — incentive is based on PAID amount, not total contract
+    // Compute totals
     for (const group of map.values()) {
-      group.totalPct = group.incentives.reduce((sum, inc) => sum + inc.percentage, 0)
-      group.incentiveAmount = Math.round(group.paidAmount * group.totalPct / 100)
+      group.totalPct = group.entries.reduce((sum, e) => sum + e.percentage, 0)
+      group.incentiveAmount = group.entries.reduce((sum, e) => sum + e.incentiveAmount, 0)
     }
 
-    // Sort by contract date descending
-    return Array.from(map.values()).sort((a, b) =>
-      (b.contractDate || '').localeCompare(a.contractDate || ''),
-    )
+    // Sort by paid date descending, then installment order
+    return Array.from(map.values()).sort((a, b) => {
+      const dateCompare = (b.paidDate || '').localeCompare(a.paidDate || '')
+      if (dateCompare !== 0) return dateCompare
+      return a.installmentOrder - b.installmentOrder
+    })
   }, [filtered])
 
   // Summaries
-  const totalContracts = contractGroups.length
-  const totalPaidAmount = contractGroups.reduce((s, g) => s + g.paidAmount, 0)
-  const totalIncentiveAmount = contractGroups.reduce((s, g) => s + g.incentiveAmount, 0)
+  const totalPayments = groups.length
+  const totalPaidAmount = groups.reduce((s, g) => s + g.paidAmount, 0)
+  const totalIncentiveAmount = groups.reduce((s, g) => s + g.incentiveAmount, 0)
 
   const isContractView = location.pathname.includes('by-contract')
 
@@ -157,11 +167,11 @@ export function IncentiveByContractPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('incentive.totalContracts')}</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('incentive.totalPayments')}</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalContracts}</div>
+            <div className="text-2xl font-bold">{totalPayments}</div>
           </CardContent>
         </Card>
         <Card>
@@ -191,7 +201,7 @@ export function IncentiveByContractPage() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : contractGroups.length === 0 ? (
+          ) : groups.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Calendar className="h-10 w-10 mb-2" />
               <p>{t('incentive.noData')}</p>
@@ -200,8 +210,9 @@ export function IncentiveByContractPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('incentive.contractDate')}</TableHead>
+                  <TableHead>{t('incentive.paidDateShort')}</TableHead>
                   <TableHead>{t('incentive.contractorStudent')}</TableHead>
+                  <TableHead>{t('incentive.installmentLabel')}</TableHead>
                   <TableHead className="text-right">{t('incentive.paidAmount')}</TableHead>
                   <TableHead>{t('incentive.recipients')}</TableHead>
                   <TableHead>{t('incentive.types')}</TableHead>
@@ -210,30 +221,35 @@ export function IncentiveByContractPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {contractGroups.map((group) => (
-                  <TableRow key={group.contractId}>
-                    <TableCell className="whitespace-nowrap">{group.contractDate}</TableCell>
+                {groups.map((group) => (
+                  <TableRow key={group.groupKey}>
+                    <TableCell className="whitespace-nowrap">{group.paidDate}</TableCell>
                     <TableCell>
                       <div className="font-medium">{group.contractorName}</div>
                       <div className="text-sm text-muted-foreground">{group.studentName}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-xs">
+                        {group.installmentLabel}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
                       {formatCurrency(group.paidAmount)}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {group.incentives.map((inc) => (
-                          <Badge key={inc.id} variant="secondary" className="text-xs">
-                            {inc.displayName}
+                        {group.entries.map((e) => (
+                          <Badge key={e.key} variant="secondary" className="text-xs">
+                            {e.displayName}
                           </Badge>
                         ))}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
-                        {group.incentives.map((inc) => (
-                          <Badge key={inc.id} variant="outline" className="text-xs">
-                            {t(INCENTIVE_TYPES[inc.incentiveType].labelKey)} {inc.percentage}%
+                        {group.entries.map((e) => (
+                          <Badge key={e.key} variant="outline" className="text-xs">
+                            {t(INCENTIVE_TYPES[e.incentiveType].labelKey)} {e.percentage}%
                           </Badge>
                         ))}
                       </div>
