@@ -14,6 +14,9 @@ import {
 } from 'lucide-react'
 import { useContractsWithInstallments, useCreateContract } from '@/hooks/useContracts'
 import { useCreateInstallments } from '@/hooks/useInstallments'
+import { useProfiles } from '@/hooks/useProfiles'
+import { useAuth } from '@/contexts/AuthContext'
+import { Textarea } from '@/components/ui/textarea'
 import { ContractPdfUploadDialog } from '@/components/ContractPdfUploadDialog'
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
@@ -73,8 +76,14 @@ const INITIAL_CONTRACT_FORM = {
   gradeAtContract: '',
   contractDate: '',
   expiryDate: '',
+  phone: '',
+  address: '',
   totalAmount: '',
   currency: 'KRW' as 'KRW' | 'USD',
+  paymentAccount: 'KR' as 'KR' | 'US',
+  salesRep: '',
+  serviceRep: '',
+  notes: '',
 }
 
 const DEFAULT_INSTALLMENTS: InstallmentRow[] = [
@@ -87,6 +96,8 @@ export function ContractsPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const t = useT()
+  const { user } = useAuth()
+  const { data: profiles = [] } = useProfiles()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -104,14 +115,14 @@ export function ContractsPage() {
     if (leadId) {
       leadInfoRef.current = { leadId, phone: searchParams.get('phone') || '' }
       setForm({
+        ...INITIAL_CONTRACT_FORM,
         contractorName: searchParams.get('contractorName') || '',
         studentName: searchParams.get('studentName') || '',
         schoolName: searchParams.get('schoolName') || '',
         gradeAtContract: searchParams.get('grade') || '',
         contractDate: new Date().toISOString().slice(0, 10),
-        expiryDate: '',
-        totalAmount: '',
-        currency: 'KRW',
+        phone: searchParams.get('phone') || '',
+        salesRep: user?.id || '',
       })
       setFromLead(true)
       setDialogOpen(true)
@@ -127,11 +138,21 @@ export function ContractsPage() {
     if (!form.contractorName.trim() || !form.studentName.trim()) return
     createContract.mutate(
       {
-        ...form,
+        contractorName: form.contractorName,
+        studentName: form.studentName,
+        schoolName: form.schoolName,
+        gradeAtContract: form.gradeAtContract,
+        contractDate: form.contractDate,
+        expiryDate: form.expiryDate,
         totalAmount: Number(form.totalAmount) || undefined,
         currency: form.currency,
+        phone: form.phone || leadInfoRef.current?.phone || undefined,
+        address: form.address || undefined,
+        paymentAccount: form.paymentAccount,
+        salesRep: form.salesRep || undefined,
+        serviceRep: form.serviceRep || undefined,
+        notes: form.notes || undefined,
         leadId: leadInfoRef.current?.leadId,
-        phone: leadInfoRef.current?.phone || undefined,
       },
       {
         onSuccess: (data) => {
@@ -261,9 +282,29 @@ export function ContractsPage() {
                     />
                   </div>
                 </div>
-                {/* Total Amount & Currency */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-2 space-y-2">
+                {/* Phone & Address */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t('common.phone')}</Label>
+                    <Input
+                      placeholder={t('common.phone')}
+                      value={form.phone}
+                      onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('contracts.address')}</Label>
+                    <Input
+                      placeholder={t('contracts.address')}
+                      value={form.address}
+                      onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                {/* Total Amount, Currency, Payment Account */}
+                <div className="grid grid-cols-[1fr_auto_auto] gap-4">
+                  <div className="space-y-2">
                     <Label>{t('contracts.totalContractAmount')}</Label>
                     <Input
                       type="number"
@@ -275,10 +316,46 @@ export function ContractsPage() {
                   <div className="space-y-2">
                     <Label>{t('contracts.currency')}</Label>
                     <Select value={form.currency} onValueChange={v => setForm(f => ({ ...f, currency: (v || 'KRW') as 'KRW' | 'USD' }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger><span>{form.currency === 'USD' ? 'USD ($)' : 'KRW (원)'}</span></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="KRW">KRW</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="KRW">KRW (원)</SelectItem>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('contracts.depositAccount')}</Label>
+                    <Select value={form.paymentAccount} onValueChange={v => setForm(f => ({ ...f, paymentAccount: (v || 'KR') as 'KR' | 'US' }))}>
+                      <SelectTrigger><span>{form.paymentAccount === 'US' ? t('contracts.usAccount') : t('contracts.krAccount')}</span></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="KR">{t('contracts.krAccount')}</SelectItem>
+                        <SelectItem value="US">{t('contracts.usAccount')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Sales Rep & Service Rep */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{t('leadDetail.salesRep')}</Label>
+                    <Select value={form.salesRep} onValueChange={v => setForm(f => ({ ...f, salesRep: v || '' }))}>
+                      <SelectTrigger><span>{profiles.find(p => p.id === form.salesRep)?.name || t('common.select')}</span></SelectTrigger>
+                      <SelectContent>
+                        {profiles.map(p => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t('leadDetail.serviceRep')}</Label>
+                    <Select value={form.serviceRep} onValueChange={v => setForm(f => ({ ...f, serviceRep: v || '' }))}>
+                      <SelectTrigger><span>{profiles.find(p => p.id === form.serviceRep)?.name || t('common.select')}</span></SelectTrigger>
+                      <SelectContent>
+                        {profiles.map(p => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -350,6 +427,17 @@ export function ContractsPage() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Notes */}
+                <div className="space-y-2">
+                  <Label>{t('common.notes')}</Label>
+                  <Textarea
+                    placeholder={t('common.notes')}
+                    value={form.notes}
+                    onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                    className="min-h-[60px]"
+                  />
                 </div>
 
                 <Button

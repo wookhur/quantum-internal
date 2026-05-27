@@ -112,6 +112,11 @@ export function useCreateContract() {
       currency?: 'KRW' | 'USD'
       leadId?: string
       phone?: string
+      address?: string
+      paymentAccount?: 'KR' | 'US'
+      salesRep?: string
+      serviceRep?: string
+      notes?: string
     }) => {
       const row: Record<string, unknown> = {
         contractor_name: contract.contractorName,
@@ -126,6 +131,11 @@ export function useCreateContract() {
       if (contract.currency) row.currency = contract.currency
       if (contract.leadId) row.lead_id = contract.leadId
       if (contract.phone) row.phone = contract.phone
+      if (contract.address) row.address = contract.address
+      if (contract.paymentAccount) row.payment_account = contract.paymentAccount
+      if (contract.salesRep) row.sales_rep = contract.salesRep
+      if (contract.serviceRep) row.service_rep = contract.serviceRep
+      if (contract.notes) row.notes = contract.notes
 
       const { data, error } = await supabase.from('contracts').insert(row).select().single()
       if (error) throw error
