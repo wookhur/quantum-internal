@@ -69,8 +69,6 @@ export function useUpdateProfile() {
 
 export type FeatureModule =
   | 'dashboard'
-  | 'calendar'
-  | 'todos'
   | 'sales'
   | 'marketing'
   | 'finance'
@@ -78,24 +76,79 @@ export type FeatureModule =
   | 'planning'
   | 'game'
 
-export const FEATURE_MODULES: { key: FeatureModule; label: string; description: string }[] = [
-  { key: 'dashboard', label: '대시보드', description: '메인 대시보드' },
-  { key: 'calendar', label: '캘린더', description: '구글 캘린더 연동' },
-  { key: 'todos', label: '할일', description: '할일 관리' },
-  { key: 'sales', label: '세일즈', description: '콜드콜, 리드, 파이프라인, 미팅, 영업 현황' },
-  { key: 'marketing', label: '마케팅', description: '마케팅 지표, 광고, 이벤트, 영상' },
-  { key: 'finance', label: '재무', description: '계약 관리, 결제 관리' },
-  { key: 'service', label: '서비스', description: '컨설턴트 배치, 서비스 관리' },
-  { key: 'planning', label: '경영기획', description: '경영 현황, 매출 Projection, 접근 관리' },
-  { key: 'game', label: '쉬는 시간', description: 'T-Rex 러너 게임' },
+/** Every navigable route and which module (package) it belongs to */
+export interface NavRouteDef {
+  path: string
+  labelKey: string
+  module: FeatureModule
+}
+
+export const NAV_ROUTE_DEFS: NavRouteDef[] = [
+  // ── Common (dashboard package) ──
+  { path: '/dashboard', labelKey: 'nav.dashboard', module: 'dashboard' },
+  { path: '/calendar', labelKey: 'nav.calendar', module: 'dashboard' },
+  { path: '/tasks', labelKey: 'nav.taskBoard', module: 'dashboard' },
+  { path: '/messages', labelKey: 'nav.messages', module: 'dashboard' },
+  // ── Sales ──
+  { path: '/sales/cold-call', labelKey: 'nav.coldCall', module: 'sales' },
+  { path: '/sales/leads', labelKey: 'nav.leadManagement', module: 'sales' },
+  { path: '/sales/pipeline', labelKey: 'nav.pipeline', module: 'sales' },
+  { path: '/sales/meetings', labelKey: 'nav.meetingRecords', module: 'sales' },
+  { path: '/sales/funnel', labelKey: 'nav.salesFunnel', module: 'sales' },
+  { path: '/sales/performance', labelKey: 'nav.salesPerformance', module: 'sales' },
+  // ── Marketing ──
+  { path: '/marketing/metrics', labelKey: 'nav.marketingMetrics', module: 'marketing' },
+  { path: '/marketing/ads', labelKey: 'nav.adPerformance', module: 'marketing' },
+  { path: '/marketing/events', labelKey: 'nav.eventManagement', module: 'marketing' },
+  { path: '/marketing/videos', labelKey: 'nav.videoContent', module: 'marketing' },
+  // ── Service ──
+  { path: '/service/dashboard', labelKey: 'nav.serviceDashboard', module: 'service' },
+  { path: '/service/student-360', labelKey: 'nav.student360', module: 'service' },
+  { path: '/service/kpi', labelKey: 'nav.kpi', module: 'service' },
+  { path: '/service/external-fees', labelKey: 'nav.externalFees', module: 'service' },
+  // ── Finance ──
+  { path: '/consulting/clients', labelKey: 'nav.contractManagement', module: 'finance' },
+  { path: '/consulting/collections', labelKey: 'nav.monthlyCollection', module: 'finance' },
+  { path: '/finance/invoices', labelKey: 'nav.invoices', module: 'finance' },
+  { path: '/finance/receipts', labelKey: 'nav.receipts', module: 'finance' },
+  { path: '/finance/wire-invoice', labelKey: 'nav.wireInvoice', module: 'finance' },
+  { path: '/finance/incentives/by-contract', labelKey: 'nav.incentives', module: 'finance' },
+  // ── Planning ──
+  { path: '/planning/overview', labelKey: 'nav.overview', module: 'planning' },
+  { path: '/planning/projection', labelKey: 'nav.revenueProjection', module: 'planning' },
+  { path: '/planning/employees', labelKey: 'nav.employeePerformance', module: 'planning' },
+  { path: '/planning/access', labelKey: 'nav.accessControl', module: 'planning' },
+  // ── Game ──
+  { path: '/game', labelKey: 'nav.trexRunner', module: 'game' },
 ]
 
-/** Default feature access per role */
+/** Module (package) definitions for display */
+export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptionKey: string }[] = [
+  { key: 'dashboard', labelKey: 'access.pkg.dashboard', descriptionKey: 'access.pkg.dashboardDesc' },
+  { key: 'sales', labelKey: 'access.pkg.sales', descriptionKey: 'access.pkg.salesDesc' },
+  { key: 'marketing', labelKey: 'access.pkg.marketing', descriptionKey: 'access.pkg.marketingDesc' },
+  { key: 'service', labelKey: 'access.pkg.service', descriptionKey: 'access.pkg.serviceDesc' },
+  { key: 'finance', labelKey: 'access.pkg.finance', descriptionKey: 'access.pkg.financeDesc' },
+  { key: 'planning', labelKey: 'access.pkg.planning', descriptionKey: 'access.pkg.planningDesc' },
+  { key: 'game', labelKey: 'access.pkg.game', descriptionKey: 'access.pkg.gameDesc' },
+]
+
+/** Get all route paths for a module */
+export function getRoutesForModule(mod: FeatureModule): string[] {
+  return NAV_ROUTE_DEFS.filter(r => r.module === mod).map(r => r.path)
+}
+
+/** Get all route paths for a list of modules */
+function expandModulesToRoutes(modules: FeatureModule[]): string[] {
+  return NAV_ROUTE_DEFS.filter(r => modules.includes(r.module)).map(r => r.path)
+}
+
+/** Default feature access per role (module-level) */
 export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
-  admin: ['dashboard', 'calendar', 'todos', 'sales', 'marketing', 'finance', 'service', 'planning', 'game'],
-  manager: ['dashboard', 'calendar', 'todos', 'sales', 'marketing', 'finance', 'service', 'planning', 'game'],
-  staff: ['dashboard', 'calendar', 'todos', 'sales', 'marketing', 'service', 'game'],
-  freelancer: ['dashboard', 'calendar', 'todos', 'game'],
+  admin: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'game'],
+  manager: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'game'],
+  staff: ['dashboard', 'sales', 'marketing', 'service', 'game'],
+  freelancer: ['dashboard', 'game'],
   viewer: ['dashboard', 'game'],
 }
 
@@ -103,6 +156,8 @@ export interface FeatureAccessRecord {
   id: string
   userId: string
   enabledModules: FeatureModule[]
+  /** Per-route overrides. If non-empty, used instead of module expansion. */
+  enabledRoutes: string[]
   updatedAt: string
 }
 
@@ -115,7 +170,6 @@ export function useFeatureAccess() {
         .from('feature_access')
         .select('*')
       if (error) {
-        // Table might not exist yet — return empty
         console.warn('feature_access table not found, using role defaults:', error.message)
         return [] as FeatureAccessRecord[]
       }
@@ -123,6 +177,7 @@ export function useFeatureAccess() {
         id: r.id as string,
         userId: r.user_id as string,
         enabledModules: (r.enabled_modules as FeatureModule[]) || [],
+        enabledRoutes: (r.enabled_routes as string[]) || [],
         updatedAt: r.updated_at as string,
       }))
     },
@@ -133,12 +188,17 @@ export function useFeatureAccess() {
 export function useUpdateFeatureAccess() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ userId, enabledModules }: { userId: string; enabledModules: FeatureModule[] }) => {
+    mutationFn: async ({ userId, enabledModules, enabledRoutes }: {
+      userId: string
+      enabledModules: FeatureModule[]
+      enabledRoutes: string[]
+    }) => {
       const { data, error } = await supabase
         .from('feature_access')
         .upsert({
           user_id: userId,
           enabled_modules: enabledModules,
+          enabled_routes: enabledRoutes,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' })
         .select()
@@ -153,15 +213,39 @@ export function useUpdateFeatureAccess() {
 }
 
 /**
- * Get enabled modules for a specific user.
- * If the user has a custom feature_access record, use that.
- * Otherwise, fall back to role-based defaults.
+ * Get the set of enabled route paths for a user.
+ * Priority: custom enabledRoutes > custom enabledModules (expand) > role defaults (expand).
+ */
+export function getEffectiveRoutes(
+  user: User,
+  featureAccessRecords: FeatureAccessRecord[],
+): string[] {
+  const custom = featureAccessRecords.find(r => r.userId === user.id)
+  if (custom) {
+    // If per-route overrides exist, use them
+    if (custom.enabledRoutes.length > 0) return custom.enabledRoutes
+    // Otherwise expand modules to routes
+    return expandModulesToRoutes(custom.enabledModules)
+  }
+  // Role defaults
+  const defaultModules = ROLE_DEFAULT_ACCESS[user.role] || ROLE_DEFAULT_ACCESS.viewer
+  return expandModulesToRoutes(defaultModules)
+}
+
+/**
+ * Get enabled modules (for sidebar section-level visibility).
+ * Kept for backward compatibility.
  */
 export function getEffectiveModules(
   user: User,
   featureAccessRecords: FeatureAccessRecord[],
 ): FeatureModule[] {
-  const custom = featureAccessRecords.find(r => r.userId === user.id)
-  if (custom) return custom.enabledModules
-  return ROLE_DEFAULT_ACCESS[user.role] || ROLE_DEFAULT_ACCESS.viewer
+  const routes = getEffectiveRoutes(user, featureAccessRecords)
+  // Derive modules from routes
+  const modules = new Set<FeatureModule>()
+  for (const r of routes) {
+    const def = NAV_ROUTE_DEFS.find(d => d.path === r)
+    if (def) modules.add(def.module)
+  }
+  return [...modules]
 }

@@ -6,19 +6,22 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   Loader2, Shield, Search, UserCog, Save,
   CheckCircle2, Users, ShieldCheck, Eye, Briefcase, UserX,
+  ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useProfiles, useUpdateProfile,
   useFeatureAccess, useUpdateFeatureAccess,
-  FEATURE_MODULES, ROLE_DEFAULT_ACCESS, getEffectiveModules,
+  FEATURE_MODULES, ROLE_DEFAULT_ACCESS,
+  NAV_ROUTE_DEFS,
+  getEffectiveModules, getEffectiveRoutes, getRoutesForModule,
   type FeatureModule, type FeatureAccessRecord,
 } from '@/hooks/useProfiles'
 import type { User, UserRole, Department } from '@/types'
@@ -53,6 +56,8 @@ function useRoleOptions() {
   ]
 }
 
+// ─── User Edit Dialog with Package + Route toggles ─────────────────────────
+
 function UserEditDialog({
   user,
   featureAccess,
@@ -72,44 +77,94 @@ function UserEditDialog({
   const { user: currentUser } = useAuth()
 
   const effectiveModules = getEffectiveModules(user, featureAccess)
+  const effectiveRoutes = getEffectiveRoutes(user, featureAccess)
+
   const [role, setRole] = useState<UserRole>(user.role)
   const [department, setDepartment] = useState<string>(user.department || '')
   const [position, setPosition] = useState<string>(user.position || '')
   const [isExternal, setIsExternal] = useState(user.isExternal)
   const [enabledModules, setEnabledModules] = useState<FeatureModule[]>(effectiveModules)
+  const [enabledRoutes, setEnabledRoutes] = useState<string[]>(effectiveRoutes)
   const [useCustomAccess, setUseCustomAccess] = useState(
-    featureAccess.some(r => r.userId === user.id)
+    featureAccess.some(r => r.userId === user.id),
   )
+  const [expandedModules, setExpandedModules] = useState<Set<FeatureModule>>(new Set())
   const [saving, setSaving] = useState(false)
 
   const isSelf = currentUser?.id === user.id
 
   const handleRoleChange = (newRole: UserRole) => {
     setRole(newRole)
-    // When role changes and not using custom access, update module list to match new role defaults
     if (!useCustomAccess) {
-      setEnabledModules(ROLE_DEFAULT_ACCESS[newRole] || [])
+      const defaultMods = ROLE_DEFAULT_ACCESS[newRole] || []
+      setEnabledModules(defaultMods)
+      // Expand default modules to routes
+      const defaultRoutes = NAV_ROUTE_DEFS.filter(r => defaultMods.includes(r.module)).map(r => r.path)
+      setEnabledRoutes(defaultRoutes)
     }
   }
 
   const toggleModule = (mod: FeatureModule) => {
-    setEnabledModules(prev =>
-      prev.includes(mod) ? prev.filter(m => m !== mod) : [...prev, mod]
-    )
+    const wasEnabled = enabledModules.includes(mod)
+    const modRoutes = getRoutesForModule(mod)
+
+    if (wasEnabled) {
+      // Remove module and all its routes
+      setEnabledModules(prev => prev.filter(m => m !== mod))
+      setEnabledRoutes(prev => prev.filter(r => !modRoutes.includes(r)))
+    } else {
+      // Add module and all its routes
+      setEnabledModules(prev => [...prev, mod])
+      setEnabledRoutes(prev => [...new Set([...prev, ...modRoutes])])
+    }
+  }
+
+  const toggleRoute = (route: string, mod: FeatureModule) => {
+    const modRoutes = getRoutesForModule(mod)
+    const wasEnabled = enabledRoutes.includes(route)
+
+    let newRoutes: string[]
+    if (wasEnabled) {
+      newRoutes = enabledRoutes.filter(r => r !== route)
+    } else {
+      newRoutes = [...enabledRoutes, route]
+    }
+    setEnabledRoutes(newRoutes)
+
+    // If all routes in this module are now disabled, disable the module too
+    const remainingModRoutes = newRoutes.filter(r => modRoutes.includes(r))
+    if (remainingModRoutes.length === 0 && enabledModules.includes(mod)) {
+      setEnabledModules(prev => prev.filter(m => m !== mod))
+    }
+    // If any route in this module is enabled and module was disabled, enable it
+    if (remainingModRoutes.length > 0 && !enabledModules.includes(mod)) {
+      setEnabledModules(prev => [...prev, mod])
+    }
+  }
+
+  const toggleExpand = (mod: FeatureModule) => {
+    setExpandedModules(prev => {
+      const next = new Set(prev)
+      if (next.has(mod)) next.delete(mod)
+      else next.add(mod)
+      return next
+    })
   }
 
   const handleToggleCustomAccess = (checked: boolean) => {
     setUseCustomAccess(checked)
     if (!checked) {
-      // Reset to role defaults
-      setEnabledModules(ROLE_DEFAULT_ACCESS[role] || [])
+      const defaultMods = ROLE_DEFAULT_ACCESS[role] || []
+      setEnabledModules(defaultMods)
+      const defaultRoutes = NAV_ROUTE_DEFS.filter(r => defaultMods.includes(r.module)).map(r => r.path)
+      setEnabledRoutes(defaultRoutes)
+      setExpandedModules(new Set())
     }
   }
 
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
-      // 1. Update profile
       await updateProfile.mutateAsync({
         id: user.id,
         role,
@@ -118,11 +173,11 @@ function UserEditDialog({
         isExternal,
       })
 
-      // 2. Update feature access if using custom
       if (useCustomAccess) {
         await updateFeatureAccess.mutateAsync({
           userId: user.id,
           enabledModules,
+          enabledRoutes,
         })
       }
 
@@ -132,7 +187,12 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, role, department, position, isExternal, useCustomAccess, enabledModules, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, role, department, position, isExternal, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+
+  const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
+  const selectedDeptLabel = department === '_none' || !department
+    ? t('common.unassigned')
+    : DEPT_OPTIONS.find(d => d.value === department)?.label || department
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -154,9 +214,9 @@ function UserEditDialog({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">{t('access.role')}</Label>
-                <Select value={role} onValueChange={(v) => handleRoleChange(v as UserRole)}>
+                <Select value={role} onValueChange={(v) => v && handleRoleChange(v as UserRole)}>
                   <SelectTrigger className="h-9">
-                    <SelectValue />
+                    <span>{selectedRoleLabel}</span>
                   </SelectTrigger>
                   <SelectContent>
                     {ROLE_OPTIONS.map(opt => (
@@ -169,7 +229,7 @@ function UserEditDialog({
                 <Label className="text-xs">{t('access.department')}</Label>
                 <Select value={department || '_none'} onValueChange={(v) => setDepartment(!v || v === '_none' ? '' : v)}>
                   <SelectTrigger className="h-9">
-                    <SelectValue placeholder={t('common.select')} />
+                    <span>{selectedDeptLabel}</span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">{t('common.unassigned')}</SelectItem>
@@ -203,7 +263,7 @@ function UserEditDialog({
             </div>
           </div>
 
-          {/* Feature Access */}
+          {/* Feature Access — Package + Route */}
           <div className="space-y-3 border-t pt-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">{t('access.featureAccess')}</h3>
@@ -225,36 +285,84 @@ function UserEditDialog({
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {FEATURE_MODULES.map(mod => {
-                const isEnabled = enabledModules.includes(mod.key)
+                const isModEnabled = enabledModules.includes(mod.key)
                 const isDefault = ROLE_DEFAULT_ACCESS[role]?.includes(mod.key)
+                const isExpanded = expandedModules.has(mod.key)
+                const modRoutes = NAV_ROUTE_DEFS.filter(r => r.module === mod.key)
+                const enabledCount = modRoutes.filter(r => enabledRoutes.includes(r.path)).length
+
                 return (
-                  <div
-                    key={mod.key}
-                    className={`flex items-center justify-between p-2.5 rounded-lg border ${
-                      isEnabled ? 'bg-white border-gray-200' : 'bg-gray-50/50 border-gray-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                      <div>
-                        <div className="text-sm font-medium">{mod.label}</div>
-                        <div className="text-[11px] text-muted-foreground">{mod.description}</div>
+                  <div key={mod.key} className="rounded-lg border overflow-hidden">
+                    {/* Module header */}
+                    <div
+                      className={`flex items-center justify-between p-2.5 ${
+                        isModEnabled ? 'bg-white' : 'bg-gray-50/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <button
+                          className="p-0.5 rounded hover:bg-gray-100 transition-colors"
+                          onClick={() => useCustomAccess && toggleExpand(mod.key)}
+                          disabled={!useCustomAccess}
+                        >
+                          {isExpanded
+                            ? <ChevronDown className="size-3.5 text-gray-500" />
+                            : <ChevronRight className="size-3.5 text-gray-400" />}
+                        </button>
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${isModEnabled ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium flex items-center gap-1.5">
+                            {t(mod.labelKey)}
+                            {useCustomAccess && (
+                              <span className="text-[10px] text-muted-foreground font-normal">
+                                {enabledCount}/{modRoutes.length}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate">{t(mod.descriptionKey)}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {!useCustomAccess && isDefault && (
+                          <Badge variant="outline" className="text-[10px] h-4 bg-blue-50 text-blue-600 border-blue-200">
+                            {t('access.default')}
+                          </Badge>
+                        )}
+                        <Switch
+                          checked={isModEnabled}
+                          onCheckedChange={() => toggleModule(mod.key)}
+                          disabled={!useCustomAccess}
+                        />
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {!useCustomAccess && isDefault && (
-                        <Badge variant="outline" className="text-[10px] h-4 bg-blue-50 text-blue-600 border-blue-200">
-                          {t('access.default')}
-                        </Badge>
-                      )}
-                      <Switch
-                        checked={isEnabled}
-                        onCheckedChange={() => toggleModule(mod.key)}
-                        disabled={!useCustomAccess}
-                      />
-                    </div>
+
+                    {/* Expanded per-route toggles */}
+                    {isExpanded && useCustomAccess && (
+                      <div className="border-t bg-gray-50/30 px-3 py-1.5 space-y-0.5">
+                        {modRoutes.map(route => {
+                          const routeEnabled = enabledRoutes.includes(route.path)
+                          return (
+                            <div
+                              key={route.path}
+                              className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-100/60"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-1.5 h-1.5 rounded-full ${routeEnabled ? 'bg-emerald-400' : 'bg-gray-300'}`} />
+                                <span className="text-xs">{t(route.labelKey)}</span>
+                                <span className="text-[10px] text-muted-foreground font-mono">{route.path}</span>
+                              </div>
+                              <Switch
+                                checked={routeEnabled}
+                                onCheckedChange={() => toggleRoute(route.path, mod.key)}
+                                className="scale-75"
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -282,6 +390,8 @@ function UserEditDialog({
   )
 }
 
+// ─── Main Page ──────────────────────────────────────────────────────────────
+
 export function AccessManagementPage() {
   const t = useT()
   const DEPT_OPTIONS = useDeptOptions()
@@ -305,13 +415,12 @@ export function AccessManagementPage() {
       const q = search.toLowerCase()
       list = list.filter(p =>
         p.name.toLowerCase().includes(q) ||
-        p.email.toLowerCase().includes(q)
+        p.email.toLowerCase().includes(q),
       )
     }
     return list
   }, [profiles, roleFilter, search])
 
-  // Stats
   const stats = useMemo(() => {
     const byRole: Record<string, number> = {}
     for (const p of profiles) {
@@ -325,6 +434,10 @@ export function AccessManagementPage() {
       external: profiles.filter(p => p.isExternal).length,
     }
   }, [profiles])
+
+  const selectedRoleFilterLabel = roleFilter === 'all'
+    ? t('access.allRoles')
+    : ROLE_OPTIONS.find(o => o.value === roleFilter)?.label.split(' ')[0] || roleFilter
 
   if (!isAdmin) {
     return (
@@ -409,7 +522,7 @@ export function AccessManagementPage() {
               <TableRow>
                 <TableHead className="w-[120px]">{t('access.role')}</TableHead>
                 {FEATURE_MODULES.map(m => (
-                  <TableHead key={m.key} className="text-center text-xs w-20">{m.label}</TableHead>
+                  <TableHead key={m.key} className="text-center text-xs w-20">{t(m.labelKey)}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
@@ -451,7 +564,7 @@ export function AccessManagementPage() {
             </div>
             <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v || 'all')}>
               <SelectTrigger className="w-[160px] h-9">
-                <SelectValue placeholder={t('access.role')} />
+                <span>{selectedRoleFilterLabel}</span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('access.allRoles')}</SelectItem>
@@ -541,7 +654,7 @@ export function AccessManagementPage() {
                               variant="outline"
                               className="text-[10px] h-4 px-1.5 font-normal"
                             >
-                              {FEATURE_MODULES.find(m => m.key === mod)?.label || mod}
+                              {t(FEATURE_MODULES.find(m => m.key === mod)?.labelKey || mod)}
                             </Badge>
                           ))}
                           {hasCustom && (
