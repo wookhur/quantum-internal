@@ -192,6 +192,7 @@ function TaskDetailDialog({
   const t = useT()
   const { user } = useAuth()
   const statusCfg = useStatusConfig()
+  const priorityLabels = { urgent: t('tasks.urgent'), normal: t('tasks.normal'), low: t('tasks.low') }
   const { data: task, isLoading } = useTask(taskId || undefined)
   const { data: comments = [] } = useTaskComments(taskId || undefined)
   const { data: attachments = [] } = useTaskAttachments(taskId || undefined)
@@ -284,10 +285,12 @@ function TaskDetailDialog({
             {/* Meta row */}
             <div className="grid grid-cols-3 gap-3 text-sm">
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">{t('tasks.statusLabel')}</Label>
+                <Label className="text-xs text-muted-foreground">{t('common.status')}</Label>
                 <Select value={task.status} onValueChange={handleStatusChange}>
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
+                    <span className={`flex items-center gap-1.5 ${statusCfg[task.status]?.className || ''}`}>
+                      {statusCfg[task.status]?.label || task.status}
+                    </span>
                   </SelectTrigger>
                   <SelectContent>
                     {STATUS_ORDER.map(s => (
@@ -300,7 +303,7 @@ function TaskDetailDialog({
                 <Label className="text-xs text-muted-foreground">{t('tasks.assignee')}</Label>
                 <Select value={task.assigneeId || '_none'} onValueChange={v => handleAssigneeChange(v === '_none' ? null : v)}>
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder={t('tasks.unassigned')} />
+                    <span>{task.assignee?.name || profiles.find(p => p.id === task.assigneeId)?.name || t('tasks.unassigned')}</span>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">{t('tasks.unassigned')}</SelectItem>
@@ -313,7 +316,9 @@ function TaskDetailDialog({
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">{t('tasks.priority')}</Label>
                 <Select value={task.priority} onValueChange={handlePriorityChange}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs">
+                    <span>{priorityLabels[task.priority] || task.priority}</span>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="urgent">{t('tasks.urgent')}</SelectItem>
                     <SelectItem value="normal">{t('tasks.normal')}</SelectItem>
@@ -735,31 +740,34 @@ function ProjectSection({ profiles }: { profiles: User[] }) {
       },
       {
         onSuccess: () => {
-          // Auto-create tasks for each assignee
-          if (form.assignees.length > 0) {
-            for (const assigneeId of form.assignees) {
-              createTask.mutate({
-                title: form.title,
-                description: form.description || undefined,
-                priority: form.priority === 'high' ? 'urgent' : form.priority === 'low' ? 'low' : 'normal',
-                requesterId: user.id,
-                assigneeId,
-                department: form.team || undefined,
-                dueDate: form.dueDate || undefined,
-              }, {
-                onSuccess: (created) => {
-                  if (assigneeId !== user.id) {
-                    createNotificationsForUsers([assigneeId], {
-                      type: 'task_assigned',
-                      title: '새 프로젝트 업무 요청',
-                      message: `${user.name}님이 프로젝트 "${form.title}"의 업무를 요청했습니다.`,
-                      link: `/tasks?open=${created.id}`,
-                      metadata: { taskId: created.id },
-                    }).catch(() => {})
-                  }
-                },
-              })
-            }
+          // Auto-create tasks for owner + assignees (deduplicated)
+          const allRecipients = new Set<string>()
+          if (form.ownerId) allRecipients.add(form.ownerId)
+          for (const a of form.assignees) allRecipients.add(a)
+
+          const taskPriority = form.priority === 'high' ? 'urgent' : form.priority === 'low' ? 'low' : 'normal' as TaskPriority
+          for (const recipientId of allRecipients) {
+            createTask.mutate({
+              title: form.title,
+              description: form.description || undefined,
+              priority: taskPriority,
+              requesterId: user.id,
+              assigneeId: recipientId,
+              department: form.team || undefined,
+              dueDate: form.dueDate || undefined,
+            }, {
+              onSuccess: (created) => {
+                if (recipientId !== user.id) {
+                  createNotificationsForUsers([recipientId], {
+                    type: 'task_assigned',
+                    title: '새 프로젝트 업무 요청',
+                    message: `${user.name}님이 프로젝트 "${form.title}"의 업무를 요청했습니다.`,
+                    link: `/tasks?open=${created.id}`,
+                    metadata: { taskId: created.id },
+                  }).catch(() => {})
+                }
+              },
+            })
           }
           setCreateOpen(false)
           setForm({ ...EMPTY_PROJECT_FORM })
@@ -783,9 +791,16 @@ function ProjectSection({ profiles }: { profiles: User[] }) {
 
   const handleEdit = () => {
     if (!editingTodo || !form.title.trim() || !user) return
-    // Detect newly added assignees
-    const prevAssignees = editingTodo.assignees || []
-    const newAssignees = form.assignees.filter(a => !prevAssignees.includes(a))
+    // Detect newly added people (owner + assignees combined)
+    const prevAll = new Set<string>()
+    if (editingTodo.ownerId) prevAll.add(editingTodo.ownerId)
+    for (const a of (editingTodo.assignees || [])) prevAll.add(a)
+
+    const newAll = new Set<string>()
+    if (form.ownerId) newAll.add(form.ownerId)
+    for (const a of form.assignees) newAll.add(a)
+
+    const newRecipients = [...newAll].filter(id => !prevAll.has(id))
 
     updateTodo.mutate(
       {
@@ -800,31 +815,30 @@ function ProjectSection({ profiles }: { profiles: User[] }) {
       },
       {
         onSuccess: () => {
-          // Auto-create tasks for NEWLY added assignees
-          if (newAssignees.length > 0) {
-            for (const assigneeId of newAssignees) {
-              createTask.mutate({
-                title: form.title,
-                description: form.description || undefined,
-                priority: form.priority === 'high' ? 'urgent' : form.priority === 'low' ? 'low' : 'normal',
-                requesterId: user.id,
-                assigneeId,
-                department: form.team || undefined,
-                dueDate: form.dueDate || undefined,
-              }, {
-                onSuccess: (created) => {
-                  if (assigneeId !== user.id) {
-                    createNotificationsForUsers([assigneeId], {
-                      type: 'task_assigned',
-                      title: '새 프로젝트 업무 요청',
-                      message: `${user.name}님이 프로젝트 "${form.title}"의 업무를 요청했습니다.`,
-                      link: `/tasks?open=${created.id}`,
-                      metadata: { taskId: created.id },
-                    }).catch(() => {})
-                  }
-                },
-              })
-            }
+          // Auto-create tasks for NEWLY added owner/assignees
+          const taskPriority = form.priority === 'high' ? 'urgent' : form.priority === 'low' ? 'low' : 'normal' as TaskPriority
+          for (const recipientId of newRecipients) {
+            createTask.mutate({
+              title: form.title,
+              description: form.description || undefined,
+              priority: taskPriority,
+              requesterId: user.id,
+              assigneeId: recipientId,
+              department: form.team || undefined,
+              dueDate: form.dueDate || undefined,
+            }, {
+              onSuccess: (created) => {
+                if (recipientId !== user.id) {
+                  createNotificationsForUsers([recipientId], {
+                    type: 'task_assigned',
+                    title: '새 프로젝트 업무 요청',
+                    message: `${user.name}님이 프로젝트 "${form.title}"의 업무를 요청했습니다.`,
+                    link: `/tasks?open=${created.id}`,
+                    metadata: { taskId: created.id },
+                  }).catch(() => {})
+                }
+              },
+            })
           }
           setEditingTodo(null)
           setForm({ ...EMPTY_PROJECT_FORM })
