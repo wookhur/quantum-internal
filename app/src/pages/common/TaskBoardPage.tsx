@@ -738,7 +738,7 @@ export function TaskBoardPage() {
 
       {/* Create Task Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('tasks.createTask')}</DialogTitle>
             <DialogDescription>{t('tasks.createDesc')}</DialogDescription>
@@ -758,7 +758,7 @@ export function TaskBoardPage() {
                 value={newTask.description}
                 onChange={e => setNewTask(f => ({ ...f, description: e.target.value }))}
                 placeholder={t('tasks.descPlaceholder')}
-                className="min-h-[80px]"
+                className="min-h-[80px] max-h-[200px] overflow-y-auto"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
