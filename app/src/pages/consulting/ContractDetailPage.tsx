@@ -1105,7 +1105,7 @@ export function ContractDetailPage() {
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder={t('incentive.selectType')} />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="min-w-[240px]">
                       {(Object.entries(INCENTIVE_TYPES) as [IncentiveType, typeof INCENTIVE_TYPES[IncentiveType]][]).map(([key, cfg]) => (
                         <SelectItem key={key} value={key}>{t(cfg.labelKey)} ({cfg.defaultPct}%)</SelectItem>
                       ))}
