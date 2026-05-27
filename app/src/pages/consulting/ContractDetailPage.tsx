@@ -1007,11 +1007,9 @@ export function ContractDetailPage() {
               <div className="space-y-3">
                 {contractIncentives.map((inc) => {
                   const typeCfg = INCENTIVE_TYPES[inc.incentiveType]
-                  // Per-installment breakdown
-                  const paidInstallments = baseInstallments.filter(i => i.paidAmount > 0)
-                  const totalIncAmount = paidInstallments.reduce((sum, i) => sum + Math.round(i.paidAmount * inc.percentage / 100), 0)
                   return (
-                    <div key={inc.id} className="p-3 rounded-lg bg-orange-50/50 border border-orange-100 space-y-2">
+                    <div key={inc.id} className="p-3 rounded-lg bg-orange-50/50 border border-orange-100 space-y-3">
+                      {/* Header: type, name, percentage, delete */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Badge variant="outline" className="text-orange-700 border-orange-200 bg-orange-100 text-xs">
@@ -1019,9 +1017,6 @@ export function ContractDetailPage() {
                           </Badge>
                           <span className="text-sm font-medium">{inc.displayName}</span>
                           <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
-                          {contract && (
-                            <span className="text-sm font-mono text-orange-700 font-semibold">{formatCurrency(totalIncAmount)}</span>
-                          )}
                         </div>
                         {!isCancelled && (
                           <Button
@@ -1038,19 +1033,31 @@ export function ContractDetailPage() {
                           </Button>
                         )}
                       </div>
-                      {/* Per-installment breakdown */}
+                      {/* Per-installment breakdown — each row shows label, paid amount, incentive */}
                       {baseInstallments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 pl-1">
+                        <div className="space-y-1.5">
                           {baseInstallments.map((inst) => {
-                            const instInc = inst.paidAmount > 0 ? Math.round(inst.paidAmount * inc.percentage / 100) : 0
                             const isPaid = inst.paidAmount > 0
+                            const instInc = isPaid ? Math.round(inst.paidAmount * inc.percentage / 100) : 0
                             return (
-                              <span
+                              <div
                                 key={inst.id}
-                                className={`text-xs px-2 py-0.5 rounded ${isPaid ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}
+                                className={`flex items-center justify-between px-3 py-1.5 rounded text-sm ${isPaid ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}
                               >
-                                {inst.label} {isPaid ? formatCurrency(instInc) : t('incentive.unpaid')}
-                              </span>
+                                <div className="flex items-center gap-2">
+                                  <span className={`font-medium ${isPaid ? 'text-green-800' : 'text-gray-400'}`}>
+                                    {inst.label}
+                                  </span>
+                                  {isPaid && (
+                                    <span className="text-xs text-green-600">
+                                      ({formatCurrency(inst.paidAmount)} × {inc.percentage}%)
+                                    </span>
+                                  )}
+                                </div>
+                                <span className={`font-mono font-semibold ${isPaid ? 'text-green-700' : 'text-gray-400'}`}>
+                                  {isPaid ? formatCurrency(instInc) : t('incentive.unpaid')}
+                                </span>
+                              </div>
                             )
                           })}
                         </div>
