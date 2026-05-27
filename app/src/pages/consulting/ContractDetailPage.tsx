@@ -1038,7 +1038,8 @@ export function ContractDetailPage() {
                         <div className="space-y-1.5">
                           {baseInstallments.map((inst) => {
                             const isPaid = inst.paidAmount > 0
-                            const instInc = isPaid ? Math.round(inst.paidAmount * inc.percentage / 100) : 0
+                            const amountExVat = Math.round(inst.paidAmount / 1.1)
+                            const instInc = isPaid ? Math.round(amountExVat * inc.percentage / 100) : 0
                             return (
                               <div
                                 key={inst.id}
@@ -1050,7 +1051,7 @@ export function ContractDetailPage() {
                                   </span>
                                   {isPaid && (
                                     <span className="text-xs text-green-600">
-                                      ({formatCurrency(inst.paidAmount)} × {inc.percentage}%)
+                                      ({formatCurrency(amountExVat)} × {inc.percentage}%)
                                     </span>
                                   )}
                                 </div>

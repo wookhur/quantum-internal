@@ -229,7 +229,9 @@ export function useIncentivesByInstallment() {
 
         const paidInsts = instMap.get(inc.contractId) || []
         for (const pi of paidInsts) {
-          const incentiveAmount = Math.round(pi.paidAmount * inc.percentage / 100)
+          // 부가세 10% 제외 후 인센티브 계산
+          const amountExVat = Math.round(pi.paidAmount / 1.1)
+          const incentiveAmount = Math.round(amountExVat * inc.percentage / 100)
           results.push({
             key: `${inc.id}-${pi.id}`,
             incentiveId: inc.id,
