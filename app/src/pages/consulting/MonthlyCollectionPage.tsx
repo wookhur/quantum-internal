@@ -64,6 +64,15 @@ function isPast(dateStr: string): boolean {
   return dateStr < new Date().toISOString().slice(0, 10)
 }
 
+/** Returns the number of days overdue (0 if not overdue) */
+function daysOverdue(dateStr: string): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dateStr + 'T00:00:00')
+  const diff = today.getTime() - due.getTime()
+  return diff > 0 ? Math.floor(diff / (1000 * 60 * 60 * 24)) : 0
+}
+
 export function MonthlyCollectionPage() {
   const t = useT()
   const navigate = useNavigate()
@@ -83,7 +92,8 @@ export function MonthlyCollectionPage() {
   const goToday = () => setCurrentMonth(getMonthKey(new Date()))
 
   // Filter installments for selected month and compute stats
-  const { monthItems, totalExpected, totalCollected, totalOverdue, totalPending } = useMemo(() => {
+  const { monthItems, totalExpected, totalCollected, totalOverdue, totalPending, overdueCount } = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10)
     const items = installments
       .filter(inst => inst.dueDate && inst.dueDate.startsWith(currentMonth))
       .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
@@ -92,15 +102,22 @@ export function MonthlyCollectionPage() {
     let collected = 0
     let overdue = 0
     let pending = 0
+    let overdueN = 0
 
     for (const inst of items) {
       expected += inst.amount
       collected += inst.paidAmount
-      if (inst.status === 'overdue') overdue += inst.amount - inst.paidAmount
-      if (inst.status === 'pending') pending += inst.amount - inst.paidAmount
+      const remaining = inst.amount - inst.paidAmount
+      const pastDue = inst.dueDate! < todayStr && inst.status !== 'paid'
+      if (pastDue) {
+        overdue += remaining
+        overdueN++
+      } else if (inst.status === 'pending') {
+        pending += remaining
+      }
     }
 
-    return { monthItems: items, totalExpected: expected, totalCollected: collected, totalOverdue: overdue, totalPending: pending }
+    return { monthItems: items, totalExpected: expected, totalCollected: collected, totalOverdue: overdue, totalPending: pending, overdueCount: overdueN }
   }, [installments, currentMonth])
 
   // Group by date for visual separation
@@ -190,8 +207,11 @@ export function MonthlyCollectionPage() {
           <CardContent className="py-3 flex items-center gap-3">
             <AlertTriangle className="size-5 text-red-500" />
             <div>
-              <div className="text-lg font-bold">{formatCurrency(totalOverdue)}</div>
-              <div className="text-xs text-muted-foreground">{t('collection.overdue')}</div>
+              <div className="text-lg font-bold text-red-600">{formatCurrency(totalOverdue)}</div>
+              <div className="text-xs text-muted-foreground">
+                {t('collection.overdue')}
+                {overdueCount > 0 && <span className="ml-1 text-red-500 font-medium">({overdueCount}{t('common.count')})</span>}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -237,26 +257,47 @@ export function MonthlyCollectionPage() {
                     const remaining = inst.amount - inst.paidAmount
                     const today = isToday(date)
                     const past = isPast(date) && inst.status !== 'paid'
+                    const overdueDays = past ? daysOverdue(date) : 0
 
                     return (
                       <TableRow
                         key={inst.id}
-                        className={`cursor-pointer hover:bg-muted/50 ${today ? 'bg-blue-50/50' : ''} ${past && inst.status === 'overdue' ? 'bg-red-50/30' : ''}`}
+                        className={`cursor-pointer hover:bg-muted/50 ${
+                          today
+                            ? 'bg-blue-50/50'
+                            : past
+                              ? 'bg-red-50/60 border-l-[3px] border-l-red-400'
+                              : ''
+                        }`}
                         onClick={() => navigate(`/consulting/clients/${inst.contractId}`)}
                       >
                         {/* Date - only show for first item in group */}
-                        <TableCell className={`font-mono text-xs ${today ? 'text-blue-600 font-semibold' : 'text-muted-foreground'}`}>
+                        <TableCell className={`font-mono text-xs ${
+                          today
+                            ? 'text-blue-600 font-semibold'
+                            : past
+                              ? 'text-red-500 font-semibold'
+                              : 'text-muted-foreground'
+                        }`}>
                           {idx === 0 ? (
-                            <div className="flex items-center gap-1">
-                              {today && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />}
-                              {getDayLabel(date)}
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1">
+                                {today && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />}
+                                {past && <AlertTriangle className="size-3 text-red-400" />}
+                                {getDayLabel(date)}
+                              </div>
+                              {past && overdueDays > 0 && (
+                                <span className="text-[10px] text-red-400 font-medium">
+                                  D+{overdueDays}
+                                </span>
+                              )}
                             </div>
                           ) : null}
                         </TableCell>
-                        <TableCell className="font-medium text-sm">
+                        <TableCell className={`font-medium text-sm ${past ? 'text-red-700' : ''}`}>
                           {inst.contract?.contractorName || '-'}
                         </TableCell>
-                        <TableCell className="text-sm">
+                        <TableCell className={`text-sm ${past ? 'text-red-600' : ''}`}>
                           {inst.contract?.studentName || '-'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
@@ -273,14 +314,21 @@ export function MonthlyCollectionPage() {
                         <TableCell className="text-right font-mono text-sm text-emerald-600">
                           {inst.paidAmount > 0 ? formatCurrency(inst.paidAmount) : '-'}
                         </TableCell>
-                        <TableCell className={`text-right font-mono text-sm ${inst.status === 'overdue' ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
+                        <TableCell className={`text-right font-mono text-sm ${past ? 'text-red-500 font-semibold' : inst.status === 'overdue' ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
                           {remaining > 0 ? formatCurrency(remaining) : '-'}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={`text-[10px] h-5 gap-1 ${cfg.color}`}>
-                            <Icon className="size-3" />
-                            {cfg.label}
-                          </Badge>
+                          {past ? (
+                            <Badge variant="outline" className="text-[10px] h-5 gap-1 bg-red-50 text-red-700 border-red-300 font-semibold">
+                              <AlertTriangle className="size-3" />
+                              {overdueDays > 0 ? `${t('collection.status.overdue')} D+${overdueDays}` : cfg.label}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className={`text-[10px] h-5 gap-1 ${cfg.color}`}>
+                              <Icon className="size-3" />
+                              {cfg.label}
+                            </Badge>
+                          )}
                         </TableCell>
                       </TableRow>
                     )
