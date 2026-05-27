@@ -22,6 +22,8 @@ export interface IncentiveWithContract extends ContractIncentive {
   contractorName: string
   studentName: string
   totalAmount: number
+  /** Sum of paid_amount from all paid installments for this contract */
+  paidAmount: number
   currency: 'KRW' | 'USD'
   contractDate: string
   contractStatus: string
@@ -57,7 +59,7 @@ function mapIncentive(row: Record<string, unknown>): ContractIncentive {
   }
 }
 
-function mapIncentiveWithContract(row: Record<string, unknown>): IncentiveWithContract {
+function mapIncentiveWithContract(row: Record<string, unknown>): Omit<IncentiveWithContract, 'paidAmount'> {
   const base = mapIncentive(row)
   const contract = row.contracts as Record<string, unknown> | null
   return {
@@ -98,6 +100,7 @@ export function useAllIncentives() {
   return useQuery({
     queryKey: ['incentives', 'all'],
     queryFn: async () => {
+      // 1. Fetch incentives with contract info
       const { data, error } = await supabase
         .from('contract_incentives')
         .select(
@@ -107,8 +110,28 @@ export function useAllIncentives() {
 
       if (error) throw error
 
-      const mapped = (data || []).map((r) => mapIncentiveWithContract(r as Record<string, unknown>))
-      // Sort by contract_date descending (from the joined contracts table)
+      // 2. Collect unique contract IDs and fetch paid installment sums
+      const contractIds = [...new Set((data || []).map((r) => r.contract_id as string))]
+      const paidMap = new Map<string, number>()
+
+      if (contractIds.length > 0) {
+        const { data: installments } = await supabase
+          .from('payment_installments')
+          .select('contract_id, paid_amount, status')
+          .in('contract_id', contractIds)
+          .eq('status', 'paid')
+
+        for (const inst of installments || []) {
+          const cid = inst.contract_id as string
+          paidMap.set(cid, (paidMap.get(cid) || 0) + (Number(inst.paid_amount) || 0))
+        }
+      }
+
+      const mapped = (data || []).map((r) => {
+        const base = mapIncentiveWithContract(r as Record<string, unknown>)
+        return { ...base, paidAmount: paidMap.get(base.contractId) || 0 }
+      })
+      // Sort by contract_date descending
       mapped.sort((a, b) => (b.contractDate || '').localeCompare(a.contractDate || ''))
       return mapped
     },

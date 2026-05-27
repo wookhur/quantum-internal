@@ -50,6 +50,7 @@ interface ContractDetail {
   contractorName: string
   studentName: string
   totalAmount: number
+  paidAmount: number
   currency: 'KRW' | 'USD'
   incentiveType: IncentiveType
   percentage: number
@@ -116,7 +117,7 @@ export function IncentiveByPersonPage() {
         map.set(groupKey, group)
       }
 
-      const incentiveAmount = Math.round(inc.totalAmount * inc.percentage / 100)
+      const incentiveAmount = Math.round(inc.paidAmount * inc.percentage / 100)
 
       group.contracts.push({
         contractId: inc.contractId,
@@ -124,6 +125,7 @@ export function IncentiveByPersonPage() {
         contractorName: inc.contractorName,
         studentName: inc.studentName,
         totalAmount: inc.totalAmount,
+        paidAmount: inc.paidAmount,
         currency: inc.currency,
         incentiveType: inc.incentiveType,
         percentage: inc.percentage,
@@ -298,7 +300,7 @@ export function IncentiveByPersonPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right text-sm text-muted-foreground">
-                            {formatCurrency(c.totalAmount)}
+                            {formatCurrency(c.paidAmount)}
                           </TableCell>
                           {activeTypes.map((type) => (
                             <TableCell key={type} className="text-right text-sm">

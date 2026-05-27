@@ -41,6 +41,7 @@ interface ContractGroup {
   contractorName: string
   studentName: string
   totalAmount: number
+  paidAmount: number
   currency: 'KRW' | 'USD'
   incentives: IncentiveWithContract[]
   totalPct: number
@@ -85,6 +86,7 @@ export function IncentiveByContractPage() {
           contractorName: inc.contractorName,
           studentName: inc.studentName,
           totalAmount: inc.totalAmount,
+          paidAmount: inc.paidAmount,
           currency: inc.currency,
           incentives: [],
           totalPct: 0,
@@ -95,10 +97,10 @@ export function IncentiveByContractPage() {
       group.incentives.push(inc)
     }
 
-    // Compute totals
+    // Compute totals — incentive is based on PAID amount, not total contract
     for (const group of map.values()) {
       group.totalPct = group.incentives.reduce((sum, inc) => sum + inc.percentage, 0)
-      group.incentiveAmount = Math.round(group.totalAmount * group.totalPct / 100)
+      group.incentiveAmount = Math.round(group.paidAmount * group.totalPct / 100)
     }
 
     // Sort by contract date descending
@@ -109,7 +111,7 @@ export function IncentiveByContractPage() {
 
   // Summaries
   const totalContracts = contractGroups.length
-  const totalContractAmount = contractGroups.reduce((s, g) => s + g.totalAmount, 0)
+  const totalPaidAmount = contractGroups.reduce((s, g) => s + g.paidAmount, 0)
   const totalIncentiveAmount = contractGroups.reduce((s, g) => s + g.incentiveAmount, 0)
 
   const isContractView = location.pathname.includes('by-contract')
@@ -164,11 +166,11 @@ export function IncentiveByContractPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('incentive.totalContractAmount')}</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('incentive.totalPaidAmount')}</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalContractAmount)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(totalPaidAmount)}</div>
           </CardContent>
         </Card>
         <Card>
@@ -200,7 +202,7 @@ export function IncentiveByContractPage() {
                 <TableRow>
                   <TableHead>{t('incentive.contractDate')}</TableHead>
                   <TableHead>{t('incentive.contractorStudent')}</TableHead>
-                  <TableHead className="text-right">{t('incentive.contractAmount')}</TableHead>
+                  <TableHead className="text-right">{t('incentive.paidAmount')}</TableHead>
                   <TableHead>{t('incentive.recipients')}</TableHead>
                   <TableHead>{t('incentive.types')}</TableHead>
                   <TableHead className="text-right">{t('incentive.totalPct')}</TableHead>
@@ -216,7 +218,7 @@ export function IncentiveByContractPage() {
                       <div className="text-sm text-muted-foreground">{group.studentName}</div>
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
-                      {formatCurrency(group.totalAmount)}
+                      {formatCurrency(group.paidAmount)}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">

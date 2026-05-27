@@ -1007,7 +1007,7 @@ export function ContractDetailPage() {
               <div className="space-y-2">
                 {contractIncentives.map((inc) => {
                   const typeCfg = INCENTIVE_TYPES[inc.incentiveType]
-                  const amount = contract ? Math.round(contract.totalAmount * inc.percentage / 100) : 0
+                  const amount = contract ? Math.round(basePaid * inc.percentage / 100) : 0
                   return (
                     <div key={inc.id} className="flex items-center justify-between p-3 rounded-lg bg-orange-50/50 border border-orange-100">
                       <div className="flex items-center gap-3">
