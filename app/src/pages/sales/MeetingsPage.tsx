@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+// Table components unused – using native <table> for tighter column control
+// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
@@ -265,62 +266,58 @@ export function MeetingsPage() {
   const selectedMeeting = meetings.find(m => m.id === selectedMeetingId)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-full overflow-x-hidden">
       {/* Page Header */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">{t('meetings.title')}</h1>
           <p className="text-sm text-muted-foreground">
             {isLoading ? t('common.loading') : t('meetings.totalMeetings').replace('{n}', String(meetings.length))}
           </p>
         </div>
-        <div className="flex gap-1.5">
-          <Button variant="outline" className="gap-1.5" size="sm" onClick={() => setPdfDialogOpen(true)}>
-            <Upload className="size-4" /> {t('meetings.uploadPdf')}
+        <div className="flex gap-1.5 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => setPdfDialogOpen(true)}>
+            <Upload className="size-4" />
           </Button>
-          <Button className="gap-1.5" size="sm" onClick={() => setDialogOpen(true)}>
+          <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
             <Plus className="size-4" /> {t('meetings.addMeeting')}
           </Button>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <CalendarCheck className="size-5 text-primary" />
-            <div>
-              <div className="text-lg font-bold">{thisMonthMeetings.length}</div>
-              <div className="text-xs text-muted-foreground">{t('meetings.thisMonthMeetings')}</div>
-            </div>
+      <div className="flex gap-3">
+        <Card className="flex-1 min-w-0">
+          <CardContent className="py-2 px-3 flex items-center gap-2">
+            <CalendarCheck className="size-4 text-primary shrink-0" />
+            <span className="text-lg font-bold">{thisMonthMeetings.length}</span>
+            <span className="text-xs text-muted-foreground truncate">{t('meetings.thisMonthMeetings')}</span>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <FileCheck className="size-5 text-success" />
-            <div>
-              <div className="text-lg font-bold">{noteDeliveryRate.toFixed(0)}%</div>
-              <div className="text-xs text-muted-foreground">{t('meetings.noteDeliveryRate')}</div>
-            </div>
+        <Card className="flex-1 min-w-0">
+          <CardContent className="py-2 px-3 flex items-center gap-2">
+            <FileCheck className="size-4 text-success shrink-0" />
+            <span className="text-lg font-bold">{noteDeliveryRate.toFixed(0)}%</span>
+            <span className="text-xs text-muted-foreground truncate">{t('meetings.noteDeliveryRate')}</span>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters */}
       <Card>
-        <CardContent className="py-3">
+        <CardContent className="py-2 px-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-muted-foreground whitespace-nowrap">{t('meetings.period')}</span>
             <Input
               type="date"
-              className="w-[150px] h-8"
+              className="w-[140px] h-8"
               value={dateFrom}
               onChange={e => setDateFrom(e.target.value)}
             />
             <span className="text-sm text-muted-foreground">~</span>
             <Input
               type="date"
-              className="w-[150px] h-8"
+              className="w-[140px] h-8"
               value={dateTo}
               onChange={e => setDateTo(e.target.value)}
             />
@@ -356,57 +353,57 @@ export function MeetingsPage() {
             </div>
           ) : (
             <div className="w-full overflow-hidden">
-              <Table className="table-fixed w-full">
+              <table className="w-full table-fixed border-collapse text-sm">
                 <colgroup>
-                  <col style={{ width: '9%' }} />   {/* 미팅일 */}
-                  <col style={{ width: '5%' }} />   {/* 회차 */}
-                  <col style={{ width: '8%' }} />   {/* 학부모 */}
-                  <col style={{ width: '8%' }} />   {/* 학생 */}
-                  <col style={{ width: '15%' }} />  {/* 학교 */}
-                  <col style={{ width: '5%' }} />   {/* 지역 */}
-                  <col style={{ width: '42%' }} />  {/* 메모 */}
-                  <col style={{ width: '4%' }} />   {/* 노트 */}
-                  <col style={{ width: '4%' }} />   {/* 편집 */}
+                  <col className="w-[86px]" />   {/* 미팅일 */}
+                  <col className="w-[42px]" />   {/* 회차 */}
+                  <col className="w-[60px]" />   {/* 학부모 */}
+                  <col className="w-[60px]" />   {/* 학생 */}
+                  <col className="w-[120px]" />  {/* 학교 */}
+                  <col className="w-[44px]" />   {/* 지역 */}
+                  <col />                        {/* 메모 - 나머지 */}
+                  <col className="w-[32px]" />   {/* 노트 */}
+                  <col className="w-[32px]" />   {/* 편집 */}
                 </colgroup>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="px-1.5">{t('meetings.col.meetingDate')}</TableHead>
-                    <TableHead className="px-1">{t('meetings.col.meetingNumber')}</TableHead>
-                    <TableHead className="px-1.5">{t('meetings.col.parent')}</TableHead>
-                    <TableHead className="px-1.5">{t('meetings.col.student')}</TableHead>
-                    <TableHead className="px-1.5">{t('common.school')}</TableHead>
-                    <TableHead className="px-1">{t('common.region')}</TableHead>
-                    <TableHead className="px-1.5">{t('common.memo')}</TableHead>
-                    <TableHead className="px-0 text-center">{t('meetings.col.note')}</TableHead>
-                    <TableHead className="px-0" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs">
+                    <th className="py-2 px-1 text-left font-medium">{t('meetings.col.meetingDate')}</th>
+                    <th className="py-2 px-1 text-left font-medium">{t('meetings.col.meetingNumber')}</th>
+                    <th className="py-2 px-1 text-left font-medium">{t('meetings.col.parent')}</th>
+                    <th className="py-2 px-1 text-left font-medium">{t('meetings.col.student')}</th>
+                    <th className="py-2 px-1 text-left font-medium">{t('common.school')}</th>
+                    <th className="py-2 px-1 text-left font-medium">{t('common.region')}</th>
+                    <th className="py-2 px-1 text-left font-medium">{t('common.memo')}</th>
+                    <th className="py-2 px-0 text-center font-medium">{t('meetings.col.note')}</th>
+                    <th className="py-2 px-0" />
+                  </tr>
+                </thead>
+                <tbody>
                   {meetings.map((meeting) => {
                     const badge = getMeetingBadge(meeting.meetingNumber, t)
                     const isSelected = meeting.id === selectedMeetingId
                     return (
-                      <TableRow
+                      <tr
                         key={meeting.id}
-                        className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : 'hover:bg-muted/50'}`}
+                        className={`border-b cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 border-l-2 border-l-blue-500' : 'hover:bg-muted/50'}`}
                         onClick={() => setSelectedMeetingId(isSelected ? null : meeting.id)}
                       >
-                        <TableCell className="px-1.5 text-xs text-muted-foreground font-mono truncate">
+                        <td className="py-2 px-1 text-xs text-muted-foreground font-mono overflow-hidden text-ellipsis whitespace-nowrap">
                           {meeting.meetingDate}
-                        </TableCell>
-                        <TableCell className="px-1">
+                        </td>
+                        <td className="py-2 px-1">
                           <Badge variant="outline" className={`text-[10px] ${badge.className}`}>
                             {badge.label}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="px-1.5 font-medium text-sm truncate">{meeting.parentName}</TableCell>
-                        <TableCell className="px-1.5 text-sm truncate">{meeting.studentName || '-'}</TableCell>
-                        <TableCell className="px-1.5 text-sm text-muted-foreground truncate">{meeting.currentSchool || '-'}</TableCell>
-                        <TableCell className="px-1 text-sm text-muted-foreground truncate">{meeting.region || '-'}</TableCell>
-                        <TableCell className="px-1.5 text-xs text-muted-foreground truncate">
+                        </td>
+                        <td className="py-2 px-1 font-medium overflow-hidden text-ellipsis whitespace-nowrap">{meeting.parentName}</td>
+                        <td className="py-2 px-1 overflow-hidden text-ellipsis whitespace-nowrap">{meeting.studentName || '-'}</td>
+                        <td className="py-2 px-1 text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">{meeting.currentSchool || '-'}</td>
+                        <td className="py-2 px-1 text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">{meeting.region || '-'}</td>
+                        <td className="py-2 px-1 text-xs text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">
                           {meeting.memo || '-'}
-                        </TableCell>
-                        <TableCell className="px-0 text-center" onClick={(e) => e.stopPropagation()}>
+                        </td>
+                        <td className="py-2 px-0 text-center" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleNoteToggle(meeting.id, meeting.noteDelivered)}
                             className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
@@ -421,22 +418,22 @@ export function MeetingsPage() {
                               </svg>
                             )}
                           </button>
-                        </TableCell>
-                        <TableCell className="px-0 text-center" onClick={(e) => e.stopPropagation()}>
+                        </td>
+                        <td className="py-2 px-0 text-center" onClick={(e) => e.stopPropagation()}>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
                             onClick={() => openEditDialog(meeting)}
                           >
-                            <Pencil className="size-3.5" />
+                            <Pencil className="size-3" />
                           </Button>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     )
                   })}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
