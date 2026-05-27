@@ -1091,7 +1091,11 @@ export function ContractDetailPage() {
                   <label className="text-xs text-muted-foreground">{t('incentive.selectType')}</label>
                   <Select value={incentiveForm.incentiveType} onValueChange={(v) => setIncentiveForm(f => ({ ...f, incentiveType: v || '' }))}>
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder={t('incentive.selectType')} />
+                      <span>
+                        {incentiveForm.incentiveType && INCENTIVE_TYPES[incentiveForm.incentiveType as IncentiveType]
+                          ? `${t(INCENTIVE_TYPES[incentiveForm.incentiveType as IncentiveType].labelKey)} (${INCENTIVE_TYPES[incentiveForm.incentiveType as IncentiveType].defaultPct}%)`
+                          : t('incentive.selectType')}
+                      </span>
                     </SelectTrigger>
                     <SelectContent className="min-w-[280px]">
                       {(Object.entries(INCENTIVE_TYPES) as [IncentiveType, typeof INCENTIVE_TYPES[IncentiveType]][]).map(([key, cfg]) => (
