@@ -164,6 +164,50 @@ export function useDeleteIncentive() {
   })
 }
 
+// ---------------------------------------------------------------------------
+// External recipients (persistent custom names)
+// ---------------------------------------------------------------------------
+
+export interface IncentiveRecipient {
+  id: string
+  name: string
+}
+
+/** Fetch all saved external recipients */
+export function useIncentiveRecipients() {
+  return useQuery({
+    queryKey: ['incentive-recipients'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('incentive_recipients')
+        .select('id, name')
+        .order('name', { ascending: true })
+      if (error) throw error
+      return (data || []) as IncentiveRecipient[]
+    },
+  })
+}
+
+/** Add a new external recipient and return it */
+export function useCreateIncentiveRecipient() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (name: string) => {
+      // Upsert to avoid duplicate errors
+      const { data, error } = await supabase
+        .from('incentive_recipients')
+        .upsert({ name }, { onConflict: 'name' })
+        .select()
+        .single()
+      if (error) throw error
+      return data as IncentiveRecipient
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['incentive-recipients'] })
+    },
+  })
+}
+
 /** Delete ALL incentives for a given contract */
 export function useDeleteContractIncentives() {
   const qc = useQueryClient()
