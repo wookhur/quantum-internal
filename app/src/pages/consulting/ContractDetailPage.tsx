@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
@@ -84,53 +84,11 @@ function IncentivePersonSelect({
   const [newName, setNewName] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const wrapperRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
-
-  // Close on outside click (check both trigger wrapper and portal dropdown)
-  useEffect(() => {
-    if (!open) return
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node
-      if (
-        wrapperRef.current && !wrapperRef.current.contains(target) &&
-        dropdownRef.current && !dropdownRef.current.contains(target)
-      ) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [open])
-
-  // Position dropdown using fixed positioning to avoid overflow clipping
-  useEffect(() => {
-    if (!open || !triggerRef.current) return
-    const rect = triggerRef.current.getBoundingClientRect()
-    const dropdownMaxH = 280
-    const spaceBelow = window.innerHeight - rect.bottom - 8
-    const spaceAbove = rect.top - 8
-    // Open upward if not enough space below but enough above
-    const openUp = spaceBelow < dropdownMaxH && spaceAbove > spaceBelow
-    setDropdownStyle({
-      position: 'fixed',
-      ...(openUp
-        ? { bottom: window.innerHeight - rect.top + 4 }
-        : { top: rect.bottom + 4 }),
-      left: rect.left,
-      width: rect.width,
-      maxHeight: Math.min(dropdownMaxH, openUp ? spaceAbove : spaceBelow),
-      zIndex: 9999,
-    })
-  }, [open])
 
   const displayLabel = value
     ? profiles.find(p => p.id === value)?.name || ''
     : customName || ''
 
-  // Build unified list: profiles first, then external recipients (deduplicated)
   const profileNames = new Set(profiles.map(p => p.name.toLowerCase()))
   const externalOnly = recipients.filter(r => !profileNames.has(r.name.toLowerCase()))
   type ListItem = { type: 'profile'; id: string; name: string } | { type: 'recipient'; id: string; name: string }
@@ -149,11 +107,8 @@ function IncentivePersonSelect({
   }
 
   return (
-    <div ref={wrapperRef}>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => { setOpen(!open); setIsAdding(false); setNewName('') }}
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setIsAdding(false); setNewName('') } }}>
+      <PopoverTrigger
         className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
       >
         <span className={displayLabel ? 'text-foreground' : 'text-muted-foreground'}>
@@ -162,74 +117,70 @@ function IncentivePersonSelect({
         <svg className="size-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
         </svg>
-      </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" side="bottom" sideOffset={4} className="w-[var(--anchor-width)] p-0 max-h-[280px] overflow-y-auto">
+        {/* Unified list */}
+        {allItems.map((item) => {
+          const isSelected = item.type === 'profile'
+            ? (value === item.id && !customName)
+            : (customName === item.name && !value)
+          return (
+            <button
+              key={`${item.type}-${item.id}`}
+              type="button"
+              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${isSelected ? 'bg-accent font-medium' : ''}`}
+              onClick={() => {
+                if (item.type === 'profile') onChange(item.id, '')
+                else onChange('', item.name)
+                setOpen(false)
+              }}
+            >
+              {item.name}
+            </button>
+          )
+        })}
 
-      {open && createPortal(
-        <div ref={dropdownRef} style={dropdownStyle} className="rounded-md border bg-popover shadow-md overflow-y-auto">
-          {/* Unified list */}
-          {allItems.map((item) => {
-            const isSelected = item.type === 'profile'
-              ? (value === item.id && !customName)
-              : (customName === item.name && !value)
-            return (
-              <button
-                key={`${item.type}-${item.id}`}
-                type="button"
-                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${isSelected ? 'bg-accent font-medium' : ''}`}
-                onClick={() => {
-                  if (item.type === 'profile') onChange(item.id, '')
-                  else onChange('', item.name)
-                  setOpen(false)
+        {/* Add new */}
+        <div className={allItems.length > 0 ? 'border-t' : ''}>
+          {!isAdding ? (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-1.5 font-medium"
+              onClick={() => {
+                setIsAdding(true)
+                setTimeout(() => inputRef.current?.focus(), 50)
+              }}
+            >
+              <Plus className="size-3.5" />
+              {addNewLabel}
+            </button>
+          ) : (
+            <div className="flex items-center gap-1 p-1.5">
+              <input
+                ref={inputRef}
+                type="text"
+                className="flex-1 h-8 rounded-md border px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                placeholder={addNewLabel}
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); handleAddNew() }
+                  if (e.key === 'Escape') { setIsAdding(false); setNewName('') }
                 }}
-              >
-                {item.name}
-              </button>
-            )
-          })}
-
-          {/* Add new */}
-          <div className={allItems.length > 0 ? 'border-t' : ''}>
-            {!isAdding ? (
+              />
               <button
                 type="button"
-                className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center gap-1.5 font-medium"
-                onClick={() => {
-                  setIsAdding(true)
-                  setTimeout(() => inputRef.current?.focus(), 50)
-                }}
+                className="h-8 px-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
+                disabled={!newName.trim()}
+                onClick={handleAddNew}
               >
-                <Plus className="size-3.5" />
-                {addNewLabel}
+                확인
               </button>
-            ) : (
-              <div className="flex items-center gap-1 p-1.5">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  className="flex-1 h-8 rounded-md border px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  placeholder={addNewLabel}
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); handleAddNew() }
-                    if (e.key === 'Escape') { setIsAdding(false); setNewName('') }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="h-8 px-2 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
-                  disabled={!newName.trim()}
-                  onClick={handleAddNew}
-                >
-                  확인
-                </button>
-              </div>
-            )}
-          </div>
-        </div>,
-        document.body,
-      )}
-    </div>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -1113,7 +1064,7 @@ export function ContractDetailPage() {
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder={t('incentive.selectType')} />
                     </SelectTrigger>
-                    <SelectContent className="min-w-[240px]">
+                    <SelectContent className="min-w-[280px]">
                       {(Object.entries(INCENTIVE_TYPES) as [IncentiveType, typeof INCENTIVE_TYPES[IncentiveType]][]).map(([key, cfg]) => (
                         <SelectItem key={key} value={key}>{t(cfg.labelKey)} ({cfg.defaultPct}%)</SelectItem>
                       ))}
