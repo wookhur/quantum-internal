@@ -1108,9 +1108,6 @@ export function TaskBoardPage() {
 
   return (
     <div className="space-y-6">
-      {/* ═══ Project Section ═══ */}
-      <ProjectSection profiles={profiles} />
-
       {/* ═══ Task Section ═══ */}
       <div className="space-y-4">
         {/* Header */}
@@ -1269,6 +1266,9 @@ export function TaskBoardPage() {
           </div>
         )}
       </div>
+
+      {/* ═══ Project Section ═══ */}
+      <ProjectSection profiles={profiles} />
 
       {/* Task Detail Dialog */}
       <TaskDetailDialog
