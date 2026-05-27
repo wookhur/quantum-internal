@@ -142,6 +142,19 @@ export function useUpdateTodo() {
   })
 }
 
+export function useDeleteTodo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('todos').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['todos'] })
+    },
+  })
+}
+
 /** Legacy: quick status toggle */
 export function useUpdateTodoStatus() {
   const qc = useQueryClient()

@@ -10,6 +10,7 @@ const koTranslations = {
   'common.cancel': '취소',
   'common.confirm': '확인',
   'common.delete': '삭제',
+  'common.deleting': '삭제 중...',
   'common.edit': '수정',
   'common.add': '추가',
   'common.create': '생성',
@@ -1218,7 +1219,7 @@ const koTranslations = {
   'incentive.addNewPerson': '새 대상자 추가',
 
   // ── Tasks ──
-  'nav.taskBoard': '업무 요청',
+  'nav.taskBoard': '프로젝트',
   'tasks.title': '업무 요청 보드',
   'tasks.description': '팀 간 업무 요청과 진행 상황을 관리합니다.',
   'tasks.createTask': '업무 요청',
@@ -1284,6 +1285,7 @@ const enTranslations: Record<string, string> = {
   'common.cancel': 'Cancel',
   'common.confirm': 'Confirm',
   'common.delete': 'Delete',
+  'common.deleting': 'Deleting...',
   'common.edit': 'Edit',
   'common.add': 'Add',
   'common.create': 'Create',
@@ -2491,7 +2493,7 @@ const enTranslations: Record<string, string> = {
   'incentive.addNewPerson': 'Add new person',
 
   // ── Tasks ──
-  'nav.taskBoard': 'Task Board',
+  'nav.taskBoard': 'Projects',
   'tasks.title': 'Task Board',
   'tasks.description': 'Manage team task requests and track progress.',
   'tasks.createTask': 'Create Task',

@@ -30,7 +30,7 @@ import {
   useTaskStats,
   type TaskFilters,
 } from '@/hooks/useTasks'
-import { useTodos, useCreateTodo, useUpdateTodo, useUpdateTodoStatus } from '@/hooks/useTodos'
+import { useTodos, useCreateTodo, useUpdateTodo, useUpdateTodoStatus, useDeleteTodo } from '@/hooks/useTodos'
 import { useProjectComments, useCreateComment, useDeleteComment } from '@/hooks/useProjectComments'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import { useT } from '@/i18n/LanguageContext'
@@ -707,6 +707,7 @@ function ProjectSection({ profiles }: { profiles: User[] }) {
   const { data: todos = [], isLoading: todosLoading } = useTodos()
   const createTodo = useCreateTodo()
   const updateTodo = useUpdateTodo()
+  const deleteTodo = useDeleteTodo()
   const updateStatus = useUpdateTodoStatus()
   const createTask = useCreateTask()
 
@@ -845,6 +846,16 @@ function ProjectSection({ profiles }: { profiles: User[] }) {
         },
       },
     )
+  }
+
+  const handleDeleteProject = () => {
+    if (!editingTodo) return
+    deleteTodo.mutate(editingTodo.id, {
+      onSuccess: () => {
+        setEditingTodo(null)
+        setForm({ ...EMPTY_PROJECT_FORM })
+      },
+    })
   }
 
   const handleToggleStatus = (id: string, status: TodoStatus) => {
@@ -1004,9 +1015,21 @@ function ProjectSection({ profiles }: { profiles: User[] }) {
           {/* Comments */}
           {editingTodo && <ProjectCommentsSection todoId={editingTodo.id} />}
 
-          <Button className="w-full" onClick={handleEdit} disabled={!form.title.trim() || updateTodo.isPending}>
-            {updateTodo.isPending ? t('common.saving') : t('common.save')}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-1.5"
+              onClick={handleDeleteProject}
+              disabled={deleteTodo.isPending}
+            >
+              <Trash2 className="size-3.5" />
+              {deleteTodo.isPending ? t('common.deleting') : t('common.delete')}
+            </Button>
+            <Button className="flex-1" onClick={handleEdit} disabled={!form.title.trim() || updateTodo.isPending}>
+              {updateTodo.isPending ? t('common.saving') : t('common.save')}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
