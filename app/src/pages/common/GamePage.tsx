@@ -9,9 +9,17 @@ import { useGameLeaderboard, useSubmitScore } from '@/hooks/useGameLeaderboard'
 
 // ─── Simple Dino Runner (pure canvas, no external deps) ───
 
+interface Obstacle {
+  x: number
+  w: number
+  h: number
+  y: number
+  type: 'cactus' | 'bird'
+}
+
 interface GameState {
-  dino: { y: number; vy: number; ducking: boolean }
-  obstacles: { x: number; w: number; h: number; y: number }[]
+  dino: { y: number; vy: number; ducking: boolean; grounded: boolean }
+  obstacles: Obstacle[]
   ground: number
   speed: number
   score: number
@@ -19,6 +27,8 @@ interface GameState {
   playing: boolean
   gameOver: boolean
   frame: number
+  /** Distance since last obstacle spawn */
+  distSinceSpawn: number
 }
 
 const CANVAS_W = 800
@@ -26,13 +36,19 @@ const CANVAS_H = 200
 const GROUND_Y = 160
 const DINO_W = 30
 const DINO_H = 40
-const DINO_DUCK_H = 22
-const GRAVITY = 0.6
-const JUMP_VEL = -11
+const DINO_DUCK_H = 20
+const GRAVITY = 0.9
+const JUMP_VEL = -12.5
+const FAST_FALL_GRAVITY = 2.0
+
+/** Bird altitude variants */
+const BIRD_Y_LOW = GROUND_Y - 30   // must duck
+const BIRD_Y_MID = GROUND_Y - 55   // can duck or jump
+const BIRD_Y_HIGH = GROUND_Y - 80  // can run under
 
 function initState(): GameState {
   return {
-    dino: { y: GROUND_Y - DINO_H, vy: 0, ducking: false },
+    dino: { y: GROUND_Y - DINO_H, vy: 0, ducking: false, grounded: true },
     obstacles: [],
     ground: 0,
     speed: 5,
@@ -41,6 +57,7 @@ function initState(): GameState {
     playing: false,
     gameOver: false,
     frame: 0,
+    distSinceSpawn: 0,
   }
 }
 
@@ -81,9 +98,8 @@ function drawGame(ctx: CanvasRenderingContext2D, s: GameState, labels?: { gameOv
 
   // Legs (animated)
   ctx.fillStyle = '#535353'
-  if (s.playing && s.dino.y >= GROUND_Y - DINO_H) {
-    // Running animation
-    if (Math.floor(s.frame / 5) % 2 === 0) {
+  if (s.playing && s.dino.grounded) {
+    if (Math.floor(s.frame / 4) % 2 === 0) {
       ctx.fillRect(55, dinoY + dinoH, 5, 6)
       ctx.fillRect(67, dinoY + dinoH, 5, 4)
     } else {
@@ -95,15 +111,38 @@ function drawGame(ctx: CanvasRenderingContext2D, s: GameState, labels?: { gameOv
     ctx.fillRect(67, dinoY + dinoH, 5, 5)
   }
 
-  // Obstacles (cacti)
-  ctx.fillStyle = '#535353'
+  // Obstacles
   s.obstacles.forEach(o => {
-    // Cactus body
-    ctx.fillRect(o.x, o.y, o.w, o.h)
-    // Cactus arms
-    if (o.h > 25) {
-      ctx.fillRect(o.x - 4, o.y + 8, 4, 10)
-      ctx.fillRect(o.x + o.w, o.y + 12, 4, 8)
+    if (o.type === 'cactus') {
+      ctx.fillStyle = '#535353'
+      ctx.fillRect(o.x, o.y, o.w, o.h)
+      if (o.h > 25) {
+        ctx.fillRect(o.x - 4, o.y + 8, 4, 10)
+        ctx.fillRect(o.x + o.w, o.y + 12, 4, 8)
+      }
+    } else {
+      // Bird — draw as a simple pterodactyl shape
+      ctx.fillStyle = '#535353'
+      const bx = o.x
+      const by = o.y
+      // Body
+      ctx.fillRect(bx + 6, by + 8, 20, 8)
+      // Head
+      ctx.fillRect(bx + 26, by + 6, 8, 8)
+      // Beak
+      ctx.fillRect(bx + 34, by + 8, 6, 4)
+      // Eye
+      ctx.fillStyle = '#f7f7f7'
+      ctx.fillRect(bx + 30, by + 7, 3, 3)
+      // Wings (animated)
+      ctx.fillStyle = '#535353'
+      if (Math.floor(s.frame / 8) % 2 === 0) {
+        // Wings up
+        ctx.fillRect(bx + 8, by, 14, 8)
+      } else {
+        // Wings down
+        ctx.fillRect(bx + 8, by + 16, 14, 8)
+      }
     }
   })
 
@@ -149,6 +188,7 @@ function DinoCanvas({ onGameOver }: { onGameOver: (score: number, hi: number) =>
   const stateRef = useRef<GameState>(initState())
   const rafRef = useRef<number>(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const keysRef = useRef<Set<string>>(new Set())
   const labelsRef = useRef({ gameOver: 'GAME OVER', restart: t('game.pressSpaceToRestart'), start: t('game.pressSpaceToStart') })
   labelsRef.current = { gameOver: 'GAME OVER', restart: t('game.pressSpaceToRestart'), start: t('game.pressSpaceToStart') }
 
@@ -160,26 +200,52 @@ function DinoCanvas({ onGameOver }: { onGameOver: (score: number, hi: number) =>
     s.ground += s.speed
     s.score = Math.floor(s.ground / 10)
 
-    // Speed up over time
-    s.speed = 5 + s.score * 0.005
+    // Speed up over time (capped)
+    s.speed = Math.min(5 + s.score * 0.004, 14)
 
     // Dino physics
-    if (s.dino.y < GROUND_Y - DINO_H) {
-      s.dino.vy += GRAVITY
+    const isDownHeld = keysRef.current.has('ArrowDown')
+    const gravity = isDownHeld && !s.dino.grounded ? FAST_FALL_GRAVITY : GRAVITY
+
+    if (!s.dino.grounded) {
+      s.dino.vy += gravity
     }
     s.dino.y += s.dino.vy
+
     if (s.dino.y >= GROUND_Y - DINO_H) {
       s.dino.y = GROUND_Y - DINO_H
       s.dino.vy = 0
+      s.dino.grounded = true
+    } else {
+      s.dino.grounded = false
     }
 
-    // Spawn obstacles
-    const lastOb = s.obstacles[s.obstacles.length - 1]
-    const minGap = 200 + Math.random() * 200
-    if (!lastOb || lastOb.x < CANVAS_W - minGap) {
-      if (Math.random() < 0.02 + s.speed * 0.002) {
-        const h = 20 + Math.random() * 25
-        s.obstacles.push({ x: CANVAS_W + 20, w: 12 + Math.random() * 10, h, y: GROUND_Y - h })
+    // Ducking only on the ground
+    s.dino.ducking = isDownHeld && s.dino.grounded
+
+    // Track distance since last spawn
+    s.distSinceSpawn += s.speed
+
+    // Minimum gap scales with speed so player always has time to react
+    const minGap = 180 + s.speed * 18
+
+    if (s.distSinceSpawn >= minGap) {
+      const spawnChance = 0.03 + s.speed * 0.003
+      if (Math.random() < spawnChance) {
+        s.distSinceSpawn = 0
+
+        // After score 80 start introducing birds, ramp up probability
+        const birdChance = s.score > 80 ? Math.min((s.score - 80) * 0.003, 0.5) : 0
+        const isBird = Math.random() < birdChance
+
+        if (isBird) {
+          const altitudes = [BIRD_Y_LOW, BIRD_Y_MID, BIRD_Y_HIGH]
+          const by = altitudes[Math.floor(Math.random() * altitudes.length)]
+          s.obstacles.push({ x: CANVAS_W + 20, w: 40, h: 24, y: by, type: 'bird' })
+        } else {
+          const h = 20 + Math.random() * 25
+          s.obstacles.push({ x: CANVAS_W + 20, w: 12 + Math.random() * 10, h, y: GROUND_Y - h, type: 'cactus' })
+        }
       }
     }
 
@@ -190,14 +256,21 @@ function DinoCanvas({ onGameOver }: { onGameOver: (score: number, hi: number) =>
     // Collision
     const dinoH = s.dino.ducking ? DINO_DUCK_H : DINO_H
     const dinoY = s.dino.ducking ? GROUND_Y - DINO_DUCK_H : s.dino.y
+    // Slightly forgiving hitbox (shrink by 6px each side)
     const dinoBox = { x: 54, y: dinoY + 4, w: DINO_W - 8, h: dinoH - 8 }
 
     for (const o of s.obstacles) {
+      // Obstacle hitbox — slightly forgiving too
+      const ox = o.type === 'bird' ? o.x + 6 : o.x + 2
+      const ow = o.type === 'bird' ? o.w - 12 : o.w - 4
+      const oy = o.y + 2
+      const oh = o.h - 4
+
       if (
-        dinoBox.x < o.x + o.w &&
-        dinoBox.x + dinoBox.w > o.x &&
-        dinoBox.y < o.y + o.h &&
-        dinoBox.y + dinoBox.h > o.y
+        dinoBox.x < ox + ow &&
+        dinoBox.x + dinoBox.w > ox &&
+        dinoBox.y < oy + oh &&
+        dinoBox.y + dinoBox.h > oy
       ) {
         s.playing = false
         s.gameOver = true
@@ -233,21 +306,22 @@ function DinoCanvas({ onGameOver }: { onGameOver: (score: number, hi: number) =>
         start()
         return
       }
-      // Jump
-      if (s.dino.y >= GROUND_Y - DINO_H) {
+      // Jump — only when grounded
+      if (s.dino.grounded) {
         s.dino.vy = JUMP_VEL
+        s.dino.grounded = false
         s.dino.ducking = false
       }
     }
-    if (e.code === 'ArrowDown' && s.playing) {
+    if (e.code === 'ArrowDown') {
       e.preventDefault()
-      s.dino.ducking = true
+      keysRef.current.add('ArrowDown')
     }
   }, [start])
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
     if (e.code === 'ArrowDown') {
-      stateRef.current.dino.ducking = false
+      keysRef.current.delete('ArrowDown')
     }
   }, [])
 
