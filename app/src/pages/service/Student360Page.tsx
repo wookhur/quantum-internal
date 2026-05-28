@@ -104,6 +104,7 @@ export function Student360Page() {
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
+  const [consultantFilter, setConsultantFilter] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('student'))
 
   // Keep ?student= in the URL in sync so links from the KPI page (and back/forward) work.
@@ -120,16 +121,25 @@ export function Student360Page() {
   const { data: studentKpis = {} } = useStudentKpis()
   const statusFlags = useStudentStatusFlags()
 
+  // Consultants who actually have at least one student (for the filter dropdown)
+  const activeConsultants = useMemo(() => {
+    const ids = new Set(students.map(s => s.assignedConsultant).filter(Boolean))
+    return CONSULTANTS.filter(c => ids.has(c.id))
+  }, [students])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return students
-    return students.filter(s =>
-      s.name.toLowerCase().includes(q) ||
-      (s.koreanName || '').toLowerCase().includes(q) ||
-      (s.school || '').toLowerCase().includes(q) ||
-      (s.parentName || '').toLowerCase().includes(q)
-    )
-  }, [students, search])
+    return students.filter(s => {
+      if (consultantFilter && s.assignedConsultant !== consultantFilter) return false
+      if (!q) return true
+      return (
+        s.name.toLowerCase().includes(q) ||
+        (s.koreanName || '').toLowerCase().includes(q) ||
+        (s.school || '').toLowerCase().includes(q) ||
+        (s.parentName || '').toLowerCase().includes(q)
+      )
+    })
+  }, [students, search, consultantFilter])
 
   const selected = students.find(s => s.id === selectedId) || null
 
@@ -140,7 +150,9 @@ export function Student360Page() {
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-lg font-bold">
             {t('nav.student360')}{' '}
-            <span className="text-muted-foreground font-normal">({students.length})</span>
+            <span className="text-muted-foreground font-normal">
+              ({consultantFilter ? `${filtered.length} / ${students.length}` : students.length})
+            </span>
           </h1>
           <StudentDialog
             trigger={<Button size="sm"><Plus className="size-4 mr-1" />{t('student360.newStudent')}</Button>}
@@ -148,7 +160,7 @@ export function Student360Page() {
             createdBy={user?.id}
           />
         </div>
-        <div className="relative mb-3">
+        <div className="relative mb-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             className="pl-9"
@@ -157,6 +169,20 @@ export function Student360Page() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <Select
+          value={consultantFilter || '__all__'}
+          onValueChange={v => setConsultantFilter(v === '__all__' ? '' : (v ?? ''))}
+        >
+          <SelectTrigger className="mb-3">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">전체 컨설턴트</SelectItem>
+            {activeConsultants.map(c => (
+              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="flex-1 overflow-y-auto space-y-1.5">
           {isLoading && <p className="text-sm text-muted-foreground px-1">{t('common.loading')}</p>}
           {!isLoading && filtered.length === 0 && (
