@@ -92,33 +92,34 @@ export function MonthlyCollectionPage() {
   const goToday = () => setCurrentMonth(getMonthKey(new Date()))
 
   // Filter installments for selected month and compute stats
-  const { monthItems, totalExpected, totalCollected, totalOverdue, totalPending, overdueCount } = useMemo(() => {
+  const { monthItems, krw, usd, overdueCount } = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10)
     const items = installments
       .filter(inst => inst.dueDate && inst.dueDate.startsWith(currentMonth))
       .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
 
-    let expected = 0
-    let collected = 0
-    let overdue = 0
-    let pending = 0
+    const stats = { expected: 0, collected: 0, overdue: 0, pending: 0 }
+    const statsUsd = { expected: 0, collected: 0, overdue: 0, pending: 0 }
     let overdueN = 0
 
     for (const inst of items) {
-      expected += inst.amount
-      collected += inst.paidAmount
+      const s = inst.currency === 'USD' ? statsUsd : stats
+      s.expected += inst.amount
+      s.collected += inst.paidAmount
       const remaining = inst.amount - inst.paidAmount
       const pastDue = inst.dueDate! < todayStr && inst.status !== 'paid'
       if (pastDue) {
-        overdue += remaining
+        s.overdue += remaining
         overdueN++
       } else if (inst.status === 'pending') {
-        pending += remaining
+        s.pending += remaining
       }
     }
 
-    return { monthItems: items, totalExpected: expected, totalCollected: collected, totalOverdue: overdue, totalPending: pending, overdueCount: overdueN }
+    return { monthItems: items, krw: stats, usd: statsUsd, overdueCount: overdueN }
   }, [installments, currentMonth])
+
+  const hasUsd = usd.expected > 0
 
   // Group by date for visual separation
   const dateGroups = useMemo(() => {
@@ -189,7 +190,8 @@ export function MonthlyCollectionPage() {
           <CardContent className="py-3 flex items-center gap-3">
             <Calendar className="size-5 text-primary" />
             <div>
-              <div className="text-lg font-bold">{formatCurrency(totalExpected)}</div>
+              <div className="text-lg font-bold">{formatCurrency(krw.expected)}</div>
+              {hasUsd && <div className="text-sm font-semibold text-primary/70">{formatCurrency(usd.expected, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">{t('collection.expectedAmount')}</div>
             </div>
           </CardContent>
@@ -198,7 +200,8 @@ export function MonthlyCollectionPage() {
           <CardContent className="py-3 flex items-center gap-3">
             <CheckCircle2 className="size-5 text-emerald-500" />
             <div>
-              <div className="text-lg font-bold">{formatCurrency(totalCollected)}</div>
+              <div className="text-lg font-bold">{formatCurrency(krw.collected)}</div>
+              {hasUsd && <div className="text-sm font-semibold text-emerald-500/70">{formatCurrency(usd.collected, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">{t('collection.collected')}</div>
             </div>
           </CardContent>
@@ -207,7 +210,8 @@ export function MonthlyCollectionPage() {
           <CardContent className="py-3 flex items-center gap-3">
             <AlertTriangle className="size-5 text-red-500" />
             <div>
-              <div className="text-lg font-bold text-red-600">{formatCurrency(totalOverdue)}</div>
+              <div className="text-lg font-bold text-red-600">{formatCurrency(krw.overdue)}</div>
+              {hasUsd && usd.overdue > 0 && <div className="text-sm font-semibold text-red-400">{formatCurrency(usd.overdue, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">
                 {t('collection.overdue')}
                 {overdueCount > 0 && <span className="ml-1 text-red-500 font-medium">({overdueCount}{t('common.count')})</span>}
@@ -219,7 +223,8 @@ export function MonthlyCollectionPage() {
           <CardContent className="py-3 flex items-center gap-3">
             <Clock className="size-5 text-blue-500" />
             <div>
-              <div className="text-lg font-bold">{formatCurrency(totalPending)}</div>
+              <div className="text-lg font-bold">{formatCurrency(krw.pending)}</div>
+              {hasUsd && usd.pending > 0 && <div className="text-sm font-semibold text-blue-400">{formatCurrency(usd.pending, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">{t('collection.pending')}</div>
             </div>
           </CardContent>
@@ -309,13 +314,13 @@ export function MonthlyCollectionPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          {formatCurrency(inst.amount)}
+                          {formatCurrency(inst.amount, inst.currency)}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm text-emerald-600">
-                          {inst.paidAmount > 0 ? formatCurrency(inst.paidAmount) : '-'}
+                          {inst.paidAmount > 0 ? formatCurrency(inst.paidAmount, inst.currency) : '-'}
                         </TableCell>
                         <TableCell className={`text-right font-mono text-sm ${past ? 'text-red-500 font-semibold' : inst.status === 'overdue' ? 'text-red-500 font-medium' : 'text-muted-foreground'}`}>
-                          {remaining > 0 ? formatCurrency(remaining) : '-'}
+                          {remaining > 0 ? formatCurrency(remaining, inst.currency) : '-'}
                         </TableCell>
                         <TableCell>
                           {past ? (
