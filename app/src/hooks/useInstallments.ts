@@ -31,6 +31,8 @@ function mapInstallment(row: Record<string, unknown>): PaymentInstallment {
           totalAmount: (contract.total_amount as number) || 0,
           currency: (contract.currency as 'KRW' | 'USD') || 'KRW',
           paymentAccount: (contract.payment_account as 'KR' | 'US') || 'KR',
+          salesRep: (contract.sales_rep as string) || undefined,
+          serviceRep: (contract.service_rep as string) || undefined,
           status: contract.status as PaymentInstallment['contract'] extends undefined ? never : NonNullable<PaymentInstallment['contract']>['status'],
           createdAt: contract.created_at as string,
           updatedAt: contract.updated_at as string,
@@ -46,7 +48,7 @@ export function useInstallments() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('payment_installments')
-        .select('*, contracts(id, contractor_name, student_name, school_name, contract_date, expiry_date, total_amount, currency, payment_account, status, created_at, updated_at)')
+        .select('*, contracts(id, contractor_name, student_name, school_name, contract_date, expiry_date, total_amount, currency, payment_account, status, sales_rep, service_rep, created_at, updated_at)')
         .order('due_date', { ascending: true })
       if (error) throw error
       return (data || []).map((r) => mapInstallment(r as Record<string, unknown>))

@@ -71,6 +71,8 @@ function mapContract(row: Record<string, unknown>): Contract {
     totalAmount: (row.total_amount as number) || 0,
     currency: (row.currency as 'KRW' | 'USD') || 'KRW',
     paymentAccount: (row.payment_account as 'KR' | 'US') || 'KR',
+    salesRep: (row.sales_rep as string) || undefined,
+    serviceRep: (row.service_rep as string) || undefined,
     status: row.status as ContractStatus,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -258,6 +260,8 @@ export function useUpdateContract() {
       paymentAccount?: 'KR' | 'US'
       notes?: string
       status?: ContractStatus
+      salesRep?: string | null
+      serviceRep?: string | null
     }) => {
       const { id, ...rest } = payload
       const update: Record<string, unknown> = {}
@@ -274,6 +278,8 @@ export function useUpdateContract() {
       if (rest.paymentAccount !== undefined) update.payment_account = rest.paymentAccount
       if (rest.notes !== undefined) update.notes = rest.notes
       if (rest.status !== undefined) update.status = rest.status
+      if (rest.salesRep !== undefined) update.sales_rep = rest.salesRep
+      if (rest.serviceRep !== undefined) update.service_rep = rest.serviceRep
 
       const { error } = await supabase.from('contracts').update(update).eq('id', id)
       if (error) throw error

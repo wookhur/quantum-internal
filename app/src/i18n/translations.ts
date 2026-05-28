@@ -903,6 +903,8 @@ const koTranslations = {
   'collection.action.minutesAgo': '{n}분 전',
   'collection.action.hoursAgo': '{n}시간 전',
   'collection.action.daysAgo': '{n}일 전',
+  'collection.action.salesRep': '세일즈:',
+  'collection.action.serviceRep': '담당 컨설턴트:',
 
   // ── Planning ──
   'planning.overview': '경영 현황',
@@ -2260,6 +2262,8 @@ const enTranslations: Record<string, string> = {
   'collection.action.minutesAgo': '{n}m ago',
   'collection.action.hoursAgo': '{n}h ago',
   'collection.action.daysAgo': '{n}d ago',
+  'collection.action.salesRep': 'Sales:',
+  'collection.action.serviceRep': 'Consultant:',
 
   // ── Planning ──
   'planning.overview': 'Business Overview',

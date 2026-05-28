@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useInstallments } from '@/hooks/useInstallments'
 import { useCollectionActions, useCreateCollectionAction, type CollectionActionType } from '@/hooks/useCollectionActions'
+import { useProfiles } from '@/hooks/useProfiles'
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
@@ -129,10 +130,14 @@ function OverdueActionRow({
   installmentId,
   actions,
   colSpan,
+  salesRepName,
+  serviceRepName,
 }: {
   installmentId: string
   actions: ReturnType<typeof useCollectionActions>['data']
   colSpan: number
+  salesRepName?: string
+  serviceRepName?: string
 }) {
   const t = useT()
   const { user } = useAuth()
@@ -164,6 +169,24 @@ function OverdueActionRow({
     <TableRow className="bg-red-50/30 border-l-[3px] border-l-red-400 hover:bg-red-50/50">
       <TableCell colSpan={colSpan} className="py-2 px-3">
         <div className="flex flex-col gap-2">
+          {/* Assigned reps */}
+          {(salesRepName || serviceRepName) && (
+            <div className="flex items-center gap-3 text-[11px]">
+              {salesRepName && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                  <span className="font-medium">{t('collection.action.salesRep')}</span>
+                  <span>{salesRepName}</span>
+                </span>
+              )}
+              {serviceRepName && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                  <span className="font-medium">{t('collection.action.serviceRep')}</span>
+                  <span>{serviceRepName}</span>
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Existing actions timeline */}
           {myActions.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -280,10 +303,17 @@ export function MonthlyCollectionPage() {
   const t = useT()
   const navigate = useNavigate()
   const { data: installments = [], isLoading, error } = useInstallments()
+  const { data: profiles = [] } = useProfiles()
   const [currentMonth, setCurrentMonth] = useState(() => getMonthKey(new Date()))
   const STATUS_CONFIG = useStatusConfig()
   const formatMonthLabel = useFormatMonthLabel()
   const getDayLabel = useGetDayLabel()
+
+  // Profile name lookup
+  const profileName = useCallback((id?: string) => {
+    if (!id) return undefined
+    return profiles.find(p => p.id === id)?.name
+  }, [profiles])
 
   // Navigate months
   const goMonth = (delta: number) => {
@@ -558,6 +588,8 @@ export function MonthlyCollectionPage() {
                             installmentId={inst.id}
                             actions={allActions}
                             colSpan={COL_COUNT}
+                            salesRepName={profileName(inst.contract?.salesRep)}
+                            serviceRepName={profileName(inst.contract?.serviceRep)}
                           />
                         )}
                       </OverdueRowGroup>
