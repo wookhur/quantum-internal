@@ -126,7 +126,7 @@ export const GRADES = [
 ] as const
 
 // ============ LEAD ACTIVITIES ============
-export type ActivityType = 'note' | 'call' | 'katalk' | 'email' | 'meeting' | 'consultation' | 'stage_change' | 'assignment_change' | 'system'
+export type ActivityType = 'note' | 'call' | 'sms' | 'katalk' | 'email' | 'meeting' | 'consultation' | 'stage_change' | 'assignment_change' | 'system'
 export type ConsultationMethod = 'zoom' | 'in_person' | 'phone' | 'katalk'
 
 export interface LeadActivity {

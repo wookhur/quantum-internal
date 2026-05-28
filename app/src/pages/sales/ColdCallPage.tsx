@@ -23,6 +23,7 @@ import {
   MapPin,
   Calendar,
   MessageSquare,
+  MessageCircle,
   Clock,
   ChevronRight,
   Filter,
@@ -41,6 +42,7 @@ import {
   UserX,
   Pause,
   CalendarCheck,
+  type LucideIcon,
 } from 'lucide-react'
 import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead } from '@/hooks/useLeads'
 import { useAuth } from '@/contexts/AuthContext'
@@ -223,6 +225,79 @@ function matchesGradeGroup(grade: string, group: string): boolean {
   if (group === 'middle') return MIDDLE_GRADES.has(grade)
   if (group === 'college') return grade === '대학생'
   return true
+}
+
+// ============ Contact method types ============
+
+type ContactMethod = 'call' | 'sms' | 'katalk' | 'email'
+
+interface ContactMethodConfig {
+  labelKey: string
+  icon: LucideIcon
+  color: string
+  activeColor: string
+  results: { value: string; labelKey: string; icon: LucideIcon; color: string }[]
+}
+
+const CONTACT_METHODS: Record<ContactMethod, ContactMethodConfig> = {
+  call: {
+    labelKey: 'coldCall.methodCall',
+    icon: Phone,
+    color: 'border-green-200 text-green-700',
+    activeColor: 'bg-green-500 hover:bg-green-600 text-white border-green-500',
+    results: [
+      { value: 'connected', labelKey: 'coldCall.callConnected', icon: PhoneCall, color: 'bg-emerald-500 hover:bg-emerald-600' },
+      { value: 'no_answer', labelKey: 'coldCall.callNoAnswer', icon: PhoneOff, color: 'bg-red-500 hover:bg-red-600' },
+      { value: 'callback', labelKey: 'coldCall.callCallback', icon: Phone, color: 'bg-blue-500 hover:bg-blue-600' },
+    ],
+  },
+  sms: {
+    labelKey: 'coldCall.methodSms',
+    icon: MessageSquare,
+    color: 'border-blue-200 text-blue-700',
+    activeColor: 'bg-blue-500 hover:bg-blue-600 text-white border-blue-500',
+    results: [
+      { value: 'sent', labelKey: 'coldCall.msgSent', icon: Send, color: 'bg-blue-500 hover:bg-blue-600' },
+      { value: 'replied', labelKey: 'coldCall.msgReplied', icon: MessageCircle, color: 'bg-emerald-500 hover:bg-emerald-600' },
+      { value: 'no_reply', labelKey: 'coldCall.msgNoReply', icon: Clock, color: 'bg-gray-500 hover:bg-gray-600' },
+    ],
+  },
+  katalk: {
+    labelKey: 'coldCall.methodKatalk',
+    icon: MessageCircle,
+    color: 'border-yellow-300 text-yellow-700',
+    activeColor: 'bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-500',
+    results: [
+      { value: 'sent', labelKey: 'coldCall.msgSent', icon: Send, color: 'bg-yellow-500 hover:bg-yellow-600' },
+      { value: 'read', labelKey: 'coldCall.msgRead', icon: CheckCircle2, color: 'bg-blue-500 hover:bg-blue-600' },
+      { value: 'replied', labelKey: 'coldCall.msgReplied', icon: MessageCircle, color: 'bg-emerald-500 hover:bg-emerald-600' },
+      { value: 'no_reply', labelKey: 'coldCall.msgNoReply', icon: Clock, color: 'bg-gray-500 hover:bg-gray-600' },
+    ],
+  },
+  email: {
+    labelKey: 'coldCall.methodEmail',
+    icon: Mail,
+    color: 'border-purple-200 text-purple-700',
+    activeColor: 'bg-purple-500 hover:bg-purple-600 text-white border-purple-500',
+    results: [
+      { value: 'sent', labelKey: 'coldCall.msgSent', icon: Send, color: 'bg-purple-500 hover:bg-purple-600' },
+      { value: 'replied', labelKey: 'coldCall.msgReplied', icon: MessageCircle, color: 'bg-emerald-500 hover:bg-emerald-600' },
+      { value: 'no_reply', labelKey: 'coldCall.msgNoReply', icon: Clock, color: 'bg-gray-500 hover:bg-gray-600' },
+    ],
+  },
+}
+
+/** Icon for activity type in history */
+function getActivityIcon(type: string): { icon: LucideIcon; color: string } {
+  switch (type) {
+    case 'call': return { icon: Phone, color: 'text-green-500' }
+    case 'sms': return { icon: MessageSquare, color: 'text-blue-500' }
+    case 'katalk': return { icon: MessageCircle, color: 'text-yellow-500' }
+    case 'email': return { icon: Mail, color: 'text-purple-500' }
+    case 'consultation': return { icon: Video, color: 'text-blue-500' }
+    case 'stage_change': return { icon: CheckCircle2, color: 'text-purple-500' }
+    default: return { icon: Clock, color: 'text-gray-400' }
+  }
 }
 
 // ============ Main Component ============
@@ -488,10 +563,13 @@ function ColdCallDetail({
   const updateLead = useUpdateLead()
 
   const [callNote, setCallNote] = useState('')
-  const [callResult, setCallResult] = useState<'connected' | 'no_answer' | 'callback' | ''>('')
+  const [contactMethod, setContactMethod] = useState<ContactMethod>('call')
+  const [callResult, setCallResult] = useState<string>('')
   const [memoEdit, setMemoEdit] = useState(lead.memo || '')
   const [showMemoEdit, setShowMemoEdit] = useState(false)
   const [excludeConfirm, setExcludeConfirm] = useState<PipelineStage | null>(null)
+
+  const methodConfig = CONTACT_METHODS[contactMethod]
 
   const priority = getPriorityLabel(lead._priority, t)
   const stage = getStageConfig(lead.pipelineStage)
@@ -499,22 +577,21 @@ function ColdCallDetail({
   const handleLogCall = useCallback(() => {
     if (!callNote.trim() && !callResult) return
 
-    const resultLabels: Record<string, string> = {
-      connected: t('coldCall.callConnected'),
-      no_answer: t('coldCall.callNoAnswer'),
-      callback: t('coldCall.callCallback'),
-    }
+    // Build result label from config
+    const resultDef = methodConfig.results.find(r => r.value === callResult)
+    const resultLabel = resultDef ? t(resultDef.labelKey) : ''
+    const methodLabel = t(methodConfig.labelKey)
 
-    const title = callResult ? `${t('coldCall.title')} - ${resultLabels[callResult]}` : t('coldCall.title')
+    const title = callResult ? `${methodLabel} - ${resultLabel}` : methodLabel
     const content = callNote.trim() || undefined
 
     createActivity.mutate(
       {
         leadId: lead.id,
-        activityType: 'call',
+        activityType: contactMethod,
         title,
         content,
-        metadata: callResult ? { callResult } : undefined,
+        metadata: callResult ? { callResult, contactMethod } : { contactMethod },
       },
       {
         onSuccess: () => {
@@ -526,8 +603,8 @@ function ColdCallDetail({
 
           // Auto-advance stage if new_lead
           if (lead.pipelineStage === 'new_lead') {
-            updateData.pipelineStage =
-              callResult === 'no_answer' ? 'no_response' : 'contact_attempted'
+            const noResponse = callResult === 'no_answer' || callResult === 'no_reply'
+            updateData.pipelineStage = noResponse ? 'no_response' : 'contact_attempted'
           }
 
           // Auto-assign current user if lead has no assignee
@@ -545,7 +622,7 @@ function ColdCallDetail({
         },
       },
     )
-  }, [callNote, callResult, lead, createActivity, updateLead])
+  }, [callNote, callResult, contactMethod, methodConfig, lead, createActivity, updateLead, user, t])
 
   const handleExclude = useCallback(
     (targetStage: PipelineStage) => {
@@ -764,46 +841,55 @@ function ColdCallDetail({
         </CardContent>
       </Card>
 
-      {/* Call Log Input */}
+      {/* Contact Log Input */}
       <Card className="border-primary/30 bg-primary/5">
         <CardContent className="p-4">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <PhoneCall className="size-4 text-primary" />
-            {t('coldCall.callLog')}
+            {t('coldCall.contactLog')}
           </h3>
           <div className="space-y-3">
-            {/* Call result buttons */}
+            {/* Contact method selector */}
+            <div className="flex gap-1.5">
+              {(Object.entries(CONTACT_METHODS) as [ContactMethod, ContactMethodConfig][]).map(([key, cfg]) => {
+                const MethodIcon = cfg.icon
+                const isActive = contactMethod === key
+                return (
+                  <Button
+                    key={key}
+                    size="sm"
+                    variant="outline"
+                    className={`h-8 text-xs gap-1.5 flex-1 ${isActive ? cfg.activeColor : cfg.color}`}
+                    onClick={() => {
+                      setContactMethod(key)
+                      setCallResult('')
+                    }}
+                  >
+                    <MethodIcon className="size-3.5" />
+                    {t(cfg.labelKey)}
+                  </Button>
+                )
+              })}
+            </div>
+
+            {/* Result buttons (dynamic per method) */}
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={callResult === 'connected' ? 'default' : 'outline'}
-                className={`h-8 text-xs gap-1.5 flex-1 ${
-                  callResult === 'connected' ? 'bg-emerald-500 hover:bg-emerald-600' : ''
-                }`}
-                onClick={() => setCallResult(callResult === 'connected' ? '' : 'connected')}
-              >
-                <PhoneCall className="size-3.5" /> {t('coldCall.callConnected')}
-              </Button>
-              <Button
-                size="sm"
-                variant={callResult === 'no_answer' ? 'default' : 'outline'}
-                className={`h-8 text-xs gap-1.5 flex-1 ${
-                  callResult === 'no_answer' ? 'bg-red-500 hover:bg-red-600' : ''
-                }`}
-                onClick={() => setCallResult(callResult === 'no_answer' ? '' : 'no_answer')}
-              >
-                <PhoneOff className="size-3.5" /> {t('coldCall.callNoAnswer')}
-              </Button>
-              <Button
-                size="sm"
-                variant={callResult === 'callback' ? 'default' : 'outline'}
-                className={`h-8 text-xs gap-1.5 flex-1 ${
-                  callResult === 'callback' ? 'bg-blue-500 hover:bg-blue-600' : ''
-                }`}
-                onClick={() => setCallResult(callResult === 'callback' ? '' : 'callback')}
-              >
-                <Phone className="size-3.5" /> {t('coldCall.callCallback')}
-              </Button>
+              {methodConfig.results.map((res) => {
+                const ResIcon = res.icon
+                const isActive = callResult === res.value
+                return (
+                  <Button
+                    key={res.value}
+                    size="sm"
+                    variant={isActive ? 'default' : 'outline'}
+                    className={`h-8 text-xs gap-1.5 flex-1 ${isActive ? res.color : ''}`}
+                    onClick={() => setCallResult(isActive ? '' : res.value)}
+                  >
+                    <ResIcon className="size-3.5" />
+                    {t(res.labelKey)}
+                  </Button>
+                )
+              })}
             </div>
 
             {/* Note input */}
@@ -825,7 +911,7 @@ function ColdCallDetail({
               ) : (
                 <Send className="size-4" />
               )}
-              {t('coldCall.saveCallLog')}
+              {t('coldCall.saveContactLog')}
             </Button>
           </div>
         </CardContent>
@@ -949,21 +1035,16 @@ function ColdCallDetail({
             </p>
           ) : (
             <div className="space-y-2">
-              {activities.map((a: LeadActivity) => (
+              {activities.map((a: LeadActivity) => {
+                const actIcon = getActivityIcon(a.activityType)
+                const ActIcon = actIcon.icon
+                return (
                 <div
                   key={a.id}
                   className="flex items-start gap-2.5 py-2 border-b border-gray-100 last:border-0"
                 >
                   <div className="mt-0.5">
-                    {a.activityType === 'call' ? (
-                      <Phone className="size-3.5 text-green-500" />
-                    ) : a.activityType === 'consultation' ? (
-                      <Video className="size-3.5 text-blue-500" />
-                    ) : a.activityType === 'stage_change' ? (
-                      <CheckCircle2 className="size-3.5 text-purple-500" />
-                    ) : (
-                      <Clock className="size-3.5 text-gray-400" />
-                    )}
+                    <ActIcon className={`size-3.5 ${actIcon.color}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">{a.title}</p>
@@ -978,7 +1059,8 @@ function ColdCallDetail({
                     </p>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>
