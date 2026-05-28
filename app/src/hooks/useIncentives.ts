@@ -54,6 +54,12 @@ export interface IncentiveByInstallment {
   percentage: number
   /** Computed: paidAmount * percentage / 100 */
   incentiveAmount: number
+  /** Whether the underlying installment is paid */
+  isPaid: boolean
+  /** Due date for unpaid installments */
+  dueDate: string
+  /** The installment's expected amount (before payment) */
+  installmentAmount: number
 }
 
 export const INCENTIVE_TYPES = {
@@ -187,24 +193,26 @@ export function useIncentivesByInstallment() {
       if (error) throw error
       if (!data || data.length === 0) return []
 
-      // 2. Fetch ALL paid installments for those contracts
+      // 2. Fetch ALL installments (paid + unpaid) for those contracts
       const contractIds = [...new Set(data.map((r) => r.contract_id as string))]
 
       const { data: installments } = await supabase
         .from('payment_installments')
-        .select('id, contract_id, label, installment_order, paid_amount, paid_date, status, category')
+        .select('id, contract_id, label, installment_order, amount, paid_amount, paid_date, due_date, status, category')
         .in('contract_id', contractIds)
-        .eq('status', 'paid')
 
       if (!installments || installments.length === 0) return []
 
-      // 3. Build per-installment map: contractId -> paid installments[]
+      // 3. Build per-installment map: contractId -> installments[]
       const instMap = new Map<string, Array<{
         id: string
         label: string
         installmentOrder: number
+        amount: number
         paidAmount: number
         paidDate: string
+        dueDate: string
+        status: string
         category: string
       }>>()
 
@@ -215,8 +223,11 @@ export function useIncentivesByInstallment() {
           id: inst.id as string,
           label: inst.label as string,
           installmentOrder: (inst.installment_order as number) || 0,
+          amount: Number(inst.amount) || 0,
           paidAmount: Number(inst.paid_amount) || 0,
           paidDate: (inst.paid_date as string) || '',
+          dueDate: (inst.due_date as string) || '',
+          status: (inst.status as string) || 'pending',
           category: (inst.category as string) || 'base',
         })
       }
@@ -235,8 +246,8 @@ export function useIncentivesByInstallment() {
         const currency = ((contract?.currency as string) || 'KRW') as 'KRW' | 'USD'
         const contractDate = (contract?.contract_date as string) || ''
 
-        const paidInsts = instMap.get(inc.contractId) || []
-        for (const pi of paidInsts) {
+        const allInsts = instMap.get(inc.contractId) || []
+        for (const pi of allInsts) {
           // Scope matching: base incentives → base installments only,
           // installment-specific incentives → that installment only
           if (inc.installmentId) {
@@ -245,8 +256,11 @@ export function useIncentivesByInstallment() {
             if (pi.category !== 'base') continue
           }
 
+          const isPaid = pi.status === 'paid'
           // 부가세 10% 제외 후 인센티브 계산
-          const amountExVat = Math.round(pi.paidAmount / 1.1)
+          // 입금 완료: paid_amount 기준, 미입금: 예정 금액(amount) 기준
+          const baseAmount = isPaid ? pi.paidAmount : pi.amount
+          const amountExVat = Math.round(baseAmount / 1.1)
           const incentiveAmount = Math.round(amountExVat * inc.percentage / 100)
           results.push({
             key: `${inc.id}-${pi.id}`,
@@ -256,7 +270,7 @@ export function useIncentivesByInstallment() {
             installmentLabel: pi.label,
             installmentOrder: pi.installmentOrder,
             paidDate: pi.paidDate,
-            paidAmount: pi.paidAmount,
+            paidAmount: isPaid ? pi.paidAmount : 0,
             currency,
             contractDate,
             contractorName,
@@ -267,6 +281,9 @@ export function useIncentivesByInstallment() {
             incentiveType: inc.incentiveType,
             percentage: inc.percentage,
             incentiveAmount,
+            isPaid,
+            dueDate: pi.dueDate,
+            installmentAmount: pi.amount,
           })
         }
       }
@@ -274,10 +291,10 @@ export function useIncentivesByInstallment() {
       // 5. Also include revenue shares (external fees) from extra installments
       //    These show as external_fee type entries in the finance views
       const allContractIds = [...new Set(data.map((r) => r.contract_id as string))]
-      // Fetch extra installments for all contracts
+      // Fetch extra installments for all contracts (paid only for external fees)
       const { data: extraInsts } = await supabase
         .from('payment_installments')
-        .select('id, contract_id, label, installment_order, paid_amount, paid_date, status, category')
+        .select('id, contract_id, label, installment_order, amount, paid_amount, paid_date, due_date, status, category')
         .in('contract_id', allContractIds)
         .eq('category', 'extra')
         .eq('status', 'paid')
@@ -322,13 +339,20 @@ export function useIncentivesByInstallment() {
               incentiveType: 'external_fee' as IncentiveType,
               percentage: Number(s.percentage) || 0,
               incentiveAmount: Number(s.amount) || 0,
+              isPaid: true,
+              dueDate: (inst.due_date as string) || '',
+              installmentAmount: Number(inst.amount) || 0,
             })
           }
         }
       }
 
-      // Sort by paidDate descending
-      results.sort((a, b) => (b.paidDate || '').localeCompare(a.paidDate || ''))
+      // Sort: paid first (by paidDate desc), then unpaid (by dueDate asc)
+      results.sort((a, b) => {
+        if (a.isPaid !== b.isPaid) return a.isPaid ? -1 : 1
+        if (a.isPaid) return (b.paidDate || '').localeCompare(a.paidDate || '')
+        return (a.dueDate || '').localeCompare(b.dueDate || '')
+      })
       return results
     },
   })

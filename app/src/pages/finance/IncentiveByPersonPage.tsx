@@ -52,7 +52,10 @@ interface InstallmentDetail {
   studentName: string
   installmentLabel: string
   paidDate: string
+  dueDate: string
   paidAmount: number
+  installmentAmount: number
+  isPaid: boolean
   currency: 'KRW' | 'USD'
   incentiveType: IncentiveType
   percentage: number
@@ -85,12 +88,15 @@ export function IncentiveByPersonPage() {
   const isCurrentMonth = currentMonth === getCurrentMonth()
   const [year, month] = currentMonth.split('-').map(Number)
 
-  // Filter entries whose paidDate falls in the selected month
+  // Filter entries: paid by paidDate, unpaid by dueDate or contractDate
   const filtered = useMemo(
     () =>
       allEntries.filter((entry) => {
-        if (!entry.paidDate) return false
-        return entry.paidDate.startsWith(currentMonth)
+        if (entry.isPaid) {
+          return entry.paidDate && entry.paidDate.startsWith(currentMonth)
+        }
+        const dateRef = entry.dueDate || entry.contractDate
+        return dateRef && dateRef.startsWith(currentMonth)
       }),
     [allEntries, currentMonth],
   )
@@ -125,7 +131,10 @@ export function IncentiveByPersonPage() {
         studentName: entry.studentName,
         installmentLabel: entry.installmentLabel,
         paidDate: entry.paidDate,
+        dueDate: entry.dueDate,
         paidAmount: entry.paidAmount,
+        installmentAmount: entry.installmentAmount,
+        isPaid: entry.isPaid,
         currency: entry.currency,
         incentiveType: entry.incentiveType,
         percentage: entry.percentage,
@@ -289,26 +298,33 @@ export function IncentiveByPersonPage() {
                       group.details.map((d) => (
                         <TableRow
                           key={d.key}
-                          className="bg-muted/30"
+                          className={d.isPaid ? 'bg-muted/30' : 'bg-amber-50/40'}
                         >
                           <TableCell />
                           <TableCell className="pl-8">
                             <div className="text-sm">
-                              <span className="text-muted-foreground">{d.paidDate}</span>
+                              <span className={d.isPaid ? 'text-muted-foreground' : 'text-amber-600'}>
+                                {d.isPaid ? d.paidDate : (d.dueDate || '-')}
+                              </span>
                               {' '}
                               {d.contractorName} / {d.studentName}
                               <Badge variant="outline" className="ml-2 text-xs">
                                 {d.installmentLabel}
                               </Badge>
+                              {!d.isPaid && (
+                                <Badge variant="outline" className="ml-1 text-[10px] h-4 bg-amber-50 text-amber-600 border-amber-200">
+                                  {t('incentive.expected')}
+                                </Badge>
+                              )}
                             </div>
                           </TableCell>
-                          <TableCell className="text-right text-sm text-muted-foreground">
-                            {formatCurrency(d.paidAmount)}
+                          <TableCell className={`text-right text-sm ${d.isPaid ? 'text-muted-foreground' : 'text-amber-600'}`}>
+                            {formatCurrency(d.isPaid ? d.paidAmount : d.installmentAmount)}
                           </TableCell>
                           {activeTypes.map((type) => (
                             <TableCell key={type} className="text-right text-sm">
                               {d.incentiveType === type ? (
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline" className={`text-xs ${d.isPaid ? '' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
                                   {d.percentage}% = {formatCurrency(d.incentiveAmount)}
                                 </Badge>
                               ) : (
@@ -316,7 +332,7 @@ export function IncentiveByPersonPage() {
                               )}
                             </TableCell>
                           ))}
-                          <TableCell className="text-right text-sm whitespace-nowrap">
+                          <TableCell className={`text-right text-sm whitespace-nowrap ${d.isPaid ? '' : 'text-amber-600'}`}>
                             {formatCurrency(d.incentiveAmount)}
                           </TableCell>
                         </TableRow>
