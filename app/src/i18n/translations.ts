@@ -263,7 +263,7 @@ const koTranslations = {
   'nav.employeePerformance': '직원 성과',
   'nav.accessControl': '접근 권한 관리',
   'nav.breakTime': '쉬는 시간',
-  'nav.trexRunner': 'T-Rex 러너',
+  'nav.trexRunner': '아케이드',
 
   // ── Dashboard ──
   'dashboard.title': '대시보드',
@@ -1157,6 +1157,8 @@ const koTranslations = {
   // ── Game ──
   'game.title': 'T-Rex Runner',
   'game.subtitle': '스페이스바로 점프! 팀원들과 최고 점수를 겨뤄보세요.',
+  'game.arcade': '아케이드',
+  'game.arcadeSubtitle': '팀원들과 최고 점수를 겨뤄보세요!',
   'game.lastScore': '마지막 점수',
   'game.myHighScore': '내 최고 점수',
   'game.jump': '점프',
@@ -1171,6 +1173,10 @@ const koTranslations = {
   'game.me': '나',
   'game.pressSpaceToRestart': '스페이스바를 눌러 다시 시작',
   'game.pressSpaceToStart': '스페이스바를 눌러 시작!',
+  'flappy.pressToStart': '스페이스바 또는 클릭으로 시작!',
+  'flappy.pressToRestart': '스페이스바 또는 클릭으로 다시 시작',
+  'flappy.click': '클릭',
+  'flappy.toFlap': '으로 날기',
 
   // ── Notifications ──
   'notif.title': '알림',
@@ -1623,7 +1629,7 @@ const enTranslations: Record<string, string> = {
   'nav.employeePerformance': 'Employee Performance',
   'nav.accessControl': 'Access Control',
   'nav.breakTime': 'Break Time',
-  'nav.trexRunner': 'T-Rex Runner',
+  'nav.trexRunner': 'Arcade',
 
   // ── Dashboard ──
   'dashboard.title': 'Dashboard',
@@ -2516,6 +2522,8 @@ const enTranslations: Record<string, string> = {
   // ── Game ──
   'game.title': 'T-Rex Runner',
   'game.subtitle': 'Press Space to jump! Compete with your team for the high score.',
+  'game.arcade': 'Arcade',
+  'game.arcadeSubtitle': 'Compete with your team for the high score!',
   'game.lastScore': 'Last Score',
   'game.myHighScore': 'My High Score',
   'game.jump': 'Jump',
@@ -2530,6 +2538,10 @@ const enTranslations: Record<string, string> = {
   'game.me': 'Me',
   'game.pressSpaceToRestart': 'Press Space to restart',
   'game.pressSpaceToStart': 'Press Space to start!',
+  'flappy.pressToStart': 'Press Space or Click to start!',
+  'flappy.pressToRestart': 'Press Space or Click to restart',
+  'flappy.click': 'Click',
+  'flappy.toFlap': 'to flap',
 
   // ── Notifications ──
   'notif.title': 'Notifications',
