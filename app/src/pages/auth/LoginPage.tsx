@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
+import { supabase } from '@/lib/supabase'
 
 export function LoginPage() {
   const t = useT()
@@ -15,6 +16,19 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showSetPassword, setShowSetPassword] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [settingPassword, setSettingPassword] = useState(false)
+  const [passwordSet, setPasswordSet] = useState(false)
+
+  // Detect invite/recovery flow from URL hash
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash && (hash.includes('type=invite') || hash.includes('type=recovery'))) {
+      setShowSetPassword(true)
+    }
+  }, [])
 
   if (loading) {
     return (
@@ -24,7 +38,13 @@ export function LoginPage() {
     )
   }
 
-  if (user) {
+  // If user is logged in and NOT in set-password mode, redirect
+  if (user && !showSetPassword) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  // If password was just set, redirect
+  if (passwordSet) {
     return <Navigate to="/dashboard" replace />
   }
 
@@ -41,6 +61,85 @@ export function LoginPage() {
     const { error: err } = await signInWithEmail(email, password)
     if (err) setError(err.message)
     setSubmitting(false)
+  }
+
+  const handleSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (newPassword.length < 6) {
+      setError(t('login.passwordMinLength'))
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError(t('login.passwordMismatch'))
+      return
+    }
+    setSettingPassword(true)
+    const { error: err } = await supabase.auth.updateUser({ password: newPassword })
+    if (err) {
+      setError(err.message)
+    } else {
+      setPasswordSet(true)
+    }
+    setSettingPassword(false)
+  }
+
+  // ─── Set Password Screen (for invited users) ───
+  if (showSetPassword && user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="w-full max-w-[400px]">
+          <div className="text-center mb-8">
+            <img src="/logo-navy.png" alt="Quantum Admissions" className="h-12 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground mt-1">Internal Management System</p>
+          </div>
+
+          <Card>
+            <CardHeader className="text-center pb-4">
+              <CardTitle className="text-lg">{t('login.setPasswordTitle')}</CardTitle>
+              <CardDescription>{t('login.setPasswordDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {error && (
+                <div className="text-sm text-destructive bg-destructive/10 rounded-md p-3">
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleSetPassword} className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-sm">{t('login.newPassword')}</Label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    className="h-10"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm">{t('login.confirmPassword')}</Label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    className="h-10"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <Button className="w-full h-10" type="submit" disabled={settingPassword}>
+                  {settingPassword ? t('common.saving') : t('login.setPasswordBtn')}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -13,8 +13,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Loader2, Shield, Search, UserCog, Save,
   CheckCircle2, Users, ShieldCheck, Eye, Briefcase, UserX,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Mail, UserPlus,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useProfiles, useUpdateProfile,
@@ -402,6 +403,111 @@ function UserEditDialog({
   )
 }
 
+// ─── Invite Dialog ─────────────────────────────────────────────────────────
+
+function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const t = useT()
+  const ROLE_OPTIONS = useRoleOptions()
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
+  const [role, setRole] = useState<UserRole>('staff')
+  const [sending, setSending] = useState(false)
+  const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
+
+  const handleSend = useCallback(async () => {
+    if (!email.trim()) return
+    setSending(true)
+    setResult(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: { email: email.trim(), name: name.trim() || undefined, role },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      setResult({ type: 'success', message: t('access.inviteSuccess') })
+      setEmail('')
+      setName('')
+      setRole('staff')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('access.inviteError')
+      setResult({ type: 'error', message: msg })
+    } finally {
+      setSending(false)
+    }
+  }, [email, name, role, t])
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="size-5" />
+            {t('access.inviteUser')}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t('access.inviteEmail')}</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder={t('access.inviteEmailPlaceholder')}
+                className="h-9 pl-9"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t('access.inviteName')}</Label>
+            <Input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder={t('access.inviteNamePlaceholder')}
+              className="h-9"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t('access.inviteRole')}</Label>
+            <Select value={role} onValueChange={v => v && setRole(v as UserRole)}>
+              <SelectTrigger className="h-9">
+                <span>{selectedRoleLabel}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {result && (
+            <div className={`text-sm rounded p-2 ${result.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {result.message}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {t('common.cancel')}
+          </Button>
+          <Button onClick={handleSend} disabled={sending || !email.trim()} className="gap-1.5">
+            {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Mail className="size-3.5" />}
+            {sending ? t('access.inviteSending') : t('access.inviteSend')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export function AccessManagementPage() {
@@ -414,6 +520,7 @@ export function AccessManagementPage() {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [editUser, setEditUser] = useState<User | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'manager'
   const isLoading = profilesLoading || accessLoading
@@ -464,11 +571,17 @@ export function AccessManagementPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('planning.access')}</h1>
-        <p className="text-muted-foreground text-sm">
-          {t('access.subtitle')}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('planning.access')}</h1>
+          <p className="text-muted-foreground text-sm">
+            {t('access.subtitle')}
+          </p>
+        </div>
+        <Button onClick={() => setInviteOpen(true)} className="gap-1.5">
+          <UserPlus className="size-4" />
+          {t('access.inviteUser')}
+        </Button>
       </div>
 
       {/* Summary */}
@@ -705,6 +818,9 @@ export function AccessManagementPage() {
           onOpenChange={(open) => { if (!open) setEditUser(null) }}
         />
       )}
+
+      {/* Invite Dialog */}
+      <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </div>
   )
 }
