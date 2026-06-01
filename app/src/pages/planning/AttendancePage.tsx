@@ -35,6 +35,7 @@ import {
   Pencil,
   Trash2,
   Clock,
+  AlertTriangle,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useProfiles } from '@/hooks/useProfiles'
@@ -77,6 +78,12 @@ function isWeekend(dateStr: string): boolean {
   return d.getDay() === 0 || d.getDay() === 6
 }
 
+/** 10:00 이후 출근 = 지각 (주말 제외) */
+function isLate(clockIn: string | null, dateStr: string): boolean {
+  if (!clockIn || isWeekend(dateStr)) return false
+  return clockIn > '10:00'
+}
+
 function formatTime(t: string | null | undefined): string {
   return t || ''
 }
@@ -92,6 +99,12 @@ interface AttendanceForm {
   clockOut: string
   note: string
 }
+
+const EXCLUDED_IDS = new Set([
+  'bb51bba1-b665-4431-b6d6-d44a63f82423', // Accounting Quantum
+  '3638c8f3-6eee-45ea-8bc5-527c2e85a77c', // Liz Yu
+  'd26cad07-580e-4cb9-bb95-cf0ae262f5b4', // Julie Kim
+])
 
 export function AttendancePage() {
   const t = useT()
@@ -110,12 +123,6 @@ export function AttendancePage() {
   const [year, month] = currentMonth.split('-').map(Number)
   const days = useMemo(() => getDaysInMonth(currentMonth), [currentMonth])
 
-  // Filter active (non-external) profiles, excluding non-attendance targets
-  const EXCLUDED_IDS = new Set([
-    'bb51bba1-b665-4431-b6d6-d44a63f82423', // Accounting Quantum
-    '3638c8f3-6eee-45ea-8bc5-527c2e85a77c', // Liz Yu
-    'd26cad07-580e-4cb9-bb95-cf0ae262f5b4', // Julie Kim
-  ])
   const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal && !EXCLUDED_IDS.has(p.id)), [profiles])
 
   // Build lookup: profileId+date -> attendance
@@ -138,13 +145,24 @@ export function AttendancePage() {
     return profiles.find(p => p.id === id)?.name || '?'
   }, [profiles])
 
+  // Late counts per profile
+  const lateCountByProfile = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const a of attendances) {
+      if (isLate(a.clockIn, a.date)) {
+        map.set(a.profileId, (map.get(a.profileId) || 0) + 1)
+      }
+    }
+    return map
+  }, [attendances])
+
   // Summary stats
   const summaryStats = useMemo(() => {
     const target = selectedProfile === 'all' ? attendances : filteredAttendances
     const totalDays = target.length
     const clockedIn = target.filter(a => a.clockIn).length
-    const clockedOut = target.filter(a => a.clockOut).length
-    return { totalDays, clockedIn, clockedOut }
+    const lateCount = target.filter(a => isLate(a.clockIn, a.date)).length
+    return { totalDays, clockedIn, lateCount }
   }, [attendances, filteredAttendances, selectedProfile])
 
   // Dialog
@@ -195,7 +213,6 @@ export function AttendancePage() {
   const handleExport = () => {
     const wsData: (string | number | null)[][] = []
 
-    // Row 0: Header descriptions (Shiftee format)
     wsData.push([
       '직원의 사원번호를 입력합니다.\n (동명이인을 구분하려면 직원의 사원번호를 입력하세요.)\n \n (예) ID1224',
       '직원을 입력합니다.\n (기존에 회사에 등록되어 있는 직원만 입력 가능합니다.)\n \n (예) 홍길동',
@@ -209,21 +226,13 @@ export function AttendancePage() {
       '출퇴근기록 관련 메모를 입력합니다.',
     ])
 
-    // Row 1: Column labels
     wsData.push([
-      '사원번호 [선택]',
-      '직원이름 [필수]',
-      '날짜 [필수]',
-      '(근무일정) 시작시간 [선택]',
-      '(근무일정) 종료시간 [선택]',
-      '(무일정) 조직 [선택]',
-      '(무일정) 직무 [선택]',
-      '출근시간 [필수]',
-      '퇴근시간 [선택]',
-      '근무노트 [선택]',
+      '사원번호 [선택]', '직원이름 [필수]', '날짜 [필수]',
+      '(근무일정) 시작시간 [선택]', '(근무일정) 종료시간 [선택]',
+      '(무일정) 조직 [선택]', '(무일정) 직무 [선택]',
+      '출근시간 [필수]', '퇴근시간 [선택]', '근무노트 [선택]',
     ])
 
-    // Data rows — sorted by profile name then date
     const targetAttendances = selectedProfile === 'all'
       ? attendances
       : attendances.filter(a => a.profileId === selectedProfile)
@@ -237,20 +246,13 @@ export function AttendancePage() {
 
     for (const att of sorted) {
       wsData.push([
-        '',                         // 사원번호
-        profileName(att.profileId), // 직원이름
-        att.date,                   // 날짜
-        att.scheduleStart || '',    // 근무일정 시작
-        att.scheduleEnd || '',      // 근무일정 종료
-        '',                         // 조직
-        '',                         // 직무
-        att.clockIn || '',          // 출근시간
-        att.clockOut || '',         // 퇴근시간
-        att.note || '',             // 근무노트
+        '', profileName(att.profileId), att.date,
+        att.scheduleStart || '', att.scheduleEnd || '',
+        '', '',
+        att.clockIn || '', att.clockOut || '', att.note || '',
       ])
     }
 
-    // Pad to 1000 rows (Shiftee template has ~1000 empty rows)
     while (wsData.length < 1002) {
       wsData.push(['', '', '', '', '', '', '', '', '', ''])
     }
@@ -275,8 +277,10 @@ export function AttendancePage() {
     return activeProfiles.filter(p => p.id === selectedProfile)
   }, [activeProfiles, selectedProfile])
 
+  const numDays = days.length
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold">{t('attendance.title')}</h1>
@@ -284,29 +288,27 @@ export function AttendancePage() {
       </div>
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Month nav */}
-        <Button variant="outline" size="icon" onClick={() => setCurrentMonth(m => shiftMonth(m, -1))}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(m => shiftMonth(m, -1))}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-lg font-semibold min-w-[140px] text-center">
+        <span className="text-base font-semibold min-w-[120px] text-center">
           {year}{t('common.year')} {month}{t('common.month')}
         </span>
-        <Button variant="outline" size="icon" onClick={() => setCurrentMonth(m => shiftMonth(m, 1))}>
+        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(m => shiftMonth(m, 1))}>
           <ChevronRight className="h-4 w-4" />
         </Button>
         {!isCurrentMonth && (
-          <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(getCurrentMonth())}>
-            <Calendar className="h-4 w-4 mr-1" />
+          <Button variant="ghost" size="sm" className="h-8" onClick={() => setCurrentMonth(getCurrentMonth())}>
+            <Calendar className="h-3.5 w-3.5 mr-1" />
             {t('common.thisMonth')}
           </Button>
         )}
 
         <div className="flex-1" />
 
-        {/* Profile filter */}
         <Select value={selectedProfile} onValueChange={v => v && setSelectedProfile(v)}>
-          <SelectTrigger className="w-[160px]">
+          <SelectTrigger className="w-[140px] h-8 text-sm">
             <span>{selectedProfile === 'all' ? t('common.all') : profileName(selectedProfile)}</span>
           </SelectTrigger>
           <SelectContent>
@@ -317,106 +319,141 @@ export function AttendancePage() {
           </SelectContent>
         </Select>
 
-        <Button size="sm" onClick={() => openCreate()}>
-          <Plus className="h-4 w-4 mr-1" />
+        <Button size="sm" className="h-8" onClick={() => openCreate()}>
+          <Plus className="h-3.5 w-3.5 mr-1" />
           {t('attendance.add')}
         </Button>
-        <Button variant="outline" size="sm" onClick={handleExport}>
-          <Download className="h-4 w-4 mr-1" />
+        <Button variant="outline" size="sm" className="h-8" onClick={handleExport}>
+          <Download className="h-3.5 w-3.5 mr-1" />
           {t('attendance.export')}
         </Button>
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-3">
         <Card>
-          <CardContent className="py-3 flex items-center justify-between">
+          <CardContent className="py-2.5 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">{t('attendance.totalRecords')}</span>
-            <span className="text-xl font-bold font-mono">{summaryStats.totalDays}</span>
+            <span className="text-lg font-bold font-mono">{summaryStats.totalDays}</span>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="py-3 flex items-center justify-between">
+          <CardContent className="py-2.5 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">{t('attendance.clockedIn')}</span>
-            <span className="text-xl font-bold font-mono text-green-600">{summaryStats.clockedIn}</span>
+            <span className="text-lg font-bold font-mono text-green-600">{summaryStats.clockedIn}</span>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">{t('attendance.clockedOut')}</span>
-            <span className="text-xl font-bold font-mono text-blue-600">{summaryStats.clockedOut}</span>
+        <Card className={summaryStats.lateCount > 0 ? 'border-red-200' : ''}>
+          <CardContent className="py-2.5 flex items-center justify-between">
+            <span className="text-sm text-muted-foreground flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+              {t('attendance.lateCount')}
+            </span>
+            <span className={`text-lg font-bold font-mono ${summaryStats.lateCount > 0 ? 'text-red-600' : ''}`}>
+              {summaryStats.lateCount}
+            </span>
           </CardContent>
         </Card>
       </div>
 
-      {/* Calendar-style table: rows = profiles, columns = days */}
+      {/* Calendar grid — fixed to viewport width */}
       <Card>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="sticky left-0 bg-background z-10 min-w-[100px]">
-                    {t('attendance.employee')}
-                  </TableHead>
-                  {days.map(day => {
-                    const d = parseInt(day.split('-')[2])
-                    const dow = getDayOfWeek(day)
-                    const weekend = isWeekend(day)
-                    return (
-                      <TableHead
-                        key={day}
-                        className={`text-center min-w-[56px] px-1 ${weekend ? 'bg-red-50/50' : ''}`}
-                      >
-                        <div className="text-xs">{d}</div>
-                        <div className={`text-[10px] ${weekend ? 'text-red-500' : 'text-muted-foreground'}`}>{dow}</div>
-                      </TableHead>
-                    )
-                  })}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {calendarProfiles.map(profile => (
-                  <TableRow key={profile.id}>
-                    <TableCell className="sticky left-0 bg-background z-10 font-medium text-sm whitespace-nowrap">
-                      {profile.name}
-                    </TableCell>
+            <div className="w-full">
+              <table className="w-full border-collapse table-fixed">
+                <colgroup>
+                  <col style={{ width: '100px' }} />
+                  {days.map(day => (
+                    <col key={day} style={{ width: `${(100 - 8) / numDays}%` }} />
+                  ))}
+                  {/* Late count column */}
+                  <col style={{ width: '44px' }} />
+                </colgroup>
+                <thead>
+                  <tr className="border-b">
+                    <th className="sticky left-0 bg-background z-10 text-left text-xs font-medium text-muted-foreground p-1.5 pl-3">
+                      {t('attendance.employee')}
+                    </th>
                     {days.map(day => {
-                      const att = attendanceMap.get(`${profile.id}:${day}`)
+                      const d = parseInt(day.split('-')[2])
+                      const dow = getDayOfWeek(day)
                       const weekend = isWeekend(day)
                       return (
-                        <TableCell
+                        <th
                           key={day}
-                          className={`text-center px-0.5 py-1 cursor-pointer hover:bg-muted/50 ${weekend ? 'bg-red-50/30' : ''}`}
-                          onClick={() => {
-                            if (att) {
-                              openEdit(att.id)
-                            } else {
-                              setEditId(null)
-                              setForm({ profileId: profile.id, date: day, clockIn: '10:00', clockOut: '19:00', note: '' })
-                              setDialogOpen(true)
-                            }
-                          }}
+                          className={`text-center p-0.5 ${weekend ? 'bg-red-50/50' : ''}`}
                         >
-                          {att ? (
-                            <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-[10px] text-green-600 font-mono">{formatTime(att.clockIn)}</span>
-                              <span className="text-[10px] text-blue-600 font-mono">{formatTime(att.clockOut)}</span>
-                            </div>
-                          ) : weekend ? null : (
-                            <span className="text-[10px] text-muted-foreground/30">-</span>
-                          )}
-                        </TableCell>
+                          <div className="text-[11px] font-medium leading-tight">{d}</div>
+                          <div className={`text-[9px] leading-tight ${weekend ? 'text-red-500 font-semibold' : 'text-muted-foreground'}`}>{dow}</div>
+                        </th>
                       )
                     })}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    <th className="text-center p-0.5">
+                      <div className="text-[9px] text-red-500 font-medium leading-tight" title={t('attendance.lateCount')}>
+                        <AlertTriangle className="h-3 w-3 mx-auto" />
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {calendarProfiles.map(profile => {
+                    const lateCount = lateCountByProfile.get(profile.id) || 0
+                    return (
+                      <tr key={profile.id} className="border-b last:border-b-0 hover:bg-muted/30">
+                        <td className="sticky left-0 bg-background z-10 text-sm font-medium whitespace-nowrap p-1.5 pl-3 truncate">
+                          {profile.name}
+                        </td>
+                        {days.map(day => {
+                          const att = attendanceMap.get(`${profile.id}:${day}`)
+                          const weekend = isWeekend(day)
+                          const late = att ? isLate(att.clockIn, att.date) : false
+                          return (
+                            <td
+                              key={day}
+                              className={`text-center p-0 cursor-pointer hover:bg-blue-50/50 transition-colors ${weekend ? 'bg-red-50/20' : ''} ${late ? 'bg-red-50/60' : ''}`}
+                              onClick={() => {
+                                if (att) {
+                                  openEdit(att.id)
+                                } else {
+                                  setEditId(null)
+                                  setForm({ profileId: profile.id, date: day, clockIn: '10:00', clockOut: '19:00', note: '' })
+                                  setDialogOpen(true)
+                                }
+                              }}
+                            >
+                              {att ? (
+                                <div className="flex flex-col items-center leading-none py-1">
+                                  <span className={`text-[9px] font-mono ${late ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                                    {formatTime(att.clockIn)}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-blue-600">
+                                    {formatTime(att.clockOut)}
+                                  </span>
+                                </div>
+                              ) : weekend ? null : (
+                                <span className="text-[9px] text-muted-foreground/20">-</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                        <td className="text-center p-0.5">
+                          {lateCount > 0 ? (
+                            <span className="text-[11px] font-bold text-red-600">{lateCount}</span>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground/30">0</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -446,7 +483,6 @@ export function AttendancePage() {
                 </TableRow>
               ) : (
                 filteredAttendances.map(att => {
-                  // Compute work hours
                   let workHrs = ''
                   if (att.clockIn && att.clockOut) {
                     const [h1, m1] = att.clockIn.split(':').map(Number)
@@ -459,8 +495,9 @@ export function AttendancePage() {
                     }
                   }
                   const weekend = isWeekend(att.date)
+                  const late = isLate(att.clockIn, att.date)
                   return (
-                    <TableRow key={att.id} className={weekend ? 'bg-red-50/30' : ''}>
+                    <TableRow key={att.id} className={`${weekend ? 'bg-red-50/30' : ''} ${late ? 'bg-red-50/40' : ''}`}>
                       <TableCell className="font-medium">{profileName(att.profileId)}</TableCell>
                       <TableCell>
                         <span>{att.date}</span>
@@ -470,7 +507,13 @@ export function AttendancePage() {
                       </TableCell>
                       <TableCell>
                         {att.clockIn ? (
-                          <Badge variant="secondary" className="font-mono text-xs">{att.clockIn}</Badge>
+                          <Badge
+                            variant="secondary"
+                            className={`font-mono text-xs ${late ? 'bg-red-100 text-red-700 border-red-300' : ''}`}
+                          >
+                            {att.clockIn}
+                            {late && <AlertTriangle className="h-3 w-3 ml-1 inline" />}
+                          </Badge>
                         ) : '-'}
                       </TableCell>
                       <TableCell>

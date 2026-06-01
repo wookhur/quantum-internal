@@ -1237,6 +1237,7 @@ const koTranslations = {
   'attendance.totalRecords': '총 기록',
   'attendance.clockedIn': '출근 기록',
   'attendance.clockedOut': '퇴근 기록',
+  'attendance.lateCount': '지각',
   'attendance.noRecords': '이번 달 근태 기록이 없습니다.',
   'attendance.confirmDelete': '이 근태 기록을 삭제하시겠습니까?',
 
@@ -2670,6 +2671,7 @@ const enTranslations: Record<string, string> = {
   'attendance.totalRecords': 'Total Records',
   'attendance.clockedIn': 'Clocked In',
   'attendance.clockedOut': 'Clocked Out',
+  'attendance.lateCount': 'Late',
   'attendance.noRecords': 'No attendance records for this month.',
   'attendance.confirmDelete': 'Delete this attendance record?',
 
