@@ -74,6 +74,7 @@ export type FeatureModule =
   | 'finance'
   | 'service'
   | 'planning'
+  | 'hr'
   | 'game'
 
 /** Every navigable route and which module (package) it belongs to */
@@ -118,9 +119,11 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/planning/projection', labelKey: 'nav.revenueProjection', module: 'planning' },
   { path: '/planning/employees', labelKey: 'nav.employeePerformance', module: 'planning' },
   { path: '/planning/cashflow', labelKey: 'nav.cashflow', module: 'planning' },
-  { path: '/planning/attendance', labelKey: 'nav.attendance', module: 'planning' },
-  { path: '/planning/kpi-targets', labelKey: 'nav.kpiTargets', module: 'planning' },
-  { path: '/planning/access', labelKey: 'nav.accessControl', module: 'planning' },
+  // ── HR ──
+  { path: '/hr/attendance', labelKey: 'nav.attendance', module: 'hr' },
+  { path: '/hr/kpi-targets', labelKey: 'nav.kpiTargets', module: 'hr' },
+  { path: '/hr/employees', labelKey: 'nav.accessControl', module: 'hr' },
+  { path: '/hr/personal-info', labelKey: 'nav.personalInfo', module: 'hr' },
   // ── Game ──
   { path: '/game', labelKey: 'nav.trexRunner', module: 'game' },
 ]
@@ -133,6 +136,7 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
   { key: 'service', labelKey: 'access.pkg.service', descriptionKey: 'access.pkg.serviceDesc' },
   { key: 'finance', labelKey: 'access.pkg.finance', descriptionKey: 'access.pkg.financeDesc' },
   { key: 'planning', labelKey: 'access.pkg.planning', descriptionKey: 'access.pkg.planningDesc' },
+  { key: 'hr', labelKey: 'access.pkg.hr', descriptionKey: 'access.pkg.hrDesc' },
   { key: 'game', labelKey: 'access.pkg.game', descriptionKey: 'access.pkg.gameDesc' },
 ]
 
@@ -148,8 +152,8 @@ function expandModulesToRoutes(modules: FeatureModule[]): string[] {
 
 /** Default feature access per role (module-level) */
 export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
-  admin: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'game'],
-  manager: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'game'],
+  admin: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'game'],
+  manager: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'game'],
   staff: ['dashboard', 'sales', 'marketing', 'service', 'game'],
   freelancer: ['dashboard', 'game'],
   viewer: [],

@@ -36,6 +36,8 @@ import { KpiTargetsPage } from '@/pages/planning/KpiTargetsPage'
 import { CashflowPage } from '@/pages/planning/CashflowPage'
 import { AttendancePage } from '@/pages/planning/AttendancePage'
 import { AttendanceKioskPage } from '@/pages/planning/AttendanceKioskPage'
+import { PersonalInfoPage } from '@/pages/hr/PersonalInfoPage'
+import { EmployeeFormPage } from '@/pages/hr/EmployeeFormPage'
 import { ServiceDashboardPage } from '@/pages/service/ServiceDashboardPage'
 import { Student360Page } from '@/pages/service/Student360Page'
 import { ConsultantKpiPage } from '@/pages/service/ConsultantKpiPage'
@@ -61,6 +63,7 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/portal/:token" element={<StudentPortalPage />} />
+            <Route path="/employee-form/:token" element={<EmployeeFormPage />} />
 
             <Route element={<ProtectedRoute />}>
               {/* Full-screen kiosk (no sidebar) */}
@@ -103,11 +106,18 @@ export default function App() {
 
                 <Route path="/planning/overview" element={<PlanningOverviewPage />} />
                 <Route path="/planning/projection" element={<RevenueProjectionPage />} />
-                <Route path="/planning/access" element={<AccessManagementPage />} />
                 <Route path="/planning/employees" element={<EmployeePerformancePage />} />
                 <Route path="/planning/cashflow" element={<CashflowPage />} />
-                <Route path="/planning/attendance" element={<AttendancePage />} />
-                <Route path="/planning/kpi-targets" element={<KpiTargetsPage />} />
+
+                <Route path="/hr/attendance" element={<AttendancePage />} />
+                <Route path="/hr/kpi-targets" element={<KpiTargetsPage />} />
+                <Route path="/hr/employees" element={<AccessManagementPage />} />
+                <Route path="/hr/personal-info" element={<PersonalInfoPage />} />
+
+                {/* Legacy redirects */}
+                <Route path="/planning/attendance" element={<Navigate to="/hr/attendance" replace />} />
+                <Route path="/planning/access" element={<Navigate to="/hr/employees" replace />} />
+                <Route path="/planning/kpi-targets" element={<Navigate to="/hr/kpi-targets" replace />} />
 
                 <Route path="/game" element={<GamePage />} />
               </Route>

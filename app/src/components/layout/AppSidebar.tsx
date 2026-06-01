@@ -117,9 +117,16 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.revenueProjection', to: '/planning/projection', icon: LineChart },
       { labelKey: 'nav.employeePerformance', to: '/planning/employees', icon: Users },
       { labelKey: 'nav.cashflow', to: '/planning/cashflow', icon: Wallet },
-      { labelKey: 'nav.attendance', to: '/planning/attendance', icon: Clock },
-      { labelKey: 'nav.kpiTargets', to: '/planning/kpi-targets', icon: Target },
-      { labelKey: 'nav.accessControl', to: '/planning/access', icon: Users },
+    ],
+  },
+  {
+    titleKey: 'nav.hr',
+    module: 'hr',
+    items: [
+      { labelKey: 'nav.attendance', to: '/hr/attendance', icon: Clock },
+      { labelKey: 'nav.kpiTargets', to: '/hr/kpi-targets', icon: Target },
+      { labelKey: 'nav.personalInfo', to: '/hr/personal-info', icon: ClipboardList },
+      { labelKey: 'nav.accessControl', to: '/hr/employees', icon: Users },
     ],
   },
   {
