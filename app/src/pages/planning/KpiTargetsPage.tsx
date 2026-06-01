@@ -718,6 +718,110 @@ function TargetKpiContent({
 }
 
 // ---------------------------------------------------------------------------
+// All departments overview (per employee, all assigned categories)
+// ---------------------------------------------------------------------------
+
+function AllKpiContent({
+  targetMap, assignments, activeProfiles, selectedProfile, t, openEdit,
+}: {
+  targetMap: Map<string, KpiTarget>
+  assignments: KpiAssignmentMap
+  activeProfiles: { id: string; name: string; department?: string }[]
+  selectedProfile: string
+  t: (key: string) => string
+  openEdit: (profileId: string, category: KpiTarget['category'], metricKey: string) => void
+}) {
+  const displayProfiles = useMemo(() => {
+    let filtered = activeProfiles.filter(p => {
+      const a = assignments[p.id]
+      return a && !a.excluded && a.categories.length > 0
+    })
+    if (selectedProfile !== 'all') {
+      filtered = filtered.filter(p => p.id === selectedProfile)
+    }
+    return filtered
+  }, [activeProfiles, assignments, selectedProfile])
+
+  if (displayProfiles.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          {t('kpiTarget.noMetricsAssigned')}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {displayProfiles.map(profile => {
+        const effectiveMetrics = getEffectiveMetrics(profile.id, assignments)
+        if (effectiveMetrics.length === 0) return null
+
+        // Group by category
+        const grouped = new Map<Category, typeof effectiveMetrics>()
+        for (const m of effectiveMetrics) {
+          const list = grouped.get(m.category) || []
+          list.push(m)
+          grouped.set(m.category, list)
+        }
+
+        return (
+          <Card key={profile.id}>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">
+                  {profile.name.charAt(0)}
+                </div>
+                {profile.name}
+                {profile.department && (
+                  <Badge variant="outline" className="text-[10px] h-4">{profile.department}</Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {Array.from(grouped.entries()).map(([cat, metrics]) => {
+                const config = CATEGORY_CONFIG[cat]
+                const Icon = config.icon
+                const cols = metrics.length <= 2 ? 'grid-cols-1 sm:grid-cols-2' :
+                  metrics.length === 3 ? 'grid-cols-1 sm:grid-cols-3' :
+                  'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+                return (
+                  <div key={cat}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon className={`h-4 w-4 ${config.iconColor}`} />
+                      <span className={`text-sm font-semibold ${config.textColor}`}>{t(config.labelKey)}</span>
+                    </div>
+                    <div className={`grid ${cols} gap-2`}>
+                      {metrics.map(metric => {
+                        const data = targetMap.get(`${profile.id}:${metric.key}`)
+                        const isRate = metric.key.includes('rate')
+                        const isInverse = metric.key === 'late_count'
+                        return (
+                          <MetricCard
+                            key={metric.key}
+                            label={t(metric.labelKey)}
+                            target={data?.targetValue || 0}
+                            actual={data?.actualValue || 0}
+                            unit={isInverse ? t('kpiTarget.unitTimes') : isRate ? '%' : undefined}
+                            onEdit={() => openEdit(profile.id, cat, metric.key)}
+                            isInverse={isInverse}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -731,7 +835,7 @@ export function KpiTargetsPage() {
   const updateAssignments = useUpdateKpiAssignments()
 
   const [selectedProfile, setSelectedProfile] = useState<string>('all')
-  const [tab, setTab] = useState('marketing')
+  const [tab, setTab] = useState('all')
   const [editOpen, setEditOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
   const [editForm, setEditForm] = useState({
@@ -811,6 +915,9 @@ export function KpiTargetsPage() {
       <Tabs value={tab} onValueChange={v => v && setTab(v)}>
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <TabsList>
+            <TabsTrigger value="all">
+              {t('kpiTarget.tabAll')}
+            </TabsTrigger>
             <TabsTrigger value="marketing">
               <Megaphone className="h-3.5 w-3.5 mr-1" />
               {t('kpiTarget.tabMarketing')}
@@ -861,6 +968,23 @@ export function KpiTargetsPage() {
         </div>
 
         {/* Tab Contents */}
+        <TabsContent value="all">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+          ) : (
+            <AllKpiContent
+              targetMap={targetMap}
+              assignments={assignments}
+              activeProfiles={activeProfiles}
+              selectedProfile={selectedProfile}
+              t={t}
+              openEdit={openEdit}
+            />
+          )}
+        </TabsContent>
+
         <TabsContent value="marketing">
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
