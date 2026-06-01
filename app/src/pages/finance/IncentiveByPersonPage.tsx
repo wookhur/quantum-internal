@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ import {
   Calendar,
   DollarSign,
   Users,
+  Download,
 } from 'lucide-react'
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
@@ -28,6 +29,17 @@ import {
   INCENTIVE_TYPES,
   type IncentiveType,
 } from '@/hooks/useIncentives'
+import { IncentiveExportDialog } from '@/components/IncentiveExportDialog'
+import {
+  exportContractExcel,
+  exportContractPdf,
+  exportPersonExcel,
+  exportPersonPdf,
+  type ExportFormat,
+  type ExportScope,
+  type ExportContractRow,
+  type ExportPersonRow,
+} from '@/utils/incentiveExport'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -163,6 +175,66 @@ export function IncentiveByPersonPage() {
 
   const isPersonView = location.pathname.includes('by-person')
 
+  const [exportOpen, setExportOpen] = useState(false)
+
+  const handleExport = useCallback(
+    (params: { format: ExportFormat; scope: ExportScope; startMonth: string; endMonth: string }) => {
+      const rangeEntries = allEntries.filter((entry) => {
+        const dateRef = entry.isPaid ? entry.paidDate : (entry.dueDate || entry.contractDate)
+        if (!dateRef) return false
+        const ym = dateRef.slice(0, 7)
+        return ym >= params.startMonth && ym <= params.endMonth
+      })
+
+      if (params.scope === 'by-contract') {
+        const map = new Map<string, { entries: typeof rangeEntries; paidDate: string; contractorName: string; studentName: string; installmentLabel: string; paidAmount: number; currency: 'KRW' | 'USD'; isPaid: boolean; installmentAmount: number }>()
+        for (const entry of rangeEntries) {
+          const gk = `${entry.contractId}-${entry.installmentId}`
+          if (!map.has(gk)) {
+            map.set(gk, { entries: [], paidDate: entry.paidDate || entry.dueDate, contractorName: entry.contractorName, studentName: entry.studentName, installmentLabel: entry.installmentLabel, paidAmount: entry.paidAmount, currency: entry.currency, isPaid: entry.isPaid, installmentAmount: entry.installmentAmount })
+          }
+          map.get(gk)!.entries.push(entry)
+        }
+        const rows: ExportContractRow[] = Array.from(map.values()).map(g => ({
+          paidDate: g.paidDate,
+          contractorName: g.contractorName,
+          studentName: g.studentName,
+          installmentLabel: g.installmentLabel,
+          paidAmount: g.isPaid ? g.paidAmount : g.installmentAmount,
+          currency: g.currency,
+          recipients: g.entries.map(e => e.displayName).join(', '),
+          types: g.entries.map(e => `${t(INCENTIVE_TYPES[e.incentiveType].labelKey)} ${e.percentage}%`).join(', '),
+          totalPct: g.entries.reduce((s, e) => s + e.percentage, 0),
+          incentiveAmount: g.entries.reduce((s, e) => s + e.incentiveAmount, 0),
+          isPaid: g.isPaid,
+        }))
+        if (params.format === 'excel') exportContractExcel(rows, { ...params, t })
+        else exportContractPdf(rows, { ...params, t })
+      } else {
+        const map = new Map<string, ExportPersonRow & { installments: Set<string> }>()
+        for (const entry of rangeEntries) {
+          const gk = entry.profileId || `custom:${entry.displayName}`
+          if (!map.has(gk)) {
+            map.set(gk, { displayName: entry.displayName, paymentCount: 0, amountByType: {}, totalIncentiveAmount: 0, installments: new Set() })
+          }
+          const g = map.get(gk)!
+          g.amountByType[entry.incentiveType] = (g.amountByType[entry.incentiveType] || 0) + entry.incentiveAmount
+          g.totalIncentiveAmount += entry.incentiveAmount
+          g.installments.add(`${entry.contractId}-${entry.installmentLabel}`)
+        }
+        const activeTypeKeys = new Set<string>()
+        const rows: ExportPersonRow[] = Array.from(map.values()).map(g => {
+          Object.entries(g.amountByType).forEach(([k, v]) => { if (v > 0) activeTypeKeys.add(k) })
+          return { displayName: g.displayName, paymentCount: g.installments.size, amountByType: g.amountByType, totalIncentiveAmount: g.totalIncentiveAmount }
+        })
+        const activeTypes = Array.from(activeTypeKeys).map(k => ({ key: k, label: t(INCENTIVE_TYPES[k as keyof typeof INCENTIVE_TYPES].labelKey) }))
+        if (params.format === 'excel') exportPersonExcel(rows, activeTypes, { ...params, t })
+        else exportPersonPdf(rows, activeTypes, { ...params, t })
+      }
+    },
+    [allEntries, t],
+  )
+
   const toggleExpand = (key: string) => {
     setExpandedPerson((prev) => (prev === key ? null : key))
   }
@@ -194,7 +266,19 @@ export function IncentiveByPersonPage() {
         >
           {t('incentive.byPerson')}
         </Button>
+        <div className="flex-1" />
+        <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+          <Download className="h-4 w-4 mr-1.5" />
+          {t('incentive.export')}
+        </Button>
       </div>
+
+      <IncentiveExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        defaultScope="by-person"
+        onExport={handleExport}
+      />
 
       {/* Month navigator */}
       <div className="flex items-center gap-3">

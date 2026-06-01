@@ -1348,6 +1348,12 @@ const koTranslations = {
   'incentive.customName': '직접 입력',
   'incentive.customNamePlaceholder': '이름 입력',
   'incentive.addNewPerson': '새 대상자 추가',
+  'incentive.export': '내보내기',
+  'incentive.exportFormat': '파일 형식',
+  'incentive.exportScope': '내보내기 범위',
+  'incentive.exportPeriod': '기간 설정',
+  'incentive.exportPeriodError': '시작 월이 종료 월보다 이후입니다.',
+  'incentive.exportDownload': '다운로드',
 
   // ── Tasks ──
   'nav.taskBoard': '프로젝트',
@@ -2753,6 +2759,12 @@ const enTranslations: Record<string, string> = {
   'incentive.customName': 'Custom Name',
   'incentive.customNamePlaceholder': 'Enter name',
   'incentive.addNewPerson': 'Add new person',
+  'incentive.export': 'Export',
+  'incentive.exportFormat': 'File Format',
+  'incentive.exportScope': 'Export Scope',
+  'incentive.exportPeriod': 'Date Range',
+  'incentive.exportPeriodError': 'Start month is after end month.',
+  'incentive.exportDownload': 'Download',
 
   // ── Tasks ──
   'nav.taskBoard': 'Projects',
