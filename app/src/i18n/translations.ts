@@ -1311,6 +1311,11 @@ const koTranslations = {
   'kpiTarget.tabSales': '세일즈',
   'kpiTarget.tabService': '서비스',
   'kpiTarget.tabAttendance': '출결',
+  'kpiTarget.avgAchievement': '전사 평균 달성률',
+  'kpiTarget.achievedCount': '목표 달성',
+  'kpiTarget.avgLabel': '평균',
+  'kpiTarget.copyPrevMonth': '이전 달 목표 복사',
+  'kpiTarget.notePlaceholder': '메모 입력 (선택사항)',
 
   // ── Notifications ──
   'notif.title': '알림',
@@ -2849,6 +2854,11 @@ const enTranslations: Record<string, string> = {
   'kpiTarget.tabSales': 'Sales',
   'kpiTarget.tabService': 'Service',
   'kpiTarget.tabAttendance': 'Attendance',
+  'kpiTarget.avgAchievement': 'Overall Achievement',
+  'kpiTarget.achievedCount': 'Goals Met',
+  'kpiTarget.avgLabel': 'Avg',
+  'kpiTarget.copyPrevMonth': 'Copy Previous Month',
+  'kpiTarget.notePlaceholder': 'Optional note',
 
   // ── Notifications ──
   'notif.title': 'Notifications',

@@ -43,6 +43,8 @@ import {
   Check,
   AlertTriangle,
   ExternalLink,
+  Copy,
+  Loader2,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useProfiles } from '@/hooks/useProfiles'
@@ -685,7 +687,7 @@ function TargetKpiContent({
               <div className={`grid ${cols} gap-2`}>
                 {metricsForCat.map(metric => {
                   const data = targetMap.get(`${profile.id}:${metric.key}`)
-                  const isRate = metric.key.includes('rate')
+                  const isRate = metric.key.includes('rate') || metric.key.includes('conversion')
                   const isInverse = metric.key === 'late_count'
                   return (
                     <MetricCard
@@ -712,6 +714,23 @@ function TargetKpiContent({
 // All departments overview (per employee, all assigned categories)
 // ---------------------------------------------------------------------------
 
+/** Compute achievement percentage for a single metric */
+function metricAchievement(targetMap: Map<string, KpiTarget>, profileId: string, metricKey: string): number | null {
+  const data = targetMap.get(`${profileId}:${metricKey}`)
+  if (!data || data.targetValue <= 0) return null
+  if (metricKey === 'late_count') {
+    return data.actualValue <= data.targetValue ? 100 : Math.max(0, Math.round(((data.targetValue - data.actualValue) / data.targetValue) * 100))
+  }
+  return progressPercent(data.actualValue, data.targetValue)
+}
+
+/** Compute average achievement for a set of metrics */
+function avgAchievement(targetMap: Map<string, KpiTarget>, profileId: string, metrics: { key: string }[]): number | null {
+  const pcts = metrics.map(m => metricAchievement(targetMap, profileId, m.key)).filter((v): v is number => v !== null)
+  if (pcts.length === 0) return null
+  return Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
+}
+
 function AllKpiContent({
   targetMap, assignments, activeProfiles, selectedProfile, t, openEdit,
 }: {
@@ -733,6 +752,35 @@ function AllKpiContent({
     return filtered
   }, [activeProfiles, assignments, selectedProfile])
 
+  // Per-person achievement rates
+  const profileAchievements = useMemo(() => {
+    const map = new Map<string, number | null>()
+    for (const p of displayProfiles) {
+      const metrics = getEffectiveMetrics(p.id, assignments)
+      map.set(p.id, avgAchievement(targetMap, p.id, metrics))
+    }
+    return map
+  }, [displayProfiles, targetMap, assignments])
+
+  // Summary stats
+  const summaryStats = useMemo(() => {
+    const pcts = Array.from(profileAchievements.values()).filter((v): v is number => v !== null)
+    const achieved = pcts.filter(p => p >= 100).length
+    const avg = pcts.length > 0 ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : 0
+    // Per-category averages
+    const catAvgs: { cat: Category; avg: number; count: number }[] = []
+    for (const cat of ALL_CATEGORIES) {
+      const vals: number[] = []
+      for (const p of displayProfiles) {
+        const metrics = getEffectiveMetrics(p.id, assignments).filter(m => m.category === cat)
+        const a = avgAchievement(targetMap, p.id, metrics)
+        if (a !== null) vals.push(a)
+      }
+      if (vals.length > 0) catAvgs.push({ cat, avg: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length), count: vals.length })
+    }
+    return { total: displayProfiles.length, achieved, avg, catAvgs }
+  }, [displayProfiles, profileAchievements, targetMap, assignments])
+
   if (displayProfiles.length === 0) {
     return (
       <Card>
@@ -745,6 +793,39 @@ function AllKpiContent({
 
   return (
     <div className="space-y-4">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="py-3 text-center">
+            <div className="text-2xl font-bold">{summaryStats.avg}%</div>
+            <div className="text-xs text-muted-foreground">{t('kpiTarget.avgAchievement')}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3 text-center">
+            <div className="text-2xl font-bold text-green-600">{summaryStats.achieved}<span className="text-sm text-muted-foreground font-normal">/{summaryStats.total}</span></div>
+            <div className="text-xs text-muted-foreground">{t('kpiTarget.achievedCount')}</div>
+          </CardContent>
+        </Card>
+        {summaryStats.catAvgs.map(({ cat, avg, count }) => {
+          const config = CATEGORY_CONFIG[cat]
+          const Icon = config.icon
+          return (
+            <Card key={cat}>
+              <CardContent className="py-3 text-center">
+                <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                  <Icon className={`h-3.5 w-3.5 ${config.iconColor}`} />
+                  <span className={`text-xs font-medium ${config.textColor}`}>{t(config.labelKey)}</span>
+                </div>
+                <div className="text-2xl font-bold">{avg}%</div>
+                <div className="text-[10px] text-muted-foreground">{count}{t('common.people')}</div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Per-employee cards */}
       {displayProfiles.map(profile => {
         const effectiveMetrics = getEffectiveMetrics(profile.id, assignments)
         if (effectiveMetrics.length === 0) return null
@@ -757,6 +838,8 @@ function AllKpiContent({
           grouped.set(m.category, list)
         }
 
+        const personalPct = profileAchievements.get(profile.id)
+
         return (
           <Card key={profile.id}>
             <CardHeader className="pb-3">
@@ -767,6 +850,11 @@ function AllKpiContent({
                 {profile.name}
                 {profile.department && (
                   <Badge variant="outline" className="text-[10px] h-4">{profile.department}</Badge>
+                )}
+                {personalPct != null && (
+                  <Badge className={`ml-auto text-[11px] ${personalPct >= 100 ? 'bg-green-100 text-green-700 hover:bg-green-100' : personalPct >= 70 ? 'bg-blue-100 text-blue-700 hover:bg-blue-100' : personalPct >= 40 ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}`}>
+                    {t('kpiTarget.avgLabel')} {personalPct}%
+                  </Badge>
                 )}
               </CardTitle>
             </CardHeader>
@@ -786,7 +874,7 @@ function AllKpiContent({
                     <div className={`grid ${cols} gap-2`}>
                       {metrics.map(metric => {
                         const data = targetMap.get(`${profile.id}:${metric.key}`)
-                        const isRate = metric.key.includes('rate')
+                        const isRate = metric.key.includes('rate') || metric.key.includes('conversion')
                         const isInverse = metric.key === 'late_count'
                         return (
                           <MetricCard
@@ -825,16 +913,21 @@ export function KpiTargetsPage() {
   const { data: assignments = {} } = useKpiAssignments()
   const updateAssignments = useUpdateKpiAssignments()
 
+  const prevMonth = useMemo(() => shiftMonth(currentMonth, -1), [currentMonth])
+  const { data: prevTargets = [] } = useKpiTargets(prevMonth)
+
   const [selectedProfile, setSelectedProfile] = useState<string>('all')
   const [tab, setTab] = useState('all')
   const [editOpen, setEditOpen] = useState(false)
   const [assignOpen, setAssignOpen] = useState(false)
+  const [copying, setCopying] = useState(false)
   const [editForm, setEditForm] = useState({
     profileId: '',
     category: 'marketing' as KpiTarget['category'],
     metricKey: '',
     targetValue: 0,
     actualValue: 0,
+    note: '',
   })
 
   const isCurrentMonth = currentMonth === getCurrentMonth()
@@ -855,6 +948,7 @@ export function KpiTargetsPage() {
       metricKey,
       targetValue: existing?.targetValue || 0,
       actualValue: existing?.actualValue || 0,
+      note: existing?.note || '',
     })
     setEditOpen(true)
   }
@@ -868,8 +962,29 @@ export function KpiTargetsPage() {
       metricKey: editForm.metricKey,
       targetValue: editForm.targetValue,
       actualValue: editForm.actualValue,
+      note: editForm.note || null,
     })
     setEditOpen(false)
+  }
+
+  const handleCopyPrevMonth = async () => {
+    if (prevTargets.length === 0 || copying) return
+    setCopying(true)
+    try {
+      // Copy target values from previous month (actual values reset to 0)
+      for (const pt of prevTargets) {
+        await upsertMut.mutateAsync({
+          profileId: pt.profileId,
+          month: currentMonth,
+          category: pt.category,
+          metricKey: pt.metricKey,
+          targetValue: pt.targetValue,
+          actualValue: 0,
+        })
+      }
+    } finally {
+      setCopying(false)
+    }
   }
 
   const profileName = useCallback(
@@ -893,13 +1008,21 @@ export function KpiTargetsPage() {
           <h1 className="text-2xl font-bold">{t('kpiTarget.title')}</h1>
           <p className="text-muted-foreground text-sm">{t('kpiTarget.subtitle')}</p>
         </div>
-        <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setAssignOpen(true)}>
-          <Settings2 className="h-3.5 w-3.5" />
-          {t('kpiTarget.assignSettings')}
-          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
-            {assignedCount}/{activeProfiles.length}
-          </Badge>
-        </Button>
+        <div className="flex items-center gap-2">
+          {targets.length === 0 && prevTargets.length > 0 && (
+            <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleCopyPrevMonth} disabled={copying}>
+              {copying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
+              {t('kpiTarget.copyPrevMonth')}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setAssignOpen(true)}>
+            <Settings2 className="h-3.5 w-3.5" />
+            {t('kpiTarget.assignSettings')}
+            <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
+              {assignedCount}/{activeProfiles.length}
+            </Badge>
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -1081,6 +1204,15 @@ export function KpiTargetsPage() {
                   min={0}
                 />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t('common.memo')}</Label>
+              <Input
+                value={editForm.note}
+                onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))}
+                placeholder={t('kpiTarget.notePlaceholder')}
+                className="h-9"
+              />
             </div>
           </div>
           <DialogFooter>
