@@ -79,6 +79,7 @@ function UserEditDialog({
   const effectiveModules = getEffectiveModules(user, featureAccess)
   const effectiveRoutes = getEffectiveRoutes(user, featureAccess)
 
+  const [displayName, setDisplayName] = useState<string>(user.name || '')
   const [role, setRole] = useState<UserRole>(user.role)
   const [department, setDepartment] = useState<string>(user.department || '')
   const [position, setPosition] = useState<string>(user.position || '')
@@ -167,6 +168,7 @@ function UserEditDialog({
     try {
       await updateProfile.mutateAsync({
         id: user.id,
+        name: displayName.trim() || undefined,
         role,
         department: department ? (department as Department) : null,
         position: position || null,
@@ -187,7 +189,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, role, department, position, isExternal, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, isExternal, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -209,6 +211,16 @@ function UserEditDialog({
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
               {user.email}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t('access.displayName')}</Label>
+              <Input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={t('access.displayNamePlaceholder')}
+                className="h-9"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">

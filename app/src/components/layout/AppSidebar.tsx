@@ -32,7 +32,6 @@ import {
   LineChart,
   Wallet,
   Clock,
-  Shield,
   UserSearch,
   MessageSquare,
   Settings,
@@ -117,7 +116,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.employeePerformance', to: '/planning/employees', icon: Users },
       { labelKey: 'nav.cashflow', to: '/planning/cashflow', icon: Wallet },
       { labelKey: 'nav.attendance', to: '/planning/attendance', icon: Clock },
-      { labelKey: 'nav.accessControl', to: '/planning/access', icon: Shield },
+      { labelKey: 'nav.accessControl', to: '/planning/access', icon: Users },
     ],
   },
   {

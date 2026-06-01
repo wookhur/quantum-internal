@@ -263,7 +263,7 @@ const koTranslations = {
   'nav.employeePerformance': '직원 성과',
   'nav.cashflow': '자금 현황',
   'nav.attendance': '근태 관리',
-  'nav.accessControl': '접근 권한 관리',
+  'nav.accessControl': '직원 관리',
   'nav.breakTime': '쉬는 시간',
   'nav.trexRunner': '아케이드',
 
@@ -911,7 +911,7 @@ const koTranslations = {
   // ── Planning ──
   'planning.overview': '경영 현황',
   'planning.projection': '매출 전망',
-  'planning.access': '접근 권한 관리',
+  'planning.access': '직원 관리',
 
   // ── Planning Overview ──
   'planOverview.subtitle': '월별 매출 목표 및 실적 현황을 확인합니다.',
@@ -949,12 +949,14 @@ const koTranslations = {
   'revProjection.unitTenThousand': '만',
 
   // ── Access Management ──
-  'access.subtitle': '직원별 역할 및 기능 접근 권한을 관리합니다',
+  'access.subtitle': '직원 정보, 역할 및 기능 접근 권한을 관리합니다',
   'access.noPermission': '접근 권한이 없습니다.',
   'access.requireAdminOrManager': 'Admin 또는 Manager 권한이 필요합니다.',
   'access.totalUsers': '전체 사용자',
   'access.externalStaff': '외부 인력',
   'access.defaultAccessByRole': '역할별 기본 접근 권한',
+  'access.displayName': '표시 이름',
+  'access.displayNamePlaceholder': '시스템에 표시될 이름',
   'access.role': '역할',
   'access.department': '부서',
   'access.position': '직책',
@@ -1695,7 +1697,7 @@ const enTranslations: Record<string, string> = {
   'nav.employeePerformance': 'Employee Performance',
   'nav.cashflow': 'Cashflow',
   'nav.attendance': 'Attendance',
-  'nav.accessControl': 'Access Control',
+  'nav.accessControl': 'Employee Management',
   'nav.breakTime': 'Break Time',
   'nav.trexRunner': 'Arcade',
 
@@ -2342,7 +2344,7 @@ const enTranslations: Record<string, string> = {
   // ── Planning ──
   'planning.overview': 'Business Overview',
   'planning.projection': 'Revenue Projection',
-  'planning.access': 'Access Control',
+  'planning.access': 'Employee Management',
 
   // ── Planning Overview ──
   'planOverview.subtitle': 'View monthly revenue targets and performance.',
@@ -2380,12 +2382,14 @@ const enTranslations: Record<string, string> = {
   'revProjection.unitTenThousand': '0K',
 
   // ── Access Management ──
-  'access.subtitle': 'Manage roles and feature access per employee',
+  'access.subtitle': 'Manage employee info, roles, and feature access',
   'access.noPermission': 'Access denied.',
   'access.requireAdminOrManager': 'Admin or Manager role is required.',
   'access.totalUsers': 'Total Users',
   'access.externalStaff': 'External',
   'access.defaultAccessByRole': 'Default Access by Role',
+  'access.displayName': 'Display Name',
+  'access.displayNamePlaceholder': 'Name shown in the system',
   'access.role': 'Role',
   'access.department': 'Department',
   'access.position': 'Position',
