@@ -1,13 +1,10 @@
 import { useMemo } from 'react'
-import { Link } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import {
   Users, FileSignature,
   ArrowUpRight, AlertCircle, Calendar, CheckCircle2, Loader2,
-  AlertTriangle, Clock, Phone, ChevronRight,
 } from 'lucide-react'
 import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
@@ -92,40 +89,6 @@ function useContractStats() {
       const outstanding = (paymentsRes.data || []).reduce((sum, p) => sum + (p.outstanding_amount || 0), 0)
       const overdueCount = (paymentsRes.data || []).filter(p => (p.outstanding_amount || 0) > 0).length
       return { activeContracts: (contractsRes.data || []).length, outstanding, overdueCount }
-    },
-  })
-}
-
-/** Active pipeline stages where neglect is a concern */
-const ACTIVE_PIPELINE_STAGES: PipelineStage[] = [
-  'new_lead', 'contact_attempted', 'consultation_scheduled',
-  'first_consultation', 'second_consultation', 'third_consultation',
-  'contract_review',
-]
-
-function useNeglectedLeads() {
-  return useQuery({
-    queryKey: ['dashboard-neglected-leads'],
-    queryFn: async () => {
-      // Fetch active leads with their last activity timestamp
-      const { data: leads, error } = await supabase
-        .from('leads')
-        .select('id, parent_name, student_name, phone, current_school, grade, pipeline_stage, assigned_to, updated_at, profiles!leads_assigned_to_fkey(name)')
-        .in('pipeline_stage', ACTIVE_PIPELINE_STAGES)
-        .order('updated_at', { ascending: true })
-
-      if (error) throw error
-      if (!leads) return []
-
-      const now = Date.now()
-      return leads
-        .map((l) => {
-          const updatedAt = new Date(l.updated_at as string).getTime()
-          const daysSince = Math.floor((now - updatedAt) / (1000 * 60 * 60 * 24))
-          return { ...l, daysSince }
-        })
-        .filter((l) => l.daysSince >= 3) // 3일 이상 방치
-        .slice(0, 10) // 최대 10건
     },
   })
 }
@@ -262,7 +225,6 @@ export function DashboardPage() {
   const { data: pipelineLeads = [], isLoading: pipelineLoading } = usePipelineStats()
   const { data: monthlyLeads = [], isLoading: leadsLoading } = useMonthlyLeadCount()
   const { data: contractStats, isLoading: contractsLoading } = useContractStats()
-  const { data: neglectedLeads = [], isLoading: neglectedLoading } = useNeglectedLeads()
 
   // Pipeline counts
   const pipelineData = useMemo(() => {
@@ -392,79 +354,6 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Neglected Leads Alert */}
-      {!neglectedLoading && neglectedLeads.length > 0 && (
-        <Card className="border-amber-200 bg-amber-50/50">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2 text-amber-800">
-                <AlertTriangle className="size-5 text-amber-500" />
-                {t('dashboard.neglectedAlert')}
-                <Badge variant="destructive" className="text-xs ml-1">
-                  {neglectedLeads.length}건
-                </Badge>
-              </CardTitle>
-              <Link to="/sales/pipeline">
-                <Button variant="ghost" size="sm" className="text-xs gap-1 text-amber-700 hover:text-amber-900">
-                  {t('dashboard.viewPipeline')} <ChevronRight className="size-3" />
-                </Button>
-              </Link>
-            </div>
-            <CardDescription className="text-amber-700/70">
-              {t('dashboard.neglectedDesc')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="space-y-2">
-              {neglectedLeads.map((lead) => {
-                const urgency = lead.daysSince >= 14 ? 'bg-red-100 text-red-700 border-red-200' :
-                  lead.daysSince >= 7 ? 'bg-orange-100 text-orange-700 border-orange-200' :
-                  'bg-amber-100 text-amber-700 border-amber-200'
-
-                const profiles = lead.profiles as { name: string }[] | { name: string } | null
-                const assignedName = Array.isArray(profiles) ? profiles[0]?.name : profiles?.name
-
-                return (
-                  <Link
-                    key={lead.id}
-                    to={`/sales/leads/${lead.id}`}
-                    className="flex items-center gap-3 p-2.5 rounded-lg bg-white border border-amber-100 hover:border-amber-300 hover:shadow-sm transition-all group"
-                  >
-                    <div className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold border ${urgency}`}>
-                      <Clock className="size-3" />
-                      {lead.daysSince}{t('dashboard.days')}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium truncate">
-                          {lead.parent_name as string}
-                          {lead.student_name ? ` / ${lead.student_name as string}` : ''}
-                        </span>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
-                          {t('stage.' + (lead.pipeline_stage as string))}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-                        {lead.current_school && <span>{lead.current_school as string}</span>}
-                        {lead.grade && <span>{lead.grade as string}</span>}
-                        {assignedName ? (
-                          <span className="text-primary font-medium">{assignedName}</span>
-                        ) : (
-                          <span className="text-red-500 font-medium">{t('common.unassigned')}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Phone className="size-3.5 text-muted-foreground" />
-                      <ChevronRight className="size-4 text-muted-foreground" />
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
