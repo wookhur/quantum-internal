@@ -151,7 +151,7 @@ export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
   manager: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'game'],
   staff: ['dashboard', 'sales', 'marketing', 'service', 'game'],
   freelancer: ['dashboard', 'game'],
-  viewer: ['dashboard', 'game'],
+  viewer: [],
 }
 
 export interface FeatureAccessRecord {
