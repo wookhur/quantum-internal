@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
-import { Outlet, useNavigate } from 'react-router-dom'
-import { Globe, MessageSquare } from 'lucide-react'
+import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Globe, MessageSquare, ShieldX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useAuth } from '@/contexts/AuthContext'
@@ -12,15 +12,26 @@ import { NotificationCenter } from '@/components/NotificationCenter'
 import { AccountSettingsDialog } from '@/components/AccountSettingsDialog'
 import { useUnreadCount, useMessageSubscription } from '@/hooks/useMessages'
 import { useUIScale } from '@/hooks/useUIScale'
+import { useFeatureAccess, getEffectiveRoutes } from '@/hooks/useProfiles'
 
 export function AppLayout() {
   const { user } = useAuth()
-  const { language, setLanguage } = useLanguage()
+  const { language, setLanguage, t } = useLanguage()
   const navigate = useNavigate()
+  const location = useLocation()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { data: unreadCount = 0 } = useUnreadCount()
+  const { data: featureAccess = [] } = useFeatureAccess()
   useMessageSubscription()
   useUIScale() // applies saved font-size to document root
+
+  // Check route-level access
+  const enabledRoutes = user ? getEffectiveRoutes(user, featureAccess) : []
+  const currentPath = location.pathname
+  // Match current path against enabled routes (check if path starts with any enabled route)
+  const hasRouteAccess = enabledRoutes.some(route =>
+    currentPath === route || currentPath.startsWith(route + '/'),
+  )
 
   return (
     <SidebarProvider>
@@ -79,7 +90,22 @@ export function AppLayout() {
 
         {/* Main Content */}
         <main className="flex-1 bg-[#F6F7FB] p-3 md:p-6 overflow-x-hidden min-w-0">
-          <Outlet />
+          {hasRouteAccess ? (
+            <Outlet />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+              <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+                <ShieldX className="size-8 text-gray-400" />
+              </div>
+              <h2 className="text-lg font-semibold text-gray-700">{t('access.noRoutePermission')}</h2>
+              <p className="text-sm text-gray-500 text-center max-w-sm">
+                {t('access.noRoutePermissionDesc')}
+              </p>
+              <Button variant="outline" onClick={() => navigate('/dashboard')} className="mt-2">
+                {t('nav.dashboard')}
+              </Button>
+            </div>
+          )}
         </main>
       </SidebarInset>
 

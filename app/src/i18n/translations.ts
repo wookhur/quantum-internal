@@ -951,6 +951,8 @@ const koTranslations = {
   // ── Access Management ──
   'access.subtitle': '직원 정보, 역할 및 기능 접근 권한을 관리합니다',
   'access.noPermission': '접근 권한이 없습니다.',
+  'access.noRoutePermission': '접근 권한이 없습니다',
+  'access.noRoutePermissionDesc': '이 페이지에 대한 접근 권한이 없습니다. 필요한 경우 관리자에게 권한을 요청해주세요.',
   'access.requireAdminOrManager': 'Admin 또는 Manager 권한이 필요합니다.',
   'access.totalUsers': '전체 사용자',
   'access.externalStaff': '외부 인력',
@@ -2402,6 +2404,8 @@ const enTranslations: Record<string, string> = {
   // ── Access Management ──
   'access.subtitle': 'Manage employee info, roles, and feature access',
   'access.noPermission': 'Access denied.',
+  'access.noRoutePermission': 'Access Denied',
+  'access.noRoutePermissionDesc': 'You do not have permission to access this page. Please contact your administrator to request access.',
   'access.requireAdminOrManager': 'Admin or Manager role is required.',
   'access.totalUsers': 'Total Users',
   'access.externalStaff': 'External',

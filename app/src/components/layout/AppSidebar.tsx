@@ -37,11 +37,12 @@ import {
   Settings,
   Receipt,
   Percent,
+  Lock,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { useFeatureAccess, getEffectiveRoutes, getEffectiveModules, type FeatureModule } from '@/hooks/useProfiles'
+import { useFeatureAccess, getEffectiveRoutes, type FeatureModule } from '@/hooks/useProfiles'
 import { useLanguage } from '@/i18n/LanguageContext'
 import type { TranslationKeys } from '@/i18n/translations'
 
@@ -138,15 +139,8 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
 
   // Determine which routes this user can access
   const enabledRoutes = user ? getEffectiveRoutes(user, featureAccess) : []
-  const enabledModules = user ? getEffectiveModules(user, featureAccess) : []
-  // Filter sections: show section if user has access to any route in it, then filter individual items
+  // Show ALL sections and items, but mark which ones are accessible
   const visibleSections = NAV_SECTIONS
-    .filter(s => enabledModules.includes(s.module))
-    .map(s => ({
-      ...s,
-      items: s.items.filter(item => enabledRoutes.includes(item.to)),
-    }))
-    .filter(s => s.items.length > 0)
 
   const DEPT_CONFIG: Record<string, { label: string; color: string }> = {
     sales: { label: 'Sales', color: 'bg-blue-100 text-blue-700' },
@@ -193,6 +187,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
                 {section.items.map((item) => {
                   const active = isActive(item.to)
                   const Icon = item.icon
+                  const hasAccess = enabledRoutes.includes(item.to)
                   return (
                     <SidebarMenuItem key={item.to}>
                       <SidebarMenuButton
@@ -204,13 +199,15 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
                           ${
                             active
                               ? 'bg-[#E6F0FF] text-blue-600 font-medium before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-5 before:w-[3px] before:rounded-r-full before:bg-blue-500'
-                              : 'text-gray-600 hover:bg-gray-50'
+                              : hasAccess
+                                ? 'text-gray-600 hover:bg-gray-50'
+                                : 'text-gray-400 hover:bg-gray-50'
                           }
                         `}
                       >
                         <Icon
                           className={`shrink-0 ${
-                            active ? 'text-blue-500' : 'text-gray-400'
+                            active ? 'text-blue-500' : hasAccess ? 'text-gray-400' : 'text-gray-300'
                           }`}
                           size={18}
                           strokeWidth={active ? 2 : 1.75}
@@ -218,6 +215,9 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
                         <span className="truncate text-[13px]">
                           {t(item.labelKey)}
                         </span>
+                        {!hasAccess && (
+                          <Lock size={12} className="ml-auto shrink-0 text-gray-300" />
+                        )}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   )
