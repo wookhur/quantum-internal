@@ -110,8 +110,13 @@ export function AttendancePage() {
   const [year, month] = currentMonth.split('-').map(Number)
   const days = useMemo(() => getDaysInMonth(currentMonth), [currentMonth])
 
-  // Filter active (non-external) profiles
-  const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal), [profiles])
+  // Filter active (non-external) profiles, excluding non-attendance targets
+  const EXCLUDED_IDS = new Set([
+    'bb51bba1-b665-4431-b6d6-d44a63f82423', // Accounting Quantum
+    '3638c8f3-6eee-45ea-8bc5-527c2e85a77c', // Liz Yu
+    'd26cad07-580e-4cb9-bb95-cf0ae262f5b4', // Julie Kim
+  ])
+  const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal && !EXCLUDED_IDS.has(p.id)), [profiles])
 
   // Build lookup: profileId+date -> attendance
   const attendanceMap = useMemo(() => {
