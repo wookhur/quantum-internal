@@ -119,6 +119,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/planning/employees', labelKey: 'nav.employeePerformance', module: 'planning' },
   { path: '/planning/cashflow', labelKey: 'nav.cashflow', module: 'planning' },
   { path: '/planning/attendance', labelKey: 'nav.attendance', module: 'planning' },
+  { path: '/planning/kpi-targets', labelKey: 'nav.kpiTargets', module: 'planning' },
   { path: '/planning/access', labelKey: 'nav.accessControl', module: 'planning' },
   // ── Game ──
   { path: '/game', labelKey: 'nav.trexRunner', module: 'game' },

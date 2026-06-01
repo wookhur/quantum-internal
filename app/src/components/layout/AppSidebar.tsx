@@ -38,6 +38,7 @@ import {
   Receipt,
   Percent,
   Lock,
+  Target,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -117,6 +118,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.employeePerformance', to: '/planning/employees', icon: Users },
       { labelKey: 'nav.cashflow', to: '/planning/cashflow', icon: Wallet },
       { labelKey: 'nav.attendance', to: '/planning/attendance', icon: Clock },
+      { labelKey: 'nav.kpiTargets', to: '/planning/kpi-targets', icon: Target },
       { labelKey: 'nav.accessControl', to: '/planning/access', icon: Users },
     ],
   },

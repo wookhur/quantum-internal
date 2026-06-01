@@ -32,6 +32,7 @@ import { PlanningOverviewPage } from '@/pages/planning/PlanningOverviewPage'
 import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
+import { KpiTargetsPage } from '@/pages/planning/KpiTargetsPage'
 import { CashflowPage } from '@/pages/planning/CashflowPage'
 import { AttendancePage } from '@/pages/planning/AttendancePage'
 import { AttendanceKioskPage } from '@/pages/planning/AttendanceKioskPage'
@@ -106,6 +107,7 @@ export default function App() {
                 <Route path="/planning/employees" element={<EmployeePerformancePage />} />
                 <Route path="/planning/cashflow" element={<CashflowPage />} />
                 <Route path="/planning/attendance" element={<AttendancePage />} />
+                <Route path="/planning/kpi-targets" element={<KpiTargetsPage />} />
 
                 <Route path="/game" element={<GamePage />} />
               </Route>
