@@ -809,7 +809,7 @@ const koTranslations = {
   'contracts.quickPresets': '빠른 선택',
   'contracts.addInstallment': '납입 일정 추가',
   'contracts.addInstallmentDesc': '계약금, 중도금, 잔금 또는 추가 비용 항목을 등록합니다.',
-  'contracts.installmentLabelPlaceholder': '예: 계약금, 2차 중도금, ���금 등',
+  'contracts.installmentLabelPlaceholder': '예: 계약금, 2차 중도금, 잔금 등',
   'contracts.editInstallment': '납입 항목 수정',
   'contracts.editInstallmentDesc': '항목명, 금액, 납입 예정일, 실제 납입일을 수정합니다.',
   'contracts.chargeLabel': '항목명',
@@ -1230,7 +1230,7 @@ const koTranslations = {
   'attendance.employee': '직원',
   'attendance.date': '날짜',
   'attendance.clockIn': '출근',
-  'attendance.clockOut': '��근',
+  'attendance.clockOut': '퇴근',
   'attendance.workHours': '근무시간',
   'attendance.note': '근무노트',
   'attendance.notePlaceholder': '메모 입력...',
@@ -2675,7 +2675,7 @@ const enTranslations: Record<string, string> = {
   'attendance.noRecords': 'No attendance records for this month.',
   'attendance.confirmDelete': 'Delete this attendance record?',
 
-  // ─��� Notifications ──
+  // ── Notifications ──
   'notif.title': 'Notifications',
   'notif.noNotifications': 'No new notifications.',
   'notif.viewDetail': 'View Details',
@@ -2685,7 +2685,7 @@ const enTranslations: Record<string, string> = {
   'notif.viewFirstToConfirm': 'View details first to confirm',
   'notif.systemAlerts': 'System alerts',
 
-  // ��─ Invoices & Receipts ──
+  // ── Invoices & Receipts ──
   'invoice.title': 'Invoices',
   'invoice.subtitle': 'Create and send invoices',
   'invoice.create': 'Create Invoice',
