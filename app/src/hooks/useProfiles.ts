@@ -105,7 +105,6 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   // ── Service ──
   { path: '/service/dashboard', labelKey: 'nav.serviceDashboard', module: 'service' },
   { path: '/service/student-360', labelKey: 'nav.student360', module: 'service' },
-  { path: '/service/kpi', labelKey: 'nav.kpi', module: 'service' },
   { path: '/service/external-fees', labelKey: 'nav.externalFees', module: 'service' },
   // ── Finance ──
   { path: '/consulting/clients', labelKey: 'nav.contractManagement', module: 'finance' },

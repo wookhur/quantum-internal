@@ -100,6 +100,7 @@ export function PersonalInfoPage() {
       phone: editForm.phone,
       address: editForm.address,
       birthDate: editForm.birthDate,
+      residentNumber: editForm.residentNumber,
       emergencyContactName: editForm.emergencyContactName,
       emergencyContactPhone: editForm.emergencyContactPhone,
       emergencyContactRelation: editForm.emergencyContactRelation,
@@ -298,6 +299,10 @@ export function PersonalInfoPage() {
                 <Label className="text-xs">{t('personalInfo.birthDate')}</Label>
                 <Input type="date" value={editForm.birthDate || ''} onChange={e => setEditForm(f => ({ ...f, birthDate: e.target.value }))} className="h-9" />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t('personalInfo.residentNumber')}</Label>
+              <Input value={editForm.residentNumber || ''} onChange={e => setEditForm(f => ({ ...f, residentNumber: e.target.value }))} className="h-9" placeholder="000000-0000000" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">{t('personalInfo.address')}</Label>

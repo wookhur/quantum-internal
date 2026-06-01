@@ -34,6 +34,7 @@ export function EmployeeFormPage() {
         phone: form.phone,
         address: form.address,
         birthDate: form.birthDate,
+        residentNumber: form.residentNumber,
         emergencyContactName: form.emergencyContactName,
         emergencyContactPhone: form.emergencyContactPhone,
         emergencyContactRelation: form.emergencyContactRelation,
@@ -126,6 +127,15 @@ export function EmployeeFormPage() {
                   className="h-9"
                 />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">주민등록번호</Label>
+              <Input
+                placeholder="000000-0000000"
+                value={form.residentNumber || ''}
+                onChange={e => setForm(f => ({ ...f, residentNumber: e.target.value }))}
+                className="h-9"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">주소</Label>

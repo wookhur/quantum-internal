@@ -1299,6 +1299,10 @@ const koTranslations = {
   'kpiTarget.noMetricsAssigned': '지표 미설정',
   'kpiTarget.noCategorySelected': '위 테이블에서 카테고리를 먼저 선택하세요.',
   'kpiTarget.excludeLabel': '평가 제외',
+  'kpiTarget.tabMarketing': '마케팅',
+  'kpiTarget.tabSales': '세일즈',
+  'kpiTarget.tabService': '서비스',
+  'kpiTarget.tabAttendance': '출결',
 
   // ── Notifications ──
   'notif.title': '알림',
@@ -1514,6 +1518,7 @@ const koTranslations = {
   'personalInfo.linkDescription': '{name}님에게 보낼 개인정보 작성 링크입니다.',
   'personalInfo.linkExpiry': '링크는 7일간 유효하며, 1회 사용 가능합니다.',
   'personalInfo.editInfo': '정보 수정',
+  'personalInfo.residentNumber': '주민등록번호',
   'personalInfo.address': '주소',
   'personalInfo.startDate': '입사일',
   'personalInfo.bankInfo': '계좌 정보',
@@ -2824,6 +2829,10 @@ const enTranslations: Record<string, string> = {
   'kpiTarget.noMetricsAssigned': 'No metrics assigned',
   'kpiTarget.noCategorySelected': 'Select a category first in the table above.',
   'kpiTarget.excludeLabel': 'Exclude',
+  'kpiTarget.tabMarketing': 'Marketing',
+  'kpiTarget.tabSales': 'Sales',
+  'kpiTarget.tabService': 'Service',
+  'kpiTarget.tabAttendance': 'Attendance',
 
   // ── Notifications ──
   'notif.title': 'Notifications',
@@ -3039,6 +3048,7 @@ const enTranslations: Record<string, string> = {
   'personalInfo.linkDescription': 'Send this personal info form link to {name}.',
   'personalInfo.linkExpiry': 'Link is valid for 7 days and can only be used once.',
   'personalInfo.editInfo': 'Edit Info',
+  'personalInfo.residentNumber': 'Resident Registration No.',
   'personalInfo.address': 'Address',
   'personalInfo.startDate': 'Start Date',
   'personalInfo.bankInfo': 'Bank Information',

@@ -7,6 +7,7 @@ export interface EmployeeInfo {
   phone: string | null
   address: string | null
   birthDate: string | null
+  residentNumber: string | null
   emergencyContactName: string | null
   emergencyContactPhone: string | null
   emergencyContactRelation: string | null
@@ -25,6 +26,7 @@ function mapRow(r: Record<string, unknown>): EmployeeInfo {
     phone: r.phone as string | null,
     address: r.address as string | null,
     birthDate: r.birth_date as string | null,
+    residentNumber: r.resident_number as string | null,
     emergencyContactName: r.emergency_contact_name as string | null,
     emergencyContactPhone: r.emergency_contact_phone as string | null,
     emergencyContactRelation: r.emergency_contact_relation as string | null,
@@ -99,6 +101,7 @@ export function useUpsertEmployeeInfo() {
       phone?: string | null
       address?: string | null
       birthDate?: string | null
+      residentNumber?: string | null
       emergencyContactName?: string | null
       emergencyContactPhone?: string | null
       emergencyContactRelation?: string | null
@@ -116,6 +119,7 @@ export function useUpsertEmployeeInfo() {
             phone: input.phone || null,
             address: input.address || null,
             birth_date: input.birthDate || null,
+            resident_number: input.residentNumber || null,
             emergency_contact_name: input.emergencyContactName || null,
             emergency_contact_phone: input.emergencyContactPhone || null,
             emergency_contact_relation: input.emergencyContactRelation || null,
