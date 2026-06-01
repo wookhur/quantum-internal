@@ -15,12 +15,13 @@ export interface KpiTarget {
 export const MARKETING_METRICS = [
   { key: 'upload_count', labelKey: 'kpiTarget.uploadCount' },
   { key: 'followers', labelKey: 'kpiTarget.followers' },
+  { key: 'db_acquisition', labelKey: 'kpiTarget.dbAcquisition' },
   { key: 'seminar_recruit', labelKey: 'kpiTarget.seminarRecruit' },
 ] as const
 
 export const SALES_METRICS = [
   { key: 'db_to_first_consult', labelKey: 'kpiTarget.dbToFirstConsult' },
-  { key: 'first_to_second_consult', labelKey: 'kpiTarget.firstToSecondConsult' },
+  { key: 'contract_conversion', labelKey: 'kpiTarget.contractConversion' },
   { key: 'consult_note_rate', labelKey: 'kpiTarget.consultNoteRate' },
   { key: 'consult_note_24h_rate', labelKey: 'kpiTarget.consultNote24hRate' },
 ] as const
