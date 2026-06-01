@@ -34,6 +34,7 @@ import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
 import { CashflowPage } from '@/pages/planning/CashflowPage'
 import { AttendancePage } from '@/pages/planning/AttendancePage'
+import { AttendanceKioskPage } from '@/pages/planning/AttendanceKioskPage'
 import { ServiceDashboardPage } from '@/pages/service/ServiceDashboardPage'
 import { Student360Page } from '@/pages/service/Student360Page'
 import { ConsultantKpiPage } from '@/pages/service/ConsultantKpiPage'
@@ -61,6 +62,9 @@ export default function App() {
             <Route path="/portal/:token" element={<StudentPortalPage />} />
 
             <Route element={<ProtectedRoute />}>
+              {/* Full-screen kiosk (no sidebar) */}
+              <Route path="/kiosk" element={<AttendanceKioskPage />} />
+
               <Route element={<AppLayout />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/calendar" element={<CalendarPage />} />
