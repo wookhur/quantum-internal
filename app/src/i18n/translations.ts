@@ -1260,6 +1260,9 @@ const koTranslations = {
   'attendance.lateCount': '지각',
   'attendance.noRecords': '이번 달 근태 기록이 없습니다.',
   'attendance.confirmDelete': '이 근태 기록을 삭제하시겠습니까?',
+  'attendance.kioskSettings': '키오스크 설정',
+  'attendance.kioskSettingsDesc': '키오스크 출퇴근 화면에 표시할 직원을 선택하세요.',
+  'attendance.kioskHidden': '숨김',
 
   // ── Notifications ──
   'notif.title': '알림',
@@ -2714,6 +2717,9 @@ const enTranslations: Record<string, string> = {
   'attendance.lateCount': 'Late',
   'attendance.noRecords': 'No attendance records for this month.',
   'attendance.confirmDelete': 'Delete this attendance record?',
+  'attendance.kioskSettings': 'Kiosk Settings',
+  'attendance.kioskSettingsDesc': 'Select which employees appear on the kiosk clock-in screen.',
+  'attendance.kioskHidden': 'Hidden',
 
   // ── Notifications ──
   'notif.title': 'Notifications',

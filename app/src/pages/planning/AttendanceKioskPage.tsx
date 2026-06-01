@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { LogIn, LogOut, ChevronLeft, Check, Clock } from 'lucide-react'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAttendances, useUpsertAttendance } from '@/hooks/useAttendances'
+import { useKioskExcludedIds } from '@/hooks/useKioskSettings'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,11 +26,6 @@ function formatClock(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
 }
 
-const EXCLUDED_IDS = new Set([
-  'bb51bba1-b665-4431-b6d6-d44a63f82423',
-  '3638c8f3-6eee-45ea-8bc5-527c2e85a77c',
-  'd26cad07-580e-4cb9-bb95-cf0ae262f5b4',
-])
 
 const AVATAR_COLORS = [
   'bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500',
@@ -46,6 +42,7 @@ export function AttendanceKioskPage() {
   const { data: profiles = [] } = useProfiles()
   const { data: attendances = [] } = useAttendances(currentMonth())
   const upsertMut = useUpsertAttendance()
+  const { data: kioskExcludedIds = [] } = useKioskExcludedIds()
 
   const [step, setStep] = useState<KioskStep>('select')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -69,9 +66,10 @@ export function AttendanceKioskPage() {
     }
   }, [step])
 
+  const excludedSet = useMemo(() => new Set(kioskExcludedIds), [kioskExcludedIds])
   const activeProfiles = useMemo(
-    () => profiles.filter(p => !p.isExternal && !EXCLUDED_IDS.has(p.id)),
-    [profiles],
+    () => profiles.filter(p => !p.isExternal && !excludedSet.has(p.id)),
+    [profiles, excludedSet],
   )
 
   // Today's attendance lookup

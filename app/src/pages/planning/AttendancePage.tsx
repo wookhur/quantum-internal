@@ -36,10 +36,13 @@ import {
   Trash2,
   Clock,
   AlertTriangle,
+  Settings2,
+  Check,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAttendances, useUpsertAttendance, useDeleteAttendance } from '@/hooks/useAttendances'
+import { useKioskExcludedIds, useUpdateKioskExcludedIds } from '@/hooks/useKioskSettings'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 
@@ -100,12 +103,6 @@ interface AttendanceForm {
   note: string
 }
 
-const EXCLUDED_IDS = new Set([
-  'bb51bba1-b665-4431-b6d6-d44a63f82423', // Accounting Quantum
-  '3638c8f3-6eee-45ea-8bc5-527c2e85a77c', // Liz Yu
-  'd26cad07-580e-4cb9-bb95-cf0ae262f5b4', // Julie Kim
-])
-
 export function AttendancePage() {
   const t = useT()
   const { data: profiles = [] } = useProfiles()
@@ -113,17 +110,22 @@ export function AttendancePage() {
   const { data: attendances = [], isLoading } = useAttendances(currentMonth)
   const upsertMut = useUpsertAttendance()
   const deleteMut = useDeleteAttendance()
+  const { data: kioskExcludedIds = [] } = useKioskExcludedIds()
+  const updateKioskExcluded = useUpdateKioskExcludedIds()
 
   const [selectedProfile, setSelectedProfile] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<AttendanceForm>({ profileId: '', date: '', clockIn: '', clockOut: '', note: '' })
+  const [kioskSettingsOpen, setKioskSettingsOpen] = useState(false)
+  const [kioskExcludedDraft, setKioskExcludedDraft] = useState<Set<string>>(new Set())
 
   const isCurrentMonth = currentMonth === getCurrentMonth()
   const [year, month] = currentMonth.split('-').map(Number)
   const days = useMemo(() => getDaysInMonth(currentMonth), [currentMonth])
 
-  const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal && !EXCLUDED_IDS.has(p.id)), [profiles])
+  const excludedSet = useMemo(() => new Set(kioskExcludedIds), [kioskExcludedIds])
+  const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal && !excludedSet.has(p.id)), [profiles, excludedSet])
 
   // Build lookup: profileId+date -> attendance
   const attendanceMap = useMemo(() => {
@@ -326,6 +328,18 @@ export function AttendancePage() {
         <Button variant="outline" size="sm" className="h-8" onClick={handleExport}>
           <Download className="h-3.5 w-3.5 mr-1" />
           {t('attendance.export')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8"
+          onClick={() => {
+            setKioskExcludedDraft(new Set(kioskExcludedIds))
+            setKioskSettingsOpen(true)
+          }}
+        >
+          <Settings2 className="h-3.5 w-3.5 mr-1" />
+          {t('attendance.kioskSettings')}
         </Button>
       </div>
 
@@ -584,6 +598,60 @@ export function AttendancePage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={handleSave} disabled={!form.profileId || !form.date}>
+              {t('common.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Kiosk Settings Dialog */}
+      <Dialog open={kioskSettingsOpen} onOpenChange={setKioskSettingsOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="size-5" />
+              {t('attendance.kioskSettings')}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t('attendance.kioskSettingsDesc')}</p>
+          <div className="max-h-[50vh] overflow-y-auto space-y-1 py-2">
+            {profiles.filter(p => !p.isExternal).map(p => {
+              const isExcluded = kioskExcludedDraft.has(p.id)
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    setKioskExcludedDraft(prev => {
+                      const next = new Set(prev)
+                      if (next.has(p.id)) next.delete(p.id)
+                      else next.add(p.id)
+                      return next
+                    })
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    isExcluded ? 'bg-gray-50 text-muted-foreground' : 'bg-green-50 hover:bg-green-100'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${
+                    isExcluded ? 'border-gray-300 bg-white' : 'border-green-500 bg-green-500'
+                  }`}>
+                    {!isExcluded && <Check className="h-3 w-3 text-white" />}
+                  </div>
+                  <span className="text-sm font-medium">{p.name}</span>
+                  {isExcluded && <span className="text-xs text-muted-foreground ml-auto">{t('attendance.kioskHidden')}</span>}
+                </button>
+              )
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setKioskSettingsOpen(false)}>{t('common.cancel')}</Button>
+            <Button
+              onClick={() => {
+                updateKioskExcluded.mutate([...kioskExcludedDraft])
+                setKioskSettingsOpen(false)
+              }}
+              disabled={updateKioskExcluded.isPending}
+            >
               {t('common.save')}
             </Button>
           </DialogFooter>
