@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase'
 export interface KpiAssignment {
   categories: string[]
   metrics: string[] // empty = all metrics in selected categories
+  excluded?: boolean // true = completely hidden from KPI page
 }
 
 export type KpiAssignmentMap = Record<string, KpiAssignment>

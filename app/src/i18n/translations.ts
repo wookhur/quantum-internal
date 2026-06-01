@@ -1298,6 +1298,7 @@ const koTranslations = {
   'kpiTarget.applyToDept': '{dept}팀 전체 적용',
   'kpiTarget.noMetricsAssigned': '지표 미설정',
   'kpiTarget.noCategorySelected': '위 테이블에서 카테고리를 먼저 선택하세요.',
+  'kpiTarget.excludeLabel': '평가 제외',
 
   // ── Notifications ──
   'notif.title': '알림',
@@ -2822,6 +2823,7 @@ const enTranslations: Record<string, string> = {
   'kpiTarget.applyToDept': 'Apply to {dept} team',
   'kpiTarget.noMetricsAssigned': 'No metrics assigned',
   'kpiTarget.noCategorySelected': 'Select a category first in the table above.',
+  'kpiTarget.excludeLabel': 'Exclude',
 
   // ── Notifications ──
   'notif.title': 'Notifications',

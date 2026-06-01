@@ -137,8 +137,8 @@ function getEffectiveMetrics(
   assignments: KpiAssignmentMap,
 ): { category: Category; key: string; labelKey: string }[] {
   const assignment = assignments[profileId]
-  // No assignment → show nothing (unassigned)
-  if (!assignment || assignment.categories.length === 0) return []
+  // No assignment, excluded, or no categories → show nothing
+  if (!assignment || assignment.excluded || assignment.categories.length === 0) return []
 
   const result: { category: Category; key: string; labelKey: string }[] = []
   for (const cat of ALL_CATEGORIES) {
@@ -240,6 +240,13 @@ function AssignmentDialog({
     }
   }, [open, currentAssignments])
 
+  const toggleExcluded = (profileId: string) => {
+    setLocal(prev => {
+      const existing = prev[profileId] || { categories: [], metrics: [] }
+      return { ...prev, [profileId]: { ...existing, excluded: !existing.excluded } }
+    })
+  }
+
   const toggleCategory = (profileId: string, cat: string) => {
     setLocal(prev => {
       const existing = prev[profileId] || { categories: [], metrics: [] }
@@ -250,7 +257,7 @@ function AssignmentDialog({
       const catConfig = CATEGORY_CONFIG[cat as Category]
       const catMetricKeys = catConfig ? catConfig.metrics.map(m => m.key) : []
       const filteredMetrics = existing.metrics.filter(m => !catMetricKeys.includes(m) || cats.includes(cat))
-      return { ...prev, [profileId]: { categories: cats, metrics: filteredMetrics } }
+      return { ...prev, [profileId]: { ...existing, categories: cats, metrics: filteredMetrics, excluded: false } }
     })
   }
 
@@ -324,22 +331,26 @@ function AssignmentDialog({
                     </div>
                   </TableHead>
                 ))}
-                <TableHead className="w-[80px]" />
+                <TableHead className="text-center w-[80px]">
+                  <span className="text-xs">{t('kpiTarget.excludeLabel')}</span>
+                </TableHead>
+                <TableHead className="w-[60px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {profiles.map(profile => {
                 const a = getAssignment(profile.id)
+                const isExcluded = !!a.excluded
                 const isExpanded = expandedProfile === profile.id
                 return (
-                  <TableRow key={profile.id} className="group">
+                  <TableRow key={profile.id} className={`group ${isExcluded ? 'opacity-50' : ''}`}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-600 shrink-0">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${isExcluded ? 'bg-gray-100 text-gray-400' : 'bg-blue-100 text-blue-600'}`}>
                           {profile.name.charAt(0)}
                         </div>
                         <div>
-                          <div className="text-sm font-medium">{profile.name}</div>
+                          <div className={`text-sm font-medium ${isExcluded ? 'line-through text-muted-foreground' : ''}`}>{profile.name}</div>
                           {profile.department && (
                             <div className="text-[10px] text-muted-foreground">{profile.department}</div>
                           )}
@@ -350,10 +361,13 @@ function AssignmentDialog({
                       <TableCell key={cat} className="text-center">
                         <button
                           type="button"
+                          disabled={isExcluded}
                           className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
-                            a.categories.includes(cat)
-                              ? `${CATEGORY_CONFIG[cat].bgColor} ${CATEGORY_CONFIG[cat].iconColor}`
-                              : 'bg-gray-50 text-gray-300 hover:bg-gray-100'
+                            isExcluded
+                              ? 'bg-gray-50 text-gray-200 cursor-not-allowed'
+                              : a.categories.includes(cat)
+                                ? `${CATEGORY_CONFIG[cat].bgColor} ${CATEGORY_CONFIG[cat].iconColor}`
+                                : 'bg-gray-50 text-gray-300 hover:bg-gray-100'
                           }`}
                           onClick={() => toggleCategory(profile.id, cat)}
                         >
@@ -361,15 +375,30 @@ function AssignmentDialog({
                         </button>
                       </TableCell>
                     ))}
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-[10px]"
-                        onClick={() => setExpandedProfile(isExpanded ? null : profile.id)}
+                    <TableCell className="text-center">
+                      <button
+                        type="button"
+                        className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
+                          isExcluded
+                            ? 'bg-red-100 text-red-600'
+                            : 'bg-gray-50 text-gray-300 hover:bg-gray-100'
+                        }`}
+                        onClick={() => toggleExcluded(profile.id)}
                       >
-                        {t('kpiTarget.detail')}
-                      </Button>
+                        {isExcluded ? <Check className="h-4 w-4" /> : <span className="text-xs">—</span>}
+                      </button>
+                    </TableCell>
+                    <TableCell>
+                      {!isExcluded && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-[10px]"
+                          onClick={() => setExpandedProfile(isExpanded ? null : profile.id)}
+                        >
+                          {t('kpiTarget.detail')}
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 )
@@ -535,14 +564,14 @@ export function KpiTargetsPage() {
     setEditOpen(false)
   }
 
-  // Filter profiles for display — only show profiles that have at least one assigned metric
+  // Filter profiles for display — hide excluded employees
   const displayProfiles = useMemo(() => {
-    let filtered = activeProfiles
+    let filtered = activeProfiles.filter(p => !assignments[p.id]?.excluded)
     if (selectedProfile !== 'all') {
       filtered = filtered.filter(p => p.id === selectedProfile)
     }
     return filtered
-  }, [activeProfiles, selectedProfile])
+  }, [activeProfiles, selectedProfile, assignments])
 
   const profileName = useCallback(
     (id: string) => profiles.find(p => p.id === id)?.name || '?',
