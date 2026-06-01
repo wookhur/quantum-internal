@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,14 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
   ChevronLeft,
   ChevronRight,
   Calendar,
@@ -26,9 +34,10 @@ import {
   Video,
   Megaphone,
   Clock,
-  Plus,
   Pencil,
   CheckCircle2,
+  Settings2,
+  Check,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useProfiles } from '@/hooks/useProfiles'
@@ -40,6 +49,53 @@ import {
   ATTENDANCE_METRICS,
   type KpiTarget,
 } from '@/hooks/useKpiTargets'
+import {
+  useKpiAssignments,
+  useUpdateKpiAssignments,
+  type KpiAssignment,
+  type KpiAssignmentMap,
+} from '@/hooks/useKpiAssignments'
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const ALL_CATEGORIES = ['marketing', 'sales', 'attendance'] as const
+type Category = (typeof ALL_CATEGORIES)[number]
+
+const CATEGORY_CONFIG: Record<Category, {
+  labelKey: string
+  icon: typeof Video
+  iconColor: string
+  textColor: string
+  bgColor: string
+  metrics: readonly { key: string; labelKey: string }[]
+}> = {
+  marketing: {
+    labelKey: 'kpiTarget.marketingGoals',
+    icon: Megaphone,
+    iconColor: 'text-purple-600',
+    textColor: 'text-purple-700',
+    bgColor: 'bg-purple-100',
+    metrics: MARKETING_METRICS,
+  },
+  sales: {
+    labelKey: 'kpiTarget.salesGoals',
+    icon: TrendingUp,
+    iconColor: 'text-blue-600',
+    textColor: 'text-blue-700',
+    bgColor: 'bg-blue-100',
+    metrics: SALES_METRICS,
+  },
+  attendance: {
+    labelKey: 'kpiTarget.attendanceGoals',
+    icon: Clock,
+    iconColor: 'text-emerald-600',
+    textColor: 'text-emerald-700',
+    bgColor: 'bg-emerald-100',
+    metrics: ATTENDANCE_METRICS,
+  },
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -75,6 +131,28 @@ function progressTextColor(pct: number): string {
   return 'text-red-600'
 }
 
+/** Get effective metrics for a profile given assignments */
+function getEffectiveMetrics(
+  profileId: string,
+  assignments: KpiAssignmentMap,
+): { category: Category; key: string; labelKey: string }[] {
+  const assignment = assignments[profileId]
+  // No assignment → show nothing (unassigned)
+  if (!assignment || assignment.categories.length === 0) return []
+
+  const result: { category: Category; key: string; labelKey: string }[] = []
+  for (const cat of ALL_CATEGORIES) {
+    if (!assignment.categories.includes(cat)) continue
+    const config = CATEGORY_CONFIG[cat]
+    for (const m of config.metrics) {
+      // If specific metrics are selected, filter
+      if (assignment.metrics.length > 0 && !assignment.metrics.includes(m.key)) continue
+      result.push({ category: cat, key: m.key, labelKey: m.labelKey })
+    }
+  }
+  return result
+}
+
 // ---------------------------------------------------------------------------
 // Metric Card
 // ---------------------------------------------------------------------------
@@ -92,7 +170,7 @@ function MetricCard({
   actual: number
   unit?: string
   onEdit: () => void
-  isInverse?: boolean // lower is better (e.g. late count)
+  isInverse?: boolean
 }) {
   const pct = isInverse
     ? (target > 0 ? Math.max(0, Math.round(((target - actual) / target) * 100)) : 100)
@@ -114,7 +192,6 @@ function MetricCard({
         </span>
         <span className="text-sm text-muted-foreground mb-0.5">/ {target}{unit}</span>
       </div>
-      {/* Progress bar */}
       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all ${progressColor(isInverse ? (achieved ? 100 : pct) : pct)}`}
@@ -132,6 +209,247 @@ function MetricCard({
 }
 
 // ---------------------------------------------------------------------------
+// Assignment Settings Dialog
+// ---------------------------------------------------------------------------
+
+function AssignmentDialog({
+  open,
+  onOpenChange,
+  profiles,
+  currentAssignments,
+  onSave,
+  isPending,
+  t,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  profiles: { id: string; name: string; department?: string }[]
+  currentAssignments: KpiAssignmentMap
+  onSave: (assignments: KpiAssignmentMap) => void
+  isPending: boolean
+  t: (key: string, params?: Record<string, string | number>) => string
+}) {
+  const [local, setLocal] = useState<KpiAssignmentMap>({})
+  const [expandedProfile, setExpandedProfile] = useState<string | null>(null)
+
+  // Reset local state when dialog opens
+  useEffect(() => {
+    if (open) {
+      setLocal({ ...currentAssignments })
+      setExpandedProfile(null)
+    }
+  }, [open, currentAssignments])
+
+  const toggleCategory = (profileId: string, cat: string) => {
+    setLocal(prev => {
+      const existing = prev[profileId] || { categories: [], metrics: [] }
+      const cats = existing.categories.includes(cat)
+        ? existing.categories.filter(c => c !== cat)
+        : [...existing.categories, cat]
+      // When removing a category, also remove its metrics from the metrics list
+      const catConfig = CATEGORY_CONFIG[cat as Category]
+      const catMetricKeys = catConfig ? catConfig.metrics.map(m => m.key) : []
+      const filteredMetrics = existing.metrics.filter(m => !catMetricKeys.includes(m) || cats.includes(cat))
+      return { ...prev, [profileId]: { categories: cats, metrics: filteredMetrics } }
+    })
+  }
+
+  const toggleMetric = (profileId: string, metricKey: string) => {
+    setLocal(prev => {
+      const existing = prev[profileId] || { categories: [], metrics: [] }
+      const metrics = existing.metrics.includes(metricKey)
+        ? existing.metrics.filter(m => m !== metricKey)
+        : [...existing.metrics, metricKey]
+      return { ...prev, [profileId]: { ...existing, metrics } }
+    })
+  }
+
+  const getAssignment = (profileId: string): KpiAssignment => {
+    return local[profileId] || { categories: [], metrics: [] }
+  }
+
+  /** Check if a specific metric is enabled for a profile */
+  const isMetricEnabled = (profileId: string, metricKey: string, category: Category): boolean => {
+    const a = getAssignment(profileId)
+    if (!a.categories.includes(category)) return false
+    // If no specific metrics selected → all in enabled categories are on
+    if (a.metrics.length === 0) return true
+    return a.metrics.includes(metricKey)
+  }
+
+  const handleSave = () => {
+    onSave(local)
+  }
+
+  /** Quick-apply: copy one profile's settings to others in the same department */
+  const applyToDepartment = (sourceId: string) => {
+    const source = profiles.find(p => p.id === sourceId)
+    if (!source?.department) return
+    const assignment = getAssignment(sourceId)
+    setLocal(prev => {
+      const next = { ...prev }
+      for (const p of profiles) {
+        if (p.department === source.department) {
+          next[p.id] = { ...assignment }
+        }
+      }
+      return next
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[680px] max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings2 className="size-5" />
+            {t('kpiTarget.assignSettings')}
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">{t('kpiTarget.assignSettingsDesc')}</p>
+        </DialogHeader>
+
+        <div className="overflow-y-auto flex-1 -mx-6 px-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[160px]">{t('common.name')}</TableHead>
+                {ALL_CATEGORIES.map(cat => (
+                  <TableHead key={cat} className="text-center">
+                    <div className="flex items-center justify-center gap-1.5">
+                      {(() => {
+                        const Icon = CATEGORY_CONFIG[cat].icon
+                        return <Icon className={`h-3.5 w-3.5 ${CATEGORY_CONFIG[cat].iconColor}`} />
+                      })()}
+                      <span className="text-xs">{t(CATEGORY_CONFIG[cat].labelKey)}</span>
+                    </div>
+                  </TableHead>
+                ))}
+                <TableHead className="w-[80px]" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {profiles.map(profile => {
+                const a = getAssignment(profile.id)
+                const isExpanded = expandedProfile === profile.id
+                return (
+                  <TableRow key={profile.id} className="group">
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-600 shrink-0">
+                          {profile.name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium">{profile.name}</div>
+                          {profile.department && (
+                            <div className="text-[10px] text-muted-foreground">{profile.department}</div>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    {ALL_CATEGORIES.map(cat => (
+                      <TableCell key={cat} className="text-center">
+                        <button
+                          type="button"
+                          className={`inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
+                            a.categories.includes(cat)
+                              ? `${CATEGORY_CONFIG[cat].bgColor} ${CATEGORY_CONFIG[cat].iconColor}`
+                              : 'bg-gray-50 text-gray-300 hover:bg-gray-100'
+                          }`}
+                          onClick={() => toggleCategory(profile.id, cat)}
+                        >
+                          <Check className="h-4 w-4" />
+                        </button>
+                      </TableCell>
+                    ))}
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[10px]"
+                        onClick={() => setExpandedProfile(isExpanded ? null : profile.id)}
+                      >
+                        {t('kpiTarget.detail')}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+
+          {/* Expanded detail panel for selected profile */}
+          {expandedProfile && (() => {
+            const profile = profiles.find(p => p.id === expandedProfile)
+            if (!profile) return null
+            const a = getAssignment(expandedProfile)
+            return (
+              <div className="mt-3 p-4 bg-muted/30 rounded-lg border space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{profile.name}</span>
+                    <span className="text-xs text-muted-foreground">— {t('kpiTarget.detailMetrics')}</span>
+                  </div>
+                  {profile.department && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-[10px]"
+                      onClick={() => applyToDepartment(expandedProfile)}
+                    >
+                      {t('kpiTarget.applyToDept', { dept: profile.department })}
+                    </Button>
+                  )}
+                </div>
+
+                {ALL_CATEGORIES.map(cat => {
+                  if (!a.categories.includes(cat)) return null
+                  const config = CATEGORY_CONFIG[cat]
+                  return (
+                    <div key={cat}>
+                      <div className={`text-xs font-semibold mb-1.5 ${config.textColor}`}>
+                        {t(config.labelKey)}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {config.metrics.map(m => {
+                          const enabled = isMetricEnabled(expandedProfile, m.key, cat)
+                          return (
+                            <button
+                              key={m.key}
+                              type="button"
+                              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all border ${
+                                enabled
+                                  ? `${config.bgColor} ${config.textColor} border-transparent`
+                                  : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+                              }`}
+                              onClick={() => toggleMetric(expandedProfile, m.key)}
+                            >
+                              {enabled && <Check className="h-3 w-3 inline mr-1" />}
+                              {t(m.labelKey)}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+                {a.categories.length === 0 && (
+                  <p className="text-xs text-muted-foreground">{t('kpiTarget.noCategorySelected')}</p>
+                )}
+              </div>
+            )
+          })()}
+        </div>
+
+        <DialogFooter className="mt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button onClick={handleSave} disabled={isPending}>{t('common.save')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -141,9 +459,12 @@ export function KpiTargetsPage() {
   const [currentMonth, setCurrentMonth] = useState(getCurrentMonth())
   const { data: targets = [], isLoading } = useKpiTargets(currentMonth)
   const upsertMut = useUpsertKpiTarget()
+  const { data: assignments = {} } = useKpiAssignments()
+  const updateAssignments = useUpdateKpiAssignments()
 
   const [selectedProfile, setSelectedProfile] = useState<string>('all')
   const [editOpen, setEditOpen] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
   const [editForm, setEditForm] = useState({
     profileId: '',
     category: 'marketing' as KpiTarget['category'],
@@ -155,7 +476,6 @@ export function KpiTargetsPage() {
   const isCurrentMonth = currentMonth === getCurrentMonth()
   const [year, month] = currentMonth.split('-').map(Number)
 
-  // Only internal employees
   const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal), [profiles])
 
   // Build lookup: profileId:metricKey -> KpiTarget
@@ -167,17 +487,19 @@ export function KpiTargetsPage() {
     return map
   }, [targets])
 
-  // Get target for a specific profile and metric
   const getTarget = useCallback(
     (profileId: string, metricKey: string) => targetMap.get(`${profileId}:${metricKey}`),
     [targetMap],
   )
 
-  // Summary by category
+  // Summary by category (only for assigned metrics)
   const categorySummary = useMemo(() => {
     const result = { marketing: { total: 0, achieved: 0 }, sales: { total: 0, achieved: 0 }, attendance: { total: 0, achieved: 0 } }
     for (const t of targets) {
       if (t.targetValue <= 0) continue
+      // Only count if metric is assigned to this employee
+      const effective = getEffectiveMetrics(t.profileId, assignments)
+      if (!effective.some(e => e.key === t.metricKey)) continue
       const cat = t.category as keyof typeof result
       if (!result[cat]) continue
       result[cat].total++
@@ -186,7 +508,7 @@ export function KpiTargetsPage() {
       if (achieved) result[cat].achieved++
     }
     return result
-  }, [targets])
+  }, [targets, assignments])
 
   const openEdit = (profileId: string, category: KpiTarget['category'], metricKey: string) => {
     const existing = getTarget(profileId, metricKey)
@@ -213,10 +535,13 @@ export function KpiTargetsPage() {
     setEditOpen(false)
   }
 
-  // Filter profiles for display
+  // Filter profiles for display — only show profiles that have at least one assigned metric
   const displayProfiles = useMemo(() => {
-    if (selectedProfile === 'all') return activeProfiles
-    return activeProfiles.filter(p => p.id === selectedProfile)
+    let filtered = activeProfiles
+    if (selectedProfile !== 'all') {
+      filtered = filtered.filter(p => p.id === selectedProfile)
+    }
+    return filtered
   }, [activeProfiles, selectedProfile])
 
   const profileName = useCallback(
@@ -224,12 +549,35 @@ export function KpiTargetsPage() {
     [profiles],
   )
 
+  // Count assigned vs unassigned employees
+  const assignedCount = useMemo(
+    () => activeProfiles.filter(p => {
+      const a = assignments[p.id]
+      return a && a.categories.length > 0
+    }).length,
+    [activeProfiles, assignments],
+  )
+
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">{t('kpiTarget.title')}</h1>
-        <p className="text-muted-foreground text-sm">{t('kpiTarget.subtitle')}</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">{t('kpiTarget.title')}</h1>
+          <p className="text-muted-foreground text-sm">{t('kpiTarget.subtitle')}</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5"
+          onClick={() => setAssignOpen(true)}
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+          {t('kpiTarget.assignSettings')}
+          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
+            {assignedCount}/{activeProfiles.length}
+          </Badge>
+        </Button>
       </div>
 
       {/* Controls */}
@@ -267,48 +615,27 @@ export function KpiTargetsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-purple-100 flex items-center justify-center">
-              <Video className="h-4 w-4 text-purple-600" />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">{t('kpiTarget.marketingGoals')}</div>
-              <div className="text-lg font-bold">
-                {categorySummary.marketing.achieved}
-                <span className="text-sm font-normal text-muted-foreground"> / {categorySummary.marketing.total}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
-              <TrendingUp className="h-4 w-4 text-blue-600" />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">{t('kpiTarget.salesGoals')}</div>
-              <div className="text-lg font-bold">
-                {categorySummary.sales.achieved}
-                <span className="text-sm font-normal text-muted-foreground"> / {categorySummary.sales.total}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
-              <Clock className="h-4 w-4 text-emerald-600" />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">{t('kpiTarget.attendanceGoals')}</div>
-              <div className="text-lg font-bold">
-                {categorySummary.attendance.achieved}
-                <span className="text-sm font-normal text-muted-foreground"> / {categorySummary.attendance.total}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {ALL_CATEGORIES.map(cat => {
+          const config = CATEGORY_CONFIG[cat]
+          const summary = categorySummary[cat]
+          const Icon = config.icon
+          return (
+            <Card key={cat}>
+              <CardContent className="py-3 flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-lg ${config.bgColor} flex items-center justify-center`}>
+                  <Icon className={`h-4 w-4 ${config.iconColor}`} />
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">{t(config.labelKey)}</div>
+                  <div className="text-lg font-bold">
+                    {summary.achieved}
+                    <span className="text-sm font-normal text-muted-foreground"> / {summary.total}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       {/* Per-employee KPI sections */}
@@ -324,7 +651,46 @@ export function KpiTargetsPage() {
         </Card>
       ) : (
         displayProfiles.map(profile => {
-          const hasAnyTarget = targets.some(t => t.profileId === profile.id)
+          const effectiveMetrics = getEffectiveMetrics(profile.id, assignments)
+          // No assigned metrics for this employee
+          if (effectiveMetrics.length === 0) {
+            return (
+              <Card key={profile.id} className="opacity-60">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-400">
+                      {profile.name.charAt(0)}
+                    </div>
+                    {profile.name}
+                    {profile.department && (
+                      <Badge variant="outline" className="text-[10px] h-4">
+                        {profile.department}
+                      </Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground ml-auto">{t('kpiTarget.noMetricsAssigned')}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs"
+                      onClick={() => setAssignOpen(true)}
+                    >
+                      <Settings2 className="h-3 w-3 mr-1" />
+                      {t('kpiTarget.assignSettings')}
+                    </Button>
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+            )
+          }
+
+          // Group metrics by category
+          const grouped = new Map<Category, typeof effectiveMetrics>()
+          for (const m of effectiveMetrics) {
+            const list = grouped.get(m.category) || []
+            list.push(m)
+            grouped.set(m.category, list)
+          }
+
           return (
             <Card key={profile.id}>
               <CardHeader className="pb-3">
@@ -338,90 +704,42 @@ export function KpiTargetsPage() {
                       {profile.department}
                     </Badge>
                   )}
-                  {!hasAnyTarget && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs ml-auto"
-                      onClick={() => openEdit(profile.id, 'marketing', MARKETING_METRICS[0].key)}
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      {t('kpiTarget.setTarget')}
-                    </Button>
-                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Marketing */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Megaphone className="h-4 w-4 text-purple-500" />
-                    <span className="text-sm font-semibold text-purple-700">{t('kpiTarget.marketingGoals')}</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {MARKETING_METRICS.map(metric => {
-                      const data = getTarget(profile.id, metric.key)
-                      return (
-                        <MetricCard
-                          key={metric.key}
-                          label={t(metric.labelKey)}
-                          target={data?.targetValue || 0}
-                          actual={data?.actualValue || 0}
-                          onEdit={() => openEdit(profile.id, 'marketing', metric.key)}
-                        />
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Sales */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="h-4 w-4 text-blue-500" />
-                    <span className="text-sm font-semibold text-blue-700">{t('kpiTarget.salesGoals')}</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    {SALES_METRICS.map(metric => {
-                      const data = getTarget(profile.id, metric.key)
-                      const isRate = metric.key.includes('rate')
-                      return (
-                        <MetricCard
-                          key={metric.key}
-                          label={t(metric.labelKey)}
-                          target={data?.targetValue || 0}
-                          actual={data?.actualValue || 0}
-                          unit={isRate ? '%' : undefined}
-                          onEdit={() => openEdit(profile.id, 'sales', metric.key)}
-                        />
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* Attendance */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Clock className="h-4 w-4 text-emerald-500" />
-                    <span className="text-sm font-semibold text-emerald-700">{t('kpiTarget.attendanceGoals')}</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {ATTENDANCE_METRICS.map(metric => {
-                      const data = getTarget(profile.id, metric.key)
-                      const isInverse = metric.key === 'late_count'
-                      return (
-                        <MetricCard
-                          key={metric.key}
-                          label={t(metric.labelKey)}
-                          target={data?.targetValue || 0}
-                          actual={data?.actualValue || 0}
-                          unit={isInverse ? t('kpiTarget.unitTimes') : t('kpiTarget.unitDays')}
-                          onEdit={() => openEdit(profile.id, 'attendance', metric.key)}
-                          isInverse={isInverse}
-                        />
-                      )
-                    })}
-                  </div>
-                </div>
+                {Array.from(grouped.entries()).map(([cat, metrics]) => {
+                  const config = CATEGORY_CONFIG[cat]
+                  const Icon = config.icon
+                  const cols = metrics.length <= 2 ? 'grid-cols-1 sm:grid-cols-2' :
+                    metrics.length === 3 ? 'grid-cols-1 sm:grid-cols-3' :
+                    'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+                  return (
+                    <div key={cat}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon className={`h-4 w-4 ${config.iconColor}`} />
+                        <span className={`text-sm font-semibold ${config.textColor}`}>{t(config.labelKey)}</span>
+                      </div>
+                      <div className={`grid ${cols} gap-2`}>
+                        {metrics.map(metric => {
+                          const data = getTarget(profile.id, metric.key)
+                          const isRate = metric.key.includes('rate')
+                          const isInverse = metric.key === 'late_count'
+                          return (
+                            <MetricCard
+                              key={metric.key}
+                              label={t(metric.labelKey)}
+                              target={data?.targetValue || 0}
+                              actual={data?.actualValue || 0}
+                              unit={isInverse ? t('kpiTarget.unitTimes') : isRate ? '%' : undefined}
+                              onEdit={() => openEdit(profile.id, cat, metric.key)}
+                              isInverse={isInverse}
+                            />
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
               </CardContent>
             </Card>
           )
@@ -486,6 +804,20 @@ export function KpiTargetsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Assignment Settings Dialog */}
+      <AssignmentDialog
+        open={assignOpen}
+        onOpenChange={setAssignOpen}
+        profiles={activeProfiles}
+        currentAssignments={assignments}
+        onSave={a => {
+          updateAssignments.mutate(a)
+          setAssignOpen(false)
+        }}
+        isPending={updateAssignments.isPending}
+        t={t}
+      />
     </div>
   )
 }

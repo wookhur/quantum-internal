@@ -1291,6 +1291,13 @@ const koTranslations = {
   'kpiTarget.lateCount': '지각 허용',
   'kpiTarget.unitTimes': '회',
   'kpiTarget.unitDays': '일',
+  'kpiTarget.assignSettings': '지표 설정',
+  'kpiTarget.assignSettingsDesc': '직원별로 적용할 KPI 카테고리와 지표를 선택하세요.',
+  'kpiTarget.detail': '상세',
+  'kpiTarget.detailMetrics': '세부 지표 선택',
+  'kpiTarget.applyToDept': '{dept}팀 전체 적용',
+  'kpiTarget.noMetricsAssigned': '지표 미설정',
+  'kpiTarget.noCategorySelected': '위 테이블에서 카테고리를 먼저 선택하세요.',
 
   // ── Notifications ──
   'notif.title': '알림',
@@ -2808,6 +2815,13 @@ const enTranslations: Record<string, string> = {
   'kpiTarget.lateCount': 'Late Allowance',
   'kpiTarget.unitTimes': 'x',
   'kpiTarget.unitDays': 'd',
+  'kpiTarget.assignSettings': 'Metric Settings',
+  'kpiTarget.assignSettingsDesc': 'Select which KPI categories and metrics apply to each employee.',
+  'kpiTarget.detail': 'Detail',
+  'kpiTarget.detailMetrics': 'Select metrics',
+  'kpiTarget.applyToDept': 'Apply to {dept} team',
+  'kpiTarget.noMetricsAssigned': 'No metrics assigned',
+  'kpiTarget.noCategorySelected': 'Select a category first in the table above.',
 
   // ── Notifications ──
   'notif.title': 'Notifications',
