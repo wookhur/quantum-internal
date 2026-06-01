@@ -33,6 +33,7 @@ import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
 import { CashflowPage } from '@/pages/planning/CashflowPage'
+import { AttendancePage } from '@/pages/planning/AttendancePage'
 import { ServiceDashboardPage } from '@/pages/service/ServiceDashboardPage'
 import { Student360Page } from '@/pages/service/Student360Page'
 import { ConsultantKpiPage } from '@/pages/service/ConsultantKpiPage'
@@ -100,6 +101,7 @@ export default function App() {
                 <Route path="/planning/access" element={<AccessManagementPage />} />
                 <Route path="/planning/employees" element={<EmployeePerformancePage />} />
                 <Route path="/planning/cashflow" element={<CashflowPage />} />
+                <Route path="/planning/attendance" element={<AttendancePage />} />
 
                 <Route path="/game" element={<GamePage />} />
               </Route>
