@@ -291,6 +291,7 @@ const koTranslations = {
   'dashboard.noTodos': '진행 중인 할일이 없습니다',
   'dashboard.due': '마감',
   'dashboard.days': '일',
+  'dashboard.noAccess': '권한이 없습니다',
 
   // ── Channel labels (dashboard) ──
   'channel.instagram': '인스타그램',
@@ -1745,6 +1746,7 @@ const enTranslations: Record<string, string> = {
   'dashboard.noTodos': 'No tasks in progress',
   'dashboard.due': 'Due',
   'dashboard.days': 'd',
+  'dashboard.noAccess': 'No permission',
 
   // ── Channel labels ──
   'channel.instagram': 'Instagram',

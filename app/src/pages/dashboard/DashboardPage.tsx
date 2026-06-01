@@ -4,12 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import {
   Users, FileSignature,
-  ArrowUpRight, AlertCircle, Calendar, CheckCircle2, Loader2,
+  ArrowUpRight, AlertCircle, Calendar, CheckCircle2, Loader2, Lock,
 } from 'lucide-react'
 import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { todayKST, currentMonthStrKST, formatTimeKST } from '@/lib/date'
+import { useAuth } from '@/contexts/AuthContext'
+import { useFeatureAccess, getEffectiveModules } from '@/hooks/useProfiles'
 import type { PipelineStage } from '@/types'
 
 // --- Real data hooks ---
@@ -218,8 +220,49 @@ function formatKRW(n: number) {
   return `₩${n.toLocaleString()}`
 }
 
+function NoAccessCard({ title, icon: Icon }: { title: string; icon: typeof Users }) {
+  const t = useT()
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+        <Icon className="size-4 text-muted-foreground/50" />
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Lock className="size-3.5" />
+          <span className="text-sm">{t('dashboard.noAccess')}</span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function NoAccessSection({ title }: { title: string }) {
+  const t = useT()
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
+          <Lock className="size-5" />
+          <span className="text-sm">{t('dashboard.noAccess')}</span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function DashboardPage() {
   const t = useT()
+  const { user } = useAuth()
+  const { data: featureAccess = [] } = useFeatureAccess()
+  const enabledModules = user ? getEffectiveModules(user, featureAccess) : []
+  const hasSales = enabledModules.includes('sales')
+  const hasFinance = enabledModules.includes('finance')
+
   const { data: todayMeetings = [], isLoading: meetingsLoading } = useTodayMeetings()
   const { data: todos = [], isLoading: todosLoading } = useDashboardTodos()
   const { data: pipelineLeads = [], isLoading: pipelineLoading } = usePipelineStats()
@@ -275,196 +318,226 @@ export function DashboardPage() {
       {/* KPI Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 신규 리드 */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.newLeadsThisMonth')}</CardTitle>
-            <Users className="size-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {leadsLoading ? (
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{totalLeads}명</div>
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  <ArrowUpRight className="size-3 text-success" />
-                  {t('dashboard.thisMonthBasis')}
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {hasSales ? (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.newLeadsThisMonth')}</CardTitle>
+              <Users className="size-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              {leadsLoading ? (
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{totalLeads}명</div>
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                    <ArrowUpRight className="size-3 text-success" />
+                    {t('dashboard.thisMonthBasis')}
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <NoAccessCard title={t('dashboard.newLeadsThisMonth')} icon={Users} />
+        )}
 
         {/* 상담 & 계약 */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.consultToContract')}</CardTitle>
-            <FileSignature className="size-4 text-accent" />
-          </CardHeader>
-          <CardContent>
-            {pipelineLoading ? (
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">
-                  {totalConsultations}건 → {totalContracted}건
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t('dashboard.conversionRate')} <span className="font-semibold text-foreground">{conversionRate}%</span>
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {hasSales ? (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.consultToContract')}</CardTitle>
+              <FileSignature className="size-4 text-accent" />
+            </CardHeader>
+            <CardContent>
+              {pipelineLoading ? (
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">
+                    {totalConsultations}건 → {totalContracted}건
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('dashboard.conversionRate')} <span className="font-semibold text-foreground">{conversionRate}%</span>
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <NoAccessCard title={t('dashboard.consultToContract')} icon={FileSignature} />
+        )}
 
         {/* 미수금 */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.outstandingTotal')}</CardTitle>
-            <AlertCircle className="size-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            {contractsLoading ? (
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold text-destructive">{formatKRW(outstanding)}</div>
-                <p className="text-xs text-muted-foreground mt-1">{t('dashboard.outstandingCount', { n: overdueCount })}</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {hasFinance ? (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.outstandingTotal')}</CardTitle>
+              <AlertCircle className="size-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              {contractsLoading ? (
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold text-destructive">{formatKRW(outstanding)}</div>
+                  <p className="text-xs text-muted-foreground mt-1">{t('dashboard.outstandingCount', { n: overdueCount })}</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <NoAccessCard title={t('dashboard.outstandingTotal')} icon={AlertCircle} />
+        )}
 
         {/* 오늘 미팅 수 */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.todayMeetings')}</CardTitle>
-            <Calendar className="size-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            {meetingsLoading ? (
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{todayMeetings.length}건</div>
-                <p className="text-xs text-muted-foreground mt-1">{todayKST()} {t('dashboard.basis')}</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {hasSales ? (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">{t('dashboard.todayMeetings')}</CardTitle>
+              <Calendar className="size-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              {meetingsLoading ? (
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{todayMeetings.length}건</div>
+                  <p className="text-xs text-muted-foreground mt-1">{todayKST()} {t('dashboard.basis')}</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <NoAccessCard title={t('dashboard.todayMeetings')} icon={Calendar} />
+        )}
       </div>
 
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* 유입 채널 분포 */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">{t('dashboard.channelDistribution')}</CardTitle>
-            <CardDescription>{t('dashboard.thisMonthLeads')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {leadsLoading ? (
-              <div className="flex items-center justify-center h-48">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : channelData.length === 0 ? (
-              <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
-                {t('dashboard.noLeadData')}
-              </div>
-            ) : (
-              <div className="flex items-center gap-8">
-                <ResponsiveContainer width="50%" height={200}>
-                  <PieChart>
-                    <Pie data={channelData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} dataKey="value" stroke="none">
-                      {channelData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-2.5 flex-1">
-                  {channelData.map((ch) => (
-                    <div key={ch.name} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ background: ch.color }} />
-                        <span>{ch.name}</span>
-                      </div>
-                      <span className="font-medium">{ch.value}명</span>
-                    </div>
-                  ))}
+        {hasSales ? (
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-base">{t('dashboard.channelDistribution')}</CardTitle>
+              <CardDescription>{t('dashboard.thisMonthLeads')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {leadsLoading ? (
+                <div className="flex items-center justify-center h-48">
+                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              ) : channelData.length === 0 ? (
+                <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
+                  {t('dashboard.noLeadData')}
+                </div>
+              ) : (
+                <div className="flex items-center gap-8">
+                  <ResponsiveContainer width="50%" height={200}>
+                    <PieChart>
+                      <Pie data={channelData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} dataKey="value" stroke="none">
+                        {channelData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="space-y-2.5 flex-1">
+                    {channelData.map((ch) => (
+                      <div key={ch.name} className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: ch.color }} />
+                          <span>{ch.name}</span>
+                        </div>
+                        <span className="font-medium">{ch.value}명</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="lg:col-span-2">
+            <NoAccessSection title={t('dashboard.channelDistribution')} />
+          </div>
+        )}
 
         {/* 파이프라인 요약 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('dashboard.pipelineStatus')}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {pipelineLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              pipelineData.map((stage) => (
-                <div key={stage.key} className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full shrink-0" style={{ background: stage.color }} />
-                  <span className="text-sm flex-1">{stage.name}</span>
-                  <span className="text-sm font-semibold">{stage.count}</span>
+        {hasSales ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t('dashboard.pipelineStatus')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {pipelineLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+              ) : (
+                pipelineData.map((stage) => (
+                  <div key={stage.key} className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ background: stage.color }} />
+                    <span className="text-sm flex-1">{stage.name}</span>
+                    <span className="text-sm font-semibold">{stage.count}</span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <NoAccessSection title={t('dashboard.pipelineStatus')} />
+        )}
       </div>
 
       {/* Meetings + Todos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* 오늘 미팅 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Calendar className="size-4" /> {t('dashboard.todayMeetings')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {meetingsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : todayMeetings.length === 0 ? (
-              <div className="text-sm text-muted-foreground text-center py-8">
-                {t('dashboard.noMeetingsToday')}
-              </div>
-            ) : (
-              todayMeetings.map((m: Record<string, unknown>, i: number) => (
-                <div key={i} className="flex items-start gap-3">
-                  <span className="text-sm font-mono text-muted-foreground shrink-0 mt-0.5">
-                    {formatTimeKST(m.meeting_date as string)}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate">
-                      {String(m.parent_name || '')}{m.student_name ? ` / ${String(m.student_name)}` : ''}
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {(m.meeting_number as number) || 1}{t('dashboard.meeting')}
-                      </Badge>
-                      {m.source_channel ? (
+        {hasSales ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calendar className="size-4" /> {t('dashboard.todayMeetings')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {meetingsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : todayMeetings.length === 0 ? (
+                <div className="text-sm text-muted-foreground text-center py-8">
+                  {t('dashboard.noMeetingsToday')}
+                </div>
+              ) : (
+                todayMeetings.map((m: Record<string, unknown>, i: number) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <span className="text-sm font-mono text-muted-foreground shrink-0 mt-0.5">
+                      {formatTimeKST(m.meeting_date as string)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {String(m.parent_name || '')}{m.student_name ? ` / ${String(m.student_name)}` : ''}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                          {String(m.source_channel)}
+                          {(m.meeting_number as number) || 1}{t('dashboard.meeting')}
                         </Badge>
-                      ) : null}
+                        {m.source_channel ? (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                            {String(m.source_channel)}
+                          </Badge>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <NoAccessSection title={t('dashboard.todayMeetings')} />
+        )}
 
         {/* 할일 */}
         <Card>
