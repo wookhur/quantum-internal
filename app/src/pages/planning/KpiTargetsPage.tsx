@@ -51,6 +51,7 @@ import {
   useUpsertKpiTarget,
   MARKETING_METRICS,
   SALES_METRICS,
+  SERVICE_METRICS,
   ATTENDANCE_METRICS,
   type KpiTarget,
 } from '@/hooks/useKpiTargets'
@@ -69,7 +70,7 @@ import { kpiDotColor } from '@/lib/kpi'
 // Constants
 // ---------------------------------------------------------------------------
 
-const ALL_CATEGORIES = ['marketing', 'sales', 'attendance'] as const
+const ALL_CATEGORIES = ['marketing', 'sales', 'service', 'attendance'] as const
 type Category = (typeof ALL_CATEGORIES)[number]
 
 const CATEGORY_CONFIG: Record<Category, {
@@ -95,6 +96,14 @@ const CATEGORY_CONFIG: Record<Category, {
     textColor: 'text-blue-700',
     bgColor: 'bg-blue-100',
     metrics: SALES_METRICS,
+  },
+  service: {
+    labelKey: 'kpiTarget.serviceGoals',
+    icon: Target,
+    iconColor: 'text-orange-600',
+    textColor: 'text-orange-700',
+    bgColor: 'bg-orange-100',
+    metrics: SERVICE_METRICS,
   },
   attendance: {
     labelKey: 'kpiTarget.attendanceGoals',
@@ -820,9 +829,7 @@ export function KpiTargetsPage() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Month picker + profile filter (hidden on service tab) */}
-          {tab !== 'service' && (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
               <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(m => shiftMonth(m, -1))}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -850,8 +857,7 @@ export function KpiTargetsPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Tab Contents */}
@@ -892,7 +898,20 @@ export function KpiTargetsPage() {
         </TabsContent>
 
         <TabsContent value="service">
-          <ServiceKpiTab t={t} />
+          <div className="space-y-6">
+            {!isLoading && (
+              <TargetKpiContent
+                category="service"
+                targetMap={targetMap}
+                assignments={assignments}
+                activeProfiles={activeProfiles}
+                selectedProfile={selectedProfile}
+                t={t}
+                openEdit={openEdit}
+              />
+            )}
+            <ServiceKpiTab t={t} />
+          </div>
         </TabsContent>
 
         <TabsContent value="attendance">
@@ -933,7 +952,7 @@ export function KpiTargetsPage() {
               <Label className="text-xs">{t('kpiTarget.metricLabel')}</Label>
               <div className="text-sm font-medium">
                 {t(
-                  [...MARKETING_METRICS, ...SALES_METRICS, ...ATTENDANCE_METRICS].find(
+                  [...MARKETING_METRICS, ...SALES_METRICS, ...SERVICE_METRICS, ...ATTENDANCE_METRICS].find(
                     m => m.key === editForm.metricKey,
                   )?.labelKey || editForm.metricKey,
                 )}
