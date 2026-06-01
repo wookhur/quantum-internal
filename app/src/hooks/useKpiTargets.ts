@@ -5,7 +5,7 @@ export interface KpiTarget {
   id: string
   profileId: string
   month: string
-  category: 'marketing' | 'sales' | 'service' | 'attendance'
+  category: 'marketing' | 'sales' | 'attendance'
   metricKey: string
   targetValue: number
   actualValue: number
@@ -23,14 +23,6 @@ export const SALES_METRICS = [
   { key: 'first_to_second_consult', labelKey: 'kpiTarget.firstToSecondConsult' },
   { key: 'consult_note_rate', labelKey: 'kpiTarget.consultNoteRate' },
   { key: 'consult_note_24h_rate', labelKey: 'kpiTarget.consultNote24hRate' },
-] as const
-
-export const SERVICE_METRICS = [
-  { key: 'svc_meetings', labelKey: 'kpiTarget.svcMeetings' },
-  { key: 'svc_prep', labelKey: 'kpiTarget.svcPrep' },
-  { key: 'svc_summary', labelKey: 'kpiTarget.svcSummary' },
-  { key: 'svc_reports', labelKey: 'kpiTarget.svcReports' },
-  { key: 'svc_followup', labelKey: 'kpiTarget.svcFollowup' },
 ] as const
 
 export const ATTENDANCE_METRICS = [

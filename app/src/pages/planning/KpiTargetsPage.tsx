@@ -51,7 +51,6 @@ import {
   useUpsertKpiTarget,
   MARKETING_METRICS,
   SALES_METRICS,
-  SERVICE_METRICS,
   ATTENDANCE_METRICS,
   type KpiTarget,
 } from '@/hooks/useKpiTargets'
@@ -70,7 +69,7 @@ import { kpiDotColor } from '@/lib/kpi'
 // Constants
 // ---------------------------------------------------------------------------
 
-const ALL_CATEGORIES = ['marketing', 'sales', 'service', 'attendance'] as const
+const ALL_CATEGORIES = ['marketing', 'sales', 'attendance'] as const
 type Category = (typeof ALL_CATEGORIES)[number]
 
 const CATEGORY_CONFIG: Record<Category, {
@@ -96,14 +95,6 @@ const CATEGORY_CONFIG: Record<Category, {
     textColor: 'text-blue-700',
     bgColor: 'bg-blue-100',
     metrics: SALES_METRICS,
-  },
-  service: {
-    labelKey: 'kpiTarget.serviceGoals',
-    icon: Target,
-    iconColor: 'text-orange-600',
-    textColor: 'text-orange-700',
-    bgColor: 'bg-orange-100',
-    metrics: SERVICE_METRICS,
   },
   attendance: {
     labelKey: 'kpiTarget.attendanceGoals',
@@ -1022,20 +1013,7 @@ export function KpiTargetsPage() {
         </TabsContent>
 
         <TabsContent value="service">
-          <div className="space-y-6">
-            {!isLoading && (
-              <TargetKpiContent
-                category="service"
-                targetMap={targetMap}
-                assignments={assignments}
-                activeProfiles={activeProfiles}
-                selectedProfile={selectedProfile}
-                t={t}
-                openEdit={openEdit}
-              />
-            )}
-            <ServiceKpiTab t={t} />
-          </div>
+          <ServiceKpiTab t={t} />
         </TabsContent>
 
         <TabsContent value="attendance">
@@ -1076,7 +1054,7 @@ export function KpiTargetsPage() {
               <Label className="text-xs">{t('kpiTarget.metricLabel')}</Label>
               <div className="text-sm font-medium">
                 {t(
-                  [...MARKETING_METRICS, ...SALES_METRICS, ...SERVICE_METRICS, ...ATTENDANCE_METRICS].find(
+                  [...MARKETING_METRICS, ...SALES_METRICS, ...ATTENDANCE_METRICS].find(
                     m => m.key === editForm.metricKey,
                   )?.labelKey || editForm.metricKey,
                 )}
