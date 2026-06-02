@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Task, TaskComment, TaskAttachment, TaskStatus, TaskPriority, TodoStatus, TodoPriority } from '@/types'
+import { createNotificationsForUsers } from './useUserNotifications'
 
 // ─── Task ↔ Todo Sync ──────────────────────────────────────────────────
 
@@ -322,6 +323,17 @@ export function useCreateTask() {
       const task = mapTask(data as Record<string, unknown>)
       // Sync: create linked todo for assignee
       syncTaskToTodo(task).catch(() => {})
+      // Notify assignee
+      if (task.assigneeId && task.assigneeId !== params.requesterId) {
+        const requesterName = task.requester?.name || '누군가'
+        createNotificationsForUsers([task.assigneeId], {
+          type: 'task_assigned',
+          title: '새 업무 배정',
+          message: `${requesterName}님이 "${task.title}" 업무를 배정했습니다.`,
+          link: `/tasks?task=${task.id}`,
+          metadata: { taskId: task.id },
+        }).catch(() => {})
+      }
       return task
     },
     onSuccess: () => {
@@ -376,7 +388,41 @@ export function useUpdateTask() {
       if (updates.status) syncTaskStatusToTodo(id, updates.status).catch(() => {})
       if (updates.assigneeId !== undefined) syncTaskAssigneeToTodo(id, updates.assigneeId).catch(() => {})
 
-      return mapTask(data as Record<string, unknown>)
+      const task = mapTask(data as Record<string, unknown>)
+
+      // Notify new assignee when task is reassigned
+      if (updates.assigneeId && updates.assigneeId !== task.requesterId) {
+        const requesterName = task.requester?.name || '누군가'
+        createNotificationsForUsers([updates.assigneeId], {
+          type: 'task_assigned',
+          title: '업무 배정',
+          message: `${requesterName}님이 "${task.title}" 업무를 배정했습니다.`,
+          link: `/tasks?task=${task.id}`,
+          metadata: { taskId: task.id },
+        }).catch(() => {})
+      }
+
+      // Notify requester when task status changes (completed/in_progress)
+      if (updates.status && task.requesterId && task.assigneeId && task.requesterId !== task.assigneeId) {
+        const statusLabels: Record<string, string> = {
+          in_progress: '진행 중',
+          completed: '완료',
+          cancelled: '취소',
+        }
+        const label = statusLabels[updates.status]
+        if (label) {
+          const assigneeName = task.assignee?.name || '담당자'
+          createNotificationsForUsers([task.requesterId], {
+            type: 'task_status_changed',
+            title: '업무 상태 변경',
+            message: `${assigneeName}님이 "${task.title}" 업무를 ${label}(으)로 변경했습니다.`,
+            link: `/tasks?task=${task.id}`,
+            metadata: { taskId: task.id, status: updates.status },
+          }).catch(() => {})
+        }
+      }
+
+      return task
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['tasks'] })
