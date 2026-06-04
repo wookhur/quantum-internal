@@ -29,7 +29,9 @@ import {
   FileText,
   Lock,
   ShieldCheck,
+  Download,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { useT } from '@/i18n/LanguageContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAllEmployeeInfo, useCreateFormToken, useUpsertEmployeeInfo, type EmployeeInfo } from '@/hooks/useEmployeeInfo'
@@ -122,6 +124,36 @@ export function PersonalInfoPage() {
 
   const filledCount = activeProfiles.filter(p => infoMap.has(p.id)).length
 
+  const handleExportExcel = () => {
+    const rows = activeProfiles.map(p => {
+      const info = infoMap.get(p.id)
+      return {
+        [t('personalInfo.name')]: p.name,
+        [t('common.email')]: p.email,
+        [t('personalInfo.phone')]: info?.phone || '',
+        [t('personalInfo.birthDate')]: info?.birthDate || '',
+        [t('personalInfo.address')]: info?.address || '',
+        [t('personalInfo.startDate')]: info?.startDate || '',
+        [t('personalInfo.bankName')]: info?.bankName || '',
+        [t('personalInfo.bankAccount')]: info?.bankAccount || '',
+        [t('personalInfo.bankHolder')]: info?.bankHolder || '',
+        [t('personalInfo.ecName')]: info?.emergencyContactName || '',
+        [t('personalInfo.ecPhone')]: info?.emergencyContactPhone || '',
+        [t('personalInfo.ecRelation')]: info?.emergencyContactRelation || '',
+        [t('personalInfo.notes')]: info?.notes || '',
+      }
+    })
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, t('personalInfo.title'))
+    // Auto-width columns
+    const colWidths = Object.keys(rows[0] || {}).map(key => ({
+      wch: Math.max(key.length + 2, ...rows.map(r => String((r as Record<string, string>)[key] || '').length + 2)),
+    }))
+    ws['!cols'] = colWidths
+    XLSX.writeFile(wb, `개인정보_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   const handlePinSubmit = () => {
     if (pin === PAGE_PIN) {
       setAuthenticated(true)
@@ -180,6 +212,10 @@ export function PersonalInfoPage() {
           <h1 className="text-2xl font-bold">{t('personalInfo.title')}</h1>
           <p className="text-muted-foreground text-sm">{t('personalInfo.subtitle')}</p>
         </div>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleExportExcel}>
+          <Download className="h-3.5 w-3.5" />
+          {t('personalInfo.exportExcel')}
+        </Button>
       </div>
 
       {/* Summary */}
