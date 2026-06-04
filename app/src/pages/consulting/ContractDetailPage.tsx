@@ -701,6 +701,16 @@ export function ContractDetailPage() {
       status: 'pending',
       paymentMethod: '',
       notes: '',
+    }, {
+      onSuccess: async () => {
+        // Delete associated receipts when payment is reverted
+        const { error } = await supabase
+          .from('invoices_receipts')
+          .delete()
+          .eq('installment_id', inst.id)
+          .eq('type', 'receipt')
+        if (error) console.error('Failed to delete receipt on revert:', error.message)
+      },
     })
   }, [updateInstallment, t])
 

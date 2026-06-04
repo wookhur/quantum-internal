@@ -1192,6 +1192,7 @@ const koTranslations = {
   'person.timeline': '통합 타임라인',
   'person.noResults': '검색 결과가 없습니다.',
   'person.enterSearch': '검색어를 입력해주세요.',
+  'person.collected': '수금',
 
   // ── Game ──
   'game.title': 'T-Rex Runner',
@@ -2752,6 +2753,7 @@ const enTranslations: Record<string, string> = {
   'person.timeline': 'Unified Timeline',
   'person.noResults': 'No results found.',
   'person.enterSearch': 'Please enter a search term.',
+  'person.collected': 'collected',
 
   // ── Game ──
   'game.title': 'T-Rex Runner',

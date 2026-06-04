@@ -89,6 +89,18 @@ function usePersonData(name: string) {
         serviceMeetings = (smData || []) as R[]
       }
 
+      // Fetch installments for each contract
+      const contractIds = (contractsRes.data || []).map((c: R) => c.id as string)
+      let installments: R[] = []
+      if (contractIds.length > 0) {
+        const { data: instData } = await supabase
+          .from('payment_installments')
+          .select('*')
+          .in('contract_id', contractIds)
+          .order('installment_order', { ascending: true })
+        installments = (instData || []) as R[]
+      }
+
       return {
         leads: (leadsRes.data || []) as WithProfiles[],
         contracts: (contractsRes.data || []) as R[],
@@ -96,6 +108,7 @@ function usePersonData(name: string) {
         salesMeetings: (meetingsRes.data || []) as WithProfiles[],
         leadActivities: activities,
         serviceMeetings,
+        installments,
       }
     },
   })
@@ -144,8 +157,16 @@ export function PersonProfilePage() {
 
   if (!data) return null
 
-  const { leads, contracts, students, salesMeetings, leadActivities, serviceMeetings } = data
+  const { leads, contracts, students, salesMeetings, leadActivities, serviceMeetings, installments } = data
   const hasAnyData = leads.length > 0 || contracts.length > 0 || students.length > 0
+
+  // Group installments by contract
+  const installmentsByContract = new Map<string, R[]>()
+  for (const inst of installments) {
+    const cid = inst.contract_id as string
+    if (!installmentsByContract.has(cid)) installmentsByContract.set(cid, [])
+    installmentsByContract.get(cid)!.push(inst)
+  }
 
   // Build a unified timeline
   type TimelineItem = {
@@ -263,7 +284,7 @@ export function PersonProfilePage() {
       )}
 
       {/* ── Person Info Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         {/* Lead Info */}
         {hasSales && leads.length > 0 && (
           <Card>
@@ -325,7 +346,7 @@ export function PersonProfilePage() {
                 {t('person.contractInfo')} ({contracts.length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               {contracts.map(c => {
                 const statusLabel: Record<string, string> = {
                   active: '진행 중', expiring_soon: '만료 임박', expired: '만료', cancelled: '취소',
@@ -334,8 +355,12 @@ export function PersonProfilePage() {
                   active: 'bg-emerald-100 text-emerald-700', expiring_soon: 'bg-amber-100 text-amber-700',
                   expired: 'bg-gray-100 text-gray-600', cancelled: 'bg-red-100 text-red-600',
                 }
+                const cInsts = installmentsByContract.get(c.id as string) || []
+                const totalPaid = cInsts.reduce((s, i) => s + ((i.paid_amount as number) || 0), 0)
+                const totalAmount = (c.total_amount as number) || 0
+                const currency = (c.currency as 'KRW' | 'USD') || 'KRW'
                 return (
-                  <div key={c.id as string} className="text-sm border-b last:border-0 pb-2 last:pb-0">
+                  <div key={c.id as string} className="text-sm border-b last:border-0 pb-3 last:pb-0">
                     <div className="flex items-center gap-2">
                       <Link
                         to={`/consulting/clients/${c.id as string}`}
@@ -352,13 +377,52 @@ export function PersonProfilePage() {
                       <span><Calendar className="size-3 inline" /> {(c.contract_date as string)?.slice(0, 10)} ~ {(c.expiry_date as string)?.slice(0, 10)}</span>
                       <span className="font-mono font-medium">
                         <DollarSign className="size-3 inline" />
-                        {formatCurrency((c.total_amount as number) || 0, (c.currency as 'KRW' | 'USD') || 'KRW')}
+                        {formatCurrency(totalAmount, currency)}
                       </span>
+                      {totalAmount > 0 && (
+                        <span className="text-[10px]">
+                          ({Math.round((totalPaid / totalAmount) * 100)}% {t('person.collected')})
+                        </span>
+                      )}
                     </div>
                     {c.phone && (
                       <div className="text-xs text-muted-foreground mt-0.5">
                         <Phone className="size-3 inline" /> {formatPhone(c.phone as string)}
                         {c.address && <span className="ml-3"><MapPin className="size-3 inline" /> {c.address as string}</span>}
+                      </div>
+                    )}
+                    {/* Installment breakdown */}
+                    {cInsts.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {cInsts.map(inst => {
+                          const amount = (inst.amount as number) || 0
+                          const paid = (inst.paid_amount as number) || 0
+                          const status = inst.status as string
+                          const statusBadge: Record<string, string> = {
+                            paid: 'bg-emerald-100 text-emerald-700',
+                            partial: 'bg-amber-100 text-amber-700',
+                            pending: 'bg-gray-100 text-gray-600',
+                            overdue: 'bg-red-100 text-red-600',
+                          }
+                          const statusText: Record<string, string> = {
+                            paid: '수금완료', partial: '부분수금', pending: '미수금', overdue: '연체',
+                          }
+                          return (
+                            <div key={inst.id as string} className="flex items-center gap-2 text-xs bg-muted/30 rounded px-2 py-1">
+                              <span className="font-medium w-20 truncate">{inst.label as string}</span>
+                              <span className="font-mono">{formatCurrency(amount, currency)}</span>
+                              {paid > 0 && paid < amount && (
+                                <span className="font-mono text-muted-foreground">({formatCurrency(paid, currency)} 수금)</span>
+                              )}
+                              <Badge variant="outline" className={`text-[9px] h-3.5 ml-auto ${statusBadge[status] || 'bg-gray-100'}`}>
+                                {statusText[status] || status}
+                              </Badge>
+                              {inst.due_date && (
+                                <span className="text-muted-foreground text-[10px]">{(inst.due_date as string).slice(5)}</span>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -370,7 +434,7 @@ export function PersonProfilePage() {
 
         {/* Service Student Info */}
         {hasService && students.length > 0 && (
-          <Card className={contracts.length === 0 && leads.length === 0 ? 'md:col-span-2' : ''}>
+          <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <GraduationCap className="size-4 text-blue-500" />
@@ -435,11 +499,11 @@ export function PersonProfilePage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1 max-h-[600px] overflow-y-auto">
+            <div className="space-y-1">
               {timeline.map((item) => (
                 <div
                   key={item.id}
-                  className={`flex gap-3 text-xs border-l-2 pl-3 py-1.5 ${phaseColors[item.phase]}`}
+                  className={`flex gap-3 text-xs border-l-2 pl-3 py-2 ${phaseColors[item.phase]}`}
                 >
                   <div className="text-muted-foreground shrink-0 w-[68px] font-mono">
                     {item.date?.slice(0, 10) || '—'}
@@ -458,7 +522,7 @@ export function PersonProfilePage() {
                       <span className="font-medium">{item.title}</span>
                     )}
                     {item.desc && (
-                      <p className="text-muted-foreground mt-0.5 line-clamp-2">{item.desc}</p>
+                      <p className="text-muted-foreground mt-0.5 whitespace-pre-wrap">{item.desc}</p>
                     )}
                   </div>
                   {item.person && (
