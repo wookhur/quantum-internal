@@ -27,10 +27,14 @@ import {
   Loader2,
   Search,
   FileText,
+  Lock,
+  ShieldCheck,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAllEmployeeInfo, useCreateFormToken, useUpsertEmployeeInfo, type EmployeeInfo } from '@/hooks/useEmployeeInfo'
+
+const PAGE_PIN = '2256'
 
 export function PersonalInfoPage() {
   const t = useT()
@@ -39,6 +43,9 @@ export function PersonalInfoPage() {
   const createToken = useCreateFormToken()
   const upsertInfo = useUpsertEmployeeInfo()
 
+  const [authenticated, setAuthenticated] = useState(false)
+  const [pin, setPin] = useState('')
+  const [pinError, setPinError] = useState(false)
   const [search, setSearch] = useState('')
   const [linkDialog, setLinkDialog] = useState<{ profileId: string; name: string } | null>(null)
   const [generatedLink, setGeneratedLink] = useState<string | null>(null)
@@ -114,6 +121,56 @@ export function PersonalInfoPage() {
   }
 
   const filledCount = activeProfiles.filter(p => infoMap.has(p.id)).length
+
+  const handlePinSubmit = () => {
+    if (pin === PAGE_PIN) {
+      setAuthenticated(true)
+      setPinError(false)
+    } else {
+      setPinError(true)
+      setPin('')
+    }
+  }
+
+  if (!authenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="w-full max-w-sm">
+          <CardContent className="pt-8 pb-6 space-y-5">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center">
+                <Lock className="h-7 w-7 text-blue-600" />
+              </div>
+              <div className="text-center">
+                <h2 className="text-lg font-bold">{t('personalInfo.pinTitle')}</h2>
+                <p className="text-sm text-muted-foreground mt-1">{t('personalInfo.pinDesc')}</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="••••"
+                className="h-12 text-center text-2xl tracking-[0.5em] font-mono"
+                value={pin}
+                onChange={e => { setPin(e.target.value.replace(/\D/g, '')); setPinError(false) }}
+                onKeyDown={e => e.key === 'Enter' && handlePinSubmit()}
+                autoFocus
+              />
+              {pinError && (
+                <p className="text-sm text-red-500 text-center">{t('personalInfo.pinError')}</p>
+              )}
+              <Button className="w-full h-10" onClick={handlePinSubmit} disabled={pin.length === 0}>
+                <ShieldCheck className="h-4 w-4 mr-2" />
+                {t('personalInfo.pinConfirm')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">

@@ -1543,6 +1543,10 @@ const koTranslations = {
   'personalInfo.ecPhone': '연락처',
   'personalInfo.ecRelation': '관계',
   'personalInfo.notes': '비고',
+  'personalInfo.pinTitle': '2차 인증 필요',
+  'personalInfo.pinDesc': '개인정보 보호를 위해 비밀번호를 입력해주세요.',
+  'personalInfo.pinError': '비밀번호가 올바르지 않습니다.',
+  'personalInfo.pinConfirm': '인증',
 } as const
 
 const enTranslations: Record<string, string> = {
@@ -3086,6 +3090,10 @@ const enTranslations: Record<string, string> = {
   'personalInfo.ecPhone': 'Phone',
   'personalInfo.ecRelation': 'Relation',
   'personalInfo.notes': 'Notes',
+  'personalInfo.pinTitle': 'Authentication Required',
+  'personalInfo.pinDesc': 'Enter the PIN to access personal information.',
+  'personalInfo.pinError': 'Incorrect PIN.',
+  'personalInfo.pinConfirm': 'Verify',
 }
 
 export type TranslationKeys = keyof typeof koTranslations
