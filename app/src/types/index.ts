@@ -528,7 +528,7 @@ export function formatCurrency(amount: number, currency: 'KRW' | 'USD' = 'KRW'):
   if (currency === 'USD') {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
   }
-  return new Intl.NumberFormat('ko-KR').format(amount) + '원'
+  return new Intl.NumberFormat('ko-KR').format(amount) + ' 원'
 }
 
 export function formatPhone(phone: string): string {

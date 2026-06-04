@@ -116,39 +116,39 @@ export function PaymentsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <DollarSign className="size-5 text-primary" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(totalAmount)}</div>
+            <DollarSign className="size-5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalAmount)}</div>
               <div className="text-xs text-muted-foreground">총 계약 금액</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <CheckCircle2 className="size-5 text-emerald-500" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(totalPaid)}</div>
+            <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalPaid)}</div>
               <div className="text-xs text-muted-foreground">수금 완료</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <AlertCircle className="size-5 text-destructive" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(totalOverdue)}</div>
+            <AlertCircle className="size-5 text-destructive shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalOverdue)}</div>
               <div className="text-xs text-muted-foreground">연체 미수금</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <TrendingUp className="size-5 text-primary" />
-            <div>
-              <div className="text-lg font-bold">{avgProgress}%</div>
+            <TrendingUp className="size-5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{avgProgress}%</div>
               <div className="text-xs text-muted-foreground">평균 수금률</div>
             </div>
           </CardContent>

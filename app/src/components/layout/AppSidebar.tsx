@@ -114,7 +114,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     items: [
       { labelKey: 'nav.overview', to: '/planning/overview', icon: Briefcase },
       { labelKey: 'nav.revenueProjection', to: '/planning/projection', icon: LineChart },
-      { labelKey: 'nav.employeePerformance', to: '/planning/employees', icon: Users },
       { labelKey: 'nav.cashflow', to: '/planning/cashflow', icon: Wallet },
     ],
   },

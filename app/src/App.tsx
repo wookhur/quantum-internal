@@ -31,7 +31,7 @@ import { SalesFunnelPage } from '@/pages/sales/SalesFunnelPage'
 import { PlanningOverviewPage } from '@/pages/planning/PlanningOverviewPage'
 import { RevenueProjectionPage } from '@/pages/planning/RevenueProjectionPage'
 import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
-import { EmployeePerformancePage } from '@/pages/planning/EmployeePerformancePage'
+// EmployeePerformancePage merged into KpiTargetsPage
 import { KpiTargetsPage } from '@/pages/planning/KpiTargetsPage'
 import { CashflowPage } from '@/pages/planning/CashflowPage'
 import { AttendancePage } from '@/pages/planning/AttendancePage'
@@ -105,7 +105,7 @@ export default function App() {
 
                 <Route path="/planning/overview" element={<PlanningOverviewPage />} />
                 <Route path="/planning/projection" element={<RevenueProjectionPage />} />
-                <Route path="/planning/employees" element={<EmployeePerformancePage />} />
+                <Route path="/planning/employees" element={<Navigate to="/hr/kpi-targets" replace />} />
                 <Route path="/planning/cashflow" element={<CashflowPage />} />
 
                 <Route path="/hr/attendance" element={<AttendancePage />} />

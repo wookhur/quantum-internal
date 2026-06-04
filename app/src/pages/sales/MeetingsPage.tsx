@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   CalendarCheck, FileCheck, Plus, Upload, Loader2, Pencil,
   X, Phone, School, MapPin, Calendar, FileText, ArrowRight, User,
-  Paperclip, Trash2, ExternalLink,
+  Paperclip, Trash2, ExternalLink, LinkIcon,
 } from 'lucide-react'
 import { useMeetings, useCreateMeeting, useUpdateMeeting, useUpdateNoteDelivered, useUploadMeetingPdf, useDeleteMeetingPdf } from '@/hooks/useMeetings'
 import type { Meeting } from '@/types'
@@ -66,13 +67,19 @@ function MeetingDetail({ meeting, onEdit, onClose, onNoteToggle, onPdfUpload, on
       <CardContent className="py-4 space-y-4">
         {/* Header */}
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Badge variant="outline" className={`text-xs ${badge.className}`}>
               {badge.label}
             </Badge>
             <h3 className="font-semibold text-base">{meeting.parentName}</h3>
             {meeting.studentName && (
               <span className="text-sm text-muted-foreground">/ {meeting.studentName}</span>
+            )}
+            {meeting.leadId && (
+              <Link to={`/sales/leads?id=${meeting.leadId}`} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                <LinkIcon className="size-3" />
+                {t('meetings.linkedLead')}
+              </Link>
             )}
           </div>
           <div className="flex items-center gap-1">
@@ -512,7 +519,12 @@ export function MeetingsPage() {
                             {badge.label}
                           </Badge>
                         </td>
-                        <td className="py-2 px-1 font-medium overflow-hidden text-ellipsis whitespace-nowrap">{meeting.parentName}</td>
+                        <td className="py-2 px-1 font-medium overflow-hidden text-ellipsis whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1">
+                            {meeting.parentName}
+                            {meeting.leadId && <LinkIcon className="size-3 text-primary shrink-0" />}
+                          </span>
+                        </td>
                         <td className="py-2 px-1 overflow-hidden text-ellipsis whitespace-nowrap">{meeting.studentName || '-'}</td>
                         <td className="py-2 px-1 text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">{meeting.currentSchool || '-'}</td>
                         <td className="py-2 px-1 text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">{meeting.region || '-'}</td>
@@ -562,14 +574,14 @@ export function MeetingsPage() {
 
       {/* Create Meeting Dialog — Step-based: upload → extracting → form */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetCreateDialog() }}>
-        <DialogContent className={`${createStep === 'form' ? 'max-w-md' : 'max-w-sm'} !grid-rows-[auto_1fr] max-h-[85vh]`}>
+        <DialogContent className="max-w-md !grid-rows-[auto_1fr] max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>{t('meetings.addMeetingTitle')}</DialogTitle>
           </DialogHeader>
 
           {/* Step 1: Upload PDF */}
           {createStep === 'upload' && (
-            <div className="space-y-4">
+            <div key="step-upload" className="space-y-4">
               <div
                 className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary hover:bg-muted/50 transition-colors"
                 onClick={() => createPdfInputRef.current?.click()}
@@ -607,7 +619,7 @@ export function MeetingsPage() {
 
           {/* Step 2: Extracting */}
           {createStep === 'extracting' && (
-            <div className="flex flex-col items-center py-8 gap-4">
+            <div key="step-extracting" className="flex flex-col items-center py-8 gap-4">
               <Loader2 className="size-8 animate-spin text-primary" />
               <div className="text-center">
                 <p className="text-sm font-medium">{extractStatus}</p>
@@ -618,7 +630,7 @@ export function MeetingsPage() {
 
           {/* Step 3: Form */}
           {createStep === 'form' && (
-            <div className="space-y-4 overflow-y-auto pr-1 -mr-1">
+            <div key="step-form" className="space-y-4 overflow-y-auto pr-1 -mr-1">
               {/* Attached PDF indicator */}
               {pdfFile && (
                 <div className="flex items-center gap-2 p-2 rounded-md bg-primary/5 border border-primary/20 text-sm">

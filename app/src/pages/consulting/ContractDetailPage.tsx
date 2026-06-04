@@ -895,22 +895,22 @@ export function ContractDetailPage() {
       <Card>
         <CardContent className="py-5">
           {/* Base contract amounts */}
-          <div className="grid grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
             <div>
               <div className="text-xs text-muted-foreground mb-1">{t('contracts.totalContractAmount')}</div>
-              <div className="text-xl font-bold font-mono">
+              <div className="text-xl font-bold font-mono whitespace-nowrap">
                 {formatCurrency(contract.totalAmount, contract.currency)}
               </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground mb-1">{t('contracts.collectionComplete')}</div>
-              <div className="text-xl font-bold font-mono text-emerald-600">
+              <div className="text-xl font-bold font-mono text-emerald-600 whitespace-nowrap">
                 {formatCurrency(basePaid, contract.currency)}
               </div>
             </div>
             <div>
               <div className="text-xs text-muted-foreground mb-1">{t('contracts.outstanding')}</div>
-              <div className={`text-xl font-bold font-mono ${(contract.totalAmount - basePaid) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+              <div className={`text-xl font-bold font-mono whitespace-nowrap ${(contract.totalAmount - basePaid) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
                 {formatCurrency(Math.max(0, contract.totalAmount - basePaid), contract.currency)}
               </div>
             </div>

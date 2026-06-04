@@ -455,48 +455,48 @@ export function ContractsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <CheckCircle2 className="size-5 text-emerald-500" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(totalPaid)}</div>
+            <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalPaid)}</div>
               <div className="text-xs text-muted-foreground">{t('contracts.collectionComplete')}</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <Clock className="size-5 text-blue-500" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(totalOutstanding)}</div>
+            <Clock className="size-5 text-blue-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalOutstanding)}</div>
               <div className="text-xs text-muted-foreground">{t('contracts.outstanding')}</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className="size-5 text-red-500" />
-            <div>
-              <div className="text-lg font-bold">{overdueContracts}</div>
+            <AlertTriangle className="size-5 text-red-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{overdueContracts}</div>
               <div className="text-xs text-muted-foreground">{t('contracts.overdueContracts')}</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <TrendingUp className="size-5 text-primary" />
-            <div>
-              <div className="text-lg font-bold">{avgProgress}%</div>
+            <TrendingUp className="size-5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{avgProgress}%</div>
               <div className="text-xs text-muted-foreground">{t('contracts.avgCollectionRate')}</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <Ban className="size-5 text-gray-400" />
-            <div>
-              <div className="text-lg font-bold">{cancelledCount}</div>
+            <Ban className="size-5 text-gray-400 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{cancelledCount}</div>
               <div className="text-xs text-muted-foreground">{t('contracts.cancelledCount')}</div>
             </div>
           </CardContent>

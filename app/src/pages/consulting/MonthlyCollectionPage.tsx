@@ -430,33 +430,33 @@ export function MonthlyCollectionPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <Calendar className="size-5 text-primary" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(krw.expected)}</div>
-              {hasUsd && <div className="text-sm font-semibold text-primary/70">{formatCurrency(usd.expected, 'USD')}</div>}
+            <Calendar className="size-5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(krw.expected)}</div>
+              {hasUsd && <div className="text-sm font-semibold text-primary/70 whitespace-nowrap">{formatCurrency(usd.expected, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">{t('collection.expectedAmount')}</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <CheckCircle2 className="size-5 text-emerald-500" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(krw.collected)}</div>
-              {hasUsd && <div className="text-sm font-semibold text-emerald-500/70">{formatCurrency(usd.collected, 'USD')}</div>}
+            <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(krw.collected)}</div>
+              {hasUsd && <div className="text-sm font-semibold text-emerald-500/70 whitespace-nowrap">{formatCurrency(usd.collected, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">{t('collection.collected')}</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className="size-5 text-red-500" />
-            <div>
-              <div className="text-lg font-bold text-red-600">{formatCurrency(krw.overdue)}</div>
-              {hasUsd && usd.overdue > 0 && <div className="text-sm font-semibold text-red-400">{formatCurrency(usd.overdue, 'USD')}</div>}
+            <AlertTriangle className="size-5 text-red-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold text-red-600 whitespace-nowrap">{formatCurrency(krw.overdue)}</div>
+              {hasUsd && usd.overdue > 0 && <div className="text-sm font-semibold text-red-400 whitespace-nowrap">{formatCurrency(usd.overdue, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">
                 {t('collection.overdue')}
                 {overdueCount > 0 && <span className="ml-1 text-red-500 font-medium">({overdueCount}{t('common.count')})</span>}
@@ -466,10 +466,10 @@ export function MonthlyCollectionPage() {
         </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <Clock className="size-5 text-blue-500" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(krw.pending)}</div>
-              {hasUsd && usd.pending > 0 && <div className="text-sm font-semibold text-blue-400">{formatCurrency(usd.pending, 'USD')}</div>}
+            <Clock className="size-5 text-blue-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(krw.pending)}</div>
+              {hasUsd && usd.pending > 0 && <div className="text-sm font-semibold text-blue-400 whitespace-nowrap">{formatCurrency(usd.pending, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">{t('collection.pending')}</div>
             </div>
           </CardContent>

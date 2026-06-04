@@ -61,6 +61,7 @@ const koTranslations = {
   'common.unknownError': '알 수 없는 오류가 발생했습니다.',
   'common.updated': '업데이트됨',
   'common.view': '보기',
+  'common.actions': '관리',
 
   // ── Sidebar Nav ──
   'nav.common': '공통',
@@ -567,6 +568,8 @@ const koTranslations = {
   'meetings.extractScanned': '스캔 PDF 감지 — 이미지 분석 중...',
   'meetings.extractVision': 'AI Vision으로 분석 중...',
   'meetings.skipPdf': 'PDF 없이 직접 입력',
+  'meetings.linkedLead': '리드 연결됨',
+  'meetings.newLeadCreated': '새 리드 자동 생성됨',
   'meetings.form.parentName': '학부모명',
   'meetings.form.studentName': '학생명',
 
@@ -1322,6 +1325,7 @@ const koTranslations = {
   'kpiTarget.tabSales': '세일즈',
   'kpiTarget.tabService': '서비스',
   'kpiTarget.tabAttendance': '출결',
+  'kpiTarget.tabPerformance': '실적현황',
   'kpiTarget.avgAchievement': '전사 평균 달성률',
   'kpiTarget.achievedCount': '목표 달성',
   'kpiTarget.avgLabel': '평균',
@@ -1623,6 +1627,7 @@ const enTranslations: Record<string, string> = {
   'common.unknownError': 'An unknown error occurred.',
   'common.updated': 'Updated',
   'common.view': 'View',
+  'common.actions': 'Actions',
 
   // ── Sidebar Nav ──
   'nav.common': 'General',
@@ -2128,6 +2133,8 @@ const enTranslations: Record<string, string> = {
   'meetings.extractScanned': 'Scanned PDF detected — analyzing images...',
   'meetings.extractVision': 'Analyzing with AI Vision...',
   'meetings.skipPdf': 'Enter manually without PDF',
+  'meetings.linkedLead': 'Lead linked',
+  'meetings.newLeadCreated': 'New lead auto-created',
   'meetings.form.parentName': 'Parent Name',
   'meetings.form.studentName': 'Student Name',
 
@@ -2883,6 +2890,7 @@ const enTranslations: Record<string, string> = {
   'kpiTarget.tabSales': 'Sales',
   'kpiTarget.tabService': 'Service',
   'kpiTarget.tabAttendance': 'Attendance',
+  'kpiTarget.tabPerformance': 'Performance',
   'kpiTarget.avgAchievement': 'Overall Achievement',
   'kpiTarget.achievedCount': 'Goals Met',
   'kpiTarget.avgLabel': 'Avg',

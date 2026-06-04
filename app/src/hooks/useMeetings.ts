@@ -50,10 +50,101 @@ export function useMeetings(filters?: { dateFrom?: string; dateTo?: string }) {
   })
 }
 
+/**
+ * Match meeting to existing lead by (parentName + phone) or (parentName + studentName).
+ * If no match, create a new lead. Returns lead_id.
+ */
+async function matchOrCreateLead(meeting: Partial<Meeting>): Promise<string | null> {
+  if (!meeting.parentName) return null
+
+  // 1) Try matching by phone (most reliable)
+  if (meeting.phone) {
+    const normalized = meeting.phone.replace(/[^0-9+]/g, '')
+    if (normalized.length >= 8) {
+      const { data: byPhone } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('phone', meeting.phone)
+        .limit(1)
+      if (byPhone && byPhone.length > 0) return byPhone[0].id as string
+
+      // Also try normalized match
+      const { data: allLeads } = await supabase
+        .from('leads')
+        .select('id, phone')
+        .neq('phone', '')
+        .not('phone', 'is', null)
+      if (allLeads) {
+        const match = allLeads.find(
+          (l) => (l.phone as string).replace(/[^0-9+]/g, '') === normalized,
+        )
+        if (match) return match.id as string
+      }
+    }
+  }
+
+  // 2) Try matching by parentName + studentName
+  if (meeting.studentName) {
+    const { data: byName } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('parent_name', meeting.parentName)
+      .eq('student_name', meeting.studentName)
+      .limit(1)
+    if (byName && byName.length > 0) return byName[0].id as string
+  }
+
+  // 3) Try matching by parentName only (if unique)
+  {
+    const { data: byParent } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('parent_name', meeting.parentName)
+    if (byParent && byParent.length === 1) return byParent[0].id as string
+  }
+
+  // 4) No match — create a new lead
+  const newLead: Record<string, unknown> = {
+    lead_date: meeting.meetingDate || new Date().toISOString().slice(0, 10),
+    parent_name: meeting.parentName,
+    pipeline_stage: 'consultation',
+  }
+  if (meeting.studentName) newLead.student_name = meeting.studentName
+  if (meeting.phone) newLead.phone = meeting.phone
+  if (meeting.currentSchool) newLead.current_school = meeting.currentSchool
+  if (meeting.grade) newLead.grade = meeting.grade
+  if (meeting.region) newLead.region = meeting.region
+  if (meeting.sourceChannel) newLead.source_channel = meeting.sourceChannel
+
+  const { data: created, error } = await supabase
+    .from('leads')
+    .insert(newLead)
+    .select('id')
+    .single()
+  if (error) {
+    console.error('Failed to create lead from meeting:', error.message)
+    return null
+  }
+
+  // Create system activity
+  await supabase.from('lead_activities').insert({
+    lead_id: created.id,
+    activity_type: 'system',
+    title: '미팅 기록에서 자동 생성',
+    content: `${meeting.parentName} 리드가 미팅 기록 추가 시 자동 생성되었습니다.`,
+    created_by: meeting.createdBy ?? null,
+  })
+
+  return created.id as string
+}
+
 export function useCreateMeeting() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (meeting: Partial<Meeting>) => {
+      // Match or create lead first
+      const leadId = await matchOrCreateLead(meeting)
+
       const row: Record<string, unknown> = {
         meeting_date: meeting.meetingDate,
         meeting_number: meeting.meetingNumber,
@@ -68,6 +159,7 @@ export function useCreateMeeting() {
         note_delivered: false,
         created_by: meeting.createdBy,
       }
+      if (leadId) row.lead_id = leadId
       if (meeting.interestArea !== undefined) row.interest_area = meeting.interestArea
       if (meeting.nextMeetingDate !== undefined) row.next_meeting_date = meeting.nextMeetingDate
       if (meeting.requiredAction !== undefined) row.required_action = meeting.requiredAction
@@ -75,7 +167,11 @@ export function useCreateMeeting() {
       if (error) throw error
       return data
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['meetings'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meetings'] })
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['lead-stats'] })
+    },
   })
 }
 

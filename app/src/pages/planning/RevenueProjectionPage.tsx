@@ -102,39 +102,39 @@ export function RevenueProjectionPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card>
           <CardContent className="py-4 flex items-center gap-3">
-            <CheckCircle2 className="size-5 text-emerald-500" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(totalPaid)}</div>
+            <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalPaid)}</div>
               <div className="text-xs text-muted-foreground">{t('revProjection.paid')}</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-4 flex items-center gap-3">
-            <Clock className="size-5 text-blue-500" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(totalPending)}</div>
+            <Clock className="size-5 text-blue-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalPending)}</div>
               <div className="text-xs text-muted-foreground">{t('revProjection.pending')}</div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-4 flex items-center gap-3">
-            <AlertTriangle className="size-5 text-red-500" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(totalOverdue)}</div>
+            <AlertTriangle className="size-5 text-red-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalOverdue)}</div>
               <div className="text-xs text-muted-foreground">{t('revProjection.overdue')}</div>
             </div>
           </CardContent>
         </Card>
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="py-4 flex items-center gap-3">
-            <TrendingUp className="size-5 text-primary" />
-            <div>
-              <div className="text-lg font-bold">{formatCurrency(futureTotal)}</div>
+            <TrendingUp className="size-5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(futureTotal)}</div>
               <div className="text-xs text-muted-foreground">{t('revProjection.futureRevenue')}</div>
             </div>
           </CardContent>

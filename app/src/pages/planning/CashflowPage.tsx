@@ -329,14 +329,14 @@ export function CashflowPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Total Income */}
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <TrendingUp className="size-5 text-emerald-500" />
-            <div>
-              <div className="text-lg font-bold text-emerald-600">{formatCurrency(income.totalKrw)}</div>
-              {hasUsd && income.totalUsd > 0 && <div className="text-sm font-semibold text-emerald-400">{formatCurrency(income.totalUsd, 'USD')}</div>}
+            <TrendingUp className="size-5 text-emerald-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold text-emerald-600 whitespace-nowrap">{formatCurrency(income.totalKrw)}</div>
+              {hasUsd && income.totalUsd > 0 && <div className="text-sm font-semibold text-emerald-400 whitespace-nowrap">{formatCurrency(income.totalUsd, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">{t('cashflow.totalIncome')}</div>
             </div>
           </CardContent>
@@ -345,10 +345,10 @@ export function CashflowPage() {
         {/* Total Expense */}
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <TrendingDown className="size-5 text-red-500" />
-            <div>
-              <div className="text-lg font-bold text-red-600">{formatCurrency(expenseTotal.krw)}</div>
-              {hasUsd && expenseTotal.usd > 0 && <div className="text-sm font-semibold text-red-400">{formatCurrency(expenseTotal.usd, 'USD')}</div>}
+            <TrendingDown className="size-5 text-red-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold text-red-600 whitespace-nowrap">{formatCurrency(expenseTotal.krw)}</div>
+              {hasUsd && expenseTotal.usd > 0 && <div className="text-sm font-semibold text-red-400 whitespace-nowrap">{formatCurrency(expenseTotal.usd, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">{t('cashflow.totalExpense')}</div>
             </div>
           </CardContent>
@@ -357,12 +357,12 @@ export function CashflowPage() {
         {/* Available Cash (expected) */}
         <Card className={availableKrw >= 0 ? 'border-emerald-200' : 'border-red-200'}>
           <CardContent className="py-3 flex items-center gap-3">
-            <Wallet className={`size-5 ${availableKrw >= 0 ? 'text-emerald-500' : 'text-red-500'}`} />
-            <div>
-              <div className={`text-lg font-bold ${availableKrw >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            <Wallet className={`size-5 shrink-0 ${availableKrw >= 0 ? 'text-emerald-500' : 'text-red-500'}`} />
+            <div className="min-w-0">
+              <div className={`text-lg font-bold whitespace-nowrap ${availableKrw >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {formatCurrency(availableKrw)}
               </div>
-              {hasUsd && <div className="text-sm font-semibold text-muted-foreground">{formatCurrency(availableUsd, 'USD')}</div>}
+              {hasUsd && <div className="text-sm font-semibold text-muted-foreground whitespace-nowrap">{formatCurrency(availableUsd, 'USD')}</div>}
               <div className="text-xs text-muted-foreground">{t('cashflow.availableCash')}</div>
             </div>
           </CardContent>
@@ -371,9 +371,9 @@ export function CashflowPage() {
         {/* Confirmed Cash (paid only - expenses) */}
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
-            <CheckCircle2 className="size-5 text-blue-500" />
-            <div>
-              <div className={`text-lg font-bold ${confirmedKrw >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+            <CheckCircle2 className="size-5 text-blue-500 shrink-0" />
+            <div className="min-w-0">
+              <div className={`text-lg font-bold whitespace-nowrap ${confirmedKrw >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
                 {formatCurrency(confirmedKrw)}
               </div>
               <div className="text-xs text-muted-foreground">{t('cashflow.confirmedCash')}</div>

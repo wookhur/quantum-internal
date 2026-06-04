@@ -194,7 +194,7 @@ export function AdCampaignsPage() {
               <DollarSign className="size-5 text-red-500" />
             </div>
             <div>
-              <div className="text-lg font-bold">{formatCurrency(summary.totalSpend)}원</div>
+              <div className="text-lg font-bold">{formatCurrency(summary.totalSpend)}</div>
               <div className="text-xs text-muted-foreground">{t('ads.totalSpend')}</div>
             </div>
           </CardContent>
@@ -318,7 +318,7 @@ export function AdCampaignsPage() {
                         <TableCell className="text-right text-sm tabular-nums">{c.impressions.toLocaleString()}</TableCell>
                         <TableCell className="text-right text-sm tabular-nums">{c.reach.toLocaleString()}</TableCell>
                         <TableCell className="text-right text-sm tabular-nums">{c.clicks.toLocaleString()}</TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">{formatCurrency(c.cost)}원</TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">{formatCurrency(c.cost)}</TableCell>
                         <TableCell className="text-right text-sm tabular-nums">{formatPercent(c.ctr)}</TableCell>
                         <TableCell className="text-right text-sm tabular-nums">{Math.round(c.cpc).toLocaleString()}원</TableCell>
                         <TableCell className="text-right text-sm tabular-nums">{c.comments ?? '-'}</TableCell>
