@@ -562,6 +562,11 @@ const koTranslations = {
   'meetings.notePdf': '미팅노트 원본',
   'meetings.viewPdf': 'PDF 보기',
   'meetings.uploadNotePdf': 'PDF 첨부',
+  'meetings.extractAutoFill': 'AI가 PDF를 분석하여 자동으로 입력합니다',
+  'meetings.extractAnalyzing': 'AI로 미팅 노트 분석 중...',
+  'meetings.extractScanned': '스캔 PDF 감지 — 이미지 분석 중...',
+  'meetings.extractVision': 'AI Vision으로 분석 중...',
+  'meetings.skipPdf': 'PDF 없이 직접 입력',
   'meetings.form.parentName': '학부모명',
   'meetings.form.studentName': '학생명',
 
@@ -2117,6 +2122,11 @@ const enTranslations: Record<string, string> = {
   'meetings.notePdf': 'Meeting Note (Original)',
   'meetings.viewPdf': 'View PDF',
   'meetings.uploadNotePdf': 'Attach PDF',
+  'meetings.extractAutoFill': 'AI will analyze the PDF and auto-fill the form',
+  'meetings.extractAnalyzing': 'Analyzing meeting note with AI...',
+  'meetings.extractScanned': 'Scanned PDF detected — analyzing images...',
+  'meetings.extractVision': 'Analyzing with AI Vision...',
+  'meetings.skipPdf': 'Enter manually without PDF',
   'meetings.form.parentName': 'Parent Name',
   'meetings.form.studentName': 'Student Name',
 

@@ -18,8 +18,10 @@ import { useMeetings, useCreateMeeting, useUpdateMeeting, useUpdateNoteDelivered
 import type { Meeting } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { currentMonthStrKST } from '@/lib/date'
+import { extractTextFromPdf, renderPdfPagesToImages } from '@/lib/pdf-extract'
+import { extractMeetingFields, extractMeetingFieldsFromImages } from '@/lib/extract-meeting-ai'
 import { useT } from '@/i18n/LanguageContext'
-import { MeetingPdfUploadDialog } from '@/components/MeetingPdfUploadDialog'
+// MeetingPdfUploadDialog no longer used — PDF upload integrated into create flow
 
 function getMeetingBadge(num: number, t: (key: string, params?: Record<string, string | number>) => string) {
   const classNames: Record<number, string> = {
@@ -220,7 +222,8 @@ export function MeetingsPage() {
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [pdfDialogOpen, setPdfDialogOpen] = useState(false)
+  const [createStep, setCreateStep] = useState<'upload' | 'extracting' | 'form'>('upload')
+  const [extractStatus, setExtractStatus] = useState('')
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)
   const [form, setForm] = useState(INITIAL_MEETING_FORM)
@@ -235,6 +238,52 @@ export function MeetingsPage() {
   const updateMeeting = useUpdateMeeting()
   const uploadPdf = useUploadMeetingPdf()
   const deletePdf = useDeleteMeetingPdf()
+
+  const handlePdfSelected = async (file: File) => {
+    setPdfFile(file)
+    setCreateStep('extracting')
+    try {
+      setExtractStatus(t('meetings.pdfUpload.extracting'))
+      const text = await extractTextFromPdf(file)
+
+      let extracted
+      if (text.trim().length >= 20) {
+        setExtractStatus(t('meetings.extractAnalyzing'))
+        extracted = await extractMeetingFields(text)
+      } else {
+        setExtractStatus(t('meetings.extractScanned'))
+        const images = await renderPdfPagesToImages(file, 5, 1.5)
+        setExtractStatus(t('meetings.extractVision'))
+        extracted = await extractMeetingFieldsFromImages(images)
+      }
+
+      // Fill form with extracted data
+      setForm({
+        meetingDate: extracted.meetingDate || '',
+        meetingNumber: extracted.meetingNumber ? String(extracted.meetingNumber) : '1',
+        parentName: extracted.parentName || '',
+        studentName: extracted.studentName || '',
+        phone: extracted.phone || '',
+        currentSchool: extracted.currentSchool || '',
+        grade: extracted.grade || '',
+        region: extracted.region || '',
+        sourceChannel: extracted.sourceChannel || '',
+        memo: extracted.memo || '',
+      })
+      setCreateStep('form')
+    } catch (err) {
+      console.error(err)
+      // On error, just go to empty form with PDF attached
+      setCreateStep('form')
+    }
+  }
+
+  const resetCreateDialog = () => {
+    setCreateStep('upload')
+    setForm(INITIAL_MEETING_FORM)
+    setPdfFile(null)
+    setExtractStatus('')
+  }
 
   const handleCreateMeeting = () => {
     const pendingPdf = pdfFile
@@ -343,9 +392,6 @@ export function MeetingsPage() {
           </p>
         </div>
         <div className="flex gap-1.5 shrink-0">
-          <Button variant="outline" size="sm" onClick={() => setPdfDialogOpen(true)}>
-            <Upload className="size-4" />
-          </Button>
           <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
             <Plus className="size-4" /> {t('meetings.addMeeting')}
           </Button>
@@ -514,114 +560,141 @@ export function MeetingsPage() {
         </CardContent>
       </Card>
 
-      {/* Create Meeting Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setPdfFile(null) }}>
-        <DialogContent className="max-w-md !grid-rows-[auto_1fr] max-h-[85vh]">
+      {/* Create Meeting Dialog — Step-based: upload → extracting → form */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetCreateDialog() }}>
+        <DialogContent className={`${createStep === 'form' ? 'max-w-md' : 'max-w-sm'} !grid-rows-[auto_1fr] max-h-[85vh]`}>
           <DialogHeader>
             <DialogTitle>{t('meetings.addMeetingTitle')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 overflow-y-auto pr-1 -mr-1">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>{t('meetings.col.meetingDate')} *</Label>
-                <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t('meetings.col.meetingNumber')} *</Label>
-                <Select value={form.meetingNumber} onValueChange={v => v && setForm(f => ({ ...f, meetingNumber: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">{t('meetings.nthMeeting').replace('{n}', '1')}</SelectItem>
-                    <SelectItem value="2">{t('meetings.nthMeeting').replace('{n}', '2')}</SelectItem>
-                    <SelectItem value="3">{t('meetings.nthMeeting').replace('{n}', '3')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>{t('meetings.form.parentName')} *</Label>
-                <Input value={form.parentName} onChange={e => setForm(f => ({ ...f, parentName: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t('meetings.form.studentName')}</Label>
-                <Input value={form.studentName} onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>{t('common.phone')}</Label>
-                <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="010-0000-0000" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t('common.school')}</Label>
-                <Input value={form.currentSchool} onChange={e => setForm(f => ({ ...f, currentSchool: e.target.value }))} />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <Label>{t('common.grade')}</Label>
-                <Input value={form.grade} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t('common.region')}</Label>
-                <Input value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>{t('leads.sourceChannel')}</Label>
-                <Input value={form.sourceChannel} onChange={e => setForm(f => ({ ...f, sourceChannel: e.target.value }))} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t('common.memo')}</Label>
-              <Textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} rows={3} />
-            </div>
 
-            {/* PDF upload */}
-            <div className="space-y-1.5">
-              <Label>{t('meetings.notePdf')}</Label>
-              {pdfFile ? (
-                <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
+          {/* Step 1: Upload PDF */}
+          {createStep === 'upload' && (
+            <div className="space-y-4">
+              <div
+                className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary hover:bg-muted/50 transition-colors"
+                onClick={() => createPdfInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const file = e.dataTransfer.files?.[0]
+                  if (file && file.name.toLowerCase().endsWith('.pdf')) handlePdfSelected(file)
+                }}
+              >
+                <Upload className="size-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm font-medium mb-1">{t('meetings.pdfUpload.dropHint')}</p>
+                <p className="text-xs text-muted-foreground">{t('meetings.extractAutoFill')}</p>
+                <input
+                  ref={createPdfInputRef}
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handlePdfSelected(file)
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={() => setCreateStep('form')}
+              >
+                {t('meetings.skipPdf')}
+              </Button>
+            </div>
+          )}
+
+          {/* Step 2: Extracting */}
+          {createStep === 'extracting' && (
+            <div className="flex flex-col items-center py-8 gap-4">
+              <Loader2 className="size-8 animate-spin text-primary" />
+              <div className="text-center">
+                <p className="text-sm font-medium">{extractStatus}</p>
+                {pdfFile && <p className="text-xs text-muted-foreground mt-1">{pdfFile.name}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Form */}
+          {createStep === 'form' && (
+            <div className="space-y-4 overflow-y-auto pr-1 -mr-1">
+              {/* Attached PDF indicator */}
+              {pdfFile && (
+                <div className="flex items-center gap-2 p-2 rounded-md bg-primary/5 border border-primary/20 text-sm">
                   <FileText className="size-4 text-primary shrink-0" />
-                  <span className="truncate flex-1">{pdfFile.name}</span>
+                  <span className="truncate flex-1 text-xs">{pdfFile.name}</span>
                   <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setPdfFile(null)}>
                     <X className="size-3.5" />
                   </Button>
                 </div>
-              ) : (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full gap-1.5 text-muted-foreground"
-                    onClick={() => createPdfInputRef.current?.click()}
-                  >
-                    <Paperclip className="size-3.5" />
-                    {t('meetings.uploadNotePdf')}
-                  </Button>
-                  <input
-                    ref={createPdfInputRef}
-                    type="file"
-                    accept=".pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) setPdfFile(file)
-                      e.target.value = ''
-                    }}
-                  />
-                </>
               )}
-            </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-              <Button onClick={handleCreateMeeting} disabled={!form.parentName || !form.meetingDate || createMeeting.isPending}>
-                {createMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
-                {t('common.add')}
-              </Button>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>{t('meetings.col.meetingDate')} *</Label>
+                  <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('meetings.col.meetingNumber')} *</Label>
+                  <Select value={form.meetingNumber} onValueChange={v => v && setForm(f => ({ ...f, meetingNumber: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">{t('meetings.nthMeeting').replace('{n}', '1')}</SelectItem>
+                      <SelectItem value="2">{t('meetings.nthMeeting').replace('{n}', '2')}</SelectItem>
+                      <SelectItem value="3">{t('meetings.nthMeeting').replace('{n}', '3')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>{t('meetings.form.parentName')} *</Label>
+                  <Input value={form.parentName} onChange={e => setForm(f => ({ ...f, parentName: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('meetings.form.studentName')}</Label>
+                  <Input value={form.studentName} onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>{t('common.phone')}</Label>
+                  <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="010-0000-0000" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('common.school')}</Label>
+                  <Input value={form.currentSchool} onChange={e => setForm(f => ({ ...f, currentSchool: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label>{t('common.grade')}</Label>
+                  <Input value={form.grade} onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('common.region')}</Label>
+                  <Input value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('leads.sourceChannel')}</Label>
+                  <Input value={form.sourceChannel} onChange={e => setForm(f => ({ ...f, sourceChannel: e.target.value }))} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('common.memo')}</Label>
+                <Textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} rows={3} />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <Button variant="outline" onClick={() => { setDialogOpen(false); resetCreateDialog() }}>{t('common.cancel')}</Button>
+                <Button onClick={handleCreateMeeting} disabled={!form.parentName || !form.meetingDate || createMeeting.isPending}>
+                  {createMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+                  {t('common.add')}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -777,8 +850,6 @@ export function MeetingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* PDF Upload Dialog */}
-      <MeetingPdfUploadDialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen} />
     </div>
   )
 }
