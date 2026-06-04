@@ -51,7 +51,7 @@ export function PersonalInfoPage() {
   const [search, setSearch] = useState('')
   const [linkDialog, setLinkDialog] = useState<{ profileId: string; name: string } | null>(null)
   const [generatedLink, setGeneratedLink] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<string | false>(false)
   const [editDialog, setEditDialog] = useState<string | null>(null) // profileId
   const [editForm, setEditForm] = useState<Partial<EmployeeInfo>>({})
 
@@ -89,10 +89,11 @@ export function PersonalInfoPage() {
     }
   }
 
-  const handleCopy = () => {
+  const handleCopy = (linkLang: 'ko' | 'en') => {
     if (!generatedLink) return
-    navigator.clipboard.writeText(generatedLink)
-    setCopied(true)
+    const url = linkLang === 'en' ? `${generatedLink}?lang=en` : generatedLink
+    navigator.clipboard.writeText(url)
+    setCopied(linkLang)
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -345,7 +346,7 @@ export function PersonalInfoPage() {
 
       {/* Link Generation Dialog */}
       <Dialog open={!!linkDialog} onOpenChange={() => setLinkDialog(null)}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Link2 className="size-5" />
@@ -357,11 +358,25 @@ export function PersonalInfoPage() {
               {t('personalInfo.linkDescription', { name: linkDialog?.name || '' })}
             </p>
             {generatedLink ? (
-              <div className="flex items-center gap-2">
-                <Input value={generatedLink} readOnly className="text-xs h-9 font-mono" />
-                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={handleCopy}>
-                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground">🇰🇷 {t('personalInfo.linkKo')}</div>
+                  <div className="flex items-center gap-2">
+                    <Input value={generatedLink} readOnly className="text-xs h-9 font-mono" />
+                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => handleCopy('ko')}>
+                      {copied === 'ko' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-muted-foreground">🇺🇸 {t('personalInfo.linkEn')}</div>
+                  <div className="flex items-center gap-2">
+                    <Input value={`${generatedLink}?lang=en`} readOnly className="text-xs h-9 font-mono" />
+                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => handleCopy('en')}>
+                      {copied === 'en' ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex items-center justify-center py-4">
