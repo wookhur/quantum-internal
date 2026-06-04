@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,8 +12,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   CalendarCheck, FileCheck, Plus, Upload, Loader2, Pencil,
   X, Phone, School, MapPin, Calendar, FileText, ArrowRight, User,
+  Paperclip, Trash2, ExternalLink,
 } from 'lucide-react'
-import { useMeetings, useCreateMeeting, useUpdateMeeting, useUpdateNoteDelivered } from '@/hooks/useMeetings'
+import { useMeetings, useCreateMeeting, useUpdateMeeting, useUpdateNoteDelivered, useUploadMeetingPdf, useDeleteMeetingPdf } from '@/hooks/useMeetings'
 import type { Meeting } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { currentMonthStrKST } from '@/lib/date'
@@ -45,13 +46,17 @@ const INITIAL_MEETING_FORM = {
   memo: '',
 }
 
-function MeetingDetail({ meeting, onEdit, onClose, onNoteToggle, t }: {
+function MeetingDetail({ meeting, onEdit, onClose, onNoteToggle, onPdfUpload, onPdfDelete, pdfUploading, t }: {
   meeting: Meeting
   onEdit: (m: Meeting) => void
   onClose: () => void
   onNoteToggle: (id: string, current: boolean) => void
+  onPdfUpload: (meetingId: string, file: File) => void
+  onPdfDelete: (meetingId: string, pdfUrl: string) => void
+  pdfUploading: boolean
   t: (key: string, params?: Record<string, string | number>) => string
 }) {
+  const pdfInputRef = useRef<HTMLInputElement>(null)
   const badge = getMeetingBadge(meeting.meetingNumber, t)
 
   return (
@@ -120,6 +125,57 @@ function MeetingDetail({ meeting, onEdit, onClose, onNoteToggle, t }: {
           </div>
         )}
 
+        {/* PDF attachment */}
+        <div className="flex items-center gap-2 text-sm">
+          <Paperclip className="size-3.5 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground">{t('meetings.notePdf')}</span>
+          {meeting.notePdfUrl ? (
+            <div className="flex items-center gap-1.5">
+              <a
+                href={meeting.notePdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline flex items-center gap-1 text-xs"
+              >
+                <ExternalLink className="size-3" />
+                {t('meetings.viewPdf')}
+              </a>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 text-destructive hover:text-destructive"
+                onClick={() => onPdfDelete(meeting.id, meeting.notePdfUrl!)}
+              >
+                <Trash2 className="size-3" />
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 text-xs px-2"
+                onClick={() => pdfInputRef.current?.click()}
+                disabled={pdfUploading}
+              >
+                {pdfUploading ? <Loader2 className="size-3 animate-spin mr-1" /> : <Upload className="size-3 mr-1" />}
+                {t('meetings.uploadNotePdf')}
+              </Button>
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept=".pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) onPdfUpload(meeting.id, file)
+                  e.target.value = ''
+                }}
+              />
+            </>
+          )}
+        </div>
+
         {/* Bottom row */}
         <div className="flex items-center justify-between pt-2 border-t">
           <div className="flex items-center gap-4 text-sm">
@@ -173,6 +229,8 @@ export function MeetingsPage() {
   const { user } = useAuth()
   const createMeeting = useCreateMeeting()
   const updateMeeting = useUpdateMeeting()
+  const uploadPdf = useUploadMeetingPdf()
+  const deletePdf = useDeleteMeetingPdf()
 
   const handleCreateMeeting = () => {
     createMeeting.mutate(
@@ -332,6 +390,9 @@ export function MeetingsPage() {
           onEdit={openEditDialog}
           onClose={() => setSelectedMeetingId(null)}
           onNoteToggle={handleNoteToggle}
+          onPdfUpload={(meetingId, file) => uploadPdf.mutate({ meetingId, file })}
+          onPdfDelete={(meetingId, pdfUrl) => deletePdf.mutate({ meetingId, pdfUrl })}
+          pdfUploading={uploadPdf.isPending}
           t={t}
         />
       )}
@@ -404,20 +465,25 @@ export function MeetingsPage() {
                           {meeting.memo || '-'}
                         </td>
                         <td className="py-2 px-0 text-center" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => handleNoteToggle(meeting.id, meeting.noteDelivered)}
-                            className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
-                              meeting.noteDelivered
-                                ? 'bg-primary border-primary text-primary-foreground'
-                                : 'border-input hover:border-primary'
-                            }`}
-                          >
-                            {meeting.noteDelivered && (
-                              <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
+                          <div className="flex items-center justify-center gap-0.5">
+                            <button
+                              onClick={() => handleNoteToggle(meeting.id, meeting.noteDelivered)}
+                              className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
+                                meeting.noteDelivered
+                                  ? 'bg-primary border-primary text-primary-foreground'
+                                  : 'border-input hover:border-primary'
+                              }`}
+                            >
+                              {meeting.noteDelivered && (
+                                <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              )}
+                            </button>
+                            {meeting.notePdfUrl && (
+                              <Paperclip className="size-3 text-primary" />
                             )}
-                          </button>
+                          </div>
                         </td>
                         <td className="py-2 px-0 text-center" onClick={(e) => e.stopPropagation()}>
                           <Button
@@ -441,11 +507,11 @@ export function MeetingsPage() {
 
       {/* Create Meeting Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{t('meetings.addMeetingTitle')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-1">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t('meetings.col.meetingDate')} *</Label>
@@ -465,11 +531,11 @@ export function MeetingsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>{t('leads.parentName')} *</Label>
+                <Label>{t('meetings.form.parentName')} *</Label>
                 <Input value={form.parentName} onChange={e => setForm(f => ({ ...f, parentName: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>{t('leads.studentName')}</Label>
+                <Label>{t('meetings.form.studentName')}</Label>
                 <Input value={form.studentName} onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))} />
               </div>
             </div>
@@ -501,7 +567,7 @@ export function MeetingsPage() {
               <Label>{t('common.memo')}</Label>
               <Textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} rows={3} />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 pt-2 sticky bottom-0 bg-background pt-3 border-t">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={handleCreateMeeting} disabled={!form.parentName || !form.meetingDate || createMeeting.isPending}>
                 {createMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
@@ -514,11 +580,11 @@ export function MeetingsPage() {
 
       {/* Edit Meeting Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{t('meetings.editMeeting')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 overflow-y-auto flex-1 pr-1">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t('meetings.col.meetingDate')} *</Label>
@@ -538,11 +604,11 @@ export function MeetingsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>{t('leads.parentName')} *</Label>
+                <Label>{t('meetings.form.parentName')} *</Label>
                 <Input value={editForm.parentName} onChange={e => setEditForm(f => ({ ...f, parentName: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>{t('leads.studentName')}</Label>
+                <Label>{t('meetings.form.studentName')}</Label>
                 <Input value={editForm.studentName} onChange={e => setEditForm(f => ({ ...f, studentName: e.target.value }))} />
               </div>
             </div>
@@ -588,7 +654,7 @@ export function MeetingsPage() {
                 <Input value={editForm.requiredAction} onChange={e => setEditForm(f => ({ ...f, requiredAction: e.target.value }))} />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 sticky bottom-0 bg-background pt-3 border-t">
               <Button variant="outline" onClick={() => setEditDialogOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={handleEditMeeting} disabled={!editForm.parentName || !editForm.meetingDate || updateMeeting.isPending}>
                 {updateMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}

@@ -20,6 +20,7 @@ function mapMeeting(row: Record<string, unknown>): Meeting {
     noteDelivered: (row.note_delivered as boolean) ?? false,
     nextMeetingDate: row.next_meeting_date as string | undefined,
     requiredAction: row.required_action as string | undefined,
+    notePdfUrl: row.note_pdf_url as string | undefined,
     googleCalendarEventId: row.google_calendar_event_id as string | undefined,
     createdBy: row.created_by as string | undefined,
     createdAt: row.created_at as string,
@@ -120,6 +121,52 @@ export function useUpdateMeeting() {
         .single()
       if (error) throw error
       return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['meetings'] }),
+  })
+}
+
+export function useUploadMeetingPdf() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ meetingId, file }: { meetingId: string; file: File }) => {
+      const ext = file.name.split('.').pop() || 'pdf'
+      const path = `${meetingId}/${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('meeting-pdfs')
+        .upload(path, file, { upsert: true })
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('meeting-pdfs')
+        .getPublicUrl(path)
+
+      const { error: updateError } = await supabase
+        .from('meetings')
+        .update({ note_pdf_url: publicUrl })
+        .eq('id', meetingId)
+      if (updateError) throw updateError
+
+      return publicUrl
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['meetings'] }),
+  })
+}
+
+export function useDeleteMeetingPdf() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ meetingId, pdfUrl }: { meetingId: string; pdfUrl: string }) => {
+      // Extract path from URL
+      const pathMatch = pdfUrl.match(/meeting-pdfs\/(.+)$/)
+      if (pathMatch) {
+        await supabase.storage.from('meeting-pdfs').remove([pathMatch[1]])
+      }
+      const { error } = await supabase
+        .from('meetings')
+        .update({ note_pdf_url: null })
+        .eq('id', meetingId)
+      if (error) throw error
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['meetings'] }),
   })

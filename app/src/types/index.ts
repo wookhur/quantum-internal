@@ -370,6 +370,7 @@ export interface Meeting {
   noteDelivered: boolean
   nextMeetingDate?: string
   requiredAction?: string
+  notePdfUrl?: string
   googleCalendarEventId?: string
   createdBy?: string
   createdAt: string

@@ -559,6 +559,11 @@ const koTranslations = {
   'meetings.pdfUpload.saving': '미팅 정보를 저장하는 중...',
   'meetings.pdfUpload.success': '미팅이 성공적으로 저장되었습니다!',
   'meetings.pdfUpload.retry': '다시 시도',
+  'meetings.notePdf': '미팅노트 원본',
+  'meetings.viewPdf': 'PDF 보기',
+  'meetings.uploadNotePdf': 'PDF 첨부',
+  'meetings.form.parentName': '학부모명',
+  'meetings.form.studentName': '학생명',
 
   // ── Sales Performance ──
   'salesPerf.title': '영업 현황',
@@ -2109,6 +2114,11 @@ const enTranslations: Record<string, string> = {
   'meetings.pdfUpload.saving': 'Saving meeting info...',
   'meetings.pdfUpload.success': 'Meeting saved successfully!',
   'meetings.pdfUpload.retry': 'Try Again',
+  'meetings.notePdf': 'Meeting Note (Original)',
+  'meetings.viewPdf': 'View PDF',
+  'meetings.uploadNotePdf': 'Attach PDF',
+  'meetings.form.parentName': 'Parent Name',
+  'meetings.form.studentName': 'Student Name',
 
   // ── Sales Performance ──
   'salesPerf.title': 'Sales Performance',
