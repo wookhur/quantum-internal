@@ -224,7 +224,11 @@ export function MeetingsPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null)
   const [form, setForm] = useState(INITIAL_MEETING_FORM)
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
+  const [editPdfFile, setEditPdfFile] = useState<File | null>(null)
   const [editForm, setEditForm] = useState({ ...INITIAL_MEETING_FORM, id: '', interestArea: '', nextMeetingDate: '', requiredAction: '' })
+  const createPdfInputRef = useRef<HTMLInputElement>(null)
+  const editPdfInputRef = useRef<HTMLInputElement>(null)
 
   const { user } = useAuth()
   const createMeeting = useCreateMeeting()
@@ -233,6 +237,7 @@ export function MeetingsPage() {
   const deletePdf = useDeleteMeetingPdf()
 
   const handleCreateMeeting = () => {
+    const pendingPdf = pdfFile
     createMeeting.mutate(
       {
         meetingDate: form.meetingDate,
@@ -248,9 +253,13 @@ export function MeetingsPage() {
         createdBy: user?.id,
       },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
+          if (pendingPdf && data?.id) {
+            uploadPdf.mutate({ meetingId: data.id, file: pendingPdf })
+          }
           setDialogOpen(false)
           setForm(INITIAL_MEETING_FORM)
+          setPdfFile(null)
         },
       },
     )
@@ -506,12 +515,12 @@ export function MeetingsPage() {
       </Card>
 
       {/* Create Meeting Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md max-h-[85vh] flex flex-col">
-          <DialogHeader className="shrink-0">
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setPdfFile(null) }}>
+        <DialogContent className="max-w-md !grid-rows-[auto_1fr] max-h-[85vh]">
+          <DialogHeader>
             <DialogTitle>{t('meetings.addMeetingTitle')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+          <div className="space-y-4 overflow-y-auto pr-1 -mr-1">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t('meetings.col.meetingDate')} *</Label>
@@ -567,7 +576,45 @@ export function MeetingsPage() {
               <Label>{t('common.memo')}</Label>
               <Textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} rows={3} />
             </div>
-            <div className="flex justify-end gap-2 pt-2 sticky bottom-0 bg-background pt-3 border-t">
+
+            {/* PDF upload */}
+            <div className="space-y-1.5">
+              <Label>{t('meetings.notePdf')}</Label>
+              {pdfFile ? (
+                <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
+                  <FileText className="size-4 text-primary shrink-0" />
+                  <span className="truncate flex-1">{pdfFile.name}</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setPdfFile(null)}>
+                    <X className="size-3.5" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-1.5 text-muted-foreground"
+                    onClick={() => createPdfInputRef.current?.click()}
+                  >
+                    <Paperclip className="size-3.5" />
+                    {t('meetings.uploadNotePdf')}
+                  </Button>
+                  <input
+                    ref={createPdfInputRef}
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) setPdfFile(file)
+                      e.target.value = ''
+                    }}
+                  />
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
               <Button onClick={handleCreateMeeting} disabled={!form.parentName || !form.meetingDate || createMeeting.isPending}>
                 {createMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
@@ -579,12 +626,12 @@ export function MeetingsPage() {
       </Dialog>
 
       {/* Edit Meeting Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
-          <DialogHeader className="shrink-0">
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditPdfFile(null) }}>
+        <DialogContent className="max-w-lg !grid-rows-[auto_1fr] max-h-[85vh]">
+          <DialogHeader>
             <DialogTitle>{t('meetings.editMeeting')}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 overflow-y-auto flex-1 pr-1">
+          <div className="space-y-4 overflow-y-auto pr-1 -mr-1">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t('meetings.col.meetingDate')} *</Label>
@@ -644,6 +691,65 @@ export function MeetingsPage() {
               <Label>{t('common.memo')}</Label>
               <Textarea value={editForm.memo} onChange={e => setEditForm(f => ({ ...f, memo: e.target.value }))} rows={3} />
             </div>
+
+            {/* PDF upload in edit */}
+            <div className="space-y-1.5">
+              <Label>{t('meetings.notePdf')}</Label>
+              {(() => {
+                const editingMeeting = meetings.find(m => m.id === editForm.id)
+                const existingPdf = editingMeeting?.notePdfUrl
+                if (existingPdf && !editPdfFile) {
+                  return (
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
+                      <FileText className="size-4 text-primary shrink-0" />
+                      <a href={existingPdf} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-xs truncate flex-1">
+                        <ExternalLink className="size-3 shrink-0" />
+                        {t('meetings.viewPdf')}
+                      </a>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive" onClick={() => deletePdf.mutate({ meetingId: editForm.id, pdfUrl: existingPdf })}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  )
+                }
+                if (editPdfFile) {
+                  return (
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
+                      <FileText className="size-4 text-primary shrink-0" />
+                      <span className="truncate flex-1">{editPdfFile.name}</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setEditPdfFile(null)}>
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                  )
+                }
+                return (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-1.5 text-muted-foreground"
+                      onClick={() => editPdfInputRef.current?.click()}
+                    >
+                      <Paperclip className="size-3.5" />
+                      {t('meetings.uploadNotePdf')}
+                    </Button>
+                    <input
+                      ref={editPdfInputRef}
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) setEditPdfFile(file)
+                        e.target.value = ''
+                      }}
+                    />
+                  </>
+                )
+              })()}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t('meetings.col.nextMeeting')}</Label>
@@ -654,9 +760,15 @@ export function MeetingsPage() {
                 <Input value={editForm.requiredAction} onChange={e => setEditForm(f => ({ ...f, requiredAction: e.target.value }))} />
               </div>
             </div>
-            <div className="flex justify-end gap-2 sticky bottom-0 bg-background pt-3 border-t">
+            <div className="flex justify-end gap-2 pt-3 border-t">
               <Button variant="outline" onClick={() => setEditDialogOpen(false)}>{t('common.cancel')}</Button>
-              <Button onClick={handleEditMeeting} disabled={!editForm.parentName || !editForm.meetingDate || updateMeeting.isPending}>
+              <Button onClick={() => {
+                handleEditMeeting()
+                if (editPdfFile) {
+                  uploadPdf.mutate({ meetingId: editForm.id, file: editPdfFile })
+                  setEditPdfFile(null)
+                }
+              }} disabled={!editForm.parentName || !editForm.meetingDate || updateMeeting.isPending}>
                 {updateMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
                 {t('common.save')}
               </Button>
