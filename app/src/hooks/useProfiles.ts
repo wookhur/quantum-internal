@@ -113,6 +113,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/finance/receipts', labelKey: 'nav.receipts', module: 'finance' },
   { path: '/finance/wire-invoice', labelKey: 'nav.wireInvoice', module: 'finance' },
   { path: '/finance/incentives/by-contract', labelKey: 'nav.incentives', module: 'finance' },
+  { path: '/finance/incentives/by-person', labelKey: 'nav.incentives', module: 'finance' },
   // ── Planning ──
   { path: '/planning/overview', labelKey: 'nav.overview', module: 'planning' },
   { path: '/planning/projection', labelKey: 'nav.revenueProjection', module: 'planning' },
