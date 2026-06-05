@@ -45,7 +45,6 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead } from '@/hooks/useLeads'
-import { useEvents } from '@/hooks/useEvents'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
 import { getStageConfig, GRADES } from '@/types'
@@ -315,27 +314,25 @@ export function ColdCallPage() {
 
   // Fetch leads in cold-callable stages
   const { data: allLeads = [], isLoading } = useLeads()
-  // Fetch events for filter
-  const { data: events = [] } = useEvents()
-
-  // Build event filter options: only specific seminar/webinar events from events table
+  // Build event filter options: only show events that have matching leads (by source_channel)
   const eventFilterOptions = useMemo(() => {
-    const options: { label: string; value: string }[] = []
-    const seen = new Set<string>()
+    // Collect all unique source_channels that actually exist in cold-callable leads
+    const leadChannels = new Set(
+      allLeads
+        .filter(l => COLD_CALL_STAGES.includes(l.pipelineStage))
+        .map(l => l.sourceChannel)
+        .filter((sc): sc is string => !!sc && sc.trim().length > 0),
+    )
+    // Only show source_channels that contain 세미나 or 웨비나 and are specific (not generic)
     const GENERIC_NAMES = new Set(['세미나', '웨비나', '세미나 참석', '웨비나 참석'])
-
-    for (const e of events) {
-      const name = e.eventName
-      if (!seen.has(name) && !GENERIC_NAMES.has(name) && (name.includes('세미나') || name.includes('웨비나'))) {
-        seen.add(name)
-        const dateStr = e.eventDate ? `${parseInt(e.eventDate.slice(5,7))}/${parseInt(e.eventDate.slice(8,10))}` : ''
-        // value includes date prefix to match source_channel format (e.g. "6/13 이광미 원장님 웨비나")
-        const value = dateStr ? `${dateStr} ${name}` : name
-        options.push({ label: value, value })
+    const options: { label: string; value: string }[] = []
+    for (const sc of leadChannels) {
+      if (!GENERIC_NAMES.has(sc) && (sc.includes('세미나') || sc.includes('웨비나'))) {
+        options.push({ label: sc, value: sc })
       }
     }
     return options
-  }, [events])
+  }, [allLeads])
 
   // Filter and score leads
   const coldCallLeads = useMemo(() => {
