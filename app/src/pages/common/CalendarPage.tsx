@@ -223,7 +223,7 @@ const CHECKLIST_STEPS = [
   { key: 'uploaded', color: 'bg-emerald-500', labelKey: 'calendar.ganttUpload' },
 ] as const
 
-type GanttCategory = 'event' | 'meeting' | 'google' | 'todo' | 'birthday' | 'contract'
+type GanttCategory = 'event' | 'google' | 'todo' | 'birthday' | 'contract'
 
 interface GanttItem {
   id: string
@@ -238,7 +238,6 @@ interface GanttItem {
 
 const CATEGORY_CONFIG: Record<GanttCategory, { labelKey: string; dotColor: string; barColor: string }> = {
   event:    { labelKey: 'calendar.legendEvent',          dotColor: 'bg-emerald-500', barColor: 'bg-emerald-400' },
-  meeting:  { labelKey: 'calendar.legendMeeting',        dotColor: 'bg-blue-500',    barColor: 'bg-blue-400' },
   google:   { labelKey: 'calendar.legendGoogle',         dotColor: 'bg-violet-500',  barColor: 'bg-violet-400' },
   todo:     { labelKey: 'calendar.legendTodo',           dotColor: 'bg-red-500',     barColor: 'bg-red-400' },
   birthday: { labelKey: 'calendar.legendBirthday',       dotColor: 'bg-pink-400',    barColor: 'bg-pink-300' },
@@ -247,7 +246,6 @@ const CATEGORY_CONFIG: Record<GanttCategory, { labelKey: string; dotColor: strin
 
 function buildGanttItems(
   events: Event[],
-  meetings: Meeting[],
   googleEvents: GoogleCalendarEvent[],
   todos: Todo[],
   birthdays: BirthdayItem[],
@@ -273,21 +271,6 @@ function buildGanttItems(
       color: CATEGORY_CONFIG.event.barColor,
       dotColor: CATEGORY_CONFIG.event.dotColor,
       event: e,
-    })
-  })
-
-  // Meetings
-  meetings.forEach(m => {
-    const d = m.meetingDate?.slice(0, 10)
-    if (!d?.startsWith(monthStr)) return
-    items.push({
-      id: `meeting-${m.id}`,
-      category: 'meeting',
-      label: m.parentName,
-      subLabel: m.studentName || undefined,
-      day: parseInt(d.slice(8, 10), 10),
-      color: CATEGORY_CONFIG.meeting.barColor,
-      dotColor: CATEGORY_CONFIG.meeting.dotColor,
     })
   })
 
@@ -357,10 +340,9 @@ function buildGanttItems(
 
 // ─── Gantt Chart Component ───────────────────────────────────────────
 function ScheduleGanttChart({
-  events, meetings, googleEvents, todos, birthdays, contractExpiries, year, month,
+  events, googleEvents, todos, birthdays, contractExpiries, year, month,
 }: {
   events: Event[]
-  meetings: Meeting[]
   googleEvents: GoogleCalendarEvent[]
   todos: Todo[]
   birthdays: BirthdayItem[]
@@ -376,14 +358,14 @@ function ScheduleGanttChart({
   const todayDay = isCurrentMonth ? parseInt(today.slice(8, 10), 10) : -1
 
   const ganttItems = useMemo(
-    () => buildGanttItems(events, meetings, googleEvents, todos, birthdays, contractExpiries, year, month, daysInMonth),
-    [events, meetings, googleEvents, todos, birthdays, contractExpiries, year, month, daysInMonth],
+    () => buildGanttItems(events, googleEvents, todos, birthdays, contractExpiries, year, month, daysInMonth),
+    [events, googleEvents, todos, birthdays, contractExpiries, year, month, daysInMonth],
   )
 
   // Group by category for section headers
   const groupedItems = useMemo(() => {
     const groups: { category: GanttCategory; items: GanttItem[] }[] = []
-    const catOrder: GanttCategory[] = ['event', 'meeting', 'google', 'todo', 'birthday', 'contract']
+    const catOrder: GanttCategory[] = ['event', 'google', 'todo', 'birthday', 'contract']
     for (const cat of catOrder) {
       const catItems = ganttItems.filter(i => i.category === cat)
       if (catItems.length > 0) groups.push({ category: cat, items: catItems })
@@ -874,7 +856,6 @@ export function CalendarPage() {
       {!isLoading && (
         <ScheduleGanttChart
           events={events}
-          meetings={meetings}
           googleEvents={googleEvents}
           todos={todos}
           birthdays={birthdays}

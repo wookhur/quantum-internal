@@ -45,6 +45,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead } from '@/hooks/useLeads'
+import { useEvents } from '@/hooks/useEvents'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
 import { getStageConfig, GRADES } from '@/types'
@@ -308,15 +309,53 @@ export function ColdCallPage() {
   const [gradeGroup, setGradeGroup] = useState('all')
   const [selectedGrade, setSelectedGrade] = useState('all')
   const [selectedSchool, setSelectedSchool] = useState('')
+  const [selectedEvent, setSelectedEvent] = useState('all')
   const [sortBy, setSortBy] = useState<'priority' | 'date' | 'grade'>('priority')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
 
   // Fetch leads in cold-callable stages
   const { data: allLeads = [], isLoading } = useLeads()
+  // Fetch events for filter
+  const { data: events = [] } = useEvents()
+
+  // Build event filter options from available events
+  const eventFilterOptions = useMemo(() => {
+    // Build source_channel-based options from leads
+    const sourceChannels = new Set(allLeads.map(l => l.sourceChannel).filter(Boolean))
+    // Combine: events + source channels that look like event names (contain 세미나/웨비나)
+    const options: { label: string; value: string }[] = []
+    const seen = new Set<string>()
+
+    // Add events first
+    for (const e of events) {
+      if (!seen.has(e.eventName)) {
+        seen.add(e.eventName)
+        const dateStr = e.eventDate ? `${parseInt(e.eventDate.slice(5,7))}/${parseInt(e.eventDate.slice(8,10))}` : ''
+        options.push({ label: dateStr ? `${dateStr} ${e.eventName}` : e.eventName, value: e.eventName })
+      }
+    }
+    // Add source channels with 세미나/웨비나 that aren't already in events
+    for (const sc of sourceChannels) {
+      if (sc && (sc.includes('세미나') || sc.includes('웨비나')) && !seen.has(sc)) {
+        seen.add(sc)
+        options.push({ label: sc, value: sc })
+      }
+    }
+    return options
+  }, [events, allLeads])
 
   // Filter and score leads
   const coldCallLeads = useMemo(() => {
     let leads = allLeads.filter((l) => COLD_CALL_STAGES.includes(l.pipelineStage))
+
+    // Event filter — show leads whose source_channel matches or contains the event name
+    if (selectedEvent !== 'all') {
+      leads = leads.filter((l) =>
+        l.sourceChannel === selectedEvent ||
+        l.sourceChannel?.includes(selectedEvent) ||
+        selectedEvent.includes(l.sourceChannel || ''),
+      )
+    }
 
     // Grade group filter
     if (gradeGroup !== 'all') {
@@ -359,7 +398,7 @@ export function ColdCallPage() {
     }
 
     return scored
-  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, search, sortBy])
+  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, search, sortBy])
 
   const selectedLead = coldCallLeads.find((l) => l.id === selectedLeadId)
 
@@ -441,14 +480,32 @@ export function ColdCallPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="relative">
-            <School className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
-            <Input
-              placeholder={t('coldCall.schoolFilter')}
-              className="pl-7 h-7 text-xs"
-              value={selectedSchool}
-              onChange={(e) => setSelectedSchool(e.target.value)}
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <School className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
+              <Input
+                placeholder={t('coldCall.schoolFilter')}
+                className="pl-7 h-7 text-xs"
+                value={selectedSchool}
+                onChange={(e) => setSelectedSchool(e.target.value)}
+              />
+            </div>
+            {eventFilterOptions.length > 0 && (
+              <Select value={selectedEvent} onValueChange={(v) => setSelectedEvent(v || 'all')}>
+                <SelectTrigger className="h-7 text-xs flex-1">
+                  <Calendar className="size-3 mr-1" />
+                  <SelectValue placeholder={t('coldCall.eventFilter')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('coldCall.allEvents')}</SelectItem>
+                  {eventFilterOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
 
