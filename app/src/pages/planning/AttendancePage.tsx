@@ -40,6 +40,7 @@ import {
   Check,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAttendances, useUpsertAttendance, useDeleteAttendance } from '@/hooks/useAttendances'
 import { useKioskExcludedIds, useUpdateKioskExcludedIds } from '@/hooks/useKioskSettings'
@@ -105,6 +106,8 @@ interface AttendanceForm {
 
 export function AttendancePage() {
   const t = useT()
+  const { user: currentUser } = useAuth()
+  const isAdmin = currentUser?.role === 'admin'
   const { data: profiles = [] } = useProfiles()
   const [currentMonth, setCurrentMonth] = useState<string>(getCurrentMonth())
   const { data: attendances = [], isLoading } = useAttendances(currentMonth)
@@ -307,6 +310,8 @@ export function AttendancePage() {
         mins: totalMins % 60,
       }))
       .filter(e => {
+        // Admin sees all (or filtered by dropdown); non-admin sees only own data
+        if (!isAdmin) return e.profileId === currentUser?.id
         if (selectedProfile === 'all') return true
         return e.profileId === selectedProfile
       })
