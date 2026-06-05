@@ -318,15 +318,12 @@ export function ColdCallPage() {
   // Fetch events for filter
   const { data: events = [] } = useEvents()
 
-  // Build event filter options from available events
+  // Build event/channel filter options from events DB + lead source_channels
   const eventFilterOptions = useMemo(() => {
-    // Build source_channel-based options from leads
-    const sourceChannels = new Set(allLeads.map(l => l.sourceChannel).filter(Boolean))
-    // Combine: events + source channels that look like event names (contain 세미나/웨비나)
     const options: { label: string; value: string }[] = []
     const seen = new Set<string>()
 
-    // Add events first
+    // Add events from events table first
     for (const e of events) {
       if (!seen.has(e.eventName)) {
         seen.add(e.eventName)
@@ -334,9 +331,14 @@ export function ColdCallPage() {
         options.push({ label: dateStr ? `${dateStr} ${e.eventName}` : e.eventName, value: e.eventName })
       }
     }
-    // Add source channels with 세미나/웨비나 that aren't already in events
+    // Add ALL non-empty source_channels from leads that aren't already covered
+    const sourceChannels = new Set(
+      allLeads
+        .map(l => l.sourceChannel)
+        .filter((sc): sc is string => !!sc && sc.trim().length > 0),
+    )
     for (const sc of sourceChannels) {
-      if (sc && (sc.includes('세미나') || sc.includes('웨비나')) && !seen.has(sc)) {
+      if (!seen.has(sc)) {
         seen.add(sc)
         options.push({ label: sc, value: sc })
       }
@@ -490,22 +492,20 @@ export function ColdCallPage() {
                 onChange={(e) => setSelectedSchool(e.target.value)}
               />
             </div>
-            {eventFilterOptions.length > 0 && (
-              <Select value={selectedEvent} onValueChange={(v) => setSelectedEvent(v || 'all')}>
-                <SelectTrigger className="h-7 text-xs flex-1">
-                  <Calendar className="size-3 mr-1" />
-                  <SelectValue placeholder={t('coldCall.eventFilter')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('coldCall.allEvents')}</SelectItem>
-                  {eventFilterOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Select value={selectedEvent} onValueChange={(v) => setSelectedEvent(v || 'all')}>
+              <SelectTrigger className="h-7 text-xs flex-1">
+                <Calendar className="size-3 mr-1" />
+                <SelectValue placeholder={t('coldCall.eventFilter')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('coldCall.allEvents')}</SelectItem>
+                {eventFilterOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
