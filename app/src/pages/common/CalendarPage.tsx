@@ -305,29 +305,42 @@ function buildGanttItems(
   return items
 }
 
-// ─── Gantt Chart Component ───────────────────────────────────────────
-function ScheduleGanttChart({
-  events, birthdays, contractExpiries, year, month,
-}: {
-  events: Event[]
-  birthdays: BirthdayItem[]
-  contractExpiries: ContractCalendarItem[]
-  year: number
-  month: number
-}) {
+// ─── Gantt Chart Component (with independent month navigation) ───────
+function ScheduleGanttChart() {
   const t = useT()
-  const daysInMonth = new Date(year, month, 0).getDate()
+  const [ganttYear, setGanttYear] = useState(currentYearKST())
+  const [ganttMonth, setGanttMonth] = useState(currentMonthKST())
+
+  // Fetch data for the gantt month independently
+  const { data: calData } = useCalendarEvents(ganttYear, ganttMonth)
+  const ganttEvents = calData?.events ?? []
+  const ganttBirthdays = calData?.birthdays ?? []
+  const ganttContracts = calData?.contractExpiries ?? []
+
+  const daysInMonth = new Date(ganttYear, ganttMonth, 0).getDate()
   const today = todayKST()
-  const monthStr = `${year}-${String(month).padStart(2, '0')}`
+  const monthStr = `${ganttYear}-${String(ganttMonth).padStart(2, '0')}`
   const isCurrentMonth = today.startsWith(monthStr)
   const todayDay = isCurrentMonth ? parseInt(today.slice(8, 10), 10) : -1
 
+  function goGanttPrev() {
+    if (ganttMonth === 1) { setGanttYear(y => y - 1); setGanttMonth(12) }
+    else setGanttMonth(m => m - 1)
+  }
+  function goGanttNext() {
+    if (ganttMonth === 12) { setGanttYear(y => y + 1); setGanttMonth(1) }
+    else setGanttMonth(m => m + 1)
+  }
+  function goGanttToday() {
+    setGanttYear(currentYearKST())
+    setGanttMonth(currentMonthKST())
+  }
+
   const ganttItems = useMemo(
-    () => buildGanttItems(events, birthdays, contractExpiries, year, month, daysInMonth),
-    [events, birthdays, contractExpiries, year, month, daysInMonth],
+    () => buildGanttItems(ganttEvents, ganttBirthdays, ganttContracts, ganttYear, ganttMonth, daysInMonth),
+    [ganttEvents, ganttBirthdays, ganttContracts, ganttYear, ganttMonth, daysInMonth],
   )
 
-  // Group by category for section headers
   const groupedItems = useMemo(() => {
     const groups: { category: GanttCategory; items: GanttItem[] }[] = []
     const catOrder: GanttCategory[] = ['event', 'birthday', 'contract']
@@ -338,40 +351,35 @@ function ScheduleGanttChart({
     return groups
   }, [ganttItems])
 
-  // Days array with weekday info
   const daysArr = useMemo(() => {
     return Array.from({ length: daysInMonth }, (_, i) => {
-      const d = new Date(year, month - 1, i + 1)
-      return { day: i + 1, dow: d.getDay() } // 0=Sun, 6=Sat
+      const d = new Date(ganttYear, ganttMonth - 1, i + 1)
+      return { day: i + 1, dow: d.getDay() }
     })
-  }, [year, month, daysInMonth])
+  }, [ganttYear, ganttMonth, daysInMonth])
 
-  if (ganttItems.length === 0) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <BarChart3 className="size-4 text-primary" />
-            {t('calendar.ganttTitle')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground text-center py-8">{t('calendar.ganttNoEvents')}</p>
-        </CardContent>
-      </Card>
-    )
-  }
+  const isThisMonth = ganttYear === currentYearKST() && ganttMonth === currentMonthKST()
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <BarChart3 className="size-4 text-primary" />
-              {t('calendar.ganttTitle')}
+          <div className="flex items-center gap-3">
+            <BarChart3 className="size-4 text-primary" />
+            <Button variant="ghost" size="icon" className="size-7" onClick={goGanttPrev}>
+              <ChevronLeft className="size-4" />
+            </Button>
+            <CardTitle className="text-base font-semibold">
+              {t('calendar.yearMonth', { year: String(ganttYear), month: String(ganttMonth) })}
             </CardTitle>
-            <p className="text-xs text-muted-foreground mt-1">{t('calendar.ganttSubtitle')}</p>
+            <Button variant="ghost" size="icon" className="size-7" onClick={goGanttNext}>
+              <ChevronRight className="size-4" />
+            </Button>
+            {!isThisMonth && (
+              <Button variant="outline" size="sm" className="h-6 text-[11px] px-2" onClick={goGanttToday}>
+                {t('common.today')}
+              </Button>
+            )}
           </div>
           {/* Legend */}
           <div className="flex flex-wrap gap-2">
@@ -387,8 +395,12 @@ function ScheduleGanttChart({
             })}
           </div>
         </div>
+        <p className="text-xs text-muted-foreground mt-1">{t('calendar.ganttSubtitle')}</p>
       </CardHeader>
       <CardContent className="p-0 pb-4">
+        {ganttItems.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">{t('calendar.ganttNoEvents')}</p>
+        ) : (
         <div className="overflow-x-auto">
           <div className="min-w-[800px]">
             {/* Timeline header — day numbers */}
@@ -509,10 +521,11 @@ function ScheduleGanttChart({
             })}
           </div>
         </div>
+        )}
 
         {/* Event management cards — interactive checklist */}
-        {events.length > 0 && (
-          <EventManagementCards events={events} />
+        {ganttEvents.length > 0 && (
+          <EventManagementCards events={ganttEvents} />
         )}
       </CardContent>
     </Card>
@@ -817,16 +830,8 @@ export function CalendarPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Gantt Chart */}
-      {!isLoading && (
-        <ScheduleGanttChart
-          events={events}
-          birthdays={birthdays}
-          contractExpiries={contractExpiries}
-          year={year}
-          month={month}
-        />
-      )}
+      {/* Gantt Chart — independent month navigation */}
+      <ScheduleGanttChart />
 
       <div className="flex gap-6">
         {/* Calendar Grid */}
