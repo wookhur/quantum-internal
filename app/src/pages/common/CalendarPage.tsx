@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
-import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot, FileWarning, Globe, CheckCircle2, Circle, Cake, BarChart3, Plus, MapPin, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot, FileWarning, Globe, CheckCircle2, Circle, Cake, BarChart3, Plus, Pencil, StickyNote } from 'lucide-react'
 import { useCalendarEvents, type ContractCalendarItem, type BirthdayItem } from '@/hooks/useCalendarEvents'
 import { useCreateEvent, useUpdateEvent, useEvents } from '@/hooks/useEvents'
 import { todayKST, currentYearKST, currentMonthKST, formatTimeKST } from '@/lib/date'
@@ -215,12 +216,12 @@ function DayCell({
 
 // ─── Gantt Chart Types & Helpers ─────────────────────────────────────
 const CHECKLIST_STEPS = [
-  { key: 'speakerConfirmed', color: 'bg-blue-500', labelKey: 'calendar.ganttSpeaker' },
-  { key: 'venueConfirmed', color: 'bg-purple-500', labelKey: 'calendar.ganttVenue' },
-  { key: 'copyWritten', color: 'bg-amber-500', labelKey: 'calendar.ganttCopy' },
-  { key: 'designCompleted', color: 'bg-pink-500', labelKey: 'calendar.ganttDesign' },
-  { key: 'pptCompleted', color: 'bg-cyan-500', labelKey: 'calendar.ganttPpt' },
-  { key: 'uploaded', color: 'bg-emerald-500', labelKey: 'calendar.ganttUpload' },
+  { key: 'speakerConfirmed', color: 'bg-blue-500', labelKey: 'calendar.ganttSpeaker', detailPlaceholder: '연사명 입력...' },
+  { key: 'venueConfirmed', color: 'bg-purple-500', labelKey: 'calendar.ganttVenue', detailPlaceholder: '장소 입력...' },
+  { key: 'copyWritten', color: 'bg-amber-500', labelKey: 'calendar.ganttCopy', detailPlaceholder: '카피 내용/링크...' },
+  { key: 'designCompleted', color: 'bg-pink-500', labelKey: 'calendar.ganttDesign', detailPlaceholder: '디자인 파일/링크...' },
+  { key: 'pptCompleted', color: 'bg-cyan-500', labelKey: 'calendar.ganttPpt', detailPlaceholder: 'PPT 파일/링크...' },
+  { key: 'uploaded', color: 'bg-emerald-500', labelKey: 'calendar.ganttUpload', detailPlaceholder: '업로드 링크...' },
 ] as const
 
 type GanttCategory = 'event' | 'birthday' | 'contract'
@@ -535,113 +536,204 @@ function ScheduleGanttChart() {
   )
 }
 
-// ─── Event Management Cards (interactive checklist from EventsPage) ──
-function EventManagementCards({ events }: { events: Event[] }) {
+// ─── Single Event Card with editable checklist + memo ──────────────
+function EventCard({ event }: { event: Event }) {
   const t = useT()
   const updateEvent = useUpdateEvent()
+  const [editingDetail, setEditingDetail] = useState<string | null>(null)
+  const [detailValue, setDetailValue] = useState('')
+  const [editingNotes, setEditingNotes] = useState(false)
+  const [notesValue, setNotesValue] = useState(event.notes || '')
 
+  const details = event.checklistDetails || {}
+  const completed = CHECKLIST_STEPS.filter(s => event[s.key as keyof Event] === true).length
+  const percent = Math.round((completed / CHECKLIST_STEPS.length) * 100)
+
+  function handleToggle(stepKey: string) {
+    const checked = event[stepKey as keyof Event] === true
+    if (!checked) {
+      // When checking: open detail input
+      const step = CHECKLIST_STEPS.find(s => s.key === stepKey)
+      setEditingDetail(stepKey)
+      setDetailValue(details[stepKey] || '')
+      // Also toggle the checkbox on
+      updateEvent.mutate({ id: event.id, field: stepKey, value: true })
+      // Auto-focus handled by React
+      if (!step) return
+    } else {
+      // Unchecking
+      updateEvent.mutate({ id: event.id, field: stepKey, value: false })
+    }
+  }
+
+  function saveDetail(stepKey: string) {
+    const newDetails = { ...details, [stepKey]: detailValue.trim() }
+    updateEvent.mutate({ id: event.id, field: 'checklistDetails', value: newDetails })
+    setEditingDetail(null)
+  }
+
+  function saveNotes() {
+    updateEvent.mutate({ id: event.id, field: 'notes', value: notesValue.trim() || null })
+    setEditingNotes(false)
+  }
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-3 px-4 pt-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="space-y-1 min-w-0">
+            <h3 className="font-semibold text-sm leading-tight truncate">{event.eventName}</h3>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <CalendarDays className="size-3" />
+                {event.eventDate
+                  ? `${parseInt(event.eventDate.slice(5, 7))}/${parseInt(event.eventDate.slice(8, 10))}`
+                  : event.eventDatetime || event.month
+                }
+                {event.eventDatetime && ` ${event.eventDatetime.split(', ')[1] || ''}`}
+              </span>
+              {event.week && (
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {event.week}주차
+                </Badge>
+              )}
+            </div>
+          </div>
+          <Badge
+            variant={percent === 100 ? 'default' : 'outline'}
+            className={`shrink-0 text-[10px] ${percent === 100 ? 'bg-green-600 text-white' : ''}`}
+          >
+            {completed}/{CHECKLIST_STEPS.length}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 px-4 pb-4">
+        {/* Progress Bar */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">{t('calendar.ganttProgress')}</span>
+            <span className={`font-medium ${
+              percent === 100 ? 'text-green-600' : percent >= 50 ? 'text-amber-600' : 'text-red-500'
+            }`}>
+              {percent}%
+            </span>
+          </div>
+          <Progress value={percent} className="h-1.5" />
+        </div>
+
+        {/* Interactive Checklist with detail inputs */}
+        <div className="space-y-1">
+          {CHECKLIST_STEPS.map(step => {
+            const checked = event[step.key as keyof Event] === true
+            const detail = details[step.key]
+            const isEditing = editingDetail === step.key
+            return (
+              <div key={step.key}>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(step.key)}
+                    className={`flex items-center gap-1.5 text-xs rounded px-1.5 py-1 cursor-pointer transition-colors hover:bg-muted/50 flex-1 min-w-0 ${
+                      checked ? 'text-green-700 bg-green-50 hover:bg-green-100' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {checked ? (
+                      <CheckCircle2 className="size-3.5 text-green-600 shrink-0" />
+                    ) : (
+                      <Circle className="size-3.5 text-muted-foreground/40 shrink-0" />
+                    )}
+                    <span className={checked ? '' : ''}>{t(step.labelKey)}</span>
+                  </button>
+                  {/* Show detail text or edit button */}
+                  {checked && !isEditing && (
+                    <button
+                      type="button"
+                      onClick={() => { setEditingDetail(step.key); setDetailValue(detail || '') }}
+                      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    >
+                      {detail ? (
+                        <span className="max-w-[120px] truncate text-xs text-foreground/70">{detail}</span>
+                      ) : (
+                        <span className="text-muted-foreground/50 italic">{step.detailPlaceholder}</span>
+                      )}
+                      <Pencil className="size-2.5" />
+                    </button>
+                  )}
+                </div>
+                {/* Inline detail editor */}
+                {isEditing && (
+                  <div className="flex items-center gap-1 ml-6 mt-1">
+                    <Input
+                      autoFocus
+                      className="h-6 text-xs flex-1"
+                      placeholder={step.detailPlaceholder}
+                      value={detailValue}
+                      onChange={e => setDetailValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') saveDetail(step.key); if (e.key === 'Escape') setEditingDetail(null) }}
+                    />
+                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => saveDetail(step.key)}>
+                      {t('common.save')}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Notes / Memo */}
+        <div className="border-t pt-2">
+          {editingNotes ? (
+            <div className="space-y-1.5">
+              <Textarea
+                autoFocus
+                className="text-xs min-h-[60px] resize-none"
+                placeholder="메모 입력..."
+                value={notesValue}
+                onChange={e => setNotesValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') { setEditingNotes(false); setNotesValue(event.notes || '') } }}
+              />
+              <div className="flex justify-end gap-1">
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => { setEditingNotes(false); setNotesValue(event.notes || '') }}>
+                  {t('common.cancel')}
+                </Button>
+                <Button size="sm" className="h-6 px-2 text-xs" onClick={saveNotes}>
+                  {t('common.save')}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingNotes(true)}
+              className="flex items-start gap-1.5 text-xs w-full text-left rounded px-1 py-1 hover:bg-muted/50 transition-colors"
+            >
+              <StickyNote className="size-3 shrink-0 mt-0.5 text-muted-foreground" />
+              {event.notes ? (
+                <span className="text-foreground/80 whitespace-pre-wrap line-clamp-3">{event.notes}</span>
+              ) : (
+                <span className="text-muted-foreground/50 italic">메모 추가...</span>
+              )}
+            </button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Event Management Cards ─────────────────────────────────────────
+function EventManagementCards({ events }: { events: Event[] }) {
+  const t = useT()
   return (
     <div className="px-6 pt-4 border-t mt-2">
       <h4 className="text-xs font-semibold text-muted-foreground mb-3">
         {t('events.title')} — {t('calendar.ganttProgress')}
       </h4>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {events.map(event => {
-          const completed = CHECKLIST_STEPS.filter(s => event[s.key as keyof Event] === true).length
-          const percent = Math.round((completed / CHECKLIST_STEPS.length) * 100)
-          return (
-            <Card key={event.id} className="overflow-hidden">
-              <CardHeader className="pb-3 px-4 pt-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-1 min-w-0">
-                    <h3 className="font-semibold text-sm leading-tight truncate">{event.eventName}</h3>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <CalendarDays className="size-3" />
-                        {event.eventDate
-                          ? `${parseInt(event.eventDate.slice(5, 7))}/${parseInt(event.eventDate.slice(8, 10))}`
-                          : event.eventDatetime || event.month
-                        }
-                        {event.eventDatetime && ` ${event.eventDatetime.split(', ')[1] || ''}`}
-                      </span>
-                      {event.week && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                          {event.week}주차
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                  <Badge
-                    variant={percent === 100 ? 'default' : 'outline'}
-                    className={`shrink-0 text-[10px] ${percent === 100 ? 'bg-green-600 text-white' : ''}`}
-                  >
-                    {completed}/{CHECKLIST_STEPS.length}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 px-4 pb-4">
-                {/* Venue & Speakers */}
-                <div className="space-y-1.5 text-xs">
-                  {event.venue && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <MapPin className="size-3 shrink-0" />
-                      <span className="truncate">{event.venue}</span>
-                    </div>
-                  )}
-                  {event.speakers && event.speakers.length > 0 && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Users className="size-3 shrink-0" />
-                      <span className="truncate">{event.speakers.join(', ')}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Progress Bar */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">{t('calendar.ganttProgress')}</span>
-                    <span className={`font-medium ${
-                      percent === 100 ? 'text-green-600' : percent >= 50 ? 'text-amber-600' : 'text-red-500'
-                    }`}>
-                      {percent}%
-                    </span>
-                  </div>
-                  <Progress value={percent} className="h-1.5" />
-                </div>
-
-                {/* Interactive Checklist */}
-                <div className="grid grid-cols-2 gap-1.5">
-                  {CHECKLIST_STEPS.map(step => {
-                    const checked = event[step.key as keyof Event] === true
-                    return (
-                      <button
-                        key={step.key}
-                        type="button"
-                        onClick={() =>
-                          updateEvent.mutate({
-                            id: event.id,
-                            field: step.key,
-                            value: !checked,
-                          })
-                        }
-                        className={`flex items-center gap-1.5 text-xs rounded px-1.5 py-1 cursor-pointer transition-colors hover:bg-muted/50 ${
-                          checked ? 'text-green-700 bg-green-50 hover:bg-green-100' : 'text-muted-foreground'
-                        }`}
-                      >
-                        {checked ? (
-                          <CheckCircle2 className="size-3.5 text-green-600 shrink-0" />
-                        ) : (
-                          <Circle className="size-3.5 text-muted-foreground/40 shrink-0" />
-                        )}
-                        <span className={checked ? 'line-through' : ''}>{t(step.labelKey)}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
+        {events.map(event => (
+          <EventCard key={event.id} event={event} />
+        ))}
       </div>
     </div>
   )

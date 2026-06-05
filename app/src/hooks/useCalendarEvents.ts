@@ -42,6 +42,8 @@ function mapEvent(row: Record<string, unknown>): Event {
     designCompleted: (row.design_completed as boolean) || false,
     pptCompleted: (row.ppt_completed as boolean) || false,
     uploaded: (row.uploaded as boolean) || false,
+    notes: (row.notes as string) || undefined,
+    checklistDetails: (row.checklist_details as Record<string, string>) || {},
     createdAt: row.created_at as string,
   }
 }

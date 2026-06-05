@@ -17,6 +17,8 @@ function mapEvent(row: Record<string, unknown>): Event {
     designCompleted: row.design_completed as boolean,
     pptCompleted: row.ppt_completed as boolean,
     uploaded: row.uploaded as boolean,
+    notes: (row.notes as string) || undefined,
+    checklistDetails: (row.checklist_details as Record<string, string>) || {},
     createdAt: row.created_at as string,
   }
 }
@@ -74,12 +76,19 @@ const FIELD_TO_COLUMN: Record<string, string> = {
   designCompleted: 'design_completed',
   pptCompleted: 'ppt_completed',
   uploaded: 'uploaded',
+  notes: 'notes',
+  checklistDetails: 'checklist_details',
+  venue: 'venue',
+  speakers: 'speakers',
+  eventName: 'event_name',
+  eventDatetime: 'event_datetime',
+  eventDate: 'event_date',
 }
 
 export function useUpdateEvent() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, field, value }: { id: string; field: string; value: boolean }) => {
+    mutationFn: async ({ id, field, value }: { id: string; field: string; value: unknown }) => {
       const column = FIELD_TO_COLUMN[field]
       if (!column) throw new Error(`Unknown field: ${field}`)
       const { error } = await supabase

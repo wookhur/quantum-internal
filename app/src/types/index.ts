@@ -310,6 +310,8 @@ export interface Event {
   designCompleted: boolean
   pptCompleted: boolean
   uploaded: boolean
+  notes?: string
+  checklistDetails?: Record<string, string>
   createdAt: string
 }
 
