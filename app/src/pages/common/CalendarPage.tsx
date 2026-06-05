@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Progress } from '@/components/ui/progress'
 import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot, FileWarning, Globe, CheckCircle2, Circle, Cake, BarChart3, Plus, MapPin, Users } from 'lucide-react'
 import { useCalendarEvents, type ContractCalendarItem, type BirthdayItem } from '@/hooks/useCalendarEvents'
-import { useCreateEvent, useUpdateEvent } from '@/hooks/useEvents'
+import { useCreateEvent, useUpdateEvent, useEvents } from '@/hooks/useEvents'
 import { todayKST, currentYearKST, currentMonthKST, formatTimeKST } from '@/lib/date'
 import { useT } from '@/i18n/LanguageContext'
 import type { Meeting, Event, Todo, GoogleCalendarEvent } from '@/types'
@@ -317,6 +317,9 @@ function ScheduleGanttChart() {
   const ganttBirthdays = calData?.birthdays ?? []
   const ganttContracts = calData?.contractExpiries ?? []
 
+  // Fetch ALL events (no month filter) for management cards
+  const { data: allEvents = [] } = useEvents()
+
   const daysInMonth = new Date(ganttYear, ganttMonth, 0).getDate()
   const today = todayKST()
   const monthStr = `${ganttYear}-${String(ganttMonth).padStart(2, '0')}`
@@ -523,9 +526,9 @@ function ScheduleGanttChart() {
         </div>
         )}
 
-        {/* Event management cards — interactive checklist */}
-        {ganttEvents.length > 0 && (
-          <EventManagementCards events={ganttEvents} />
+        {/* Event management cards — all events across all months */}
+        {allEvents.length > 0 && (
+          <EventManagementCards events={allEvents} />
         )}
       </CardContent>
     </Card>
