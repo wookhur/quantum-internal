@@ -318,45 +318,31 @@ export function ColdCallPage() {
   // Fetch events for filter
   const { data: events = [] } = useEvents()
 
-  // Build event/channel filter options from events DB + lead source_channels
+  // Build event filter options: only specific seminar/webinar events from events table
+  // Generic names like just "세미나" are excluded. Matching is exact on source_channel.
   const eventFilterOptions = useMemo(() => {
     const options: { label: string; value: string }[] = []
     const seen = new Set<string>()
+    const GENERIC_NAMES = new Set(['세미나', '웨비나', '세미나 참석', '웨비나 참석'])
 
-    // Add events from events table first
     for (const e of events) {
-      if (!seen.has(e.eventName)) {
-        seen.add(e.eventName)
+      const name = e.eventName
+      if (!seen.has(name) && !GENERIC_NAMES.has(name) && (name.includes('세미나') || name.includes('웨비나'))) {
+        seen.add(name)
         const dateStr = e.eventDate ? `${parseInt(e.eventDate.slice(5,7))}/${parseInt(e.eventDate.slice(8,10))}` : ''
-        options.push({ label: dateStr ? `${dateStr} ${e.eventName}` : e.eventName, value: e.eventName })
-      }
-    }
-    // Add ALL non-empty source_channels from leads that aren't already covered
-    const sourceChannels = new Set(
-      allLeads
-        .map(l => l.sourceChannel)
-        .filter((sc): sc is string => !!sc && sc.trim().length > 0),
-    )
-    for (const sc of sourceChannels) {
-      if (!seen.has(sc)) {
-        seen.add(sc)
-        options.push({ label: sc, value: sc })
+        options.push({ label: dateStr ? `${dateStr} ${name}` : name, value: name })
       }
     }
     return options
-  }, [events, allLeads])
+  }, [events])
 
   // Filter and score leads
   const coldCallLeads = useMemo(() => {
     let leads = allLeads.filter((l) => COLD_CALL_STAGES.includes(l.pipelineStage))
 
-    // Event filter — show leads whose source_channel matches or contains the event name
+    // Event filter — exact match on source_channel only
     if (selectedEvent !== 'all') {
-      leads = leads.filter((l) =>
-        l.sourceChannel === selectedEvent ||
-        l.sourceChannel?.includes(selectedEvent) ||
-        selectedEvent.includes(l.sourceChannel || ''),
-      )
+      leads = leads.filter((l) => l.sourceChannel === selectedEvent)
     }
 
     // Grade group filter
