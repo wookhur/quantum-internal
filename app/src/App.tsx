@@ -25,7 +25,7 @@ import { IncentiveByContractPage } from '@/pages/finance/IncentiveByContractPage
 import { IncentiveByPersonPage } from '@/pages/finance/IncentiveByPersonPage'
 import { MarketingMetricsPage } from '@/pages/marketing/MarketingMetricsPage'
 import { AdCampaignsPage } from '@/pages/marketing/AdCampaignsPage'
-import { EventsPage } from '@/pages/marketing/EventsPage'
+// EventsPage merged into CalendarPage
 import { VideoProjectsPage } from '@/pages/marketing/VideoProjectsPage'
 import { SalesFunnelPage } from '@/pages/sales/SalesFunnelPage'
 import { PlanningOverviewPage } from '@/pages/planning/PlanningOverviewPage'
@@ -86,7 +86,7 @@ export default function App() {
 
                 <Route path="/marketing/metrics" element={<MarketingMetricsPage />} />
                 <Route path="/marketing/ads" element={<AdCampaignsPage />} />
-                <Route path="/marketing/events" element={<EventsPage />} />
+                <Route path="/marketing/events" element={<Navigate to="/calendar" replace />} />
                 <Route path="/marketing/videos" element={<VideoProjectsPage />} />
 
                 <Route path="/consulting/clients" element={<ContractsPage />} />

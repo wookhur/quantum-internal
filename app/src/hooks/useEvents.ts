@@ -26,6 +26,7 @@ export interface CreateEventInput {
   week: number
   event_name: string
   event_datetime: string
+  event_date?: string  // YYYY-MM-DD
   venue?: string
   speakers?: string[]
 }
@@ -34,6 +35,9 @@ export function useCreateEvent() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: CreateEventInput) => {
+      // Auto-derive event_date from event_datetime if not provided
+      const eventDate = input.event_date || (input.event_datetime ? input.event_datetime.slice(0, 10) : null)
+
       const { data, error } = await supabase
         .from('events')
         .insert({
@@ -41,6 +45,7 @@ export function useCreateEvent() {
           week: input.week,
           event_name: input.event_name,
           event_datetime: input.event_datetime,
+          event_date: eventDate,
           venue: input.venue || null,
           speakers: input.speakers || [],
           speaker_confirmed: false,
@@ -57,6 +62,7 @@ export function useCreateEvent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] })
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] })
     },
   })
 }
@@ -84,6 +90,7 @@ export function useUpdateEvent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] })
+      queryClient.invalidateQueries({ queryKey: ['calendar-events'] })
     },
   })
 }

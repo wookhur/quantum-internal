@@ -2,8 +2,13 @@ import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot, FileWarning, Globe } from 'lucide-react'
-import { useCalendarEvents, type ContractCalendarItem } from '@/hooks/useCalendarEvents'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Progress } from '@/components/ui/progress'
+import { ChevronLeft, ChevronRight, Loader2, Video, CalendarDays, CircleDot, FileWarning, Globe, CheckCircle2, Circle, Cake, BarChart3, Plus, MapPin, Users } from 'lucide-react'
+import { useCalendarEvents, type ContractCalendarItem, type BirthdayItem } from '@/hooks/useCalendarEvents'
+import { useCreateEvent, useUpdateEvent } from '@/hooks/useEvents'
 import { todayKST, currentYearKST, currentMonthKST, formatTimeKST } from '@/lib/date'
 import { useT } from '@/i18n/LanguageContext'
 import type { Meeting, Event, Todo, GoogleCalendarEvent } from '@/types'
@@ -22,6 +27,7 @@ interface DayData {
   todos: Todo[]
   contractExpiries: ContractCalendarItem[]
   googleEvents: GoogleCalendarEvent[]
+  birthdays: BirthdayItem[]
 }
 
 function buildCalendarGrid(
@@ -32,6 +38,7 @@ function buildCalendarGrid(
   todos: Todo[],
   contractExpiries: ContractCalendarItem[],
   googleEvents: GoogleCalendarEvent[],
+  birthdays: BirthdayItem[],
 ): DayData[][] {
   const firstDay = new Date(year, month - 1, 1)
   const lastDay = new Date(year, month, 0)
@@ -47,7 +54,7 @@ function buildCalendarGrid(
 
   const eventsByDate = new Map<string, Event[]>()
   events.forEach(e => {
-    const d = e.eventDatetime?.slice(0, 10)
+    const d = e.eventDate?.slice(0, 10) || e.eventDatetime?.slice(0, 10)
     if (d) eventsByDate.set(d, [...(eventsByDate.get(d) || []), e])
   })
 
@@ -69,6 +76,12 @@ function buildCalendarGrid(
     if (d) googleEventsByDate.set(d, [...(googleEventsByDate.get(d) || []), g])
   })
 
+  const birthdaysByDate = new Map<string, BirthdayItem[]>()
+  birthdays.forEach(b => {
+    const d = b.birthDate?.slice(0, 10)
+    if (d) birthdaysByDate.set(d, [...(birthdaysByDate.get(d) || []), b])
+  })
+
   const weeks: DayData[][] = []
   let currentWeek: DayData[] = []
 
@@ -79,7 +92,7 @@ function buildCalendarGrid(
     const m = month - 1 === 0 ? 12 : month - 1
     const y = month - 1 === 0 ? year - 1 : year
     const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(date).padStart(2, '0')}`
-    currentWeek.push({ date, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [], googleEvents: [] })
+    currentWeek.push({ date, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [], googleEvents: [], birthdays: [] })
   }
 
   // Current month days
@@ -94,6 +107,7 @@ function buildCalendarGrid(
       todos: todosByDate.get(dateStr) || [],
       contractExpiries: contractsByDate.get(dateStr) || [],
       googleEvents: googleEventsByDate.get(dateStr) || [],
+      birthdays: birthdaysByDate.get(dateStr) || [],
     })
 
     if (currentWeek.length === 7) {
@@ -109,7 +123,7 @@ function buildCalendarGrid(
       const m = month + 1 > 12 ? 1 : month + 1
       const y = month + 1 > 12 ? year + 1 : year
       const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(nextDate).padStart(2, '0')}`
-      currentWeek.push({ date: nextDate, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [], googleEvents: [] })
+      currentWeek.push({ date: nextDate, isCurrentMonth: false, dateStr, meetings: [], events: [], todos: [], contractExpiries: [], googleEvents: [], birthdays: [] })
       nextDate++
     }
     weeks.push(currentWeek)
@@ -129,7 +143,7 @@ function DayCell({
   isSelected: boolean
   onClick: () => void
 }) {
-  const totalItems = day.meetings.length + day.events.length + day.todos.length + day.contractExpiries.length + day.googleEvents.length
+  const totalItems = day.meetings.length + day.events.length + day.todos.length + day.contractExpiries.length + day.googleEvents.length + day.birthdays.length
   const hasItems = totalItems > 0
 
   return (
@@ -183,6 +197,12 @@ function DayCell({
             <span className="text-[10px] text-red-700 truncate">{t.title}</span>
           </div>
         ))}
+        {day.birthdays.slice(0, 1).map(b => (
+          <div key={b.profileId} className="flex items-center gap-0.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-pink-400 shrink-0" />
+            <span className="text-[10px] text-pink-600 truncate">🎂 {b.name}</span>
+          </div>
+        ))}
         {totalItems > 3 && (
           <div className="text-[10px] text-muted-foreground">
             +{totalItems - 3}
@@ -193,11 +213,495 @@ function DayCell({
   )
 }
 
+// ─── Gantt Chart Types & Helpers ─────────────────────────────────────
+const CHECKLIST_STEPS = [
+  { key: 'speakerConfirmed', color: 'bg-blue-500', labelKey: 'calendar.ganttSpeaker' },
+  { key: 'venueConfirmed', color: 'bg-purple-500', labelKey: 'calendar.ganttVenue' },
+  { key: 'copyWritten', color: 'bg-amber-500', labelKey: 'calendar.ganttCopy' },
+  { key: 'designCompleted', color: 'bg-pink-500', labelKey: 'calendar.ganttDesign' },
+  { key: 'pptCompleted', color: 'bg-cyan-500', labelKey: 'calendar.ganttPpt' },
+  { key: 'uploaded', color: 'bg-emerald-500', labelKey: 'calendar.ganttUpload' },
+] as const
+
+type GanttCategory = 'event' | 'meeting' | 'google' | 'todo' | 'birthday' | 'contract'
+
+interface GanttItem {
+  id: string
+  category: GanttCategory
+  label: string
+  subLabel?: string
+  day: number           // day of month (1-31)
+  color: string         // tailwind bg class
+  dotColor: string      // tailwind bg class for dot
+  event?: Event         // if category is 'event'
+}
+
+const CATEGORY_CONFIG: Record<GanttCategory, { labelKey: string; dotColor: string; barColor: string }> = {
+  event:    { labelKey: 'calendar.legendEvent',          dotColor: 'bg-emerald-500', barColor: 'bg-emerald-400' },
+  meeting:  { labelKey: 'calendar.legendMeeting',        dotColor: 'bg-blue-500',    barColor: 'bg-blue-400' },
+  google:   { labelKey: 'calendar.legendGoogle',         dotColor: 'bg-violet-500',  barColor: 'bg-violet-400' },
+  todo:     { labelKey: 'calendar.legendTodo',           dotColor: 'bg-red-500',     barColor: 'bg-red-400' },
+  birthday: { labelKey: 'calendar.legendBirthday',       dotColor: 'bg-pink-400',    barColor: 'bg-pink-300' },
+  contract: { labelKey: 'calendar.legendContractExpiry', dotColor: 'bg-orange-500',  barColor: 'bg-orange-400' },
+}
+
+function buildGanttItems(
+  events: Event[],
+  meetings: Meeting[],
+  googleEvents: GoogleCalendarEvent[],
+  todos: Todo[],
+  birthdays: BirthdayItem[],
+  contractExpiries: ContractCalendarItem[],
+  year: number,
+  month: number,
+  daysInMonth: number,
+): GanttItem[] {
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`
+  const items: GanttItem[] = []
+
+  // Events (seminars, webinars etc)
+  events.forEach(e => {
+    if (e.month !== monthStr && !e.eventDate?.startsWith(monthStr)) return
+    const dayStr = e.eventDate?.slice(8, 10)
+    const day = dayStr ? parseInt(dayStr, 10) : daysInMonth
+    items.push({
+      id: `event-${e.id}`,
+      category: 'event',
+      label: e.eventName,
+      subLabel: e.venue || undefined,
+      day,
+      color: CATEGORY_CONFIG.event.barColor,
+      dotColor: CATEGORY_CONFIG.event.dotColor,
+      event: e,
+    })
+  })
+
+  // Meetings
+  meetings.forEach(m => {
+    const d = m.meetingDate?.slice(0, 10)
+    if (!d?.startsWith(monthStr)) return
+    items.push({
+      id: `meeting-${m.id}`,
+      category: 'meeting',
+      label: m.parentName,
+      subLabel: m.studentName || undefined,
+      day: parseInt(d.slice(8, 10), 10),
+      color: CATEGORY_CONFIG.meeting.barColor,
+      dotColor: CATEGORY_CONFIG.meeting.dotColor,
+    })
+  })
+
+  // Google Calendar
+  googleEvents.forEach(g => {
+    const d = g.startTime?.slice(0, 10)
+    if (!d?.startsWith(monthStr)) return
+    items.push({
+      id: `google-${g.id}`,
+      category: 'google',
+      label: g.summary,
+      subLabel: g.location || undefined,
+      day: parseInt(d.slice(8, 10), 10),
+      color: CATEGORY_CONFIG.google.barColor,
+      dotColor: CATEGORY_CONFIG.google.dotColor,
+    })
+  })
+
+  // Todos
+  todos.forEach(td => {
+    const d = td.dueDate?.slice(0, 10)
+    if (!d?.startsWith(monthStr)) return
+    items.push({
+      id: `todo-${td.id}`,
+      category: 'todo',
+      label: td.title,
+      day: parseInt(d.slice(8, 10), 10),
+      color: CATEGORY_CONFIG.todo.barColor,
+      dotColor: CATEGORY_CONFIG.todo.dotColor,
+    })
+  })
+
+  // Birthdays
+  birthdays.forEach(b => {
+    const d = b.birthDate?.slice(0, 10)
+    if (!d?.startsWith(monthStr)) return
+    items.push({
+      id: `bday-${b.profileId}`,
+      category: 'birthday',
+      label: `🎂 ${b.name}`,
+      subLabel: b.department || undefined,
+      day: parseInt(d.slice(8, 10), 10),
+      color: CATEGORY_CONFIG.birthday.barColor,
+      dotColor: CATEGORY_CONFIG.birthday.dotColor,
+    })
+  })
+
+  // Contract expiries
+  contractExpiries.forEach(c => {
+    const d = c.expiryDate?.slice(0, 10)
+    if (!d?.startsWith(monthStr)) return
+    items.push({
+      id: `contract-${c.id}`,
+      category: 'contract',
+      label: c.studentName,
+      subLabel: c.contractorName,
+      day: parseInt(d.slice(8, 10), 10),
+      color: CATEGORY_CONFIG.contract.barColor,
+      dotColor: CATEGORY_CONFIG.contract.dotColor,
+    })
+  })
+
+  // Sort by day
+  items.sort((a, b) => a.day - b.day)
+  return items
+}
+
+// ─── Gantt Chart Component ───────────────────────────────────────────
+function ScheduleGanttChart({
+  events, meetings, googleEvents, todos, birthdays, contractExpiries, year, month,
+}: {
+  events: Event[]
+  meetings: Meeting[]
+  googleEvents: GoogleCalendarEvent[]
+  todos: Todo[]
+  birthdays: BirthdayItem[]
+  contractExpiries: ContractCalendarItem[]
+  year: number
+  month: number
+}) {
+  const t = useT()
+  const daysInMonth = new Date(year, month, 0).getDate()
+  const today = todayKST()
+  const monthStr = `${year}-${String(month).padStart(2, '0')}`
+  const isCurrentMonth = today.startsWith(monthStr)
+  const todayDay = isCurrentMonth ? parseInt(today.slice(8, 10), 10) : -1
+
+  const ganttItems = useMemo(
+    () => buildGanttItems(events, meetings, googleEvents, todos, birthdays, contractExpiries, year, month, daysInMonth),
+    [events, meetings, googleEvents, todos, birthdays, contractExpiries, year, month, daysInMonth],
+  )
+
+  // Group by category for section headers
+  const groupedItems = useMemo(() => {
+    const groups: { category: GanttCategory; items: GanttItem[] }[] = []
+    const catOrder: GanttCategory[] = ['event', 'meeting', 'google', 'todo', 'birthday', 'contract']
+    for (const cat of catOrder) {
+      const catItems = ganttItems.filter(i => i.category === cat)
+      if (catItems.length > 0) groups.push({ category: cat, items: catItems })
+    }
+    return groups
+  }, [ganttItems])
+
+  // Days array with weekday info
+  const daysArr = useMemo(() => {
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const d = new Date(year, month - 1, i + 1)
+      return { day: i + 1, dow: d.getDay() } // 0=Sun, 6=Sat
+    })
+  }, [year, month, daysInMonth])
+
+  if (ganttItems.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <BarChart3 className="size-4 text-primary" />
+            {t('calendar.ganttTitle')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground text-center py-8">{t('calendar.ganttNoEvents')}</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <BarChart3 className="size-4 text-primary" />
+              {t('calendar.ganttTitle')}
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">{t('calendar.ganttSubtitle')}</p>
+          </div>
+          {/* Legend */}
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => {
+              const hasItems = ganttItems.some(i => i.category === key)
+              if (!hasItems) return null
+              return (
+                <span key={key} className="flex items-center gap-1">
+                  <span className={`w-2.5 h-2.5 rounded-full ${cfg.dotColor} inline-block`} />
+                  <span className="text-[10px] text-muted-foreground">{t(cfg.labelKey)}</span>
+                </span>
+              )
+            })}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0 pb-4">
+        <div className="overflow-x-auto">
+          <div className="min-w-[800px]">
+            {/* Timeline header — day numbers */}
+            <div className="flex border-t border-b bg-muted/30 sticky top-0 z-20">
+              <div className="w-52 shrink-0 px-4 py-2 text-[11px] font-medium text-muted-foreground border-r" />
+              <div className="flex-1 flex relative">
+                {daysArr.map(({ day, dow }) => (
+                  <div
+                    key={day}
+                    className={`flex-1 text-center text-[10px] py-1.5 border-r border-transparent ${
+                      dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : 'text-muted-foreground'
+                    } ${day === todayDay ? 'font-bold text-primary bg-primary/5' : ''}`}
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Grouped rows */}
+            {groupedItems.map(({ category, items }) => {
+              const cfg = CATEGORY_CONFIG[category]
+              return (
+                <div key={category}>
+                  {/* Category header */}
+                  <div className="flex border-b bg-muted/20">
+                    <div className="w-52 shrink-0 px-4 py-1.5 border-r flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${cfg.dotColor}`} />
+                      <span className="text-[11px] font-semibold text-muted-foreground">{t(cfg.labelKey)} ({items.length})</span>
+                    </div>
+                    <div className="flex-1" />
+                  </div>
+
+                  {/* Items */}
+                  {items.map(item => (
+                    <div key={item.id} className="flex border-b hover:bg-muted/10 transition-colors group">
+                      {/* Label */}
+                      <div className="w-52 shrink-0 px-4 py-2 border-r min-w-0">
+                        <div className="text-xs font-medium truncate">{item.label}</div>
+                        {item.subLabel && (
+                          <div className="text-[10px] text-muted-foreground truncate">{item.subLabel}</div>
+                        )}
+                      </div>
+
+                      {/* Timeline bar area */}
+                      <div className="flex-1 relative flex items-center">
+                        {/* Weekend shading */}
+                        {daysArr.map(({ day, dow }) =>
+                          (dow === 0 || dow === 6) ? (
+                            <div
+                              key={`wk-${day}`}
+                              className="absolute top-0 bottom-0 bg-muted/20"
+                              style={{
+                                left: `${((day - 1) / daysInMonth) * 100}%`,
+                                width: `${(1 / daysInMonth) * 100}%`,
+                              }}
+                            />
+                          ) : null
+                        )}
+
+                        {/* Today line */}
+                        {isCurrentMonth && (
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-red-400/60 z-10"
+                            style={{ left: `${((todayDay - 0.5) / daysInMonth) * 100}%` }}
+                          />
+                        )}
+
+                        {/* Point marker for this item's date */}
+                        <div
+                          className="absolute z-10 flex items-center"
+                          style={{ left: `${((item.day - 0.5) / daysInMonth) * 100}%`, transform: 'translateX(-50%)' }}
+                        >
+                          <div className={`w-3 h-3 rounded-full ${item.dotColor} ring-2 ring-background shadow-sm`} />
+                        </div>
+
+                        {/* For events: show checklist progress bar leading up to event date */}
+                        {item.event && (
+                          <div className="absolute h-2 flex" style={{ left: '0%', width: `${((item.day - 0.5) / daysInMonth) * 100}%` }}>
+                            {CHECKLIST_STEPS.map((step, idx) => {
+                              const isDone = item.event![step.key as keyof Event] === true
+                              return (
+                                <div
+                                  key={step.key}
+                                  className={`flex-1 ${idx === 0 ? 'rounded-l-full' : ''} ${idx === CHECKLIST_STEPS.length - 1 ? 'rounded-r-full' : ''} ${
+                                    isDone ? step.color : 'bg-gray-200 dark:bg-gray-700'
+                                  } ${isDone ? 'opacity-80' : 'opacity-30'}`}
+                                  style={{ marginRight: idx < CHECKLIST_STEPS.length - 1 ? 1 : 0 }}
+                                />
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Progress for events */}
+                      {item.event ? (
+                        <div className="w-16 shrink-0 px-1 py-2 border-l flex items-center justify-center">
+                          {(() => {
+                            const done = CHECKLIST_STEPS.filter(s => item.event![s.key as keyof Event] === true).length
+                            const pct = Math.round((done / CHECKLIST_STEPS.length) * 100)
+                            return (
+                              <span className={`text-[11px] font-semibold ${
+                                pct === 100 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-gray-400'
+                              }`}>{pct}%</span>
+                            )
+                          })()}
+                        </div>
+                      ) : (
+                        <div className="w-16 shrink-0 px-1 py-2 border-l flex items-center justify-center">
+                          <span className="text-[10px] text-muted-foreground">{item.day}일</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Event management cards — interactive checklist */}
+        {events.length > 0 && (
+          <EventManagementCards events={events} />
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Event Management Cards (interactive checklist from EventsPage) ──
+function EventManagementCards({ events }: { events: Event[] }) {
+  const t = useT()
+  const updateEvent = useUpdateEvent()
+
+  return (
+    <div className="px-6 pt-4 border-t mt-2">
+      <h4 className="text-xs font-semibold text-muted-foreground mb-3">
+        {t('events.title')} — {t('calendar.ganttProgress')}
+      </h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {events.map(event => {
+          const completed = CHECKLIST_STEPS.filter(s => event[s.key as keyof Event] === true).length
+          const percent = Math.round((completed / CHECKLIST_STEPS.length) * 100)
+          return (
+            <Card key={event.id} className="overflow-hidden">
+              <CardHeader className="pb-3 px-4 pt-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-1 min-w-0">
+                    <h3 className="font-semibold text-sm leading-tight truncate">{event.eventName}</h3>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <CalendarDays className="size-3" />
+                        {event.eventDate
+                          ? `${parseInt(event.eventDate.slice(5, 7))}/${parseInt(event.eventDate.slice(8, 10))}`
+                          : event.eventDatetime || event.month
+                        }
+                        {event.eventDatetime && ` ${event.eventDatetime.split(', ')[1] || ''}`}
+                      </span>
+                      {event.week && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          {event.week}주차
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <Badge
+                    variant={percent === 100 ? 'default' : 'outline'}
+                    className={`shrink-0 text-[10px] ${percent === 100 ? 'bg-green-600 text-white' : ''}`}
+                  >
+                    {completed}/{CHECKLIST_STEPS.length}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 px-4 pb-4">
+                {/* Venue & Speakers */}
+                <div className="space-y-1.5 text-xs">
+                  {event.venue && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <MapPin className="size-3 shrink-0" />
+                      <span className="truncate">{event.venue}</span>
+                    </div>
+                  )}
+                  {event.speakers && event.speakers.length > 0 && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <Users className="size-3 shrink-0" />
+                      <span className="truncate">{event.speakers.join(', ')}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Progress Bar */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{t('calendar.ganttProgress')}</span>
+                    <span className={`font-medium ${
+                      percent === 100 ? 'text-green-600' : percent >= 50 ? 'text-amber-600' : 'text-red-500'
+                    }`}>
+                      {percent}%
+                    </span>
+                  </div>
+                  <Progress value={percent} className="h-1.5" />
+                </div>
+
+                {/* Interactive Checklist */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {CHECKLIST_STEPS.map(step => {
+                    const checked = event[step.key as keyof Event] === true
+                    return (
+                      <button
+                        key={step.key}
+                        type="button"
+                        onClick={() =>
+                          updateEvent.mutate({
+                            id: event.id,
+                            field: step.key,
+                            value: !checked,
+                          })
+                        }
+                        className={`flex items-center gap-1.5 text-xs rounded px-1.5 py-1 cursor-pointer transition-colors hover:bg-muted/50 ${
+                          checked ? 'text-green-700 bg-green-50 hover:bg-green-100' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {checked ? (
+                          <CheckCircle2 className="size-3.5 text-green-600 shrink-0" />
+                        ) : (
+                          <Circle className="size-3.5 text-muted-foreground/40 shrink-0" />
+                        )}
+                        <span className={checked ? 'line-through' : ''}>{t(step.labelKey)}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Add Event Dialog ────────────────────────────────────────────────
+const INITIAL_EVENT_FORM = {
+  month: '',
+  week: 1,
+  eventName: '',
+  eventDatetime: '',
+  venue: '',
+  speakers: '',
+}
+
 export function CalendarPage() {
   const t = useT()
   const [year, setYear] = useState(() => currentYearKST())
   const [month, setMonth] = useState(() => currentMonthKST())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [eventDialogOpen, setEventDialogOpen] = useState(false)
+  const [eventForm, setEventForm] = useState(INITIAL_EVENT_FORM)
+  const createEvent = useCreateEvent()
 
   const { data, isLoading } = useCalendarEvents(year, month)
   const meetings = data?.meetings || []
@@ -205,10 +709,35 @@ export function CalendarPage() {
   const todos = data?.todos || []
   const contractExpiries = data?.contractExpiries || []
   const googleEvents = data?.googleEvents || []
+  const birthdays = data?.birthdays || []
+
+  function handleCreateEvent() {
+    const monthStr = `${year}-${String(month).padStart(2, '0')}`
+    const speakersArray = eventForm.speakers
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+    createEvent.mutate(
+      {
+        month: eventForm.month || monthStr,
+        week: eventForm.week,
+        event_name: eventForm.eventName,
+        event_datetime: eventForm.eventDatetime,
+        venue: eventForm.venue || undefined,
+        speakers: speakersArray.length > 0 ? speakersArray : undefined,
+      },
+      {
+        onSuccess: () => {
+          setEventDialogOpen(false)
+          setEventForm(INITIAL_EVENT_FORM)
+        },
+      },
+    )
+  }
 
   const weeks = useMemo(
-    () => buildCalendarGrid(year, month, meetings, events, todos, contractExpiries, googleEvents),
-    [year, month, meetings, events, todos, contractExpiries, googleEvents]
+    () => buildCalendarGrid(year, month, meetings, events, todos, contractExpiries, googleEvents, birthdays),
+    [year, month, meetings, events, todos, contractExpiries, googleEvents, birthdays]
   )
 
   const todayStr = todayKST()
@@ -257,16 +786,103 @@ export function CalendarPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t('calendar.title')}</h1>
           <p className="text-muted-foreground">{t('calendar.subtitle')}</p>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="flex items-center gap-2 mr-4 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mr-2 text-xs text-muted-foreground flex-wrap">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> {t('calendar.legendMeeting')}</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> {t('calendar.legendEvent')}</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500 inline-block" /> {t('calendar.legendGoogle')}</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500 inline-block" /> {t('calendar.legendContractExpiry')}</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> {t('calendar.legendTodo')}</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-pink-400 inline-block" /> {t('calendar.legendBirthday')}</span>
           </div>
+          <Button size="sm" className="h-9 shrink-0" onClick={() => setEventDialogOpen(true)}>
+            <Plus className="size-4 mr-1" />
+            {t('events.addEvent')}
+          </Button>
         </div>
       </div>
+
+      {/* Add Event Dialog */}
+      <Dialog open={eventDialogOpen} onOpenChange={setEventDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('events.addEvent')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('events.month')}</Label>
+                <Input
+                  placeholder={`${year}-${String(month).padStart(2, '0')}`}
+                  value={eventForm.month}
+                  onChange={e => setEventForm(f => ({ ...f, month: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('events.week')}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={eventForm.week}
+                  onChange={e => setEventForm(f => ({ ...f, week: Number(e.target.value) }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{t('events.eventName')}</Label>
+              <Input
+                value={eventForm.eventName}
+                onChange={e => setEventForm(f => ({ ...f, eventName: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('events.datetime')}</Label>
+              <Input
+                type="datetime-local"
+                value={eventForm.eventDatetime}
+                onChange={e => setEventForm(f => ({ ...f, eventDatetime: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('events.venue')}</Label>
+              <Input
+                value={eventForm.venue}
+                onChange={e => setEventForm(f => ({ ...f, venue: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('events.speakers')}</Label>
+              <Input
+                placeholder={t('events.speakersPlaceholder')}
+                value={eventForm.speakers}
+                onChange={e => setEventForm(f => ({ ...f, speakers: e.target.value }))}
+              />
+            </div>
+            <Button
+              className="w-full"
+              onClick={handleCreateEvent}
+              disabled={createEvent.isPending || !eventForm.eventName || !eventForm.eventDatetime}
+            >
+              {createEvent.isPending ? t('common.saving') : t('common.add')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Gantt Chart */}
+      {!isLoading && (
+        <ScheduleGanttChart
+          events={events}
+          meetings={meetings}
+          googleEvents={googleEvents}
+          todos={todos}
+          birthdays={birthdays}
+          contractExpiries={contractExpiries}
+          year={year}
+          month={month}
+        />
+      )}
 
       <div className="flex gap-6">
         {/* Calendar Grid */}
@@ -344,7 +960,7 @@ export function CalendarPage() {
               <div className="text-center py-12 text-muted-foreground text-sm whitespace-pre-line">
                 {t('calendar.selectDateHint')}
               </div>
-            ) : selectedDay.meetings.length + selectedDay.events.length + selectedDay.todos.length + selectedDay.contractExpiries.length + selectedDay.googleEvents.length === 0 ? (
+            ) : selectedDay.meetings.length + selectedDay.events.length + selectedDay.todos.length + selectedDay.contractExpiries.length + selectedDay.googleEvents.length + selectedDay.birthdays.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
                 {t('calendar.noSchedule')}
               </div>
@@ -510,6 +1126,26 @@ export function CalendarPage() {
                               {td.priority === 'high' ? t('priority.high') : td.priority === 'medium' ? t('priority.medium') : t('priority.low')}
                             </Badge>
                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Birthdays */}
+                {selectedDay.birthdays.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Cake className="size-3.5 text-pink-400" />
+                      <h3 className="text-xs font-semibold text-pink-600">{t('calendar.legendBirthday')} ({selectedDay.birthdays.length})</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {selectedDay.birthdays.map(b => (
+                        <div key={b.profileId} className="p-2.5 rounded-lg border border-pink-200 bg-pink-50/50">
+                          <div className="text-sm font-medium">🎂 {b.name}</div>
+                          {b.department && (
+                            <div className="text-xs text-muted-foreground">{b.department}</div>
+                          )}
                         </div>
                       ))}
                     </div>

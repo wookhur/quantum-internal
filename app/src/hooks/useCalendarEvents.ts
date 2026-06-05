@@ -32,6 +32,7 @@ function mapEvent(row: Record<string, unknown>): Event {
     month: row.month as string,
     week: row.week as number,
     eventName: row.event_name as string,
+    eventDate: row.event_date as string | undefined,
     eventDatetime: row.event_datetime as string,
     venue: row.venue as string,
     speakers: row.speakers as string[],
@@ -89,12 +90,20 @@ export interface ContractCalendarItem {
   status: string
 }
 
+export interface BirthdayItem {
+  profileId: string
+  name: string
+  birthDate: string   // YYYY-MM-DD
+  department?: string
+}
+
 export interface CalendarData {
   meetings: Meeting[]
   events: Event[]
   todos: Todo[]
   contractExpiries: ContractCalendarItem[]
   googleEvents: GoogleCalendarEvent[]
+  birthdays: BirthdayItem[]
 }
 
 export function useCalendarEvents(year: number, month: number) {
@@ -105,19 +114,21 @@ export function useCalendarEvents(year: number, month: number) {
       const endDate = new Date(year, month, 0) // last day of month
       const endDateStr = `${year}-${String(month).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`
 
-      const [meetingsRes, eventsRes, todosRes, contractsRes, googleEventsRes] = await Promise.all([
+      const monthStr = `${year}-${String(month).padStart(2, '0')}`
+
+      const [meetingsRes, eventsRes, todosRes, contractsRes, googleEventsRes, employeeInfoRes, profilesRes] = await Promise.all([
         supabase
           .from('meetings')
           .select('*')
           .gte('meeting_date', startDate)
           .lte('meeting_date', endDateStr + 'T23:59:59')
           .order('meeting_date', { ascending: true }),
+        // Events: match by event_date range OR month field
         supabase
           .from('events')
           .select('*')
-          .gte('event_datetime', startDate)
-          .lte('event_datetime', endDateStr + 'T23:59:59')
-          .order('event_datetime', { ascending: true }),
+          .or(`and(event_date.gte.${startDate},event_date.lte.${endDateStr}),month.eq.${monthStr}`)
+          .order('event_date', { ascending: true }),
         supabase
           .from('todos')
           .select('*')
@@ -140,6 +151,15 @@ export function useCalendarEvents(year: number, month: number) {
           .lte('start_time', endDateStr + 'T23:59:59')
           .eq('status', 'confirmed')
           .order('start_time', { ascending: true }),
+        // Fetch employee info for birthdays
+        supabase
+          .from('employee_info')
+          .select('profile_id, birth_date')
+          .not('birth_date', 'is', null),
+        // Fetch profiles for names
+        supabase
+          .from('profiles')
+          .select('id, name, department'),
       ])
 
       if (meetingsRes.error) throw meetingsRes.error
@@ -155,12 +175,39 @@ export function useCalendarEvents(year: number, month: number) {
         status: row.status as string,
       }))
 
+      // Build birthday list for this month
+      const profileMap = new Map<string, { name: string; department?: string }>()
+      ;(profilesRes.data || []).forEach((p: Record<string, unknown>) => {
+        profileMap.set(p.id as string, { name: p.name as string, department: p.department as string | undefined })
+      })
+
+      const birthdays: BirthdayItem[] = []
+      ;(employeeInfoRes.data || []).forEach((row: Record<string, unknown>) => {
+        const bd = row.birth_date as string | null
+        if (!bd) return
+        // birth_date is YYYY-MM-DD; check if MM matches this month
+        const bdMonth = parseInt(bd.slice(5, 7), 10)
+        if (bdMonth !== month) return
+        const profile = profileMap.get(row.profile_id as string)
+        if (!profile) return
+        // Build a date in this year for display
+        const bdDay = bd.slice(8, 10)
+        birthdays.push({
+          profileId: row.profile_id as string,
+          name: profile.name,
+          birthDate: `${year}-${String(month).padStart(2, '0')}-${bdDay}`,
+          department: profile.department,
+        })
+      })
+      birthdays.sort((a, b) => a.birthDate.localeCompare(b.birthDate))
+
       return {
         meetings: (meetingsRes.data || []).map(mapMeeting),
         events: (eventsRes.data || []).map(mapEvent),
         todos: (todosRes.data || []).map(mapTodo),
         contractExpiries,
         googleEvents: (googleEventsRes.data || []).map(mapGoogleCalendarEvent),
+        birthdays,
       }
     },
   })
