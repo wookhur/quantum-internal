@@ -562,9 +562,9 @@ function EventCard({ event }: { event: Event }) {
                 <CalendarDays className="size-3" />
                 {event.eventDate
                   ? `${parseInt(event.eventDate.slice(5, 7))}/${parseInt(event.eventDate.slice(8, 10))}`
-                  : event.eventDatetime || event.month
+                  : event.eventDatetime?.split(', ')[0] || event.month
                 }
-                {event.eventDatetime && ` ${event.eventDatetime.split(', ')[1] || ''}`}
+                {event.eventDatetime?.includes(', ') && `, ${event.eventDatetime.split(', ')[1]}`}
               </span>
               {event.week && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">

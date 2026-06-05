@@ -8,6 +8,7 @@ function mapEvent(row: Record<string, unknown>): Event {
     month: row.month as string,
     week: row.week as number | undefined,
     eventName: row.event_name as string,
+    eventDate: row.event_date as string | undefined,
     eventDatetime: row.event_datetime as string | undefined,
     venue: row.venue as string | undefined,
     speakers: row.speakers as string[] | undefined,
