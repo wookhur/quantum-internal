@@ -319,7 +319,6 @@ export function ColdCallPage() {
   const { data: events = [] } = useEvents()
 
   // Build event filter options: only specific seminar/webinar events from events table
-  // Generic names like just "세미나" are excluded. Matching is exact on source_channel.
   const eventFilterOptions = useMemo(() => {
     const options: { label: string; value: string }[] = []
     const seen = new Set<string>()
@@ -330,7 +329,9 @@ export function ColdCallPage() {
       if (!seen.has(name) && !GENERIC_NAMES.has(name) && (name.includes('세미나') || name.includes('웨비나'))) {
         seen.add(name)
         const dateStr = e.eventDate ? `${parseInt(e.eventDate.slice(5,7))}/${parseInt(e.eventDate.slice(8,10))}` : ''
-        options.push({ label: dateStr ? `${dateStr} ${name}` : name, value: name })
+        // value includes date prefix to match source_channel format (e.g. "6/13 이광미 원장님 웨비나")
+        const value = dateStr ? `${dateStr} ${name}` : name
+        options.push({ label: value, value })
       }
     }
     return options
