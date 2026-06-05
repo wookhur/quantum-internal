@@ -725,13 +725,40 @@ function EventCard({ event }: { event: Event }) {
 // ─── Event Management Cards ─────────────────────────────────────────
 function EventManagementCards({ events }: { events: Event[] }) {
   const t = useT()
+  const [showPast, setShowPast] = useState(false)
+  const today = todayKST()
+
+  const { upcoming, past } = useMemo(() => {
+    const up: Event[] = []
+    const pa: Event[] = []
+    for (const e of events) {
+      const d = e.eventDate || e.eventDatetime?.slice(0, 10)
+      if (d && d < today) pa.push(e)
+      else up.push(e)
+    }
+    return { upcoming: up, past: pa }
+  }, [events, today])
+
+  const displayed = showPast ? [...upcoming, ...past] : upcoming
+
   return (
     <div className="px-6 pt-4 border-t mt-2">
-      <h4 className="text-xs font-semibold text-muted-foreground mb-3">
-        {t('events.title')} — {t('calendar.ganttProgress')}
-      </h4>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-xs font-semibold text-muted-foreground">
+          {t('events.title')} — {t('calendar.ganttProgress')}
+        </h4>
+        {past.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowPast(v => !v)}
+            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showPast ? '지난 이벤트 숨기기' : `지난 이벤트 보기 (${past.length})`}
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {events.map(event => (
+        {displayed.map(event => (
           <EventCard key={event.id} event={event} />
         ))}
       </div>
