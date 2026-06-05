@@ -281,6 +281,39 @@ export function AttendancePage() {
 
   const numDays = days.length
 
+  // Total worked hours per employee for the month
+  const totalHoursByProfile = useMemo(() => {
+    const map = new Map<string, number>() // profileId -> total minutes
+    for (const a of attendances) {
+      if (a.clockIn && a.clockOut) {
+        const [h1, m1] = a.clockIn.split(':').map(Number)
+        const [h2, m2] = a.clockOut.split(':').map(Number)
+        const mins = (h2 * 60 + m2) - (h1 * 60 + m1)
+        if (mins > 0) {
+          map.set(a.profileId, (map.get(a.profileId) || 0) + mins)
+        }
+      }
+    }
+    return map
+  }, [attendances])
+
+  const sortedHoursSummary = useMemo(() => {
+    const entries = Array.from(totalHoursByProfile.entries())
+      .map(([profileId, totalMins]) => ({
+        profileId,
+        name: profileName(profileId),
+        totalMins,
+        hours: Math.floor(totalMins / 60),
+        mins: totalMins % 60,
+      }))
+      .filter(e => {
+        if (selectedProfile === 'all') return true
+        return e.profileId === selectedProfile
+      })
+    entries.sort((a, b) => b.totalMins - a.totalMins)
+    return entries
+  }, [totalHoursByProfile, profileName, selectedProfile])
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -369,6 +402,31 @@ export function AttendancePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Monthly total hours per employee */}
+      {sortedHoursSummary.length > 0 && (
+        <Card>
+          <CardContent className="py-3 px-4">
+            <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-blue-500" />
+              월별 근무시간 합계
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {sortedHoursSummary.map(entry => (
+                <div
+                  key={entry.profileId}
+                  className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2"
+                >
+                  <span className="text-sm font-medium truncate mr-2">{entry.name}</span>
+                  <span className="text-sm font-mono font-bold text-blue-600 whitespace-nowrap">
+                    {entry.hours}h{entry.mins > 0 ? ` ${entry.mins}m` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Calendar grid — fixed to viewport width */}
       <Card>
