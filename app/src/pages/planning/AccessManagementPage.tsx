@@ -32,6 +32,7 @@ const ROLE_CONFIG: Record<UserRole, { label: string; className: string; icon: ty
   manager: { label: 'Manager', className: 'bg-blue-50 text-blue-700 border-blue-200', icon: ShieldCheck },
   staff: { label: 'Staff', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: Users },
   freelancer: { label: 'Freelancer', className: 'bg-purple-50 text-purple-700 border-purple-200', icon: Briefcase },
+  partner: { label: 'Partner', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: Briefcase },
   viewer: { label: 'Viewer', className: 'bg-gray-50 text-gray-600 border-gray-200', icon: Eye },
 }
 

@@ -75,6 +75,7 @@ export type FeatureModule =
   | 'service'
   | 'planning'
   | 'hr'
+  | 'partner'
   | 'game'
 
 /** Every navigable route and which module (package) it belongs to */
@@ -124,6 +125,8 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/hr/kpi-targets', labelKey: 'nav.kpiTargets', module: 'hr' },
   { path: '/hr/employees', labelKey: 'nav.accessControl', module: 'hr' },
   { path: '/hr/personal-info', labelKey: 'nav.personalInfo', module: 'hr' },
+  // ── Partner ──
+  { path: '/partner/contracts', labelKey: 'nav.partnerContracts', module: 'partner' },
   // ── Game ──
   { path: '/game', labelKey: 'nav.trexRunner', module: 'game' },
 ]
@@ -137,6 +140,7 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
   { key: 'finance', labelKey: 'access.pkg.finance', descriptionKey: 'access.pkg.financeDesc' },
   { key: 'planning', labelKey: 'access.pkg.planning', descriptionKey: 'access.pkg.planningDesc' },
   { key: 'hr', labelKey: 'access.pkg.hr', descriptionKey: 'access.pkg.hrDesc' },
+  { key: 'partner', labelKey: 'access.pkg.partner', descriptionKey: 'access.pkg.partnerDesc' },
   { key: 'game', labelKey: 'access.pkg.game', descriptionKey: 'access.pkg.gameDesc' },
 ]
 
@@ -156,6 +160,7 @@ export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
   manager: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'game'],
   staff: ['dashboard', 'sales', 'marketing', 'service', 'game'],
   freelancer: ['dashboard', 'game'],
+  partner: ['partner', 'dashboard'],
   viewer: [],
 }
 

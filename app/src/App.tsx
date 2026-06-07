@@ -45,6 +45,7 @@ import { MessagesPage } from '@/pages/common/MessagesPage'
 import { TaskBoardPage } from '@/pages/common/TaskBoardPage'
 import { PersonProfilePage } from '@/pages/common/PersonProfilePage'
 import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
+import { PartnerContractsPage } from '@/pages/partner/PartnerContractsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -97,6 +98,8 @@ export default function App() {
                 <Route path="/finance/wire-invoice" element={<WireInvoicePage />} />
                 <Route path="/finance/incentives/by-contract" element={<IncentiveByContractPage />} />
                 <Route path="/finance/incentives/by-person" element={<IncentiveByPersonPage />} />
+
+                <Route path="/partner/contracts" element={<PartnerContractsPage />} />
 
                 <Route path="/service/dashboard" element={<ServiceDashboardPage />} />
                 <Route path="/service/student-360" element={<Student360Page />} />

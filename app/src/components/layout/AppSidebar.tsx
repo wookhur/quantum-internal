@@ -128,6 +128,14 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     ],
   },
   {
+    titleKey: 'nav.partner',
+    module: 'partner',
+    items: [
+      { labelKey: 'nav.partnerContracts', to: '/partner/contracts', icon: FileText },
+      { labelKey: 'nav.calendar', to: '/calendar', icon: Calendar },
+    ],
+  },
+  {
     titleKey: 'nav.breakTime',
     module: 'game',
     items: [

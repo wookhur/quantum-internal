@@ -1,5 +1,5 @@
 // ============ USER & AUTH ============
-export type UserRole = 'admin' | 'manager' | 'staff' | 'freelancer' | 'viewer'
+export type UserRole = 'admin' | 'manager' | 'staff' | 'freelancer' | 'partner' | 'viewer'
 export type Department = 'management' | 'sales' | 'marketing' | 'finance' | 'service'
 
 export interface User {
@@ -166,6 +166,8 @@ export interface Contract {
   serviceRep?: string  // profile id
   salesRepUser?: User  // joined
   serviceRepUser?: User  // joined
+  partnerId?: string  // profile id of partner (e.g. 해리스컨셉)
+  partnerFeeRate?: number  // e.g. 0.20 = 20%
   status: ContractStatus
   notes?: string
   createdAt: string
