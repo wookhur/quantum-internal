@@ -91,6 +91,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/calendar', labelKey: 'nav.calendar', module: 'dashboard' },
   { path: '/tasks', labelKey: 'nav.taskBoard', module: 'dashboard' },
   { path: '/messages', labelKey: 'nav.messages', module: 'dashboard' },
+  { path: '/person', labelKey: 'nav.personProfile', module: 'dashboard' },
   // ── Sales ──
   { path: '/sales/cold-call', labelKey: 'nav.coldCall', module: 'sales' },
   { path: '/sales/leads', labelKey: 'nav.leadManagement', module: 'sales' },
@@ -156,7 +157,7 @@ function expandModulesToRoutes(modules: FeatureModule[]): string[] {
 
 /** Default feature access per role (module-level) */
 export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
-  admin: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'game'],
+  admin: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'partner', 'game'],
   manager: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'game'],
   staff: ['dashboard', 'sales', 'marketing', 'service', 'game'],
   freelancer: ['dashboard', 'game'],
