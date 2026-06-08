@@ -227,18 +227,26 @@ export function useUpdateFeatureAccess() {
 
 /**
  * Get the set of enabled route paths for a user.
- * Priority: custom enabledRoutes > custom enabledModules (expand) > role defaults (expand).
+ * Admin always gets ALL routes (never blocked by stale custom records).
+ * Others: custom enabledRoutes > custom enabledModules (expand) > role defaults (expand).
  */
 export function getEffectiveRoutes(
   user: User,
   featureAccessRecords: FeatureAccessRecord[],
 ): string[] {
+  // Admin always has full access to every defined route
+  if (user.role === 'admin') {
+    return NAV_ROUTE_DEFS.map(r => r.path)
+  }
   const custom = featureAccessRecords.find(r => r.userId === user.id)
   if (custom) {
-    // If per-route overrides exist, use them
-    if (custom.enabledRoutes.length > 0) return custom.enabledRoutes
-    // Otherwise expand modules to routes
-    return expandModulesToRoutes(custom.enabledModules)
+    // If per-route overrides exist, merge with module-expanded routes to avoid stale gaps
+    const moduleRoutes = expandModulesToRoutes(custom.enabledModules)
+    if (custom.enabledRoutes.length > 0) {
+      const merged = new Set([...moduleRoutes, ...custom.enabledRoutes])
+      return [...merged]
+    }
+    return moduleRoutes
   }
   // Role defaults
   const defaultModules = ROLE_DEFAULT_ACCESS[user.role] || ROLE_DEFAULT_ACCESS.viewer
