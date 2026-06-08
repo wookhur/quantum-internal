@@ -256,7 +256,7 @@ export function useIncentivesByInstallment() {
             if (pi.category !== 'base') continue
           }
 
-          const isPaid = pi.status === 'paid'
+          const isPaid = pi.status === 'paid' || (pi.paidAmount > 0 && pi.paidAmount >= pi.amount)
           // 부가세 10% 제외 후 인센티브 계산
           // 입금 완료: paid_amount 기준, 미입금: 예정 금액(amount) 기준
           const baseAmount = isPaid ? pi.paidAmount : pi.amount
