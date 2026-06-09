@@ -43,6 +43,10 @@ const TEXT: Record<string, Record<Lang, string>> = {
   ecPhonePh:      { ko: '010-0000-0000', en: 'Phone number' },
   ecRelation:     { ko: '관계', en: 'Relation' },
   ecRelationPh:   { ko: '예: 배우자, 부모', en: 'e.g. Spouse, Parent' },
+  nationality:    { ko: '국적', en: 'Nationality' },
+  nationalityPh:  { ko: '예: 한국, 미국', en: 'e.g. Korean, American' },
+  visaType:       { ko: '비자 타입', en: 'Visa Type' },
+  visaTypePh:     { ko: '예: F-4, E-7', en: 'e.g. F-4, E-7' },
   notes:          { ko: '기타 메모', en: 'Notes' },
   notesPh:        { ko: '알레르기, 특이사항 등', en: 'Allergies, special notes, etc.' },
   submitting:     { ko: '제출 중...', en: 'Submitting...' },
@@ -101,6 +105,8 @@ export function EmployeeFormPage() {
         bankHolder: form.bankHolder,
         startDate: form.startDate,
         notes: form.notes,
+        nationality: form.nationality,
+        visaType: form.visaType,
       })
       await markUsed.mutateAsync(token!)
       setSubmitted(true)
@@ -223,6 +229,28 @@ export function EmployeeFormPage() {
                 onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
                 className="h-9"
               />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">{t('nationality')}</Label>
+                <Input
+                  placeholder={t('nationalityPh')}
+                  value={form.nationality || ''}
+                  onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))}
+                  className="h-9"
+                />
+              </div>
+              {form.nationality && form.nationality !== '한국' && form.nationality !== 'Korea' && form.nationality !== 'Korean' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">{t('visaType')}</Label>
+                  <Input
+                    placeholder={t('visaTypePh')}
+                    value={form.visaType || ''}
+                    onChange={e => setForm(f => ({ ...f, visaType: e.target.value }))}
+                    className="h-9"
+                  />
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

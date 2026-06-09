@@ -119,6 +119,8 @@ export function PersonalInfoPage() {
       bankHolder: editForm.bankHolder,
       startDate: editForm.startDate,
       notes: editForm.notes,
+      nationality: editForm.nationality,
+      visaType: editForm.visaType,
     })
     setEditDialog(null)
   }
@@ -141,6 +143,8 @@ export function PersonalInfoPage() {
         [t('personalInfo.ecName')]: info?.emergencyContactName || '',
         [t('personalInfo.ecPhone')]: info?.emergencyContactPhone || '',
         [t('personalInfo.ecRelation')]: info?.emergencyContactRelation || '',
+        [t('personalInfo.nationality')]: info?.nationality || '',
+        [t('personalInfo.visaType')]: info?.visaType || '',
         [t('personalInfo.notes')]: info?.notes || '',
       }
     })
@@ -419,6 +423,19 @@ export function PersonalInfoPage() {
             <div className="space-y-1.5">
               <Label className="text-xs">{t('personalInfo.startDate')}</Label>
               <Input type="date" value={editForm.startDate || ''} onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))} className="h-9" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">{t('personalInfo.nationality')}</Label>
+                <Input value={editForm.nationality || ''} onChange={e => setEditForm(f => ({ ...f, nationality: e.target.value }))} className="h-9" placeholder={t('personalInfo.nationalityPh')} />
+              </div>
+              {editForm.nationality && editForm.nationality !== '한국' && editForm.nationality !== 'Korea' && editForm.nationality !== 'Korean' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">{t('personalInfo.visaType')}</Label>
+                  <Input value={editForm.visaType || ''} onChange={e => setEditForm(f => ({ ...f, visaType: e.target.value }))} className="h-9" placeholder={t('personalInfo.visaTypePh')} />
+                </div>
+              )}
             </div>
 
             <div className="border-t pt-3 mt-3">

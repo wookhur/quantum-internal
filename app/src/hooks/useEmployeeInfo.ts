@@ -16,6 +16,8 @@ export interface EmployeeInfo {
   bankHolder: string | null
   startDate: string | null
   notes: string | null
+  nationality: string | null
+  visaType: string | null
   updatedAt: string
 }
 
@@ -35,6 +37,8 @@ function mapRow(r: Record<string, unknown>): EmployeeInfo {
     bankHolder: r.bank_holder as string | null,
     startDate: r.start_date as string | null,
     notes: r.notes as string | null,
+    nationality: r.nationality as string | null,
+    visaType: r.visa_type as string | null,
     updatedAt: r.updated_at as string,
   }
 }
@@ -110,6 +114,8 @@ export function useUpsertEmployeeInfo() {
       bankHolder?: string | null
       startDate?: string | null
       notes?: string | null
+      nationality?: string | null
+      visaType?: string | null
     }) => {
       const { error } = await supabase
         .from('employee_info')
@@ -128,6 +134,8 @@ export function useUpsertEmployeeInfo() {
             bank_holder: input.bankHolder || null,
             start_date: input.startDate || null,
             notes: input.notes || null,
+            nationality: input.nationality || null,
+            visa_type: input.visaType || null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'profile_id' },
