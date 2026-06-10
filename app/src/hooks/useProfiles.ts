@@ -164,11 +164,11 @@ function expandModulesToRoutes(modules: FeatureModule[]): string[] {
 /** Default feature access per role (module-level) */
 export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
   admin: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
-  manager: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'game', 'my_incentive'],
-  staff: ['dashboard', 'sales', 'marketing', 'service', 'game', 'my_incentive'],
-  freelancer: ['dashboard', 'game'],
-  partner: ['partner', 'dashboard'],
-  viewer: [],
+  c_level: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
+  sales_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
+  service_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'hr', 'game'],
+  marketing_manager: ['dashboard', 'marketing', 'game'],
+  external: ['dashboard', 'game'],
 }
 
 export interface FeatureAccessRecord {
@@ -257,7 +257,7 @@ export function getEffectiveRoutes(
     }
   } else {
     // Role defaults
-    const defaultModules = ROLE_DEFAULT_ACCESS[user.role] || ROLE_DEFAULT_ACCESS.viewer
+    const defaultModules = ROLE_DEFAULT_ACCESS[user.role] || ROLE_DEFAULT_ACCESS.external
     routes = expandModulesToRoutes(defaultModules)
   }
   // Non-admin users are always blocked from admin-only routes

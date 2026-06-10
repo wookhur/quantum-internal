@@ -33,7 +33,7 @@ function fallbackUser(s: Session): User {
     id: s.user.id,
     email: s.user.email || '',
     name: s.user.user_metadata?.full_name || s.user.user_metadata?.name || s.user.email?.split('@')[0] || 'User',
-    role: 'viewer' as UserRole,
+    role: 'external' as UserRole,
     isExternal: false,
     createdAt: s.user.created_at,
   }
@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const name = fullName || email.split('@')[0]
       const { data: newProfile, error: insertError } = await supabase
         .from('profiles')
-        .insert({ id: userId, email, name, role: 'viewer' })
+        .insert({ id: userId, email, name, role: 'external' })
         .select()
         .single()
 
@@ -124,14 +124,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(profile)
           } else {
             // Only use fallback if we've NEVER successfully loaded
-            setUser(prev => prev && prev.role !== 'viewer' ? prev : fallbackUser(s))
+            setUser(prev => prev && prev.role !== 'external' ? prev : fallbackUser(s))
           }
           setSession(s)
         }
       } catch (err) {
         console.error('Profile fetch error:', err)
         if (isMounted) {
-          setUser(prev => prev && prev.role !== 'viewer' ? prev : fallbackUser(s))
+          setUser(prev => prev && prev.role !== 'external' ? prev : fallbackUser(s))
           setSession(s)
         }
       } finally {

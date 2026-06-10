@@ -147,20 +147,20 @@ export async function getContractNotificationRecipients(): Promise<string[]> {
       continue
     }
 
-    // Sales managers (department=sales, role=admin or manager)
-    if (department === 'sales' && (role === 'admin' || role === 'manager')) {
+    // Sales managers
+    if (department === 'sales' && (role === 'admin' || role === 'c_level' || role === 'sales_manager')) {
       recipients.add(profile.id as string)
       continue
     }
 
-    // Service managers (department=service, role=admin or manager)
-    if (department === 'service' && (role === 'admin' || role === 'manager')) {
+    // Service managers
+    if (department === 'service' && (role === 'admin' || role === 'c_level' || role === 'service_manager')) {
       recipients.add(profile.id as string)
       continue
     }
 
     // Management department (includes CEO, COO, etc.)
-    if (department === 'management' && (role === 'admin' || role === 'manager')) {
+    if (department === 'management' && (role === 'admin' || role === 'c_level')) {
       recipients.add(profile.id as string)
     }
   }
