@@ -100,6 +100,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     titleKey: 'nav.finance',
     module: 'finance',
     items: [
+      { labelKey: 'nav.financeDashboard', to: '/finance/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.contractManagement', to: '/consulting/clients', icon: FileText },
       { labelKey: 'nav.monthlyCollection', to: '/consulting/collections', icon: CalendarDays },
       { labelKey: 'nav.invoices', to: '/finance/invoices', icon: FileText },

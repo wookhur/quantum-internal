@@ -23,6 +23,7 @@ import { ReceiptsPage } from '@/pages/finance/ReceiptsPage'
 import { WireInvoicePage } from '@/pages/finance/WireInvoicePage'
 import { IncentiveByContractPage } from '@/pages/finance/IncentiveByContractPage'
 import { IncentiveByPersonPage } from '@/pages/finance/IncentiveByPersonPage'
+import { FinanceDashboardPage } from '@/pages/finance/FinanceDashboardPage'
 import { MarketingMetricsPage } from '@/pages/marketing/MarketingMetricsPage'
 import { AdCampaignsPage } from '@/pages/marketing/AdCampaignsPage'
 // EventsPage merged into CalendarPage
@@ -93,6 +94,7 @@ export default function App() {
                 <Route path="/consulting/clients" element={<ContractsPage />} />
                 <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />
                 <Route path="/consulting/collections" element={<MonthlyCollectionPage />} />
+                <Route path="/finance/dashboard" element={<FinanceDashboardPage />} />
                 <Route path="/finance/invoices" element={<InvoicesPage />} />
                 <Route path="/finance/receipts" element={<ReceiptsPage />} />
                 <Route path="/finance/wire-invoice" element={<WireInvoicePage />} />
