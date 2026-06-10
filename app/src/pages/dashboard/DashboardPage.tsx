@@ -417,6 +417,7 @@ export function DashboardPage() {
   const enabledModules = user ? getEffectiveModules(user, featureAccess) : []
   const hasSales = enabledModules.includes('sales')
   const hasFinance = enabledModules.includes('finance')
+  const hasMyIncentive = enabledModules.includes('my_incentive')
 
   const { data: todayMeetings = [], isLoading: meetingsLoading } = useTodayMeetings()
   const { data: todos = [], isLoading: todosLoading } = useDashboardTodos()
@@ -646,7 +647,7 @@ export function DashboardPage() {
       </div>
 
       {/* 내 인센티브 */}
-      <MyIncentiveCard userId={user?.id || ''} />
+      {hasMyIncentive && <MyIncentiveCard userId={user?.id || ''} />}
 
       {/* Meetings + Todos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

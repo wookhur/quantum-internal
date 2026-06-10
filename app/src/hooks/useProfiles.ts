@@ -77,6 +77,7 @@ export type FeatureModule =
   | 'hr'
   | 'partner'
   | 'game'
+  | 'my_incentive'
 
 /** Every navigable route and which module (package) it belongs to */
 export interface NavRouteDef {
@@ -143,6 +144,7 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
   { key: 'hr', labelKey: 'access.pkg.hr', descriptionKey: 'access.pkg.hrDesc' },
   { key: 'partner', labelKey: 'access.pkg.partner', descriptionKey: 'access.pkg.partnerDesc' },
   { key: 'game', labelKey: 'access.pkg.game', descriptionKey: 'access.pkg.gameDesc' },
+  { key: 'my_incentive', labelKey: 'access.pkg.myIncentive', descriptionKey: 'access.pkg.myIncentiveDesc' },
 ]
 
 /** Get all route paths for a module */
@@ -157,9 +159,9 @@ function expandModulesToRoutes(modules: FeatureModule[]): string[] {
 
 /** Default feature access per role (module-level) */
 export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
-  admin: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'partner', 'game'],
-  manager: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'game'],
-  staff: ['dashboard', 'sales', 'marketing', 'service', 'game'],
+  admin: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
+  manager: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'game', 'my_incentive'],
+  staff: ['dashboard', 'sales', 'marketing', 'service', 'game', 'my_incentive'],
   freelancer: ['dashboard', 'game'],
   partner: ['partner', 'dashboard'],
   viewer: [],
