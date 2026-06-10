@@ -147,6 +147,9 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
   { key: 'my_incentive', labelKey: 'access.pkg.myIncentive', descriptionKey: 'access.pkg.myIncentiveDesc' },
 ]
 
+/** Routes that require admin role — non-admins are always blocked */
+export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info']
+
 /** Get all route paths for a module */
 export function getRoutesForModule(mod: FeatureModule): string[] {
   return NAV_ROUTE_DEFS.filter(r => r.module === mod).map(r => r.path)
@@ -240,19 +243,24 @@ export function getEffectiveRoutes(
   if (user.role === 'admin') {
     return NAV_ROUTE_DEFS.map(r => r.path)
   }
+  let routes: string[]
   const custom = featureAccessRecords.find(r => r.userId === user.id)
   if (custom) {
     // If per-route overrides exist, merge with module-expanded routes to avoid stale gaps
     const moduleRoutes = expandModulesToRoutes(custom.enabledModules)
     if (custom.enabledRoutes.length > 0) {
       const merged = new Set([...moduleRoutes, ...custom.enabledRoutes])
-      return [...merged]
+      routes = [...merged]
+    } else {
+      routes = moduleRoutes
     }
-    return moduleRoutes
+  } else {
+    // Role defaults
+    const defaultModules = ROLE_DEFAULT_ACCESS[user.role] || ROLE_DEFAULT_ACCESS.viewer
+    routes = expandModulesToRoutes(defaultModules)
   }
-  // Role defaults
-  const defaultModules = ROLE_DEFAULT_ACCESS[user.role] || ROLE_DEFAULT_ACCESS.viewer
-  return expandModulesToRoutes(defaultModules)
+  // Non-admin users are always blocked from admin-only routes
+  return routes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
 }
 
 /**

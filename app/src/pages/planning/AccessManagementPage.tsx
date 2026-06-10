@@ -21,7 +21,7 @@ import {
   useProfiles, useUpdateProfile,
   useFeatureAccess, useUpdateFeatureAccess,
   FEATURE_MODULES, ROLE_DEFAULT_ACCESS,
-  NAV_ROUTE_DEFS,
+  NAV_ROUTE_DEFS, ADMIN_ONLY_ROUTES,
   getEffectiveModules, getEffectiveRoutes, getRoutesForModule,
   type FeatureModule, type FeatureAccessRecord,
 } from '@/hooks/useProfiles'
@@ -178,10 +178,14 @@ function UserEditDialog({
       })
 
       if (useCustomAccess) {
+        // Strip admin-only routes for non-admin users
+        const safeRoutes = role === 'admin'
+          ? enabledRoutes
+          : enabledRoutes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
         await updateFeatureAccess.mutateAsync({
           userId: user.id,
           enabledModules,
-          enabledRoutes,
+          enabledRoutes: safeRoutes,
         })
       }
 
@@ -357,20 +361,29 @@ function UserEditDialog({
                       <div className="border-t bg-gray-50/30 px-3 py-1.5 space-y-0.5">
                         {modRoutes.map(route => {
                           const routeEnabled = enabledRoutes.includes(route.path)
+                          const isAdminOnly = ADMIN_ONLY_ROUTES.includes(route.path)
+                          const isTargetAdmin = role === 'admin'
+                          const routeLocked = isAdminOnly && !isTargetAdmin
                           return (
                             <div
                               key={route.path}
-                              className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-100/60"
+                              className={`flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-100/60 ${routeLocked ? 'opacity-50' : ''}`}
                             >
                               <div className="flex items-center gap-2">
-                                <div className={`w-1.5 h-1.5 rounded-full ${routeEnabled ? 'bg-emerald-400' : 'bg-gray-300'}`} />
+                                <div className={`w-1.5 h-1.5 rounded-full ${routeEnabled && !routeLocked ? 'bg-emerald-400' : 'bg-gray-300'}`} />
                                 <span className="text-xs">{t(route.labelKey)}</span>
                                 <span className="text-[10px] text-muted-foreground font-mono">{route.path}</span>
+                                {isAdminOnly && (
+                                  <Badge variant="outline" className="text-[9px] h-3.5 bg-red-50 text-red-600 border-red-200">
+                                    Admin
+                                  </Badge>
+                                )}
                               </div>
                               <Switch
-                                checked={routeEnabled}
+                                checked={routeEnabled && !routeLocked}
                                 onCheckedChange={() => toggleRoute(route.path, mod.key)}
                                 className="scale-75"
+                                disabled={routeLocked}
                               />
                             </div>
                           )
@@ -523,7 +536,7 @@ export function AccessManagementPage() {
   const [editUser, setEditUser] = useState<User | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'manager'
+  const isAdmin = currentUser?.role === 'admin'
   const isLoading = profilesLoading || accessLoading
 
   const filteredProfiles = useMemo(() => {
