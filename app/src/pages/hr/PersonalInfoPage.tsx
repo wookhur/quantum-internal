@@ -185,15 +185,17 @@ export function PersonalInfoPage() {
             </div>
             <div className="space-y-3">
               <Input
+                ref={el => { if (el) setTimeout(() => el.focus(), 100) }}
                 type="password"
                 inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
                 maxLength={6}
                 placeholder="••••"
                 className="h-12 text-center text-2xl tracking-[0.5em] font-mono"
                 value={pin}
                 onChange={e => { setPin(e.target.value.replace(/\D/g, '')); setPinError(false) }}
                 onKeyDown={e => e.key === 'Enter' && handlePinSubmit()}
-                autoFocus
               />
               {pinError && (
                 <p className="text-sm text-red-500 text-center">{t('personalInfo.pinError')}</p>
