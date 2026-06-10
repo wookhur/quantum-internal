@@ -1,10 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   Users, FileSignature,
   ArrowUpRight, AlertCircle, Calendar, CheckCircle2, Loader2, Lock,
+  ChevronLeft, ChevronRight, TrendingUp,
 } from 'lucide-react'
 import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useQuery } from '@tanstack/react-query'
@@ -12,6 +14,8 @@ import { supabase } from '@/lib/supabase'
 import { todayKST, currentMonthStrKST, formatTimeKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import { useFeatureAccess, getEffectiveModules } from '@/hooks/useProfiles'
+import { useIncentivesByInstallment, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
+import { formatCurrency } from '@/types'
 import type { PipelineStage } from '@/types'
 
 // --- Real data hooks ---
@@ -255,6 +259,157 @@ function NoAccessSection({ title }: { title: string }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// 내 인센티브 카드
+// ---------------------------------------------------------------------------
+
+function getYearMonth(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function shiftYearMonth(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(y, m - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function MyIncentiveCard({ userId }: { userId: string }) {
+  const t = useT()
+  const { data: allEntries = [], isLoading } = useIncentivesByInstallment()
+  const [month, setMonth] = useState(getYearMonth)
+
+  const isCurrentMonth = month === getYearMonth()
+  const [year, mon] = month.split('-').map(Number)
+
+  // Filter to this user + this month
+  const myEntries = useMemo(() => {
+    if (!userId) return []
+    return allEntries.filter(e => {
+      if (e.profileId !== userId) return false
+      if (e.isPaid) {
+        return e.paidDate && e.paidDate.startsWith(month)
+      }
+      const dateRef = e.dueDate || e.contractDate
+      return dateRef && dateRef.startsWith(month)
+    })
+  }, [allEntries, userId, month])
+
+  const paidEntries = myEntries.filter(e => e.isPaid)
+  const unpaidEntries = myEntries.filter(e => !e.isPaid)
+  const totalPaid = paidEntries.reduce((s, e) => s + e.incentiveAmount, 0)
+  const totalExpected = unpaidEntries.reduce((s, e) => s + e.incentiveAmount, 0)
+  const totalAll = totalPaid + totalExpected
+
+  // Breakdown by incentive type
+  const byType = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const e of myEntries) {
+      map[e.incentiveType] = (map[e.incentiveType] || 0) + e.incentiveAmount
+    }
+    return Object.entries(map)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+  }, [myEntries])
+
+  if (!userId) return null
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="size-4" />
+            {t('dashboard.myIncentive')}
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth(m => shiftYearMonth(m, -1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium min-w-[100px] text-center">
+              {year}{t('common.year')} {mon}{t('common.month')}
+            </span>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setMonth(m => shiftYearMonth(m, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            {!isCurrentMonth && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setMonth(getYearMonth())}>
+                {t('incentive.thisMonth')}
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : myEntries.length === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-6">
+            {t('dashboard.noIncentiveData')}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Summary row */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-muted/50 rounded-lg p-3 text-center">
+                <div className="text-xs text-muted-foreground mb-1">{t('dashboard.incentivePaid')}</div>
+                <div className="text-lg font-bold text-green-600">{formatCurrency(totalPaid)}</div>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-3 text-center">
+                <div className="text-xs text-muted-foreground mb-1">{t('dashboard.incentiveExpected')}</div>
+                <div className="text-lg font-bold text-amber-600">{formatCurrency(totalExpected)}</div>
+              </div>
+              <div className="bg-primary/5 rounded-lg p-3 text-center">
+                <div className="text-xs text-muted-foreground mb-1">{t('dashboard.incentiveTotal')}</div>
+                <div className="text-lg font-bold">{formatCurrency(totalAll)}</div>
+              </div>
+            </div>
+
+            {/* Type breakdown */}
+            {byType.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-muted-foreground">{t('dashboard.incentiveBreakdown')}</div>
+                {byType.map(([type, amount]) => (
+                  <div key={type} className="flex items-center justify-between text-sm">
+                    <span>{t(INCENTIVE_TYPES[type as IncentiveType].labelKey)}</span>
+                    <span className="font-medium">{formatCurrency(amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Detail list */}
+            <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+              <div className="text-xs font-medium text-muted-foreground">{t('dashboard.incentiveDetails')}</div>
+              {myEntries.map(e => (
+                <div key={e.key} className={`flex items-center justify-between text-xs py-1 px-2 rounded ${e.isPaid ? 'bg-muted/30' : 'bg-amber-50/50'}`}>
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className={e.isPaid ? 'text-muted-foreground' : 'text-amber-600'}>
+                      {e.isPaid ? e.paidDate : (e.dueDate || '-')}
+                    </span>
+                    <span className="truncate">{e.contractorName}/{e.studentName}</span>
+                    <Badge variant="outline" className="text-[9px] h-4 shrink-0">{e.installmentLabel}</Badge>
+                    {!e.isPaid && (
+                      <Badge variant="outline" className="text-[9px] h-4 bg-amber-50 text-amber-600 border-amber-200 shrink-0">
+                        {t('incentive.expected')}
+                      </Badge>
+                    )}
+                  </div>
+                  <span className={`font-medium shrink-0 ml-2 ${e.isPaid ? '' : 'text-amber-600'}`}>
+                    {formatCurrency(e.incentiveAmount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function DashboardPage() {
   const t = useT()
   const { user } = useAuth()
@@ -489,6 +644,9 @@ export function DashboardPage() {
           <NoAccessSection title={t('dashboard.pipelineStatus')} />
         )}
       </div>
+
+      {/* 내 인센티브 */}
+      <MyIncentiveCard userId={user?.id || ''} />
 
       {/* Meetings + Todos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
