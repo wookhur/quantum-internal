@@ -168,6 +168,8 @@ export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
   sales_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
   service_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'hr', 'game'],
   marketing_manager: ['dashboard', 'marketing', 'game'],
+  consultant: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'hr', 'game', 'my_incentive'],
+  freelancer: ['dashboard', 'service', 'game', 'my_incentive'],
   external: ['dashboard', 'game'],
 }
 

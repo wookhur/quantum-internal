@@ -1039,7 +1039,9 @@ const koTranslations = {
   'access.roleSalesManager': '세일즈 매니저',
   'access.roleServiceManager': '서비스 매니저',
   'access.roleMarketingManager': '마케팅 매니저',
-  'access.roleExternal': '인턴/프리랜서/파트너',
+  'access.roleConsultant': '컨설턴트',
+  'access.roleFreelancer': '프리랜서',
+  'access.roleExternal': '인턴/파트너',
   // ── Package (module) labels ──
   'access.pkg.dashboard': '공통',
   'access.pkg.dashboardDesc': '대시보드, 캘린더, 프로젝트, 메시지',
@@ -2648,7 +2650,9 @@ const enTranslations: Record<string, string> = {
   'access.roleSalesManager': 'Sales Manager',
   'access.roleServiceManager': 'Service Manager',
   'access.roleMarketingManager': 'Marketing Manager',
-  'access.roleExternal': 'Intern/Freelancer/Partner',
+  'access.roleConsultant': 'Consultant',
+  'access.roleFreelancer': 'Freelancer',
+  'access.roleExternal': 'Intern/Partner',
   // ── Package (module) labels ──
   'access.pkg.dashboard': 'Common',
   'access.pkg.dashboardDesc': 'Dashboard, Calendar, Projects, Messages',

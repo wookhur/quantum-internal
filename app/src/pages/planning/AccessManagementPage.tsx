@@ -33,6 +33,8 @@ const ROLE_CONFIG: Record<UserRole, { label: string; className: string; icon: ty
   sales_manager: { label: 'Sales Mgr', className: 'bg-blue-50 text-blue-700 border-blue-200', icon: Users },
   service_manager: { label: 'Service Mgr', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: Users },
   marketing_manager: { label: 'Marketing Mgr', className: 'bg-purple-50 text-purple-700 border-purple-200', icon: Users },
+  consultant: { label: 'Consultant', className: 'bg-teal-50 text-teal-700 border-teal-200', icon: Briefcase },
+  freelancer: { label: 'Freelancer', className: 'bg-orange-50 text-orange-700 border-orange-200', icon: UserX },
   external: { label: 'External', className: 'bg-gray-50 text-gray-600 border-gray-200', icon: Eye },
 }
 
@@ -55,6 +57,8 @@ function useRoleOptions() {
     { value: 'sales_manager' as UserRole, label: `Sales Mgr (${t('access.roleSalesManager')})` },
     { value: 'service_manager' as UserRole, label: `Service Mgr (${t('access.roleServiceManager')})` },
     { value: 'marketing_manager' as UserRole, label: `Marketing Mgr (${t('access.roleMarketingManager')})` },
+    { value: 'consultant' as UserRole, label: `Consultant (${t('access.roleConsultant')})` },
+    { value: 'freelancer' as UserRole, label: `Freelancer (${t('access.roleFreelancer')})` },
     { value: 'external' as UserRole, label: `External (${t('access.roleExternal')})` },
   ]
 }

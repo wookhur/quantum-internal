@@ -1,5 +1,5 @@
 // ============ USER & AUTH ============
-export type UserRole = 'admin' | 'c_level' | 'sales_manager' | 'service_manager' | 'marketing_manager' | 'external'
+export type UserRole = 'admin' | 'c_level' | 'sales_manager' | 'service_manager' | 'marketing_manager' | 'consultant' | 'freelancer' | 'external'
 export type Department = 'management' | 'sales' | 'marketing' | 'finance' | 'service'
 
 export interface User {
