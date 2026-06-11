@@ -15,7 +15,7 @@ import {
   X, Phone, School, MapPin, Calendar, FileText, ArrowRight, User,
   Paperclip, Trash2, ExternalLink, LinkIcon,
 } from 'lucide-react'
-import { useMeetings, useCreateMeeting, useUpdateMeeting, useUpdateNoteDelivered, useUploadMeetingPdf, useDeleteMeetingPdf } from '@/hooks/useMeetings'
+import { useMeetings, useCreateMeeting, useUpdateMeeting, useDeleteMeeting, useUpdateNoteDelivered, useUploadMeetingPdf, useDeleteMeetingPdf } from '@/hooks/useMeetings'
 import type { Meeting } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { currentMonthStrKST } from '@/lib/date'
@@ -49,14 +49,16 @@ const INITIAL_MEETING_FORM = {
   memo: '',
 }
 
-function MeetingDetail({ meeting, onEdit, onClose, onNoteToggle, onPdfUpload, onPdfDelete, pdfUploading, t }: {
+function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdfUpload, onPdfDelete, pdfUploading, deleting, t }: {
   meeting: Meeting
   onEdit: (m: Meeting) => void
   onClose: () => void
+  onDelete: (id: string) => void
   onNoteToggle: (id: string, current: boolean) => void
   onPdfUpload: (meetingId: string, file: File) => void
   onPdfDelete: (meetingId: string, pdfUrl: string) => void
   pdfUploading: boolean
+  deleting: boolean
   t: (key: string, params?: Record<string, string | number>) => string
 }) {
   const pdfInputRef = useRef<HTMLInputElement>(null)
@@ -85,6 +87,15 @@ function MeetingDetail({ meeting, onEdit, onClose, onNoteToggle, onPdfUpload, on
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(meeting)}>
               <Pencil className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive hover:text-destructive"
+              onClick={() => { if (confirm(t('meetings.deleteConfirm'))) onDelete(meeting.id) }}
+              disabled={deleting}
+            >
+              <Trash2 className="size-3.5" />
             </Button>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
               <X className="size-3.5" />
@@ -243,6 +254,7 @@ export function MeetingsPage() {
   const { user } = useAuth()
   const createMeeting = useCreateMeeting()
   const updateMeeting = useUpdateMeeting()
+  const deleteMeeting = useDeleteMeeting()
   const uploadPdf = useUploadMeetingPdf()
   const deletePdf = useDeleteMeetingPdf()
 
@@ -451,10 +463,12 @@ export function MeetingsPage() {
           meeting={selectedMeeting}
           onEdit={openEditDialog}
           onClose={() => setSelectedMeetingId(null)}
+          onDelete={(id) => deleteMeeting.mutate(id, { onSuccess: () => setSelectedMeetingId(null) })}
           onNoteToggle={handleNoteToggle}
           onPdfUpload={(meetingId, file) => uploadPdf.mutate({ meetingId, file })}
           onPdfDelete={(meetingId, pdfUrl) => deletePdf.mutate({ meetingId, pdfUrl })}
           pdfUploading={uploadPdf.isPending}
+          deleting={deleteMeeting.isPending}
           t={t}
         />
       )}

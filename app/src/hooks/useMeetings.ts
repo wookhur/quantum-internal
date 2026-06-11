@@ -268,6 +268,19 @@ export function useDeleteMeetingPdf() {
   })
 }
 
+export function useDeleteMeeting() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('meetings').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meetings'] })
+    },
+  })
+}
+
 export function useUpdateNoteDelivered() {
   const queryClient = useQueryClient()
   return useMutation({
