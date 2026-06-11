@@ -15,7 +15,7 @@ import {
 import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
-  Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle,
+  Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star,
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -36,6 +36,10 @@ import {
 import {
   usePortalTokens, useCreatePortalToken, useTogglePortalToken, useDeletePortalToken,
 } from '@/hooks/usePortalTokens'
+import {
+  useECActivities, useCreateECActivity, useUpdateECActivity, useDeleteECActivity,
+  type ECActivity,
+} from '@/hooks/useECActivities'
 import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
   ServiceReportCategory,
@@ -69,6 +73,38 @@ function formatRegularSchedule(schedule?: string): string | undefined {
   const [week, day, time] = schedule.split('|')
   if (!week || !day) return schedule
   return `${week}주차 ${day}요일${time ? ' ' + time : ''}`
+}
+
+// ── EC Service constants ──
+const EC_PARTNERS = [
+  // Korean names first
+  '넥스튼융합',
+  '허브커넥서스-리더십코칭',
+  '허브커넥서스-리서치',
+  // English names alphabetically
+  'ASDA Korea',
+  'IRIS Edu',
+  'KYN',
+  'Next Bound',
+  'Stanley Prep-internship',
+  'Stanley Prep-UNAT',
+] as const
+
+const EC_SALES_PRESETS = [
+  'Cindy', 'Eva', 'Evelyn', 'Jisoo', 'Julie', 'Liz', 'Maryam', 'Sam', 'Wook',
+] as const
+
+function ecSalesSelectVal(stored?: string) {
+  if (!stored) return ''
+  return (EC_SALES_PRESETS as readonly string[]).includes(stored) ? stored : '직접입력'
+}
+function ecSalesCustomVal(stored?: string) {
+  if (!stored) return ''
+  return (EC_SALES_PRESETS as readonly string[]).includes(stored) ? '' : stored
+}
+function ecSalesFinal(select: string, custom: string): string | undefined {
+  if (!select) return undefined
+  return select === '직접입력' ? (custom.trim() || undefined) : select
 }
 
 const ESSAY_EDITORS = ['Somee Park', 'Danny Kim', '한상범+양은영'] as const
@@ -242,6 +278,7 @@ export function Student360Page() {
         ) : (
           <div className="space-y-4">
             <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} />
+            <ECServicesSection studentId={selected.id} createdBy={user?.id} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} />
             <MeetingsSection studentId={selected.id} createdBy={user?.id} authorName={user?.name} />
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} />
@@ -330,6 +367,204 @@ function Field({ icon, label, value }: { icon?: ReactNode; label: string; value?
       <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">{icon}{label}</p>
       <p>{value || '—'}</p>
     </div>
+  )
+}
+
+// ────────────────────────── EC Services ──────────────────────────
+function ECServicesSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
+  const { data: activities = [] } = useECActivities(studentId)
+  const del = useDeleteECActivity()
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Star className="size-5 text-primary" />
+          Extra Curricular Service
+          <span className="text-muted-foreground font-normal">({activities.length})</span>
+        </CardTitle>
+        <ECActivityDialog
+          studentId={studentId}
+          createdBy={createdBy}
+          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />추가</Button>}
+        />
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {activities.length === 0 && (
+          <p className="text-sm text-muted-foreground">등록된 EC 서비스가 없습니다.</p>
+        )}
+        {activities.map(a => (
+          <div key={a.id} className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-sm">{a.partner || '—'}</span>
+              <div className="flex gap-1">
+                <ECActivityDialog
+                  studentId={studentId}
+                  activity={a}
+                  createdBy={createdBy}
+                  trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
+                />
+                <Button
+                  size="sm" variant="ghost"
+                  onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: a.id, studentId }) }}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">Period</p>
+                <p className="text-xs">{[a.periodStart, a.periodEnd].filter(Boolean).join(' ~ ') || '—'}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs text-muted-foreground">Program</p>
+                <p className="whitespace-pre-wrap">{a.program || '—'}</p>
+              </div>
+            </div>
+            {(a.salesContributor1 || a.salesContributor2) && (
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground">Sales Contributor</p>
+                <p>{[a.salesContributor1, a.salesContributor2].filter(Boolean).join(' / ')}</p>
+              </div>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
+  studentId: string
+  activity?: ECActivity
+  trigger: ReactNode
+  createdBy?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const create = useCreateECActivity()
+  const update = useUpdateECActivity()
+
+  const buildForm = () => ({
+    partner: activity?.partner || '',
+    periodStart: activity?.periodStart || '',
+    periodEnd: activity?.periodEnd || '',
+    program: activity?.program || '',
+    sc1Select: ecSalesSelectVal(activity?.salesContributor1),
+    sc1Custom: ecSalesCustomVal(activity?.salesContributor1),
+    sc2Select: ecSalesSelectVal(activity?.salesContributor2),
+    sc2Custom: ecSalesCustomVal(activity?.salesContributor2),
+  })
+  const [form, setForm] = useState(buildForm)
+  useEffect(() => { if (open) setForm(buildForm()) }, [open])
+  const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
+
+  const submit = () => {
+    const payload = {
+      studentId,
+      partner: form.partner || undefined,
+      periodStart: form.periodStart || undefined,
+      periodEnd: form.periodEnd || undefined,
+      program: form.program || undefined,
+      salesContributor1: ecSalesFinal(form.sc1Select, form.sc1Custom),
+      salesContributor2: ecSalesFinal(form.sc2Select, form.sc2Custom),
+      createdBy,
+    }
+    if (activity) {
+      update.mutate({ id: activity.id, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
+    } else {
+      create.mutate(payload, { onSuccess: () => setOpen(false), onError: reportSaveError })
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <span onClick={() => setOpen(true)}>{trigger}</span>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{activity ? 'EC 서비스 수정' : 'EC 서비스 추가'}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          {/* Partner */}
+          <div>
+            <Label className="text-xs">Partner</Label>
+            <Select value={form.partner || null} onValueChange={v => set('partner', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {EC_PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Period */}
+          <div>
+            <Label className="text-xs">Period</Label>
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Start</Label>
+                <Input type="date" value={form.periodStart} onChange={e => set('periodStart', e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-[10px] text-muted-foreground">End</Label>
+                <Input type="date" value={form.periodEnd} onChange={e => set('periodEnd', e.target.value)} />
+              </div>
+            </div>
+          </div>
+          {/* Program */}
+          <div>
+            <Label className="text-xs">Program</Label>
+            <Textarea
+              className="mt-1"
+              placeholder="프로그램 내용 및 메모..."
+              value={form.program}
+              onChange={e => set('program', e.target.value)}
+              rows={3}
+            />
+          </div>
+          {/* Sales Contributor 1 */}
+          <div>
+            <Label className="text-xs">Sales Contributor 1</Label>
+            <Select value={form.sc1Select || null} onValueChange={v => set('sc1Select', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {EC_SALES_PRESETS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                <SelectItem value="직접입력">직접입력</SelectItem>
+              </SelectContent>
+            </Select>
+            {form.sc1Select === '직접입력' && (
+              <Input
+                className="mt-1"
+                placeholder="직접 입력..."
+                value={form.sc1Custom}
+                onChange={e => set('sc1Custom', e.target.value)}
+              />
+            )}
+          </div>
+          {/* Sales Contributor 2 */}
+          <div>
+            <Label className="text-xs">Sales Contributor 2</Label>
+            <Select value={form.sc2Select || null} onValueChange={v => set('sc2Select', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {EC_SALES_PRESETS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                <SelectItem value="직접입력">직접입력</SelectItem>
+              </SelectContent>
+            </Select>
+            {form.sc2Select === '직접입력' && (
+              <Input
+                className="mt-1"
+                placeholder="직접 입력..."
+                value={form.sc2Custom}
+                onChange={e => set('sc2Custom', e.target.value)}
+              />
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>취소</Button>
+          <Button onClick={submit}>저장</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
