@@ -326,8 +326,11 @@ export function MeetingsPage() {
             uploadPdf.mutate({ meetingId: data.id, file: pendingPdf })
           }
           setDialogOpen(false)
-          setForm(INITIAL_MEETING_FORM)
-          setPdfFile(null)
+          resetCreateDialog()
+        },
+        onError: (err) => {
+          console.error('Meeting create failed:', err)
+          alert(t('meetings.createError') || '미팅 기록 저장에 실패했습니다. 다시 시도해주세요.')
         },
       },
     )
@@ -372,6 +375,10 @@ export function MeetingsPage() {
       requiredAction: editForm.requiredAction,
     }, {
       onSuccess: () => setEditDialogOpen(false),
+      onError: (err) => {
+        console.error('Meeting update failed:', err)
+        alert(t('meetings.updateError') || '미팅 기록 수정에 실패했습니다.')
+      },
     })
   }
 
