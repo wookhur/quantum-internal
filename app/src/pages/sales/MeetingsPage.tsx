@@ -594,7 +594,7 @@ export function MeetingsPage() {
       </Card>
 
       {/* Create Meeting Dialog — Step-based: upload → extracting → form */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetCreateDialog() }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetCreateDialog() }} disablePointerDismissal>
         <DialogContent className="max-w-md !grid-rows-[auto_1fr] max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>{t('meetings.addMeetingTitle')}</DialogTitle>
@@ -732,7 +732,7 @@ export function MeetingsPage() {
       </Dialog>
 
       {/* Edit Meeting Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditPdfFile(null) }}>
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditPdfFile(null) }} disablePointerDismissal>
         <DialogContent className="max-w-lg !grid-rows-[auto_1fr] max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>{t('meetings.editMeeting')}</DialogTitle>
