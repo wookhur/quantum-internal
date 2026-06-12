@@ -866,18 +866,35 @@ export function MeetingsPage() {
                 <Input value={editForm.requiredAction} onChange={e => setEditForm(f => ({ ...f, requiredAction: e.target.value }))} />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-3 border-t">
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>{t('common.cancel')}</Button>
-              <Button onClick={() => {
-                handleEditMeeting()
-                if (editPdfFile) {
-                  uploadPdf.mutate({ meetingId: editForm.id, file: editPdfFile })
-                  setEditPdfFile(null)
-                }
-              }} disabled={!editForm.parentName || !editForm.meetingDate || updateMeeting.isPending}>
-                {updateMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
-                {t('common.save')}
+            <div className="flex justify-between pt-3 border-t">
+              <Button
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => {
+                  if (confirm(t('meetings.deleteConfirm'))) {
+                    deleteMeeting.mutate(editForm.id, {
+                      onSuccess: () => { setEditDialogOpen(false); setSelectedMeetingId(null) },
+                    })
+                  }
+                }}
+                disabled={deleteMeeting.isPending}
+              >
+                {deleteMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : <Trash2 className="size-4 mr-1" />}
+                {t('common.delete')}
               </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setEditDialogOpen(false)}>{t('common.cancel')}</Button>
+                <Button onClick={() => {
+                  handleEditMeeting()
+                  if (editPdfFile) {
+                    uploadPdf.mutate({ meetingId: editForm.id, file: editPdfFile })
+                    setEditPdfFile(null)
+                  }
+                }} disabled={!editForm.parentName || !editForm.meetingDate || updateMeeting.isPending}>
+                  {updateMeeting.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+                  {t('common.save')}
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
