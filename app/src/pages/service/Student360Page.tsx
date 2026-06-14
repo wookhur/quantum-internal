@@ -15,7 +15,7 @@ import {
 import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
-  Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star,
+  Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -40,6 +40,10 @@ import {
   useECActivities, useCreateECActivity, useUpdateECActivity, useDeleteECActivity,
   type ECActivity,
 } from '@/hooks/useECActivities'
+import {
+  useAcademicSupport, useCreateAcademicSupport, useUpdateAcademicSupport, useDeleteAcademicSupport,
+  type AcademicSupportItem,
+} from '@/hooks/useAcademicSupport'
 import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
   ServiceReportCategory,
@@ -93,6 +97,13 @@ const EC_PARTNERS = [
 const EC_SALES_PRESETS = [
   'Cindy', 'Eva', 'Evelyn', 'Jisoo', 'Julie', 'Liz', 'Maryam', 'Sam', 'Wook',
 ] as const
+
+const ACADEMY_PRESETS = [
+  '숨마스프렙', '와이즈조인', '이준형코치',  // Korean (alphabetical)
+  'CRI', 'IVYPenn Edu', 'Prime', 'tutor Ava', // English (alphabetical)
+] as const
+
+const SEASON_OPTIONS = ['방학', '학기중'] as const
 
 function ecSalesSelectVal(stored?: string) {
   if (!stored) return ''
@@ -279,6 +290,7 @@ export function Student360Page() {
           <div className="space-y-4">
             <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} />
             <ECServicesSection studentId={selected.id} createdBy={user?.id} />
+            <AcademicSupportSection studentId={selected.id} createdBy={user?.id} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} />
             <MeetingsSection studentId={selected.id} createdBy={user?.id} authorName={user?.name} />
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} />
@@ -557,6 +569,200 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
                 onChange={e => set('sc2Custom', e.target.value)}
               />
             )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>취소</Button>
+          <Button onClick={submit}>저장</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ────────────────────────── Academic Support ──────────────────────────
+function AcademicSupportSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
+  const { data: items = [] } = useAcademicSupport(studentId)
+  const del = useDeleteAcademicSupport()
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BookOpen className="size-5 text-primary" />
+          Academic Support
+          <span className="text-muted-foreground font-normal">({items.length})</span>
+        </CardTitle>
+        <AcademicSupportDialog
+          studentId={studentId}
+          createdBy={createdBy}
+          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />추가</Button>}
+        />
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {items.length === 0 && (
+          <p className="text-sm text-muted-foreground">등록된 Academic Support가 없습니다.</p>
+        )}
+        {items.map(item => (
+          <div key={item.id} className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-sm">{item.academyName || '—'}</span>
+              <div className="flex gap-1">
+                <AcademicSupportDialog
+                  studentId={studentId}
+                  item={item}
+                  createdBy={createdBy}
+                  trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
+                />
+                <Button
+                  size="sm" variant="ghost"
+                  onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: item.id, studentId }) }}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground">과목</p>
+                <p>{item.subject || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">시기 / 기간</p>
+                <p>
+                  {item.season && <span className="mr-1.5">{item.season}</span>}
+                  <span className="text-xs text-muted-foreground">
+                    {[item.periodStart, item.periodEnd].filter(Boolean).join(' ~ ')}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">특이사항</p>
+                <p className="whitespace-pre-wrap">{item.notes || '—'}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
+  studentId: string
+  item?: AcademicSupportItem
+  trigger: ReactNode
+  createdBy?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const create = useCreateAcademicSupport()
+  const update = useUpdateAcademicSupport()
+
+  const buildForm = () => ({
+    academySelect: item?.academyName && (ACADEMY_PRESETS as readonly string[]).includes(item.academyName)
+      ? item.academyName : item?.academyName ? '직접입력' : '',
+    academyCustom: item?.academyName && !(ACADEMY_PRESETS as readonly string[]).includes(item.academyName)
+      ? item.academyName : '',
+    subject: item?.subject || '',
+    season: item?.season || '',
+    periodStart: item?.periodStart || '',
+    periodEnd: item?.periodEnd || '',
+    notes: item?.notes || '',
+  })
+  const [form, setForm] = useState(buildForm)
+  useEffect(() => { if (open) setForm(buildForm()) }, [open])
+  const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
+
+  const submit = () => {
+    const resolvedAcademy = form.academySelect === '직접입력'
+      ? (form.academyCustom.trim() || undefined)
+      : (form.academySelect || undefined)
+    const payload = {
+      studentId,
+      academyName: resolvedAcademy,
+      subject: form.subject || undefined,
+      season: form.season || undefined,
+      periodStart: form.periodStart || undefined,
+      periodEnd: form.periodEnd || undefined,
+      notes: form.notes || undefined,
+      createdBy,
+    }
+    if (item) {
+      update.mutate({ id: item.id, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
+    } else {
+      create.mutate(payload, { onSuccess: () => setOpen(false), onError: reportSaveError })
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <span onClick={() => setOpen(true)}>{trigger}</span>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{item ? 'Academic Support 수정' : 'Academic Support 추가'}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          {/* 학원명 */}
+          <div>
+            <Label className="text-xs">학원명</Label>
+            <Select value={form.academySelect || null} onValueChange={v => set('academySelect', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {ACADEMY_PRESETS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                <SelectItem value="직접입력">직접입력</SelectItem>
+              </SelectContent>
+            </Select>
+            {form.academySelect === '직접입력' && (
+              <Input
+                className="mt-1"
+                placeholder="학원명 직접 입력..."
+                value={form.academyCustom}
+                onChange={e => set('academyCustom', e.target.value)}
+              />
+            )}
+          </div>
+          {/* 과목명 */}
+          <div>
+            <Label className="text-xs">과목명</Label>
+            <Input
+              placeholder="예) 수학, 영어, SAT Math..."
+              value={form.subject}
+              onChange={e => set('subject', e.target.value)}
+            />
+          </div>
+          {/* 시기 + 기간 */}
+          <div>
+            <Label className="text-xs">시기</Label>
+            <Select value={form.season || null} onValueChange={v => set('season', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {SEASON_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">기간</Label>
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Start</Label>
+                <Input type="date" value={form.periodStart} onChange={e => set('periodStart', e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-[10px] text-muted-foreground">End</Label>
+                <Input type="date" value={form.periodEnd} onChange={e => set('periodEnd', e.target.value)} />
+              </div>
+            </div>
+          </div>
+          {/* 특이사항 */}
+          <div>
+            <Label className="text-xs">특별 요청 / 메모</Label>
+            <Textarea
+              className="mt-1"
+              placeholder="특별 요청사항이나 기억해야 할 내용을 입력하세요..."
+              value={form.notes}
+              onChange={e => set('notes', e.target.value)}
+              rows={3}
+            />
           </div>
         </div>
         <DialogFooter>
