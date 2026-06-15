@@ -10,6 +10,8 @@ export interface AcademicSupportItem {
   periodStart?: string
   periodEnd?: string
   notes?: string
+  salesContributor1?: string
+  salesContributor2?: string
   createdBy?: string
   createdAt: string
   updatedAt: string
@@ -25,6 +27,8 @@ function mapRow(row: Record<string, unknown>): AcademicSupportItem {
     periodStart: (row.period_start as string) || undefined,
     periodEnd: (row.period_end as string) || undefined,
     notes: (row.notes as string) || undefined,
+    salesContributor1: (row.sales_contributor_1 as string) || undefined,
+    salesContributor2: (row.sales_contributor_2 as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -59,6 +63,8 @@ export function useCreateAcademicSupport() {
         period_start: a.periodStart || null,
         period_end: a.periodEnd || null,
         notes: a.notes || null,
+        sales_contributor_1: a.salesContributor1 || null,
+        sales_contributor_2: a.salesContributor2 || null,
         created_by: a.createdBy || null,
       }).select().single()
       if (error) throw error
@@ -79,6 +85,8 @@ export function useUpdateAcademicSupport() {
         period_start: a.periodStart ?? null,
         period_end: a.periodEnd ?? null,
         notes: a.notes ?? null,
+        sales_contributor_1: a.salesContributor1 ?? null,
+        sales_contributor_2: a.salesContributor2 ?? null,
       }).eq('id', a.id)
       if (error) throw error
     },

@@ -641,6 +641,12 @@ function AcademicSupportSection({ studentId, createdBy }: { studentId: string; c
                 <p className="whitespace-pre-wrap">{item.notes || '—'}</p>
               </div>
             </div>
+            {(item.salesContributor1 || item.salesContributor2) && (
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground">Sales Contributor</p>
+                <p>{[item.salesContributor1, item.salesContributor2].filter(Boolean).join(' / ')}</p>
+              </div>
+            )}
           </div>
         ))}
       </CardContent>
@@ -668,6 +674,8 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
     periodStart: item?.periodStart || '',
     periodEnd: item?.periodEnd || '',
     notes: item?.notes || '',
+    salesContributor1: item?.salesContributor1 || '',
+    salesContributor2: item?.salesContributor2 || '',
   })
   const [form, setForm] = useState(buildForm)
   useEffect(() => { if (open) setForm(buildForm()) }, [open])
@@ -685,6 +693,8 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
       periodStart: form.periodStart || undefined,
       periodEnd: form.periodEnd || undefined,
       notes: form.notes || undefined,
+      salesContributor1: form.salesContributor1 || undefined,
+      salesContributor2: form.salesContributor2 || undefined,
       createdBy,
     }
     if (item) {
@@ -763,6 +773,30 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
               onChange={e => set('notes', e.target.value)}
               rows={3}
             />
+          </div>
+          {/* Sales Contributor 1 */}
+          <div>
+            <Label className="text-xs">Sales Contributor 1</Label>
+            <Select value={form.salesContributor1 || null} onValueChange={v => set('salesContributor1', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {CONSULTANTS.map(c => (
+                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* Sales Contributor 2 */}
+          <div>
+            <Label className="text-xs">Sales Contributor 2</Label>
+            <Select value={form.salesContributor2 || null} onValueChange={v => set('salesContributor2', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {CONSULTANTS.map(c => (
+                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
