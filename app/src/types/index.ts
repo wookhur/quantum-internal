@@ -480,6 +480,8 @@ export interface ServiceFollowup {
   id: string
   studentId: string
   diaryId?: string
+  /** Which diary field this checklist item belongs to: 'followup' | 'assignment'. */
+  category: string
   text: string
   done: boolean
   doneAt?: string

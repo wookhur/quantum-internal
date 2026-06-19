@@ -1441,7 +1441,8 @@ function DiarySection({ studentId, authorName, createdBy }: {
             )}
             <div className="mt-2 space-y-2">
               {DIARY_FIELDS.map(f => {
-                if (f.key === 'followUpCommitments') return null  // shown as checklist below
+                // Shown as checklists below instead of plain text
+                if (f.key === 'followUpCommitments' || f.key === 'assignments') return null
                 const val = d[f.key]
                 if (!val) return null
                 return (
@@ -1454,7 +1455,17 @@ function DiarySection({ studentId, authorName, createdBy }: {
               <FollowupChecklist
                 studentId={studentId}
                 diaryId={d.id}
+                category="followup"
+                labelKey="student360.followUpCommitments"
                 fallbackText={d.followUpCommitments}
+                createdBy={createdBy}
+              />
+              <FollowupChecklist
+                studentId={studentId}
+                diaryId={d.id}
+                category="assignment"
+                labelKey="student360.assignments"
+                fallbackText={d.assignments}
                 createdBy={createdBy}
               />
             </div>
@@ -1799,14 +1810,27 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
         },
         {
           onSuccess: (created) => {
-            const items = splitFollowupText(d.followUpCommitments || '')
-            if (items.length && created?.id) {
-              bulkCreateFollowups.mutate({
-                studentId,
-                diaryId: created.id,
-                items,
-                createdBy,
-              })
+            if (created?.id) {
+              const followupItems = splitFollowupText(d.followUpCommitments || '')
+              if (followupItems.length) {
+                bulkCreateFollowups.mutate({
+                  studentId,
+                  diaryId: created.id,
+                  category: 'followup',
+                  items: followupItems,
+                  createdBy,
+                })
+              }
+              const assignmentItems = splitFollowupText(d.assignments || '')
+              if (assignmentItems.length) {
+                bulkCreateFollowups.mutate({
+                  studentId,
+                  diaryId: created.id,
+                  category: 'assignment',
+                  items: assignmentItems,
+                  createdBy,
+                })
+              }
             }
             setOpen(false)
           },
@@ -1869,17 +1893,19 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
 }
 
 // ────────────────────────── Follow-up Checklist ──────────────────────────
-function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy }: {
+function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, category = 'followup', labelKey = 'student360.followUpCommitments' }: {
   studentId: string
   diaryId: string
   fallbackText?: string
   createdBy?: string
+  category?: string
+  labelKey?: string
 }) {
   const t = useT()
   const { data: all = [] } = useServiceFollowups(studentId)
   const items = useMemo(
-    () => all.filter(f => f.diaryId === diaryId),
-    [all, diaryId],
+    () => all.filter(f => f.diaryId === diaryId && (f.category || 'followup') === category),
+    [all, diaryId, category],
   )
   const toggle = useToggleFollowup()
   const create = useCreateFollowup()
@@ -1892,7 +1918,7 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy }: {
     return (
       <div>
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">{t('student360.followUpCommitments')}</p>
+          <p className="text-xs font-medium text-muted-foreground">{t(labelKey)}</p>
           <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
             <Plus className="size-3.5" />
           </Button>
@@ -1905,7 +1931,7 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy }: {
     const v = draft.trim()
     if (!v) { setAdding(false); return }
     create.mutate(
-      { studentId, diaryId, text: v, createdBy },
+      { studentId, diaryId, category, text: v, createdBy },
       { onSuccess: () => { setDraft(''); setAdding(false) }, onError: reportSaveError },
     )
   }
@@ -1916,7 +1942,7 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy }: {
     <div>
       <div className="flex items-center justify-between mb-1">
         <p className="text-xs font-medium text-muted-foreground">
-          {t('student360.followUpCommitments')}
+          {t(labelKey)}
           {items.length > 0 && (
             <span className="ml-1 text-muted-foreground/70">
               ({doneCount}/{items.length})

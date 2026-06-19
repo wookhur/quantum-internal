@@ -7,6 +7,7 @@ function mapFollowup(row: Record<string, unknown>): ServiceFollowup {
     id: row.id as string,
     studentId: row.student_id as string,
     diaryId: (row.diary_id as string) || undefined,
+    category: (row.category as string) || 'followup',
     text: row.text as string,
     done: row.done as boolean,
     doneAt: (row.done_at as string) || undefined,
@@ -40,6 +41,7 @@ export function useCreateFollowup() {
     mutationFn: async (f: {
       studentId: string
       diaryId?: string
+      category?: string
       text: string
       dueDate?: string
       createdBy?: string
@@ -47,6 +49,7 @@ export function useCreateFollowup() {
       const { data, error } = await supabase.from('service_followups').insert({
         student_id: f.studentId,
         diary_id: f.diaryId || null,
+        category: f.category || 'followup',
         text: f.text,
         due_date: f.dueDate || null,
         created_by: f.createdBy || null,
@@ -65,6 +68,7 @@ export function useBulkCreateFollowups() {
     mutationFn: async (payload: {
       studentId: string
       diaryId?: string
+      category?: string
       items: string[]
       createdBy?: string
     }) => {
@@ -72,6 +76,7 @@ export function useBulkCreateFollowups() {
       const rows = payload.items.map(text => ({
         student_id: payload.studentId,
         diary_id: payload.diaryId || null,
+        category: payload.category || 'followup',
         text,
         created_by: payload.createdBy || null,
       }))
@@ -107,11 +112,27 @@ export function useDeleteFollowup() {
   })
 }
 
-/** Split AI-generated follow-up text into clean line items. */
+/** Split AI-generated follow-up text into clean line items.
+ *  Splits on newlines AND on " / " separators that the AI uses to join
+ *  multiple commitments for one person, so each becomes its own checkable item.
+ *  A leading "Name:" label is preserved on every split item. */
 export function splitFollowupText(text: string): string[] {
   if (!text) return []
   return text
     .split(/\n+/)
-    .map(line => line.replace(/^[\s•·\-*–—\d.)\]]+/, '').trim())
+    .flatMap(rawLine => {
+      const line = rawLine.replace(/^[\s•·\-*–—\d.)\]]+/, '').trim()
+      if (!line) return []
+      // Detect an optional "Name:" / "이름:" prefix (no slash, ≤40 chars) to
+      // carry across the slash-separated sub-items.
+      const m = line.match(/^([^/:：]{1,40}[:：])\s*(.+)$/)
+      const prefix = m ? `${m[1]} ` : ''
+      const body = m ? m[2] : line
+      // Only split on " / " (slash padded by whitespace) so dates like 9/15,
+      // "물리/화학", or "http://" stay intact.
+      const parts = body.split(/\s+\/\s+/).map(p => p.trim()).filter(Boolean)
+      if (parts.length <= 1) return [line]
+      return parts.map(p => prefix + p)
+    })
     .filter(line => line.length > 0 && line.length < 500)
 }
