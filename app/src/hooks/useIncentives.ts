@@ -13,7 +13,7 @@ export interface ContractIncentive {
   customName: string | null
   /** Resolved display name: profileName or customName */
   displayName: string
-  incentiveType: 'partner_sales' | 'partner_fee' | 'cold_call' | 'total_revenue' | 'external_fee'
+  incentiveType: 'partner_sales' | 'partner_fee' | 'cold_call' | 'total_revenue' | 'total_revenue_1_5' | 'external_fee'
   percentage: number
   /** When set, this incentive applies only to that specific installment (extra payments) */
   installmentId: string | null
@@ -67,6 +67,7 @@ export const INCENTIVE_TYPES = {
   partner_fee: { labelKey: 'incentive.partnerFee', defaultPct: 10 },
   cold_call: { labelKey: 'incentive.coldCall', defaultPct: 4 },
   total_revenue: { labelKey: 'incentive.totalRevenue', defaultPct: 2 },
+  total_revenue_1_5: { labelKey: 'incentive.totalRevenue1_5', defaultPct: 1.5 },
   external_fee: { labelKey: 'incentive.externalFee', defaultPct: 0 },
 } as const
 

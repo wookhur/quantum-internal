@@ -108,16 +108,29 @@ function IncentivePersonSelect({
 
   return (
     <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setIsAdding(false); setNewName('') } }}>
-      <PopoverTrigger
-        className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-      >
-        <span className={displayLabel ? 'text-foreground' : 'text-muted-foreground'}>
-          {displayLabel || placeholder}
-        </span>
-        <svg className="size-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-        </svg>
-      </PopoverTrigger>
+      <div className="relative">
+        <PopoverTrigger
+          className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          <span className={displayLabel ? 'text-foreground pr-5' : 'text-muted-foreground'}>
+            {displayLabel || placeholder}
+          </span>
+          <svg className="size-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+          </svg>
+        </PopoverTrigger>
+        {displayLabel && (
+          <button
+            type="button"
+            className="absolute right-8 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+            onClick={(e) => { e.stopPropagation(); onChange('', '') }}
+          >
+            <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
       <PopoverContent align="start" side="bottom" sideOffset={4} className="w-[var(--anchor-width)] p-0 max-h-[280px] overflow-y-auto">
         {/* Unified list */}
         {allItems.map((item) => {
@@ -184,6 +197,13 @@ function IncentivePersonSelect({
   )
 }
 
+const EXTRA_INCENTIVE_OPTIONS = [
+  { key: 'custom', label: '커스텀 비율 설정', pct: 0, needsCustom: true },
+  { key: 'external_fee', label: '서비스 디렉터 인센티브', pct: 1, needsCustom: false },
+  { key: 'external_fee', label: '담당자 인센티브', pct: 3, needsCustom: false },
+  { key: 'external_fee', label: '서비스 매니저 인센티브', pct: 1, needsCustom: false },
+] as const
+
 /** Inline form to add an incentive scoped to a specific extra installment */
 function ExtraIncentiveAddForm({
   contractId,
@@ -200,7 +220,9 @@ function ExtraIncentiveAddForm({
 }) {
   const t = useT()
   const createIncentive = useCreateIncentive()
-  const [form, setForm] = useState({ profileId: '', customName: '', incentiveType: '' })
+  const [form, setForm] = useState({ profileId: '', customName: '', selectedOption: '', customPct: '', customLabel: '' })
+
+  const selectedOpt = EXTRA_INCENTIVE_OPTIONS[Number(form.selectedOption)] ?? null
 
   return (
     <div className="flex items-end gap-2 flex-wrap pt-1">
@@ -217,38 +239,71 @@ function ExtraIncentiveAddForm({
         />
       </div>
       <div className="flex-1 min-w-[120px] space-y-1">
-        <Select value={form.incentiveType} onValueChange={(v) => setForm(f => ({ ...f, incentiveType: v || '' }))}>
+        <Select value={form.selectedOption} onValueChange={(v) => setForm(f => ({ ...f, selectedOption: v || '', customPct: '', customLabel: '' }))}>
           <SelectTrigger className="h-8 text-xs">
             <span>
-              {form.incentiveType && INCENTIVE_TYPES[form.incentiveType as IncentiveType]
-                ? `${t(INCENTIVE_TYPES[form.incentiveType as IncentiveType].labelKey)} (${INCENTIVE_TYPES[form.incentiveType as IncentiveType].defaultPct}%)`
+              {selectedOpt
+                ? `${selectedOpt.label}${selectedOpt.needsCustom ? '' : ` (${selectedOpt.pct}%)`}`
                 : t('incentive.selectType')}
             </span>
           </SelectTrigger>
           <SelectContent className="min-w-[280px]">
-            {(Object.entries(INCENTIVE_TYPES) as [IncentiveType, typeof INCENTIVE_TYPES[IncentiveType]][]).map(([key, cfg]) => (
-              <SelectItem key={key} value={key}>{t(cfg.labelKey)} ({cfg.defaultPct}%)</SelectItem>
+            {EXTRA_INCENTIVE_OPTIONS.map((opt, i) => (
+              <SelectItem key={i} value={String(i)}>
+                {opt.label}{opt.needsCustom ? '' : ` (${opt.pct}%)`}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
+      {selectedOpt?.needsCustom && (
+        <>
+          <div className="w-[100px] space-y-1">
+            <Input
+              className="h-8 text-xs"
+              placeholder="이름"
+              value={form.customLabel}
+              onChange={(e) => setForm(f => ({ ...f, customLabel: e.target.value }))}
+            />
+          </div>
+          <div className="w-[70px] space-y-1">
+            <Input
+              className="h-8 text-xs"
+              placeholder="%"
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              value={form.customPct}
+              onChange={(e) => setForm(f => ({ ...f, customPct: e.target.value }))}
+            />
+          </div>
+        </>
+      )}
       <Button
         size="sm"
         className="h-8 gap-1 text-xs"
-        disabled={(!form.profileId && !form.customName.trim()) || !form.incentiveType || createIncentive.isPending}
+        disabled={
+          (!form.profileId && !form.customName.trim()) ||
+          !selectedOpt ||
+          (selectedOpt.needsCustom && (!form.customPct || Number(form.customPct) <= 0)) ||
+          createIncentive.isPending
+        }
         onClick={() => {
-          if (!form.incentiveType) return
+          if (!selectedOpt) return
           if (!form.profileId && !form.customName.trim()) return
-          const typKey = form.incentiveType as IncentiveType
+          const pct = selectedOpt.needsCustom ? Number(form.customPct) : selectedOpt.pct
+          if (pct <= 0 && selectedOpt.needsCustom) return
+          const typKey = (selectedOpt.needsCustom ? 'external_fee' : selectedOpt.key) as IncentiveType
           createIncentive.mutate({
             contract_id: contractId,
             profile_id: form.profileId || null,
             custom_name: form.customName.trim() || null,
             incentive_type: typKey,
-            percentage: INCENTIVE_TYPES[typKey].defaultPct,
+            percentage: pct,
             installment_id: installmentId,
           }, {
-            onSuccess: () => setForm({ profileId: '', customName: '', incentiveType: '' }),
+            onSuccess: () => setForm({ profileId: '', customName: '', selectedOption: '', customPct: '', customLabel: '' }),
           })
         }}
       >

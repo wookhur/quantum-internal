@@ -155,6 +155,9 @@ export function ContractsPage() {
         leadId: leadInfoRef.current?.leadId,
       },
       {
+        onError: (err) => {
+          alert(`계약 추가 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`)
+        },
         onSuccess: (data) => {
           // Create installments if any have amount
           const validItems = installmentRows

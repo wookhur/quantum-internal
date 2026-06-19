@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, Users, Percent, Receipt } from 'lucide-react'
+import { Loader2, Users, Receipt } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
 import { useIncentivesByInstallment, type IncentiveType } from '@/hooks/useIncentives'
@@ -8,8 +8,6 @@ import { useAllExtraInstallments } from '@/hooks/useExternalFees'
 
 // Freelancer commission types (partner/freelancer)
 const FREELANCER_TYPES: IncentiveType[] = ['partner_sales', 'partner_fee']
-// Internal sales commission types
-const SALES_TYPES: IncentiveType[] = ['cold_call', 'total_revenue']
 
 interface PersonAmount {
   name: string
@@ -52,15 +50,7 @@ export function FinanceDashboardPage() {
     return { total, count: unpaid.length, byPerson }
   }, [allIncentives])
 
-  // ─── 2. 세일즈 커미션 미지급 ─────────────────────────────────────
-  const salesCommission = useMemo(() => {
-    const unpaid = allIncentives.filter(e => !e.isPaid && SALES_TYPES.includes(e.incentiveType))
-    const total = unpaid.reduce((s, e) => s + e.incentiveAmount, 0)
-    const byPerson = groupByPerson(unpaid)
-    return { total, count: unpaid.length, byPerson }
-  }, [allIncentives])
-
-  // ─── 3. 서비스 수수료 미지급 ─────────────────────────────────────
+  // ─── 2. 서비스 수수료 미지급 ─────────────────────────────────────
   const serviceFees = useMemo(() => {
     const unpaidShares: { name: string; amount: number; studentName: string; label: string }[] = []
     for (const ext of allExtras) {
@@ -93,7 +83,7 @@ export function FinanceDashboardPage() {
     return { total, count: unpaidShares.length, byPerson }
   }, [allExtras])
 
-  const grandTotal = freelancerCommission.total + salesCommission.total + serviceFees.total
+  const grandTotal = freelancerCommission.total + serviceFees.total
 
   return (
     <div className="space-y-6">
@@ -110,7 +100,7 @@ export function FinanceDashboardPage() {
       ) : (
         <>
           {/* ─── Summary Cards ────────────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-xs font-medium text-muted-foreground">{t('financeDash.freelancerCommission')}</CardTitle>
@@ -119,17 +109,6 @@ export function FinanceDashboardPage() {
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(freelancerCommission.total)}</div>
                 <p className="text-[11px] text-muted-foreground mt-1">{freelancerCommission.count}{t('financeDash.cases')}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xs font-medium text-muted-foreground">{t('financeDash.salesCommission')}</CardTitle>
-                <Percent className="size-4 text-blue-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(salesCommission.total)}</div>
-                <p className="text-[11px] text-muted-foreground mt-1">{salesCommission.count}{t('financeDash.cases')}</p>
               </CardContent>
             </Card>
 
@@ -152,20 +131,12 @@ export function FinanceDashboardPage() {
           </div>
 
           {/* ─── Detail Cards ─────────────────────────────────── */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* 프리랜서 세일즈 커미션 */}
             <PayoutCard
               title={t('financeDash.freelancerCommission')}
               color="purple"
               persons={freelancerCommission.byPerson}
-              t={t}
-            />
-
-            {/* 세일즈 커미션 */}
-            <PayoutCard
-              title={t('financeDash.salesCommission')}
-              color="blue"
-              persons={salesCommission.byPerson}
               t={t}
             />
 
