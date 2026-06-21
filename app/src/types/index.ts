@@ -440,6 +440,9 @@ export interface ServiceStudent {
   updatedAt: string
 }
 
+export type MeetingStatus = 'scheduled' | 'held' | 'cancelled' | 'no_show' | 'rescheduled'
+export type MeetingCancelledBy = 'client' | 'consultant' | 'other'
+
 export interface ServiceMeeting {
   id: string
   studentId: string
@@ -452,6 +455,11 @@ export interface ServiceMeeting {
   reportStatus: ServiceReportStatus
   reportUrl?: string
   reportDate?: string
+  /** Attendance lifecycle for QC reporting. */
+  status: MeetingStatus
+  cancellationReason?: string
+  cancelledBy?: MeetingCancelledBy
+  rescheduledTo?: string
   createdBy?: string
   createdAt: string
   updatedAt: string

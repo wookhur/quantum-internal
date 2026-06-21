@@ -5,6 +5,8 @@ import type {
   ServiceMeeting,
   ServiceReportStatus,
   ServiceDiaryEntry,
+  MeetingStatus,
+  MeetingCancelledBy,
 } from '@/types'
 import { createNotificationsForUsers } from './useUserNotifications'
 
@@ -54,6 +56,10 @@ function mapMeeting(row: Record<string, unknown>): ServiceMeeting {
     reportStatus: row.report_status as ServiceReportStatus,
     reportUrl: (row.report_url as string) || undefined,
     reportDate: (row.report_date as string) || undefined,
+    status: (row.status as MeetingStatus) || 'held',
+    cancellationReason: (row.cancellation_reason as string) || undefined,
+    cancelledBy: (row.cancelled_by as MeetingCancelledBy) || undefined,
+    rescheduledTo: (row.rescheduled_to as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -299,6 +305,10 @@ export function useCreateServiceMeeting() {
       reportStatus?: ServiceReportStatus
       reportUrl?: string
       reportDate?: string
+      status?: MeetingStatus
+      cancellationReason?: string | null
+      cancelledBy?: MeetingCancelledBy | null
+      rescheduledTo?: string | null
       createdBy?: string
     }) => {
       const { data, error } = await supabase.from('service_meetings').insert({
@@ -311,6 +321,10 @@ export function useCreateServiceMeeting() {
         report_status: m.reportStatus || 'none',
         report_url: m.reportUrl,
         report_date: m.reportDate || null,
+        status: m.status || 'held',
+        cancellation_reason: m.cancellationReason || null,
+        cancelled_by: m.cancelledBy || null,
+        rescheduled_to: m.rescheduledTo || null,
         created_by: m.createdBy || null,
       }).select().single()
       if (error) throw error
@@ -334,6 +348,10 @@ export function useUpdateServiceMeeting() {
       reportStatus?: ServiceReportStatus
       reportUrl?: string
       reportDate?: string | null
+      status?: MeetingStatus
+      cancellationReason?: string | null
+      cancelledBy?: MeetingCancelledBy | null
+      rescheduledTo?: string | null
     }) => {
       const { id, studentId: _s, ...rest } = payload
       const update: Record<string, unknown> = {}
@@ -345,6 +363,10 @@ export function useUpdateServiceMeeting() {
       if (rest.reportStatus !== undefined) update.report_status = rest.reportStatus
       if (rest.reportUrl !== undefined) update.report_url = rest.reportUrl
       if (rest.reportDate !== undefined) update.report_date = rest.reportDate
+      if (rest.status !== undefined) update.status = rest.status
+      if (rest.cancellationReason !== undefined) update.cancellation_reason = rest.cancellationReason
+      if (rest.cancelledBy !== undefined) update.cancelled_by = rest.cancelledBy
+      if (rest.rescheduledTo !== undefined) update.rescheduled_to = rest.rescheduledTo
       const { error } = await supabase.from('service_meetings').update(update).eq('id', id)
       if (error) throw error
     },

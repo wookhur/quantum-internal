@@ -37,7 +37,7 @@ import {
 import { CONSULTANTS, consultantName } from '@/lib/consultants'
 import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
-import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus } from '@/types'
+import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus, MeetingStatus, MeetingCancelledBy } from '@/types'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -570,6 +570,20 @@ const REPORT_STATUS_OPTIONS: { value: ServiceReportStatus; label: string }[] = [
   { value: 'submitted', label: '제출 완료' },
 ]
 
+const MEETING_STATUS_OPTIONS: { value: MeetingStatus; label: string }[] = [
+  { value: 'held',        label: '진행 완료' },
+  { value: 'scheduled',   label: '예정' },
+  { value: 'cancelled',   label: '취소' },
+  { value: 'no_show',     label: '노쇼' },
+  { value: 'rescheduled', label: '일정 변경' },
+]
+
+const CANCELLED_BY_OPTIONS: { value: MeetingCancelledBy; label: string }[] = [
+  { value: 'client',     label: '고객' },
+  { value: 'consultant', label: '컨설턴트' },
+  { value: 'other',      label: '기타' },
+]
+
 function MeetingDialog({
   open,
   onClose,
@@ -589,6 +603,11 @@ function MeetingDialog({
   const [reportStatus, setReportStatus] = useState<ServiceReportStatus>(meeting?.reportStatus ?? 'none')
   const [reportUrl,    setReportUrl]    = useState(meeting?.reportUrl ?? '')
   const [prepUrl,      setPrepUrl]      = useState(meeting?.prepUrl ?? '')
+  const [status,       setStatus]       = useState<MeetingStatus>(meeting?.status ?? 'held')
+  const [cancelledBy,  setCancelledBy]  = useState<MeetingCancelledBy | ''>(meeting?.cancelledBy ?? '')
+  const [cancelReason, setCancelReason] = useState(meeting?.cancellationReason ?? '')
+
+  const isCancelled = status === 'cancelled' || status === 'no_show'
 
   // Repopulate fields each time the dialog opens for a meeting
   useEffect(() => {
@@ -599,6 +618,9 @@ function MeetingDialog({
       setReportStatus(meeting.reportStatus ?? 'none')
       setReportUrl(meeting.reportUrl ?? '')
       setPrepUrl(meeting.prepUrl ?? '')
+      setStatus(meeting.status ?? 'held')
+      setCancelledBy(meeting.cancelledBy ?? '')
+      setCancelReason(meeting.cancellationReason ?? '')
     }
   }, [open, meeting])
 
@@ -617,6 +639,10 @@ function MeetingDialog({
         reportStatus,
         reportUrl,
         prepUrl,
+        status,
+        // Cancellation details only apply to cancelled / no-show meetings
+        cancellationReason: isCancelled ? (cancelReason || null) : null,
+        cancelledBy: isCancelled ? (cancelledBy || null) : null,
       })
       qc.invalidateQueries({ queryKey: ['dashboard_meetings'] })
       onClose()
@@ -667,6 +693,36 @@ function MeetingDialog({
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1">
+            <Label>진행 상태</Label>
+            <Select value={status} onValueChange={v => setStatus(v as MeetingStatus)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MEETING_STATUS_OPTIONS.map(s => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {isCancelled && (
+            <div className="grid grid-cols-2 gap-3 rounded-md border border-red-200 bg-red-50/50 p-3">
+              <div className="space-y-1">
+                <Label>취소 주체</Label>
+                <Select value={cancelledBy} onValueChange={v => setCancelledBy(v as MeetingCancelledBy)}>
+                  <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+                  <SelectContent>
+                    {CANCELLED_BY_OPTIONS.map(c => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>취소 사유</Label>
+                <Input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="예: 고객 개인 사정" />
+              </div>
+            </div>
+          )}
           <div className="space-y-1">
             <Label>리포트 상태</Label>
             <Select value={reportStatus} onValueChange={v => setReportStatus(v as ServiceReportStatus)}>
