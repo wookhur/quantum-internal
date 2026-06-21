@@ -93,6 +93,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     items: [
       { labelKey: 'nav.serviceDashboard', to: '/service/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.student360', to: '/service/student-360', icon: UserSearch },
+      { labelKey: 'nav.weeklyReport', to: '/service/weekly-report', icon: FileText },
       { labelKey: 'nav.externalFees', to: '/service/external-fees', icon: Receipt },
     ],
   },

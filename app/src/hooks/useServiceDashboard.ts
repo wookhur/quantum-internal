@@ -89,6 +89,39 @@ export function useAllServiceFollowupsDue(startDate: string, endDate: string) {
   })
 }
 
+/** All follow-ups (done or not) due within the range — for QC completion rates. */
+export function useAllServiceFollowupsInRange(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ['dashboard_followups_all', startDate, endDate],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('service_followups')
+        .select('*, service_students!inner(name, assigned_consultant)')
+        .gte('due_date', startDate)
+        .lte('due_date', endDate)
+        .order('due_date', { ascending: true })
+      if (error) throw error
+      return (data || []).map((row: Record<string, unknown>) => {
+        const s = row.service_students as Record<string, unknown>
+        return {
+          id: row.id as string,
+          studentId: row.student_id as string,
+          diaryId: (row.diary_id as string) || undefined,
+          text: row.text as string,
+          done: row.done as boolean,
+          doneAt: (row.done_at as string) || undefined,
+          dueDate: (row.due_date as string) || undefined,
+          createdBy: (row.created_by as string) || undefined,
+          createdAt: row.created_at as string,
+          updatedAt: row.updated_at as string,
+          studentName: (s?.name as string) || '',
+          studentConsultant: (s?.assigned_consultant as string) || undefined,
+        } as DashboardFollowup
+      })
+    },
+  })
+}
+
 export interface StudentStatusFlags {
   missingReports: Set<string>
   pendingFollowups: Set<string>
