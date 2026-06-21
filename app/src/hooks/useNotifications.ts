@@ -24,12 +24,14 @@ export function useAppNotifications() {
   const { data: prefs } = useNotificationPreferences()
   const disabledTypes = prefs?.disabledTypes || []
 
-  // Birthday alerts are only shown to users who can view employee info (직원정보).
+  // Birthday alerts are shown to admins (who can view employee info / 직원정보)
+  // and to service managers.
   const { data: featureAccess = [] } = useFeatureAccess()
-  const canViewPersonalInfo = useMemo(
-    () => (user ? getEffectiveRoutes(user, featureAccess).includes('/hr/personal-info') : false),
-    [user, featureAccess],
-  )
+  const canSeeBirthdayAlerts = useMemo(() => {
+    if (!user) return false
+    if (user.role === 'service_manager') return true
+    return getEffectiveRoutes(user, featureAccess).includes('/hr/personal-info')
+  }, [user, featureAccess])
 
   // --- Neglected leads (no activity in 7+ days) ---
   const { data: neglectedLeads = [] } = useQuery({
@@ -106,8 +108,8 @@ export function useAppNotifications() {
 
   // --- Upcoming employee birthdays (next 3 weeks) ---
   const { data: upcomingBirthdays = [] } = useQuery({
-    queryKey: ['notifications-birthdays', canViewPersonalInfo],
-    enabled: !!user?.id && canViewPersonalInfo,
+    queryKey: ['notifications-birthdays', canSeeBirthdayAlerts],
+    enabled: !!user?.id && canSeeBirthdayAlerts,
     refetchInterval: 60 * 60 * 1000,
     queryFn: async () => {
       const [infoRes, profilesRes] = await Promise.all([
@@ -217,7 +219,7 @@ export function useAppNotifications() {
     }
 
     // Upcoming employee birthdays (only for users who can view 직원정보)
-    if (canViewPersonalInfo && !disabledTypes.includes('employee_birthday')) {
+    if (canSeeBirthdayAlerts && !disabledTypes.includes('employee_birthday')) {
       upcomingBirthdays.forEach((b) => {
         const dday = b.daysUntil === 0 ? '오늘' : `D-${b.daysUntil}`
         items.push({
@@ -233,7 +235,7 @@ export function useAppNotifications() {
     }
 
     return items
-  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, upcomingBirthdays, canViewPersonalInfo, disabledTypes])
+  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, upcomingBirthdays, canSeeBirthdayAlerts, disabledTypes])
 
   return notifications
 }
