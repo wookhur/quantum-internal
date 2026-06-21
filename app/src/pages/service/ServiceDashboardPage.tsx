@@ -17,7 +17,7 @@ import {
 import {
   ChevronLeft, ChevronRight, Plus, X, ExternalLink,
   Users, Calendar, AlertCircle, FileText, CheckSquare,
-  Loader2,
+  Loader2, Trash2,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useServiceStudents, useServiceDiary } from '@/hooks/useServiceStudents'
@@ -27,7 +27,7 @@ import {
   type DashboardMeeting, type DashboardFollowup,
 } from '@/hooks/useServiceDashboard'
 import {
-  useAllStudentMilestones, useCreateMilestone, useUpdateMilestone,
+  useAllStudentMilestones, useCreateMilestone, useUpdateMilestone, useDeleteMilestone,
   type DashboardMilestone,
 } from '@/hooks/useStudentMilestones'
 import { CONSULTANTS, consultantName } from '@/lib/consultants'
@@ -179,7 +179,20 @@ function SessionPrepPanel({
 
   const openFollowups = followups.filter(f => !f.done)
   const doneFollowups = followups.filter(f => f.done)
-  const lastDiary = diaryEntries[0]
+
+  // Pick the diary that matches the clicked meeting's date — not just the newest
+  // one. diaryEntries are sorted by entry_date descending.
+  const lastDiary = useMemo(() => {
+    if (!diaryEntries.length) return undefined
+    const md = meeting.meetingDate
+    if (!md) return diaryEntries[0]
+    // Diary written for this exact meeting day
+    const exact = diaryEntries.find(d => d.entryDate === md)
+    if (exact) return exact
+    // Otherwise the most recent diary on or before this meeting's date
+    return diaryEntries.find(d => d.entryDate && d.entryDate <= md) ?? undefined
+  }, [diaryEntries, meeting.meetingDate])
+  const isThisMeetingDiary = !!lastDiary && lastDiary.entryDate === meeting.meetingDate
 
   const daysAgo = meeting.meetingDate ? daysFromTodayKST(meeting.meetingDate) : null
   const lastMetLabel = daysAgo === null
@@ -239,7 +252,9 @@ function SessionPrepPanel({
         {lastDiary && (
           <section>
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">지난 세션에서</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                {isThisMeetingDiary ? '이 미팅 일지' : '지난 세션에서'}
+              </h3>
               {lastDiary.entryDate && (
                 <span className="text-[11px] text-gray-400">{formatDateLabel(lastDiary.entryDate)}</span>
               )}
@@ -392,6 +407,7 @@ function MilestoneDialog({
   const { user } = useAuth()
   const createMilestone = useCreateMilestone()
   const updateMilestone = useUpdateMilestone()
+  const deleteMilestone = useDeleteMilestone()
 
   const [studentId, setStudentId] = useState(editing?.studentId ?? defaultStudentId ?? '')
   const [type,      setType]      = useState<MilestoneType>(editing?.type ?? 'application')
@@ -413,6 +429,7 @@ function MilestoneDialog({
   }, [open])
 
   const saving = createMilestone.isPending || updateMilestone.isPending
+  const deleting = deleteMilestone.isPending
 
   async function handleSave() {
     if (!studentId || !title || !date) return
@@ -426,6 +443,18 @@ function MilestoneDialog({
     } catch (e) {
       const msg = (e as { message?: string })?.message || String(e)
       alert(`저장 실패: ${msg}`)
+    }
+  }
+
+  async function handleDelete() {
+    if (!editing) return
+    if (!window.confirm('이 일정을 삭제할까요? 되돌릴 수 없습니다.')) return
+    try {
+      await deleteMilestone.mutateAsync({ id: editing.id, studentId: editing.studentId })
+      onClose()
+    } catch (e) {
+      const msg = (e as { message?: string })?.message || String(e)
+      alert(`삭제 실패: ${msg}`)
     }
   }
 
@@ -484,12 +513,25 @@ function MilestoneDialog({
             <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="추가 내용..." />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button onClick={handleSave} disabled={saving || !studentId || !title || !date}>
-            {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
-            {editing ? '저장' : '추가'}
-          </Button>
+        <DialogFooter className={editing ? 'sm:justify-between' : undefined}>
+          {editing && (
+            <Button
+              variant="outline"
+              onClick={handleDelete}
+              disabled={saving || deleting}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
+              삭제
+            </Button>
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={deleting}>취소</Button>
+            <Button onClick={handleSave} disabled={saving || deleting || !studentId || !title || !date}>
+              {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+              {editing ? '저장' : '추가'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -507,6 +549,7 @@ function WeekCalendar({
   consultantFilter,
   onSelectMeeting,
   onAddMilestone,
+  onEditMilestone,
 }: {
   days: Date[]
   meetings: DashboardMeeting[]
@@ -516,6 +559,7 @@ function WeekCalendar({
   consultantFilter: string
   onSelectMeeting: (m: DashboardMeeting) => void
   onAddMilestone: (dateStr: string) => void
+  onEditMilestone: (m: DashboardMilestone) => void
 }) {
   const today = todayKST()
   const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
@@ -582,13 +626,14 @@ function WeekCalendar({
               {mm.map(m => {
                 const cfg = milestoneConfig(m.type)
                 return (
-                  <div
+                  <button
                     key={m.id}
-                    className={`w-full text-[11px] px-1.5 py-1 rounded border font-medium truncate ${cfg.color}`}
-                    title={`${m.studentName}: ${m.title}`}
+                    onClick={() => onEditMilestone(m)}
+                    className={`w-full text-left text-[11px] px-1.5 py-1 rounded border font-medium truncate hover:opacity-80 transition-opacity ${cfg.color}`}
+                    title={`${m.studentName}: ${m.title} (클릭하여 수정)`}
                   >
                     {m.studentName} · {m.title}
-                  </div>
+                  </button>
                 )
               })}
               {ff.map(f => (
@@ -627,6 +672,7 @@ function MonthCalendar({
   ghostMeetings,
   consultantFilter,
   onSelectMeeting,
+  onEditMilestone,
 }: {
   year: number
   month: number
@@ -636,6 +682,7 @@ function MonthCalendar({
   ghostMeetings: GhostMeeting[]
   consultantFilter: string
   onSelectMeeting: (m: DashboardMeeting) => void
+  onEditMilestone: (m: DashboardMilestone) => void
 }) {
   const today = todayKST()
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -702,9 +749,14 @@ function MonthCalendar({
                   {mm.slice(0, 2).map(m => {
                     const cfg = milestoneConfig(m.type)
                     return (
-                      <div key={m.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${cfg.color}`}>
+                      <button
+                        key={m.id}
+                        onClick={() => onEditMilestone(m)}
+                        className={`w-full text-left text-[10px] px-1 py-0.5 rounded truncate hover:opacity-80 transition-opacity ${cfg.color}`}
+                        title={`${m.studentName}: ${m.title} (클릭하여 수정)`}
+                      >
                         {m.studentName}
-                      </div>
+                      </button>
                     )
                   })}
                   {ff.slice(0, 1).map(f => (
@@ -733,12 +785,14 @@ function CycleOverview({
   consultantFilter,
   cycleFilter,
   onAddMilestone,
+  onEditMilestone,
 }: {
   students: { id: string; name: string; assignedConsultant?: string; status?: string }[]
   milestones: DashboardMilestone[]
   consultantFilter: string
   cycleFilter: 'all' | 'at_risk'
   onAddMilestone: (studentId: string) => void
+  onEditMilestone: (m: DashboardMilestone) => void
 }) {
   const today = todayKST()
   const ref = new Date(today + 'T00:00:00')
@@ -862,10 +916,11 @@ function CycleOverview({
                             return (
                               <button
                                 key={m.id}
-                                className={`group relative w-5 h-5 rounded-full border-2 border-white shadow-sm flex items-center justify-center ${cfg.dot} ${
+                                onClick={() => onEditMilestone(m)}
+                                className={`group relative w-5 h-5 rounded-full border-2 border-white shadow-sm flex items-center justify-center hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 ${cfg.dot} ${
                                   m.status === 'completed' ? 'opacity-40' : isPast ? 'opacity-70' : ''
                                 } ${isCurrentMonth ? 'ring-2 ring-offset-1 ring-blue-300' : ''}`}
-                                title={`${m.title} · ${MILESTONE_STATUSES.find(s => s.value === m.status)?.label}`}
+                                title={`${m.title} · ${MILESTONE_STATUSES.find(s => s.value === m.status)?.label} (클릭하여 수정)`}
                               >
                                 {m.status === 'urgent' && (
                                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
@@ -920,6 +975,14 @@ export function ServiceDashboardPage() {
   const [defaultMilestoneStudentId, setDefaultMilestoneStudentId] = useState<string | undefined>()
   const [defaultMilestoneDate, setDefaultMilestoneDate] = useState<string | undefined>()
   const [editingMilestone, setEditingMilestone] = useState<StudentMilestone | null>(null)
+
+  // Open the milestone dialog in edit mode for an existing milestone
+  const openEditMilestone = (m: StudentMilestone) => {
+    setDefaultMilestoneStudentId(undefined)
+    setDefaultMilestoneDate(undefined)
+    setEditingMilestone(m)
+    setShowAddMilestone(true)
+  }
 
   // Compute date ranges
   const weekDays = useMemo(() => getWeekDays(refDate), [refDate])
@@ -1183,6 +1246,7 @@ export function ServiceDashboardPage() {
               setEditingMilestone(null)
               setShowAddMilestone(true)
             }}
+            onEditMilestone={openEditMilestone}
           />
         )}
 
@@ -1196,6 +1260,7 @@ export function ServiceDashboardPage() {
             ghostMeetings={ghostMeetings}
             consultantFilter={consultantFilter}
             onSelectMeeting={setSelectedMeeting}
+            onEditMilestone={openEditMilestone}
           />
         )}
 
@@ -1280,6 +1345,7 @@ export function ServiceDashboardPage() {
             consultantFilter={consultantFilter}
             cycleFilter={cycleFilter}
             onAddMilestone={studentId => { setDefaultMilestoneStudentId(studentId); setDefaultMilestoneDate(undefined); setEditingMilestone(null); setShowAddMilestone(true) }}
+            onEditMilestone={openEditMilestone}
           />
         )}
       </div>
