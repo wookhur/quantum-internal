@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNotificationPreferences } from './useNotificationPreferences'
+import { useFeatureAccess, getEffectiveRoutes } from './useProfiles'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
@@ -22,6 +23,13 @@ export function useAppNotifications() {
   const { user } = useAuth()
   const { data: prefs } = useNotificationPreferences()
   const disabledTypes = prefs?.disabledTypes || []
+
+  // Birthday alerts are only shown to users who can view employee info (직원정보).
+  const { data: featureAccess = [] } = useFeatureAccess()
+  const canViewPersonalInfo = useMemo(
+    () => (user ? getEffectiveRoutes(user, featureAccess).includes('/hr/personal-info') : false),
+    [user, featureAccess],
+  )
 
   // --- Neglected leads (no activity in 7+ days) ---
   const { data: neglectedLeads = [] } = useQuery({
@@ -96,6 +104,55 @@ export function useAppNotifications() {
     },
   })
 
+  // --- Upcoming employee birthdays (next 3 weeks) ---
+  const { data: upcomingBirthdays = [] } = useQuery({
+    queryKey: ['notifications-birthdays', canViewPersonalInfo],
+    enabled: !!user?.id && canViewPersonalInfo,
+    refetchInterval: 60 * 60 * 1000,
+    queryFn: async () => {
+      const [infoRes, profilesRes] = await Promise.all([
+        supabase.from('employee_info').select('profile_id, birth_date').not('birth_date', 'is', null),
+        supabase.from('profiles').select('id, name'),
+      ])
+      if (infoRes.error || profilesRes.error) return []
+      const nameMap = new Map<string, string>()
+      ;(profilesRes.data || []).forEach((p: Record<string, unknown>) => {
+        nameMap.set(p.id as string, (p.name as string) || '')
+      })
+
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const year = today.getFullYear()
+      const DAY = 86400000
+      const WINDOW_DAYS = 21
+
+      const result: { profileId: string; name: string; dateLabel: string; daysUntil: number; cycleYear: number }[] = []
+      ;(infoRes.data || []).forEach((row: Record<string, unknown>) => {
+        const bd = row.birth_date as string | null
+        const profileId = row.profile_id as string
+        const name = nameMap.get(profileId)
+        if (!bd || !name) return
+        const month = parseInt(bd.slice(5, 7), 10)
+        const day = parseInt(bd.slice(8, 10), 10)
+        if (!month || !day) return
+        let bday = new Date(year, month - 1, day)
+        bday.setHours(0, 0, 0, 0)
+        let cycleYear = year
+        if (bday.getTime() < today.getTime()) {
+          bday = new Date(year + 1, month - 1, day)
+          bday.setHours(0, 0, 0, 0)
+          cycleYear = year + 1
+        }
+        const daysUntil = Math.round((bday.getTime() - today.getTime()) / DAY)
+        if (daysUntil <= WINDOW_DAYS) {
+          result.push({ profileId, name, dateLabel: `${month}월 ${day}일`, daysUntil, cycleYear })
+        }
+      })
+      result.sort((a, b) => a.daysUntil - b.daysUntil)
+      return result
+    },
+  })
+
   const notifications = useMemo(() => {
     const items: AppNotification[] = []
     const now = new Date().toISOString()
@@ -159,8 +216,24 @@ export function useAppNotifications() {
       })
     }
 
+    // Upcoming employee birthdays (only for users who can view 직원정보)
+    if (canViewPersonalInfo && !disabledTypes.includes('employee_birthday')) {
+      upcomingBirthdays.forEach((b) => {
+        const dday = b.daysUntil === 0 ? '오늘' : `D-${b.daysUntil}`
+        items.push({
+          id: `birthday-${b.profileId}-${b.cycleYear}`,
+          type: 'employee_birthday',
+          title: `${b.name}님 생일 (${dday})`,
+          message: `${b.dateLabel} · 직원 생일이 다가옵니다.`,
+          severity: 'info',
+          link: '/hr/personal-info',
+          createdAt: now,
+        })
+      })
+    }
+
     return items
-  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, disabledTypes])
+  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, upcomingBirthdays, canViewPersonalInfo, disabledTypes])
 
   return notifications
 }
@@ -176,4 +249,5 @@ export const NOTIFICATION_TYPES = [
   { key: 'consultant_assigned', label: '고객 배정 알림', labelEn: 'Client Assignment Alert' },
   { key: 'task_assigned', label: '업무 배정 알림', labelEn: 'Task Assignment Alert' },
   { key: 'task_status_changed', label: '업무 상태 변경 알림', labelEn: 'Task Status Changed Alert' },
+  { key: 'employee_birthday', label: '직원 생일 알림', labelEn: 'Employee Birthday Alert' },
 ] as const
