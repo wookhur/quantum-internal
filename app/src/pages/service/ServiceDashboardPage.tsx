@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,7 +21,10 @@ import {
   Loader2, Trash2,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useServiceStudents, useServiceDiary } from '@/hooks/useServiceStudents'
+import {
+  useServiceStudents, useServiceDiary,
+  useUpdateServiceMeeting, useDeleteServiceMeeting,
+} from '@/hooks/useServiceStudents'
 import { useServiceFollowups } from '@/hooks/useServiceFollowups'
 import {
   useAllServiceMeetings, useAllServiceFollowupsDue,
@@ -33,7 +37,7 @@ import {
 import { CONSULTANTS, consultantName } from '@/lib/consultants'
 import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
-import type { MilestoneType, MilestoneStatus, StudentMilestone } from '@/types'
+import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus } from '@/types'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -558,6 +562,154 @@ function MilestoneDialog({
   )
 }
 
+// ─── Meeting Dialog ───────────────────────────────────────────────────────────
+
+const REPORT_STATUS_OPTIONS: { value: ServiceReportStatus; label: string }[] = [
+  { value: 'none',      label: '리포트 없음' },
+  { value: 'pending',   label: '리포트 대기' },
+  { value: 'submitted', label: '제출 완료' },
+]
+
+function MeetingDialog({
+  open,
+  onClose,
+  meeting,
+}: {
+  open: boolean
+  onClose: () => void
+  meeting: DashboardMeeting | null
+}) {
+  const qc = useQueryClient()
+  const updateMeeting = useUpdateServiceMeeting()
+  const deleteMeeting = useDeleteServiceMeeting()
+
+  const [meetingType,  setMeetingType]  = useState(meeting?.meetingType ?? '')
+  const [date,         setDate]         = useState(meeting?.meetingDate ?? todayKST())
+  const [consultantId, setConsultantId] = useState(meeting?.consultantId ?? '')
+  const [reportStatus, setReportStatus] = useState<ServiceReportStatus>(meeting?.reportStatus ?? 'none')
+  const [reportUrl,    setReportUrl]    = useState(meeting?.reportUrl ?? '')
+  const [prepUrl,      setPrepUrl]      = useState(meeting?.prepUrl ?? '')
+
+  // Repopulate fields each time the dialog opens for a meeting
+  useEffect(() => {
+    if (open && meeting) {
+      setMeetingType(meeting.meetingType ?? '')
+      setDate(meeting.meetingDate ?? todayKST())
+      setConsultantId(meeting.consultantId ?? '')
+      setReportStatus(meeting.reportStatus ?? 'none')
+      setReportUrl(meeting.reportUrl ?? '')
+      setPrepUrl(meeting.prepUrl ?? '')
+    }
+  }, [open, meeting])
+
+  const saving = updateMeeting.isPending
+  const deleting = deleteMeeting.isPending
+
+  async function handleSave() {
+    if (!meeting || !date) return
+    try {
+      await updateMeeting.mutateAsync({
+        id: meeting.id,
+        studentId: meeting.studentId,
+        meetingDate: date || null,
+        meetingType,
+        consultantId: consultantId || null,
+        reportStatus,
+        reportUrl,
+        prepUrl,
+      })
+      qc.invalidateQueries({ queryKey: ['dashboard_meetings'] })
+      onClose()
+    } catch (e) {
+      const msg = (e as { message?: string })?.message || String(e)
+      alert(`저장 실패: ${msg}`)
+    }
+  }
+
+  async function handleDelete() {
+    if (!meeting) return
+    if (!window.confirm('이 미팅 일정을 삭제할까요? 되돌릴 수 없습니다.')) return
+    try {
+      await deleteMeeting.mutateAsync({ id: meeting.id, studentId: meeting.studentId })
+      qc.invalidateQueries({ queryKey: ['dashboard_meetings'] })
+      onClose()
+    } catch (e) {
+      const msg = (e as { message?: string })?.message || String(e)
+      alert(`삭제 실패: ${msg}`)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>미팅 수정{meeting ? ` · ${meeting.studentName}` : ''}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label>유형</Label>
+              <Input value={meetingType} onChange={e => setMeetingType(e.target.value)} placeholder="예: Regular" />
+            </div>
+            <div className="space-y-1">
+              <Label>날짜</Label>
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>컨설턴트</Label>
+            <Select value={consultantId} onValueChange={v => setConsultantId(v ?? '')}>
+              <SelectTrigger><SelectValue placeholder="컨설턴트 선택" /></SelectTrigger>
+              <SelectContent>
+                {CONSULTANTS.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>리포트 상태</Label>
+            <Select value={reportStatus} onValueChange={v => setReportStatus(v as ServiceReportStatus)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {REPORT_STATUS_OPTIONS.map(s => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label>리포트 링크 (선택)</Label>
+            <Input value={reportUrl} onChange={e => setReportUrl(e.target.value)} placeholder="https://..." />
+          </div>
+          <div className="space-y-1">
+            <Label>준비 자료 링크 (선택)</Label>
+            <Input value={prepUrl} onChange={e => setPrepUrl(e.target.value)} placeholder="https://..." />
+          </div>
+        </div>
+        <DialogFooter className="sm:justify-between">
+          <Button
+            variant="outline"
+            onClick={handleDelete}
+            disabled={saving || deleting}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+          >
+            {deleting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
+            삭제
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={deleting}>취소</Button>
+            <Button onClick={handleSave} disabled={saving || deleting || !date}>
+              {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+              저장
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Week Calendar ────────────────────────────────────────────────────────────
 
 function WeekCalendar({
@@ -567,7 +719,7 @@ function WeekCalendar({
   followups,
   ghostMeetings,
   consultantFilter,
-  onSelectMeeting,
+  onEditMeeting,
   onAddMilestone,
   onEditMilestone,
 }: {
@@ -577,7 +729,7 @@ function WeekCalendar({
   followups: DashboardFollowup[]
   ghostMeetings: GhostMeeting[]
   consultantFilter: string
-  onSelectMeeting: (m: DashboardMeeting) => void
+  onEditMeeting: (m: DashboardMeeting) => void
   onAddMilestone: (dateStr: string) => void
   onEditMilestone: (m: DashboardMilestone) => void
 }) {
@@ -627,8 +779,9 @@ function WeekCalendar({
               {dm.map(m => (
                 <button
                   key={m.id}
-                  onClick={() => onSelectMeeting(m)}
+                  onClick={() => onEditMeeting(m)}
                   className={`w-full text-left text-[11px] px-1.5 py-1 rounded border font-medium truncate hover:opacity-80 transition-opacity ${MEETING_COLOR}`}
+                  title={`${m.studentName} 미팅 (클릭하여 수정)`}
                 >
                   {m.studentName}
                   {m.meetingType && <span className="opacity-70"> · {m.meetingType}</span>}
@@ -995,6 +1148,8 @@ export function ServiceDashboardPage() {
   const [defaultMilestoneStudentId, setDefaultMilestoneStudentId] = useState<string | undefined>()
   const [defaultMilestoneDate, setDefaultMilestoneDate] = useState<string | undefined>()
   const [editingMilestone, setEditingMilestone] = useState<StudentMilestone | null>(null)
+  const [editingMeeting,   setEditingMeeting]   = useState<DashboardMeeting | null>(null)
+  const [showEditMeeting,  setShowEditMeeting]  = useState(false)
 
   // Open the milestone dialog in edit mode for an existing milestone
   const openEditMilestone = (m: StudentMilestone) => {
@@ -1002,6 +1157,12 @@ export function ServiceDashboardPage() {
     setDefaultMilestoneDate(undefined)
     setEditingMilestone(m)
     setShowAddMilestone(true)
+  }
+
+  // Open the meeting dialog in edit mode for an existing meeting
+  const openEditMeeting = (m: DashboardMeeting) => {
+    setEditingMeeting(m)
+    setShowEditMeeting(true)
   }
 
   // Compute date ranges
@@ -1259,7 +1420,7 @@ export function ServiceDashboardPage() {
             followups={filteredFollowups}
             ghostMeetings={ghostMeetings}
             consultantFilter={consultantFilter}
-            onSelectMeeting={setSelectedMeeting}
+            onEditMeeting={openEditMeeting}
             onAddMilestone={dateStr => {
               setDefaultMilestoneStudentId(undefined)
               setDefaultMilestoneDate(dateStr)
@@ -1390,6 +1551,13 @@ export function ServiceDashboardPage() {
         editing={editingMilestone}
         defaultStudentId={defaultMilestoneStudentId}
         defaultDate={defaultMilestoneDate}
+      />
+
+      {/* Edit Meeting Dialog (week view) */}
+      <MeetingDialog
+        open={showEditMeeting}
+        onClose={() => { setShowEditMeeting(false); setEditingMeeting(null) }}
+        meeting={editingMeeting}
       />
     </div>
   )
