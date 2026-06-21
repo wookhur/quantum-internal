@@ -7,25 +7,38 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
   Loader2, Search, Plus, Trash2, CheckCircle2, Clock, DollarSign,
-  ExternalLink, HandCoins,
+  ExternalLink, HandCoins, Lock,
 } from 'lucide-react'
 import { useAllExtraInstallments, type ExtraInstallmentWithContext } from '@/hooks/useExternalFees'
 import {
   useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare,
 } from '@/hooks/useRevenueShares'
+import { useProfiles } from '@/hooks/useProfiles'
+import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
 import { Link } from 'react-router-dom'
 
+// Only these people may configure fee recipients / percentages.
+const FEE_MANAGERS = ['허욱', '한상범', '김지현', '이미미']
+
 export function ExternalFeesPage() {
   const t = useT()
+  const { user } = useAuth()
   const { data: extras = [], isLoading } = useAllExtraInstallments()
+  const { data: profiles = [] } = useProfiles()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<ExtraInstallmentWithContext | null>(null)
+
+  const canManageFees = FEE_MANAGERS.includes(user?.name ?? '')
+  const employees = useMemo(() => profiles.map(p => ({ id: p.id, name: p.name })), [profiles])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return extras
@@ -189,6 +202,8 @@ export function ExternalFeesPage() {
         <ExternalFeeDetailDialog
           item={selected}
           onClose={() => setSelected(null)}
+          canManage={canManageFees}
+          employees={employees}
         />
       )}
     </div>
@@ -200,29 +215,39 @@ export function ExternalFeesPage() {
 function ExternalFeeDetailDialog({
   item,
   onClose,
+  canManage,
+  employees,
 }: {
   item: ExtraInstallmentWithContext
   onClose: () => void
+  canManage: boolean
+  employees: { id: string; name: string }[]
 }) {
   const t = useT()
   const createShares = useCreateRevenueShares()
   const updateShare = useUpdateRevenueShare()
   const deleteShare = useDeleteRevenueShare()
 
-  const [addForm, setAddForm] = useState({ name: '', amount: '', role: '' })
+  const [recipientId, setRecipientId] = useState('')
+  const [percent, setPercent] = useState('')
   const isPaid = item.status === 'paid'
 
+  // Incentive = 청구 금액 × 수수료 % (rounded)
+  const computedAmount = percent ? Math.round((item.amount * Number(percent)) / 100) : 0
+
   const handleAddShare = () => {
-    if (!addForm.name.trim() || !Number(addForm.amount)) return
+    const emp = employees.find(e => e.id === recipientId)
+    if (!emp || !percent) return
     createShares.mutate({
       installmentId: item.id,
       shares: [{
-        recipientName: addForm.name.trim(),
-        amount: Number(addForm.amount),
-        role: addForm.role.trim() || undefined,
+        recipientName: emp.name,
+        recipientProfileId: emp.id,
+        percentage: Number(percent),
+        amount: computedAmount,
       }],
     }, {
-      onSuccess: () => setAddForm({ name: '', amount: '', role: '' }),
+      onSuccess: () => { setRecipientId(''); setPercent('') },
     })
   }
 
@@ -294,29 +319,34 @@ function ExternalFeeDetailDialog({
                   <div>
                     <div className="text-sm font-medium">{share.recipientName}</div>
                     {share.role && <div className="text-xs text-muted-foreground">{share.role}</div>}
-                    <div className="text-sm font-mono mt-0.5">{formatCurrency(share.amount, item.currency as 'KRW' | 'USD')}</div>
+                    <div className="text-sm font-mono mt-0.5">
+                      {share.percentage ? <span className="text-muted-foreground">{share.percentage}% · </span> : null}
+                      {formatCurrency(share.amount, item.currency as 'KRW' | 'USD')}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant={share.isPaid ? 'default' : 'outline'}
-                      className={`h-7 text-xs gap-1 ${share.isPaid ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
-                      onClick={() => togglePaid(share)}
-                      disabled={updateShare.isPending}
-                    >
-                      <CheckCircle2 className="size-3" />
-                      {share.isPaid ? t('externalFees.feePaid') : t('externalFees.markPaid')}
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                      onClick={() => deleteShare.mutate(share.id)}
-                      disabled={deleteShare.isPending}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </div>
+                  {canManage && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={share.isPaid ? 'default' : 'outline'}
+                        className={`h-7 text-xs gap-1 ${share.isPaid ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+                        onClick={() => togglePaid(share)}
+                        disabled={updateShare.isPending}
+                      >
+                        <CheckCircle2 className="size-3" />
+                        {share.isPaid ? t('externalFees.feePaid') : t('externalFees.markPaid')}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-muted-foreground hover:text-red-500"
+                        onClick={() => deleteShare.mutate(share.id)}
+                        disabled={deleteShare.isPending}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -324,40 +354,51 @@ function ExternalFeeDetailDialog({
             <p className="text-sm text-muted-foreground text-center py-3">{t('externalFees.noFeeSet')}</p>
           )}
 
-          {/* Add new fee recipient */}
-          <div className="space-y-2 pt-2 border-t">
-            <div className="text-xs font-medium text-muted-foreground">{t('externalFees.addFee')}</div>
-            <div className="flex gap-2">
-              <Input
-                placeholder={t('externalFees.recipientNamePlaceholder')}
-                value={addForm.name}
-                onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                className="h-8 text-sm flex-1"
-              />
-              <Input
-                placeholder={t('externalFees.rolePlaceholder')}
-                value={addForm.role}
-                onChange={e => setAddForm(f => ({ ...f, role: e.target.value }))}
-                className="h-8 text-sm w-24"
-              />
-              <Input
-                type="number"
-                placeholder={t('contracts.amount')}
-                value={addForm.amount}
-                onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))}
-                className="h-8 text-sm w-28"
-              />
-              <Button
-                size="sm"
-                className="h-8 gap-1"
-                disabled={!addForm.name.trim() || !Number(addForm.amount) || createShares.isPending}
-                onClick={handleAddShare}
-              >
-                {createShares.isPending ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
-                {t('common.add')}
-              </Button>
+          <p className="text-[11px] text-muted-foreground">
+            수수료는 해당 항목이 <b>수금 완료</b>된 후 재무 인센티브(급여산정)에 자동 반영됩니다.
+          </p>
+
+          {/* Add fee recipient — restricted to FEE_MANAGERS */}
+          {canManage ? (
+            <div className="space-y-2 pt-2 border-t">
+              <div className="text-xs font-medium text-muted-foreground">수수료 대상 추가</div>
+              <div className="flex gap-2 items-center">
+                <Select value={recipientId} onValueChange={v => setRecipientId(v ?? '')}>
+                  <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="직원 선택" /></SelectTrigger>
+                  <SelectContent>
+                    {employees.map(e => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={percent} onValueChange={v => setPercent(v ?? '')}>
+                  <SelectTrigger className="h-8 text-sm w-20"><SelectValue placeholder="%" /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 10 }, (_, i) => String(i + 1)).map(p => (
+                      <SelectItem key={p} value={p}>{p}%</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="w-28 text-right text-sm font-mono text-muted-foreground">
+                  {percent ? formatCurrency(computedAmount, item.currency as 'KRW' | 'USD') : '—'}
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 gap-1"
+                  disabled={!recipientId || !percent || createShares.isPending}
+                  onClick={handleAddShare}
+                >
+                  {createShares.isPending ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+                  {t('common.add')}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">금액 = 청구 금액 × 선택한 % (자동 계산)</p>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-2 border-t">
+              <Lock className="size-3" /> 수수료 설정 권한이 없습니다 (보기 전용)
+            </div>
+          )}
         </div>
 
         <DialogFooter>
