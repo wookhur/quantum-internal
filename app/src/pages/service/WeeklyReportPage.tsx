@@ -53,7 +53,7 @@ export function WeeklyReportPage() {
   const { data: meetings = [] } = useAllServiceMeetings(start, end)
   const { data: followups = [] } = useAllServiceFollowupsInRange(start, end)
 
-  const knownIds = useMemo(() => new Set(CONSULTANTS.map(c => c.id)), [])
+  const knownIds = useMemo(() => new Set<string>(CONSULTANTS.map(c => c.id)), [])
   const bucketOf = (id?: string) => (id && knownIds.has(id) ? id : OTHER_ID)
 
   const { rows, totals, cancelDist } = useMemo(() => {
