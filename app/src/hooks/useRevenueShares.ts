@@ -70,6 +70,8 @@ export function useCreateRevenueShares() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['revenue-shares'] })
+      qc.invalidateQueries({ queryKey: ['extra-installments-all'] })
+      qc.invalidateQueries({ queryKey: ['incentives'] })
     },
   })
 }
@@ -108,6 +110,8 @@ export function useUpdateRevenueShare() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['revenue-shares'] })
+      qc.invalidateQueries({ queryKey: ['extra-installments-all'] })
+      qc.invalidateQueries({ queryKey: ['incentives'] })
     },
   })
 }
@@ -125,6 +129,8 @@ export function useDeleteRevenueShare() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['revenue-shares'] })
+      qc.invalidateQueries({ queryKey: ['extra-installments-all'] })
+      qc.invalidateQueries({ queryKey: ['incentives'] })
     },
   })
 }

@@ -200,7 +200,7 @@ export function ExternalFeesPage() {
       {/* Detail Dialog */}
       {selected && (
         <ExternalFeeDetailDialog
-          item={selected}
+          item={extras.find(e => e.id === selected.id) ?? selected}
           onClose={() => setSelected(null)}
           canManage={canManageFees}
           employees={employees}
