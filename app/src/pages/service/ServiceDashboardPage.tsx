@@ -180,19 +180,38 @@ function SessionPrepPanel({
   const openFollowups = followups.filter(f => !f.done)
   const doneFollowups = followups.filter(f => f.done)
 
-  // Pick the diary that matches the clicked meeting's date — not just the newest
-  // one. diaryEntries are sorted by entry_date descending.
-  const lastDiary = useMemo(() => {
-    if (!diaryEntries.length) return undefined
+  // Pick the diary belonging to the clicked meeting's session — not just the
+  // newest one. The diary is often logged a few days after the meeting, so we
+  // look in a window around the meeting date, then fall back to the previous
+  // session. diaryEntries are sorted by entry_date descending.
+  const { lastDiary, isThisMeetingDiary } = useMemo(() => {
+    if (!diaryEntries.length) return { lastDiary: undefined, isThisMeetingDiary: false }
     const md = meeting.meetingDate
-    if (!md) return diaryEntries[0]
+    if (!md) return { lastDiary: diaryEntries[0], isThisMeetingDiary: false }
     // Diary written for this exact meeting day
     const exact = diaryEntries.find(d => d.entryDate === md)
-    if (exact) return exact
-    // Otherwise the most recent diary on or before this meeting's date
-    return diaryEntries.find(d => d.entryDate && d.entryDate <= md) ?? undefined
+    if (exact) return { lastDiary: exact, isThisMeetingDiary: true }
+    // The session's diary may be logged a couple days before to a few days
+    // after the meeting — pick the closest entry within that window.
+    const DAY = 86400000
+    const mdTime = new Date(md + 'T00:00:00').getTime()
+    const near = diaryEntries
+      .filter(d => d.entryDate)
+      .map(d => ({ d, diff: (new Date(d.entryDate! + 'T00:00:00').getTime() - mdTime) / DAY }))
+      .filter(x => x.diff >= -2 && x.diff <= 5)
+      .sort((a, b) => Math.abs(a.diff) - Math.abs(b.diff))
+    if (near.length) return { lastDiary: near[0].d, isThisMeetingDiary: true }
+    // Otherwise the most recent diary on or before this meeting (prior session)
+    const prior = diaryEntries.find(d => d.entryDate && d.entryDate <= md)
+    return { lastDiary: prior, isThisMeetingDiary: false }
   }, [diaryEntries, meeting.meetingDate])
-  const isThisMeetingDiary = !!lastDiary && lastDiary.entryDate === meeting.meetingDate
+
+  // Recent diaries up to (and including) this meeting's date
+  const recentDiaries = useMemo(() => {
+    const md = meeting.meetingDate
+    if (!md) return diaryEntries
+    return diaryEntries.filter(d => !d.entryDate || d.entryDate <= md)
+  }, [diaryEntries, meeting.meetingDate])
 
   const daysAgo = meeting.meetingDate ? daysFromTodayKST(meeting.meetingDate) : null
   const lastMetLabel = daysAgo === null
@@ -320,12 +339,13 @@ function SessionPrepPanel({
           </section>
         )}
 
-        {/* Recent diary entries */}
-        {diaryEntries.length > 0 && (
+        {/* Recent diary entries (up to this meeting's date, so reviewing a past
+            meeting doesn't surface diaries from later sessions) */}
+        {recentDiaries.length > 0 && (
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">최근 다이어리</h3>
             <ul className="space-y-2">
-              {diaryEntries.slice(0, 4).map(d => (
+              {recentDiaries.slice(0, 4).map(d => (
                 <li key={d.id} className="flex gap-2.5 text-sm">
                   {d.entryDate && (
                     <span className="text-[11px] text-gray-400 shrink-0 w-12">
