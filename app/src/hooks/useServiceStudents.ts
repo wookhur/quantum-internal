@@ -29,6 +29,8 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     partners: (row.partners as string) || undefined,
     majors: (row.majors as string) || undefined,
     contractType: (row.contract_type as string) || undefined,
+    applicationCount: (row.application_count as number) || undefined,
+    additionalServices: (row.additional_services as string) || undefined,
     communicationPlatform: (row.communication_platform as string) || undefined,
     preferredLanguage: (row.preferred_language as string) || undefined,
     startDate: (row.start_date as string) || undefined,
@@ -124,6 +126,8 @@ export function useCreateServiceStudent() {
       partners?: string
       majors?: string
       contractType?: string
+      applicationCount?: number
+      additionalServices?: string
       communicationPlatform?: string
       preferredLanguage?: string
       startDate?: string
@@ -151,6 +155,8 @@ export function useCreateServiceStudent() {
         partners: s.partners,
         majors: s.majors,
         contract_type: s.contractType,
+        application_count: s.applicationCount || null,
+        additional_services: s.additionalServices || null,
         communication_platform: s.communicationPlatform,
         preferred_language: s.preferredLanguage,
         start_date: s.startDate || null,
@@ -189,6 +195,8 @@ export function useUpdateServiceStudent() {
       partners?: string
       majors?: string
       contractType?: string
+      applicationCount?: number
+      additionalServices?: string
       communicationPlatform?: string
       preferredLanguage?: string
       startDate?: string | null
@@ -216,6 +224,8 @@ export function useUpdateServiceStudent() {
       if (rest.partners !== undefined) update.partners = rest.partners
       if (rest.majors !== undefined) update.majors = rest.majors
       if (rest.contractType !== undefined) update.contract_type = rest.contractType
+      if (rest.applicationCount !== undefined) update.application_count = rest.applicationCount || null
+      if (rest.additionalServices !== undefined) update.additional_services = rest.additionalServices || null
       if (rest.communicationPlatform !== undefined) update.communication_platform = rest.communicationPlatform
       if (rest.preferredLanguage !== undefined) update.preferred_language = rest.preferredLanguage
       if (rest.startDate !== undefined) update.start_date = rest.startDate

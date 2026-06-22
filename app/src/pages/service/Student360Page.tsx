@@ -353,6 +353,8 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field label={t('student360.partners')} value={student.partners} />
         <Field label={t('student360.majors')} value={student.majors} />
         <Field label={t('student360.contractType')} value={student.contractType} />
+        <Field label={t('student360.applicationCount')} value={student.applicationCount ? String(student.applicationCount) : undefined} />
+        <Field label={t('student360.additionalServices')} value={student.additionalServices} />
         <Field label={t('student360.status')} value={student.status} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
         <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
@@ -957,6 +959,8 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     partners: student?.partners || '',
     majors: student?.majors || '',
     contractType: student?.contractType || '',
+    applicationCount: student?.applicationCount ? String(student.applicationCount) : '',
+    additionalServices: student?.additionalServices || '',
     communicationPlatform: student?.communicationPlatform || '',
     preferredLanguage: student?.preferredLanguage || '',
     startDate: student?.startDate || '',
@@ -994,6 +998,8 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
       partners: form.partners || undefined,
       majors: form.majors || undefined,
       contractType: form.contractType || undefined,
+      applicationCount: form.applicationCount ? Number(form.applicationCount) : undefined,
+      additionalServices: form.additionalServices || undefined,
       communicationPlatform: form.communicationPlatform || undefined,
       preferredLanguage: form.preferredLanguage || undefined,
       startDate: form.startDate || undefined,
@@ -1065,6 +1071,10 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           </div>
           <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />
+          <LabeledInput label={t('student360.applicationCount')} value={form.applicationCount} onChange={v => set('applicationCount', v)} />
+          <div className="col-span-2">
+            <LabeledInput label={t('student360.additionalServices')} value={form.additionalServices} onChange={v => set('additionalServices', v)} />
+          </div>
           <LabeledInput label={t('student360.status')} value={form.status} onChange={v => set('status', v)} />
           <LabeledInput label={t('student360.acceptedUni')} value={form.acceptedUni} onChange={v => set('acceptedUni', v)} />
           <div>

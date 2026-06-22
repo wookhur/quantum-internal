@@ -159,6 +159,8 @@ export interface Contract {
   phone?: string
   contractDate: string
   expiryDate: string
+  serviceStartDate?: string
+  serviceEndDate?: string
   totalAmount: number
   currency: 'KRW' | 'USD'
   paymentAccount: 'KR' | 'US'
@@ -426,6 +428,8 @@ export interface ServiceStudent {
   partners?: string
   majors?: string
   contractType?: string
+  applicationCount?: number
+  additionalServices?: string
   communicationPlatform?: string
   preferredLanguage?: string
   startDate?: string

@@ -200,7 +200,7 @@ function IncentivePersonSelect({
 const EXTRA_INCENTIVE_OPTIONS = [
   { key: 'custom', label: '커스텀 비율 설정', pct: 0, needsCustom: true },
   { key: 'external_fee', label: '서비스 디렉터 인센티브', pct: 1, needsCustom: false },
-  { key: 'external_fee', label: '담당자 인센티브', pct: 3, needsCustom: false },
+  { key: 'external_fee', label: '계약 담당자 인센티브', pct: 3, needsCustom: false },
   { key: 'external_fee', label: '서비스 매니저 인센티브', pct: 1, needsCustom: false },
 ] as const
 
@@ -1358,6 +1358,15 @@ export function ContractDetailPage() {
               <span className="text-muted-foreground w-16">{t('contracts.expiryDate')}</span>
               <span className="font-mono">{contract.expiryDate}</span>
             </div>
+            {(contract.serviceStartDate || contract.serviceEndDate) && (
+              <div className="flex items-center gap-2">
+                <Calendar className="size-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground w-24">{t('contracts.servicePeriod')}</span>
+                <span className="font-mono">
+                  {contract.serviceStartDate || '?'} ~ {contract.serviceEndDate || '?'}
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <DollarSign className="size-3.5 text-muted-foreground" />
               <span className="text-muted-foreground w-16">{t('contracts.depositAccount')}</span>
@@ -2015,6 +2024,8 @@ function ContractEditDialog({
     gradeAtContract: string
     contractDate: string
     expiryDate: string
+    serviceStartDate: string
+    serviceEndDate: string
     address: string
     phone: string
     totalAmount: number
@@ -2032,6 +2043,8 @@ function ContractEditDialog({
     gradeAtContract: contract.gradeAtContract || '',
     contractDate: contract.contractDate || '',
     expiryDate: contract.expiryDate || '',
+    serviceStartDate: contract.serviceStartDate || '',
+    serviceEndDate: contract.serviceEndDate || '',
     address: contract.address || '',
     phone: contract.phone || '',
     totalAmount: contract.totalAmount ? String(contract.totalAmount) : '',
@@ -2057,6 +2070,8 @@ function ContractEditDialog({
       gradeAtContract: form.gradeAtContract,
       contractDate: form.contractDate,
       expiryDate: form.expiryDate,
+      serviceStartDate: form.serviceStartDate,
+      serviceEndDate: form.serviceEndDate,
       address: form.address,
       phone: form.phone,
       totalAmount: Number(form.totalAmount) || 0,
@@ -2096,6 +2111,14 @@ function ContractEditDialog({
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.expiryDate')}</Label>
             <Input type="date" value={form.expiryDate} onChange={e => set('expiryDate', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.serviceStartDate')}</Label>
+            <Input type="date" value={form.serviceStartDate} onChange={e => set('serviceStartDate', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.serviceEndDate')}</Label>
+            <Input type="date" value={form.serviceEndDate} onChange={e => set('serviceEndDate', e.target.value)} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.contact')}</Label>
