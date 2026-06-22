@@ -132,7 +132,7 @@ export function CoupangOrdersPage() {
       )}
 
       {/* Create Dialog */}
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) resetForm() }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>쿠팡 주문 요청</DialogTitle>
@@ -160,7 +160,7 @@ export function CoupangOrdersPage() {
               <Label>카테고리</Label>
               <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v as OrderCategory })}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="카테고리 선택" />
                 </SelectTrigger>
                 <SelectContent>
                   {ORDER_CATEGORIES.map((c) => (
