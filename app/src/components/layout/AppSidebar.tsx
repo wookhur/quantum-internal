@@ -40,6 +40,7 @@ import {
   HandCoins,
   Lock,
   Target,
+  ShoppingCart,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -64,6 +65,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.calendar', to: '/calendar', icon: Calendar },
       { labelKey: 'nav.taskBoard', to: '/tasks', icon: ClipboardList },
       { labelKey: 'nav.messages', to: '/messages', icon: MessageSquare },
+      { labelKey: 'nav.coupangOrders', to: '/common/coupang-orders', icon: ShoppingCart },
     ],
   },
   {

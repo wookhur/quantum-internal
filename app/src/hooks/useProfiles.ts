@@ -93,6 +93,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/tasks', labelKey: 'nav.taskBoard', module: 'dashboard' },
   { path: '/messages', labelKey: 'nav.messages', module: 'dashboard' },
   { path: '/person', labelKey: 'nav.personProfile', module: 'dashboard' },
+  { path: '/common/coupang-orders', labelKey: 'nav.coupangOrders', module: 'dashboard' },
   // ── Sales ──
   { path: '/sales/cold-call', labelKey: 'nav.coldCall', module: 'sales' },
   { path: '/sales/leads', labelKey: 'nav.leadManagement', module: 'sales' },

@@ -48,6 +48,7 @@ import { TaskBoardPage } from '@/pages/common/TaskBoardPage'
 import { PersonProfilePage } from '@/pages/common/PersonProfilePage'
 import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
 import { PartnerContractsPage } from '@/pages/partner/PartnerContractsPage'
+import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -125,6 +126,7 @@ export default function App() {
                 <Route path="/planning/access" element={<Navigate to="/hr/employees" replace />} />
                 <Route path="/planning/kpi-targets" element={<Navigate to="/hr/kpi-targets" replace />} />
 
+                <Route path="/common/coupang-orders" element={<CoupangOrdersPage />} />
                 <Route path="/game" element={<GamePage />} />
               </Route>
             </Route>
