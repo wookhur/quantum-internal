@@ -122,6 +122,46 @@ export function useAllServiceFollowupsInRange(startDate: string, endDate: string
   })
 }
 
+export interface DashboardDiary {
+  id: string
+  studentId: string
+  entryDate?: string
+  studentName: string
+  studentConsultant?: string
+  meetingSummary?: string
+  criticalIssue?: string
+  followUpCommitments?: string
+}
+
+/** Diary entries within a date range, with student + consultant — for the QC report. */
+export function useAllServiceDiaryInRange(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ['dashboard_diary', startDate, endDate],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('service_diary')
+        .select('id, student_id, entry_date, meeting_summary, critical_issue, follow_up_commitments, service_students!inner(name, assigned_consultant)')
+        .gte('entry_date', startDate)
+        .lte('entry_date', endDate)
+        .order('entry_date', { ascending: false })
+      if (error) throw error
+      return (data || []).map((row: Record<string, unknown>) => {
+        const s = row.service_students as Record<string, unknown>
+        return {
+          id: row.id as string,
+          studentId: row.student_id as string,
+          entryDate: (row.entry_date as string) || undefined,
+          studentName: (s?.name as string) || '',
+          studentConsultant: (s?.assigned_consultant as string) || undefined,
+          meetingSummary: (row.meeting_summary as string) || undefined,
+          criticalIssue: (row.critical_issue as string) || undefined,
+          followUpCommitments: (row.follow_up_commitments as string) || undefined,
+        } as DashboardDiary
+      })
+    },
+  })
+}
+
 export interface StudentStatusFlags {
   missingReports: Set<string>
   pendingFollowups: Set<string>

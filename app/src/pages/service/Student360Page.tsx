@@ -144,6 +144,7 @@ const DIARY_FIELDS = [
   { key: 'followUpCommitments', labelKey: 'student360.followUpCommitments' },
   { key: 'assignments', labelKey: 'student360.assignments' },
   { key: 'criticalDates', labelKey: 'student360.criticalDates' },
+  { key: 'criticalIssue', labelKey: 'student360.criticalIssue' },
 ] as const satisfies ReadonlyArray<{ key: keyof ServiceDiaryEntry; labelKey: string }>
 
 export function Student360Page() {
@@ -1502,6 +1503,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
     followUpCommitments: entry?.followUpCommitments || '',
     assignments: entry?.assignments || '',
     criticalDates: entry?.criticalDates || '',
+    criticalIssue: entry?.criticalIssue || '',
   })
   const [form, setForm] = useState(buildForm)
   useEffect(() => { if (open) setForm(buildForm()) }, [open])
@@ -1521,6 +1523,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
       followUpCommitments: form.followUpCommitments || undefined,
       assignments: form.assignments || undefined,
       criticalDates: form.criticalDates || undefined,
+      criticalIssue: form.criticalIssue || undefined,
     }
     if (entry) {
       update.mutate({ id: entry.id, studentId, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
@@ -1805,6 +1808,7 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
           followUpCommitments: d.followUpCommitments || undefined,
           assignments: d.assignments || undefined,
           criticalDates: d.criticalDates || undefined,
+          criticalIssue: d.criticalIssue || undefined,
           authorId: authorName,
           createdBy,
         },

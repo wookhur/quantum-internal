@@ -514,6 +514,7 @@ export interface ServiceDiaryEntry {
   followUpCommitments?: string
   assignments?: string
   criticalDates?: string
+  criticalIssue?: string
   authorId?: string
   createdBy?: string
   createdAt: string

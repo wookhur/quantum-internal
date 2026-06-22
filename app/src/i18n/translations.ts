@@ -246,6 +246,7 @@ const koTranslations = {
   'student360.followUpCommitments': 'Follow-Up Commitments',
   'student360.assignments': 'Assignments',
   'student360.criticalDates': 'Critical Dates',
+  'student360.criticalIssue': 'Critical Issue',
   // ── Portal ──
   'portal.clientLinks': '고객 포털 링크',
   'portal.generateLink': '고객 링크 생성',
@@ -1862,6 +1863,7 @@ const enTranslations: Record<string, string> = {
   'student360.followUpCommitments': 'Follow-Up Commitments',
   'student360.assignments': 'Assignments',
   'student360.criticalDates': 'Critical Dates',
+  'student360.criticalIssue': 'Critical Issue',
   // ── Portal ──
   'portal.clientLinks': 'Client Portal Links',
   'portal.generateLink': 'Generate Client Link',

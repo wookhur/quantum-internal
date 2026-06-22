@@ -82,6 +82,7 @@ function mapDiary(row: Record<string, unknown>): ServiceDiaryEntry {
     followUpCommitments: (row.follow_up_commitments as string) || undefined,
     assignments: (row.assignments as string) || undefined,
     criticalDates: (row.critical_dates as string) || undefined,
+    criticalIssue: (row.critical_issue as string) || undefined,
     authorId: (row.author_id as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
@@ -419,6 +420,7 @@ export function useCreateServiceDiary() {
       followUpCommitments?: string
       assignments?: string
       criticalDates?: string
+      criticalIssue?: string
       authorId?: string
       createdBy?: string
     }) => {
@@ -436,6 +438,7 @@ export function useCreateServiceDiary() {
         follow_up_commitments: d.followUpCommitments,
         assignments: d.assignments,
         critical_dates: d.criticalDates,
+        critical_issue: d.criticalIssue,
         author_id: d.authorId || null,
         created_by: d.createdBy || null,
       }).select().single()
@@ -464,6 +467,7 @@ export function useUpdateServiceDiary() {
       followUpCommitments?: string
       assignments?: string
       criticalDates?: string
+      criticalIssue?: string
     }) => {
       const { id, studentId: _s, ...rest } = payload
       const update: Record<string, unknown> = {}
@@ -479,6 +483,7 @@ export function useUpdateServiceDiary() {
       if (rest.followUpCommitments !== undefined) update.follow_up_commitments = rest.followUpCommitments
       if (rest.assignments !== undefined) update.assignments = rest.assignments
       if (rest.criticalDates !== undefined) update.critical_dates = rest.criticalDates
+      if (rest.criticalIssue !== undefined) update.critical_issue = rest.criticalIssue
       const { error } = await supabase.from('service_diary').update(update).eq('id', id)
       if (error) throw error
     },

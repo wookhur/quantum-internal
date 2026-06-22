@@ -3,8 +3,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Printer } from 'lucide-react'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
-import { useAllServiceMeetings, useAllServiceFollowupsInRange } from '@/hooks/useServiceDashboard'
-import { CONSULTANTS } from '@/lib/consultants'
+import { useAllServiceMeetings, useAllServiceFollowupsInRange, useAllServiceDiaryInRange } from '@/hooks/useServiceDashboard'
+import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
+import { CONSULTANTS, consultantName } from '@/lib/consultants'
 import { countScheduledMeetings } from '@/lib/meetingSchedule'
 
 const OTHER_ID = '__other__'
@@ -52,9 +53,46 @@ export function WeeklyReportPage() {
   const { data: students = [] } = useServiceStudents()
   const { data: meetings = [] } = useAllServiceMeetings(start, end)
   const { data: followups = [] } = useAllServiceFollowupsInRange(start, end)
+  const { data: diaries = [] } = useAllServiceDiaryInRange(start, end)
+  const { data: programs = [] } = useAllServiceProgramFees()
 
   const knownIds = useMemo(() => new Set<string>(CONSULTANTS.map(c => c.id)), [])
   const bucketOf = (id?: string) => (id && knownIds.has(id) ? id : OTHER_ID)
+
+  // student id -> assigned consultant (for grouping EC programs)
+  const studentConsultant = useMemo(() => {
+    const m = new Map<string, string | undefined>()
+    students.forEach(s => m.set(s.id, s.assignedConsultant))
+    return m
+  }, [students])
+
+  // EC engagement grouped by consultant: { consultantName -> [{student, program}] }
+  const ecByConsultant = useMemo(() => {
+    const groups = new Map<string, { student: string; program: string }[]>()
+    programs.filter(p => p.source === 'ec').forEach(p => {
+      const label = `${p.label}${p.detail ? ` · ${p.detail}` : ''}`
+      const cName = consultantName(studentConsultant.get(p.studentId))
+      if (!groups.has(cName)) groups.set(cName, [])
+      groups.get(cName)!.push({ student: p.studentName, program: label })
+    })
+    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [programs, studentConsultant])
+
+  // Critical issues (risks/escalations) from diaries in the period
+  const criticalIssues = useMemo(
+    () => diaries
+      .filter(d => (d.criticalIssue || '').trim().length > 0)
+      .map(d => ({ date: d.entryDate || '', student: d.studentName, consultant: consultantName(d.studentConsultant), text: (d.criticalIssue || '').trim() })),
+    [diaries],
+  )
+
+  // Follow-up commitments due in the period, with completion status
+  const followupStatus = useMemo(
+    () => followups
+      .map(f => ({ consultant: consultantName(f.studentConsultant), student: f.studentName, text: f.text, done: f.done, dueDate: f.dueDate }))
+      .sort((a, b) => (a.done === b.done ? a.consultant.localeCompare(b.consultant) : a.done ? 1 : -1)),
+    [followups],
+  )
 
   const { rows, totals, cancelDist } = useMemo(() => {
     const buckets: { id: string; name: string }[] = [
@@ -214,6 +252,70 @@ export function WeeklyReportPage() {
                 <li key={k} className="flex justify-between max-w-xs">
                   <span>{CANCEL_BY_LABEL[k]}</span>
                   <span>{n}건 · {pct(n, cancelTotal)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Engagement status — EC programs (by consultant) */}
+        <div className="border rounded-lg p-4 mt-4">
+          <div className="text-sm font-medium text-gray-600 mb-2">Engagement · EC 프로그램 (컨설턴트별)</div>
+          {ecByConsultant.length === 0 ? (
+            <div className="text-sm text-gray-400">EC 프로그램이 없습니다.</div>
+          ) : (
+            <div className="space-y-3">
+              {ecByConsultant.map(([cName, items]) => (
+                <div key={cName}>
+                  <div className="text-xs font-semibold text-gray-500 mb-1">{cName} <span className="text-gray-400">({items.length})</span></div>
+                  <ul className="text-sm text-gray-700 space-y-0.5 pl-1">
+                    {items.map((it, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="text-gray-500 shrink-0 w-24 truncate">{it.student}</span>
+                        <span className="text-gray-700">{it.program}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Risks, Issues & Escalations (from meeting diary critical issue) */}
+        <div className="border rounded-lg p-4 mt-4">
+          <div className="text-sm font-medium text-gray-600 mb-2">Risks, Issues &amp; Escalations</div>
+          {criticalIssues.length === 0 ? (
+            <div className="text-sm text-gray-400">해당 기간에 보고된 Critical Issue가 없습니다.</div>
+          ) : (
+            <ul className="space-y-2">
+              {criticalIssues.map((c, i) => (
+                <li key={i} className="text-sm border-l-2 border-red-300 pl-2.5">
+                  <div className="text-[11px] text-gray-400">{c.date} · {c.consultant} · {c.student}</div>
+                  <div className="text-gray-700 whitespace-pre-wrap">{c.text}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Follow-up commitments — completion status */}
+        <div className="border rounded-lg p-4 mt-4">
+          <div className="text-sm font-medium text-gray-600 mb-2">
+            Follow-up 완료 현황
+            {followupStatus.length > 0 && (
+              <span className="ml-1 text-gray-400">({followupStatus.filter(f => f.done).length}/{followupStatus.length} 완료)</span>
+            )}
+          </div>
+          {followupStatus.length === 0 ? (
+            <div className="text-sm text-gray-400">해당 기간에 마감 예정인 follow-up이 없습니다.</div>
+          ) : (
+            <ul className="space-y-1">
+              {followupStatus.map((f, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <span className={`shrink-0 mt-0.5 ${f.done ? 'text-emerald-600' : 'text-amber-600'}`}>{f.done ? '✓' : '○'}</span>
+                  <span className="text-gray-400 shrink-0 w-20 truncate text-xs mt-0.5">{f.consultant} · {f.student}</span>
+                  <span className={`flex-1 ${f.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>{f.text}</span>
                 </li>
               ))}
             </ul>
