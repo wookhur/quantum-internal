@@ -69,6 +69,8 @@ export const INCENTIVE_TYPES = {
   total_revenue: { labelKey: 'incentive.totalRevenue', defaultPct: 2 },
   total_revenue_1_5: { labelKey: 'incentive.totalRevenue1_5', defaultPct: 1.5 },
   external_fee: { labelKey: 'incentive.externalFee', defaultPct: 0 },
+  service_team: { labelKey: 'incentive.serviceTeam', defaultPct: 1 },
+  service_director: { labelKey: 'incentive.serviceDirector', defaultPct: 1 },
 } as const
 
 export type IncentiveType = keyof typeof INCENTIVE_TYPES
