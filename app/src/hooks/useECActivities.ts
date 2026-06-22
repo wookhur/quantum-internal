@@ -103,7 +103,11 @@ export function useUpdateECActivity() {
       const { error } = await supabase.from('service_ec_activities').update(row).eq('id', a.id)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['ec_activities', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['ec_activities', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['service-program-fees'] })
+      qc.invalidateQueries({ queryKey: ['incentives'] })
+    },
   })
 }
 

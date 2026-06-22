@@ -37,6 +37,7 @@ import {
   Settings,
   Receipt,
   Percent,
+  HandCoins,
   Lock,
   Target,
   type LucideIcon,
@@ -94,7 +95,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.serviceDashboard', to: '/service/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.student360', to: '/service/student-360', icon: UserSearch },
       { labelKey: 'nav.weeklyReport', to: '/service/weekly-report', icon: FileText },
-      { labelKey: 'nav.externalFees', to: '/service/external-fees', icon: Receipt },
     ],
   },
   {
@@ -107,6 +107,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.invoices', to: '/finance/invoices', icon: FileText },
       { labelKey: 'nav.receipts', to: '/finance/receipts', icon: Receipt },
       { labelKey: 'nav.wireInvoice', to: '/finance/wire-invoice', icon: FileText },
+      { labelKey: 'nav.externalFees', to: '/service/external-fees', icon: HandCoins },
       { labelKey: 'nav.incentives', to: '/finance/incentives/by-contract', icon: Percent },
     ],
   },

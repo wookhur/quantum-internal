@@ -109,7 +109,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/service/dashboard', labelKey: 'nav.serviceDashboard', module: 'service' },
   { path: '/service/student-360', labelKey: 'nav.student360', module: 'service' },
   { path: '/service/weekly-report', labelKey: 'nav.weeklyReport', module: 'service' },
-  { path: '/service/external-fees', labelKey: 'nav.externalFees', module: 'service' },
+  { path: '/service/external-fees', labelKey: 'nav.externalFees', module: 'finance' },
   // ── Finance ──
   { path: '/finance/dashboard', labelKey: 'nav.financeDashboard', module: 'finance' },
   { path: '/consulting/clients', labelKey: 'nav.contractManagement', module: 'finance' },

@@ -348,6 +348,61 @@ export function useIncentivesByInstallment() {
         }
       }
 
+      // 6. Service programs (Student 360 EC + academic support) → external fee
+      //    incentives. Each contributor with a % on a collected program earns
+      //    billed_amount × % (attributed by contributor name).
+      const programQueries = [
+        { table: 'service_ec_activities', labelCol: 'partner', detailCol: 'program' },
+        { table: 'service_academic_support', labelCol: 'academy_name', detailCol: 'subject' },
+      ]
+      for (const pq of programQueries) {
+        const { data: progs } = await supabase
+          .from(pq.table)
+          .select('*, service_students:student_id(name)')
+          .eq('collection_status', 'paid')
+        for (const p of progs || []) {
+          const billed = Number(p.billed_amount) || 0
+          if (!billed) continue
+          const student = p.service_students as Record<string, unknown> | null
+          const studentName = (student?.name as string) || ''
+          const label = (p[pq.labelCol] as string) || ''
+          const detail = (p[pq.detailCol] as string) || ''
+          const fullLabel = detail ? `${label} · ${detail}` : label
+          const currency = ((p.currency as string) || 'KRW') as 'KRW' | 'USD'
+          const paidDate = (p.paid_date as string) || ''
+          const contributors = [
+            { name: p.sales_contributor_1 as string | null, pct: Number(p.contributor_1_percentage) || 0 },
+            { name: p.sales_contributor_2 as string | null, pct: Number(p.contributor_2_percentage) || 0 },
+          ]
+          contributors.forEach((c, idx) => {
+            if (!c.name || !c.pct) return
+            results.push({
+              key: `sp-${p.id}-${idx}`,
+              incentiveId: `${p.id}-${idx}`,
+              contractId: '',
+              installmentId: p.id as string,
+              installmentLabel: fullLabel,
+              installmentOrder: 99,
+              paidDate,
+              paidAmount: billed,
+              currency,
+              contractDate: '',
+              contractorName: '',
+              studentName,
+              totalAmount: billed,
+              profileId: null,
+              displayName: c.name,
+              incentiveType: 'external_fee' as IncentiveType,
+              percentage: c.pct,
+              incentiveAmount: Math.round((billed * c.pct) / 100),
+              isPaid: true,
+              dueDate: '',
+              installmentAmount: billed,
+            })
+          })
+        }
+      }
+
       // Sort: paid first (by paidDate desc), then unpaid (by dueDate asc)
       results.sort((a, b) => {
         if (a.isPaid !== b.isPaid) return a.isPaid ? -1 : 1

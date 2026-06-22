@@ -13,180 +13,162 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
-  Loader2, Search, Plus, Trash2, CheckCircle2, Clock, DollarSign,
-  ExternalLink, HandCoins, Lock,
+  Loader2, Search, CheckCircle2, Clock, HandCoins, Lock, Link as LinkIcon,
 } from 'lucide-react'
-import { useAllExtraInstallments, type ExtraInstallmentWithContext } from '@/hooks/useExternalFees'
-import {
-  useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare,
-} from '@/hooks/useRevenueShares'
-import { useProfiles } from '@/hooks/useProfiles'
-import { useAuth } from '@/contexts/AuthContext'
-import { useT } from '@/i18n/LanguageContext'
-import { formatCurrency } from '@/types'
 import { Link } from 'react-router-dom'
+import { useAllServiceProgramFees, type ServiceProgramFee } from '@/hooks/useServiceProgramFees'
+import { useUpdateECActivity } from '@/hooks/useECActivities'
+import { useUpdateAcademicSupport } from '@/hooks/useAcademicSupport'
+import { useAuth } from '@/contexts/AuthContext'
+import { todayKST } from '@/lib/date'
+import { formatCurrency } from '@/types'
 
-// Only these people may configure fee recipients / percentages.
-const FEE_MANAGERS = ['허욱', '한상범', '김지현', '이미미']
+function contributorsOf(f: ServiceProgramFee): { name: string; pct?: number }[] {
+  const out: { name: string; pct?: number }[] = []
+  if (f.contributor1) out.push({ name: f.contributor1, pct: f.contributor1Percentage })
+  if (f.contributor2) out.push({ name: f.contributor2, pct: f.contributor2Percentage })
+  return out
+}
+
+/** Total incentive for an item = billed × each contributor's % (rounded). */
+function incentiveOf(f: ServiceProgramFee): number {
+  const b = f.billedAmount || 0
+  return contributorsOf(f).reduce((s, c) => s + (c.pct ? Math.round((b * c.pct) / 100) : 0), 0)
+}
 
 export function ExternalFeesPage() {
-  const t = useT()
   const { user } = useAuth()
-  const { data: extras = [], isLoading } = useAllExtraInstallments()
-  const { data: profiles = [] } = useProfiles()
+  const { data: fees = [], isLoading } = useAllServiceProgramFees()
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<ExtraInstallmentWithContext | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const canManageFees = FEE_MANAGERS.includes(user?.name ?? '')
-  const employees = useMemo(() => profiles.map(p => ({ id: p.id, name: p.name })), [profiles])
+  const isAdmin = user?.role === 'admin'
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return extras
+    if (!search.trim()) return fees
     const q = search.toLowerCase()
-    return extras.filter(e =>
-      e.label.toLowerCase().includes(q) ||
-      e.studentName.toLowerCase().includes(q) ||
-      e.contractorName.toLowerCase().includes(q) ||
-      e.revenueShares.some(s => s.recipientName.toLowerCase().includes(q)),
+    return fees.filter(f =>
+      f.label.toLowerCase().includes(q) ||
+      (f.detail || '').toLowerCase().includes(q) ||
+      f.studentName.toLowerCase().includes(q) ||
+      (f.contributor1 || '').toLowerCase().includes(q) ||
+      (f.contributor2 || '').toLowerCase().includes(q),
     )
-  }, [extras, search])
+  }, [fees, search])
 
-  // Summary stats
-  const totalFees = extras.reduce((s, e) => s + e.revenueShares.reduce((ss, rs) => ss + rs.amount, 0), 0)
-  const paidFees = extras.reduce((s, e) => s + e.revenueShares.filter(rs => rs.isPaid).reduce((ss, rs) => ss + rs.amount, 0), 0)
-  const unpaidFees = totalFees - paidFees
-  const totalExtras = extras.length
+  const totalBilled = fees.reduce((s, f) => s + (f.billedAmount || 0), 0)
+  const collected = fees.filter(f => f.collectionStatus === 'paid').reduce((s, f) => s + (f.billedAmount || 0), 0)
+  const totalIncentive = fees.reduce((s, f) => s + incentiveOf(f), 0)
+
+  const selected = selectedId ? fees.find(f => f.id === selectedId) ?? null : null
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">{t('externalFees.title')}</h1>
-        <p className="text-sm text-muted-foreground">{t('externalFees.description')}</p>
+        <h1 className="text-2xl font-bold">외부서비스 수수료 관리</h1>
+        <p className="text-sm text-muted-foreground">
+          Student 360의 EC·Academic 프로그램을 기준으로, 청구금액·수금상태·기여자 수수료를 관리합니다.
+        </p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
         <Card className="border-l-[3px] border-l-purple-400">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-muted-foreground">{t('externalFees.totalItems')}</div>
-            <div className="text-2xl font-bold mt-1">{totalExtras}</div>
+            <div className="text-xs text-muted-foreground">프로그램 항목</div>
+            <div className="text-2xl font-bold mt-1">{fees.length}</div>
           </CardContent>
         </Card>
         <Card className="border-l-[3px] border-l-orange-400">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-muted-foreground">{t('externalFees.totalFees')}</div>
-            <div className="text-2xl font-bold mt-1">{formatCurrency(totalFees)}</div>
+            <div className="text-xs text-muted-foreground">총 청구금액</div>
+            <div className="text-2xl font-bold mt-1">{formatCurrency(totalBilled)}</div>
           </CardContent>
         </Card>
         <Card className="border-l-[3px] border-l-emerald-400">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-muted-foreground">{t('externalFees.paidFees')}</div>
-            <div className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(paidFees)}</div>
+            <div className="text-xs text-muted-foreground">수금 완료</div>
+            <div className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(collected)}</div>
           </CardContent>
         </Card>
-        <Card className="border-l-[3px] border-l-red-400">
+        <Card className="border-l-[3px] border-l-blue-400">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-muted-foreground">{t('externalFees.unpaidFees')}</div>
-            <div className="text-2xl font-bold text-red-500 mt-1">{formatCurrency(unpaidFees)}</div>
+            <div className="text-xs text-muted-foreground">총 인센티브</div>
+            <div className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totalIncentive)}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
         <Input
-          placeholder={t('externalFees.searchPlaceholder')}
+          placeholder="학생, 프로그램, 기여자 검색..."
           className="pl-9"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
       </div>
 
-      {/* Table */}
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : filtered.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">{t('externalFees.noItems')}</div>
+            <div className="py-16 text-center text-sm text-muted-foreground">
+              Student 360에서 입력된 EC·Academic 프로그램이 없습니다.
+            </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t('externalFees.serviceItem')}</TableHead>
-                  <TableHead>{t('externalFees.student')}</TableHead>
-                  <TableHead className="text-right">{t('externalFees.chargeAmount')}</TableHead>
-                  <TableHead>{t('externalFees.paymentStatus')}</TableHead>
-                  <TableHead>{t('externalFees.feeRecipient')}</TableHead>
-                  <TableHead className="text-right">{t('externalFees.feeAmount')}</TableHead>
-                  <TableHead>{t('externalFees.feeStatus')}</TableHead>
+                  <TableHead>프로그램</TableHead>
+                  <TableHead>학생</TableHead>
+                  <TableHead>수수료 대상</TableHead>
+                  <TableHead className="text-right">청구금액</TableHead>
+                  <TableHead>수금상태</TableHead>
+                  <TableHead className="text-right">인센티브</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(ext => {
-                  const isPaid = ext.status === 'paid'
-                  const totalShareAmt = ext.revenueShares.reduce((s, rs) => s + rs.amount, 0)
-                  const allSharesPaid = ext.revenueShares.length > 0 && ext.revenueShares.every(rs => rs.isPaid)
+                {filtered.map(f => {
+                  const inc = incentiveOf(f)
+                  const conts = contributorsOf(f)
                   return (
-                    <TableRow
-                      key={ext.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setSelected(ext)}
-                    >
+                    <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(f.id)}>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <HandCoins className="size-4 text-purple-500 shrink-0" />
-                          <span className="font-medium text-sm">{ext.label}</span>
+                          <div>
+                            <div className="font-medium text-sm">{f.label}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {f.source === 'ec' ? 'EC' : 'Academic'}{f.detail ? ` · ${f.detail}` : ''}
+                            </div>
+                          </div>
                         </div>
                       </TableCell>
+                      <TableCell className="text-sm">{f.studentName}</TableCell>
                       <TableCell>
-                        <div className="text-sm">{ext.studentName}</div>
-                        <div className="text-xs text-muted-foreground">{ext.contractorName}</div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {formatCurrency(ext.amount, ext.currency as 'KRW' | 'USD')}
-                      </TableCell>
-                      <TableCell>
-                        {isPaid ? (
-                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1">
-                            <CheckCircle2 className="size-3" /> {t('externalFees.collected')}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1">
-                            <Clock className="size-3" /> {t('externalFees.pending')}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {ext.revenueShares.length > 0 ? (
+                        {conts.length > 0 ? (
                           <div className="space-y-0.5">
-                            {ext.revenueShares.map(rs => (
-                              <div key={rs.id} className="text-sm">{rs.recipientName}
-                                {rs.role && <span className="text-xs text-muted-foreground ml-1">({rs.role})</span>}
+                            {conts.map((c, i) => (
+                              <div key={i} className="text-sm">
+                                {c.name}{c.pct ? <span className="text-xs text-muted-foreground ml-1">({c.pct}%)</span> : null}
                               </div>
                             ))}
                           </div>
+                        ) : <span className="text-xs text-muted-foreground">미입력</span>}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {f.billedAmount ? formatCurrency(f.billedAmount, f.currency as 'KRW' | 'USD') : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {f.collectionStatus === 'paid' ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="size-3" /> 수금 완료</Badge>
                         ) : (
-                          <span className="text-xs text-muted-foreground">{t('externalFees.noFeeSet')}</span>
+                          <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1"><Clock className="size-3" /> 미수금</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
-                        {totalShareAmt > 0 ? formatCurrency(totalShareAmt, ext.currency as 'KRW' | 'USD') : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {ext.revenueShares.length === 0 ? (
-                          <span className="text-xs text-muted-foreground">-</span>
-                        ) : allSharesPaid ? (
-                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1 text-xs">
-                            <CheckCircle2 className="size-3" /> {t('externalFees.feePaid')}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-red-600 border-red-200 gap-1 text-xs">
-                            <Clock className="size-3" /> {t('externalFees.feeUnpaid')}
-                          </Badge>
-                        )}
+                        {inc > 0 ? formatCurrency(inc, f.currency as 'KRW' | 'USD') : '-'}
                       </TableCell>
                     </TableRow>
                   )
@@ -197,212 +179,152 @@ export function ExternalFeesPage() {
         </CardContent>
       </Card>
 
-      {/* Detail Dialog */}
       {selected && (
-        <ExternalFeeDetailDialog
-          item={extras.find(e => e.id === selected.id) ?? selected}
-          onClose={() => setSelected(null)}
-          canManage={canManageFees}
-          employees={employees}
+        <ProgramFeeDialog
+          fee={selected}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedId(null)}
         />
       )}
     </div>
   )
 }
 
-// ─── Detail Dialog ─────────────────────────────────────────────────
-
-function ExternalFeeDetailDialog({
-  item,
+// ─── Detail / edit dialog ─────────────────────────────────────────────
+function ProgramFeeDialog({
+  fee,
+  isAdmin,
   onClose,
-  canManage,
-  employees,
 }: {
-  item: ExtraInstallmentWithContext
+  fee: ServiceProgramFee
+  isAdmin: boolean
   onClose: () => void
-  canManage: boolean
-  employees: { id: string; name: string }[]
 }) {
-  const t = useT()
-  const createShares = useCreateRevenueShares()
-  const updateShare = useUpdateRevenueShare()
-  const deleteShare = useDeleteRevenueShare()
+  const updateEC = useUpdateECActivity()
+  const updateAC = useUpdateAcademicSupport()
 
-  const [recipientId, setRecipientId] = useState('')
-  const [percent, setPercent] = useState('')
-  const isPaid = item.status === 'paid'
+  const [billed, setBilled] = useState(fee.billedAmount ? String(fee.billedAmount) : '')
+  const [status, setStatus] = useState<'pending' | 'paid'>(fee.collectionStatus)
+  const [pct1, setPct1] = useState(fee.contributor1Percentage ? String(fee.contributor1Percentage) : '')
+  const [pct2, setPct2] = useState(fee.contributor2Percentage ? String(fee.contributor2Percentage) : '')
 
-  // Incentive = 청구 금액 × 수수료 % (rounded)
-  const computedAmount = percent ? Math.round((item.amount * Number(percent)) / 100) : 0
+  const saving = updateEC.isPending || updateAC.isPending
+  const billedNum = Number(billed) || 0
+  const inc1 = pct1 ? Math.round((billedNum * Number(pct1)) / 100) : 0
+  const inc2 = pct2 ? Math.round((billedNum * Number(pct2)) / 100) : 0
 
-  const handleAddShare = () => {
-    const emp = employees.find(e => e.id === recipientId)
-    if (!emp || !percent) return
-    createShares.mutate({
-      installmentId: item.id,
-      shares: [{
-        recipientName: emp.name,
-        recipientProfileId: emp.id,
-        percentage: Number(percent),
-        amount: computedAmount,
-      }],
-    }, {
-      onSuccess: () => { setRecipientId(''); setPercent('') },
-    })
+  const handleSave = () => {
+    const payload = {
+      id: fee.id,
+      studentId: fee.studentId,
+      billedAmount: billed ? Number(billed) : undefined,
+      collectionStatus: status,
+      // stamp a collection date when paid; clear it ('' → null) when pending
+      paidDate: status === 'paid' ? (fee.paidDate || todayKST()) : '',
+      contributor1Percentage: pct1 ? Number(pct1) : undefined,
+      contributor2Percentage: pct2 ? Number(pct2) : undefined,
+    }
+    const mut = fee.source === 'ec' ? updateEC : updateAC
+    mut.mutate(payload, { onSuccess: onClose })
   }
 
-  const togglePaid = (share: ExtraInstallmentWithContext['revenueShares'][0]) => {
-    updateShare.mutate({
-      id: share.id,
-      isPaid: !share.isPaid,
-      paidDate: !share.isPaid ? new Date().toISOString().slice(0, 10) : undefined,
-    })
-  }
+  const pctOptions = Array.from({ length: 10 }, (_, i) => String(i + 1))
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <HandCoins className="size-5 text-purple-500" />
-            {item.label}
+            {fee.label}{fee.detail ? ` · ${fee.detail}` : ''}
           </DialogTitle>
           <DialogDescription>
-            {item.studentName} ({item.contractorName})
+            {fee.studentName} · {fee.source === 'ec' ? 'Extra Curricular' : 'Academic Support'}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Installment Info */}
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <div className="text-xs text-muted-foreground">{t('externalFees.chargeAmount')}</div>
-            <div className="font-mono font-semibold">{formatCurrency(item.amount, item.currency as 'KRW' | 'USD')}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">{t('externalFees.paymentStatus')}</div>
-            {isPaid ? (
-              <Badge className="bg-emerald-100 text-emerald-700 gap-1"><CheckCircle2 className="size-3" /> {t('externalFees.collected')}</Badge>
-            ) : (
-              <Badge variant="outline" className="text-amber-600 gap-1"><Clock className="size-3" /> {t('externalFees.pending')}</Badge>
-            )}
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">{t('contracts.contractDate')}</div>
-            <div>{item.contractDate || '-'}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">{t('externalFees.contractLink')}</div>
-            <Link
-              to={`/consulting/clients/${item.contractId}`}
-              className="text-blue-600 hover:underline inline-flex items-center gap-1 text-sm"
-              onClick={onClose}
-            >
-              {t('externalFees.viewContract')} <ExternalLink className="size-3" />
-            </Link>
-          </div>
+        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <LinkIcon className="size-3" />
+          기여자는 Student 360에서 입력됩니다.
+          <Link to={`/service/student-360?student=${fee.studentId}`} className="text-blue-600 hover:underline" onClick={onClose}>
+            Student 360에서 보기
+          </Link>
         </div>
 
-        {/* Revenue Shares / Fee Recipients */}
-        <div className="space-y-3 pt-2 border-t">
-          <div className="text-sm font-semibold flex items-center gap-2">
-            <DollarSign className="size-4 text-orange-500" />
-            {t('externalFees.feeRecipients')}
-          </div>
-
-          {item.revenueShares.length > 0 ? (
+        {/* Contributors (from Student 360, read-only) */}
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-muted-foreground">수수료 대상 (Student 360 입력)</div>
+          {contributorsOf(fee).length === 0 ? (
+            <p className="text-sm text-muted-foreground">Student 360에 기여자가 입력되지 않았습니다.</p>
+          ) : (
             <div className="space-y-2">
-              {item.revenueShares.map(share => (
-                <div
-                  key={share.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border ${share.isPaid ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}
-                >
-                  <div>
-                    <div className="text-sm font-medium">{share.recipientName}</div>
-                    {share.role && <div className="text-xs text-muted-foreground">{share.role}</div>}
-                    <div className="text-sm font-mono mt-0.5">
-                      {share.percentage ? <span className="text-muted-foreground">{share.percentage}% · </span> : null}
-                      {formatCurrency(share.amount, item.currency as 'KRW' | 'USD')}
-                    </div>
+              {fee.contributor1 && (
+                <div className="flex items-center justify-between gap-3 p-2 rounded-md border bg-gray-50">
+                  <span className="text-sm font-medium">{fee.contributor1}</span>
+                  <div className="flex items-center gap-2">
+                    {isAdmin ? (
+                      <Select value={pct1} onValueChange={v => setPct1(v ?? '')}>
+                        <SelectTrigger className="h-7 w-20 text-sm"><SelectValue placeholder="%" /></SelectTrigger>
+                        <SelectContent>{pctOptions.map(p => <SelectItem key={p} value={p}>{p}%</SelectItem>)}</SelectContent>
+                      </Select>
+                    ) : <span className="text-sm text-muted-foreground">{pct1 ? `${pct1}%` : '-'}</span>}
+                    <span className="text-sm font-mono w-28 text-right">{inc1 ? formatCurrency(inc1, fee.currency as 'KRW' | 'USD') : '-'}</span>
                   </div>
-                  {canManage && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant={share.isPaid ? 'default' : 'outline'}
-                        className={`h-7 text-xs gap-1 ${share.isPaid ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
-                        onClick={() => togglePaid(share)}
-                        disabled={updateShare.isPending}
-                      >
-                        <CheckCircle2 className="size-3" />
-                        {share.isPaid ? t('externalFees.feePaid') : t('externalFees.markPaid')}
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                        onClick={() => deleteShare.mutate(share.id)}
-                        disabled={deleteShare.isPending}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  )}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-3">{t('externalFees.noFeeSet')}</p>
-          )}
-
-          <p className="text-[11px] text-muted-foreground">
-            수수료는 해당 항목이 <b>수금 완료</b>된 후 재무 인센티브(급여산정)에 자동 반영됩니다.
-          </p>
-
-          {/* Add fee recipient — restricted to FEE_MANAGERS */}
-          {canManage ? (
-            <div className="space-y-2 pt-2 border-t">
-              <div className="text-xs font-medium text-muted-foreground">수수료 대상 추가</div>
-              <div className="flex gap-2 items-center">
-                <Select value={recipientId} onValueChange={v => setRecipientId(v ?? '')}>
-                  <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="직원 선택" /></SelectTrigger>
-                  <SelectContent>
-                    {employees.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={percent} onValueChange={v => setPercent(v ?? '')}>
-                  <SelectTrigger className="h-8 text-sm w-20"><SelectValue placeholder="%" /></SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 10 }, (_, i) => String(i + 1)).map(p => (
-                      <SelectItem key={p} value={p}>{p}%</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="w-28 text-right text-sm font-mono text-muted-foreground">
-                  {percent ? formatCurrency(computedAmount, item.currency as 'KRW' | 'USD') : '—'}
+              )}
+              {fee.contributor2 && (
+                <div className="flex items-center justify-between gap-3 p-2 rounded-md border bg-gray-50">
+                  <span className="text-sm font-medium">{fee.contributor2}</span>
+                  <div className="flex items-center gap-2">
+                    {isAdmin ? (
+                      <Select value={pct2} onValueChange={v => setPct2(v ?? '')}>
+                        <SelectTrigger className="h-7 w-20 text-sm"><SelectValue placeholder="%" /></SelectTrigger>
+                        <SelectContent>{pctOptions.map(p => <SelectItem key={p} value={p}>{p}%</SelectItem>)}</SelectContent>
+                      </Select>
+                    ) : <span className="text-sm text-muted-foreground">{pct2 ? `${pct2}%` : '-'}</span>}
+                    <span className="text-sm font-mono w-28 text-right">{inc2 ? formatCurrency(inc2, fee.currency as 'KRW' | 'USD') : '-'}</span>
+                  </div>
                 </div>
-                <Button
-                  size="sm"
-                  className="h-8 gap-1"
-                  disabled={!recipientId || !percent || createShares.isPending}
-                  onClick={handleAddShare}
-                >
-                  {createShares.isPending ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
-                  {t('common.add')}
-                </Button>
-              </div>
-              <p className="text-[11px] text-muted-foreground">금액 = 청구 금액 × 선택한 % (자동 계산)</p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-2 border-t">
-              <Lock className="size-3" /> 수수료 설정 권한이 없습니다 (보기 전용)
+              )}
             </div>
           )}
         </div>
+
+        {/* Billing (admin editable) */}
+        <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">청구금액</label>
+            {isAdmin ? (
+              <Input type="number" value={billed} onChange={e => setBilled(e.target.value)} placeholder="0" className="h-8 text-sm" />
+            ) : <div className="text-sm font-mono">{fee.billedAmount ? formatCurrency(fee.billedAmount, fee.currency as 'KRW' | 'USD') : '-'}</div>}
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">수금상태</label>
+            {isAdmin ? (
+              <Select value={status} onValueChange={v => setStatus((v as 'pending' | 'paid') ?? 'pending')}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">미수금</SelectItem>
+                  <SelectItem value="paid">수금 완료</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : <div className="text-sm">{fee.collectionStatus === 'paid' ? '수금 완료' : '미수금'}</div>}
+          </div>
+        </div>
+
+        <p className="text-[11px] text-muted-foreground">
+          수금 완료 시 각 기여자의 인센티브가 세일즈 인센티브(인원별)에 자동 반영됩니다.
+        </p>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common.close')}</Button>
+          <Button variant="outline" onClick={onClose}>닫기</Button>
+          {isAdmin ? (
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}저장
+            </Button>
+          ) : (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lock className="size-3" /> admin만 편집할 수 있습니다</span>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

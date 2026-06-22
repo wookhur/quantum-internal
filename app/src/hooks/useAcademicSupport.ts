@@ -111,7 +111,11 @@ export function useUpdateAcademicSupport() {
       const { error } = await supabase.from('service_academic_support').update(row).eq('id', a.id)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['academic_support', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['academic_support', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['service-program-fees'] })
+      qc.invalidateQueries({ queryKey: ['incentives'] })
+    },
   })
 }
 
