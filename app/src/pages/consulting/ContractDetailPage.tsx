@@ -304,6 +304,9 @@ function ExtraIncentiveAddForm({
             installment_id: installmentId,
           }, {
             onSuccess: () => setForm({ profileId: '', customName: '', selectedOption: '', customPct: '', customLabel: '' }),
+            onError: (err) => {
+              window.alert(`인센티브 추가 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`)
+            },
           })
         }}
       >
@@ -646,6 +649,7 @@ export function ContractDetailPage() {
   const { data: incentiveRecipients = [] } = useIncentiveRecipients()
   const createRecipient = useCreateIncentiveRecipient()
   const [incentiveForm, setIncentiveForm] = useState({ profileId: '', customName: '', incentiveType: '' as string })
+  const [incentiveFormKey, setIncentiveFormKey] = useState(0)
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -1214,7 +1218,7 @@ export function ContractDetailPage() {
                 </div>
                 <div className="flex-1 min-w-[140px] space-y-1">
                   <label className="text-xs text-muted-foreground">{t('incentive.selectType')}</label>
-                  <Select value={incentiveForm.incentiveType} onValueChange={(v) => setIncentiveForm(f => ({ ...f, incentiveType: v || '' }))}>
+                  <Select key={incentiveFormKey} value={incentiveForm.incentiveType || undefined} onValueChange={(v) => setIncentiveForm(f => ({ ...f, incentiveType: v || '' }))}>
                     <SelectTrigger className="h-9">
                       <span>
                         {incentiveForm.incentiveType && INCENTIVE_TYPES[incentiveForm.incentiveType as IncentiveType]
@@ -1244,7 +1248,13 @@ export function ContractDetailPage() {
                       incentive_type: typKey,
                       percentage: INCENTIVE_TYPES[typKey].defaultPct,
                     }, {
-                      onSuccess: () => setIncentiveForm({ profileId: '', customName: '', incentiveType: '' }),
+                      onSuccess: () => {
+                        setIncentiveForm({ profileId: '', customName: '', incentiveType: '' })
+                        setIncentiveFormKey(k => k + 1)
+                      },
+                      onError: (err) => {
+                        window.alert(`인센티브 추가 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`)
+                      },
                     })
                   }}
                 >
