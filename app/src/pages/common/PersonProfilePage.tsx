@@ -391,16 +391,11 @@ export function PersonProfilePage() {
                         {c.address && <span className="ml-3"><MapPin className="size-3 inline" /> {c.address as string}</span>}
                       </div>
                     )}
-                    {/* Application count & additional services */}
+                    {/* Application count */}
                     <div className="text-xs text-muted-foreground mt-1 flex items-center gap-4">
                       <span>
                         📋 원서 지원 수: <span className={c.application_count ? 'font-medium text-foreground' : 'text-red-400'}>
                           {c.application_count ? `${c.application_count}개` : '미입력'}
-                        </span>
-                      </span>
-                      <span>
-                        ➕ 추가 서비스: <span className={c.additional_services ? 'font-medium text-foreground' : 'text-red-400'}>
-                          {(c.additional_services as string) || '미입력'}
                         </span>
                       </span>
                       <Link
@@ -410,6 +405,41 @@ export function PersonProfilePage() {
                         수정 <ExternalLink className="size-2.5" />
                       </Link>
                     </div>
+                    {/* Additional services (extra installments) */}
+                    {(() => {
+                      const extras = cInsts.filter(i => (i.category as string) === 'extra')
+                      if (extras.length === 0) return null
+                      return (
+                        <div className="mt-2 space-y-1">
+                          <span className="text-[10px] text-muted-foreground font-medium">➕ 추가 서비스</span>
+                          {extras.map(inst => {
+                            const amount = (inst.amount as number) || 0
+                            const status = inst.status as string
+                            const statusBadge: Record<string, string> = {
+                              paid: 'bg-emerald-100 text-emerald-700',
+                              partial: 'bg-amber-100 text-amber-700',
+                              pending: 'bg-gray-100 text-gray-600',
+                              overdue: 'bg-red-100 text-red-600',
+                            }
+                            const statusText: Record<string, string> = {
+                              paid: '수금완료', partial: '부분수금', pending: '미수금', overdue: '연체',
+                            }
+                            return (
+                              <div key={inst.id as string} className="flex items-center gap-2 text-xs bg-purple-50 rounded px-2 py-1">
+                                <span className="font-medium truncate">{inst.label as string}</span>
+                                <span className="font-mono">{formatCurrency(amount, currency)}</span>
+                                <Badge variant="outline" className={`text-[9px] h-3.5 ml-auto ${statusBadge[status] || 'bg-gray-100'}`}>
+                                  {statusText[status] || status}
+                                </Badge>
+                                {inst.due_date && (
+                                  <span className="text-muted-foreground text-[10px]">{(inst.due_date as string).slice(5)}</span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
                     {/* Installment breakdown */}
                     {cInsts.length > 0 && (
                       <div className="mt-2 space-y-1">
