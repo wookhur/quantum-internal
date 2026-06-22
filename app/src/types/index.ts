@@ -170,6 +170,8 @@ export interface Contract {
   serviceRepUser?: User  // joined
   partnerId?: string  // profile id of partner (e.g. 해리스컨셉)
   partnerFeeRate?: number  // e.g. 0.20 = 20%
+  applicationCount?: number
+  additionalServices?: string
   status: ContractStatus
   notes?: string
   createdAt: string

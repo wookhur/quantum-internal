@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus, Users, X,
+  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
@@ -1377,6 +1377,20 @@ export function ContractDetailPage() {
                 </span>
               </div>
             )}
+            {contract.applicationCount && (
+              <div className="flex items-center gap-2">
+                <FileText className="size-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground w-24">{t('contracts.applicationCount')}</span>
+                <span className="font-medium">{contract.applicationCount}개</span>
+              </div>
+            )}
+            {contract.additionalServices && (
+              <div className="flex items-center gap-2">
+                <FileText className="size-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground w-24">{t('contracts.additionalServices')}</span>
+                <span className="font-medium">{contract.additionalServices}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <DollarSign className="size-3.5 text-muted-foreground" />
               <span className="text-muted-foreground w-16">{t('contracts.depositAccount')}</span>
@@ -2036,6 +2050,8 @@ function ContractEditDialog({
     expiryDate: string
     serviceStartDate: string
     serviceEndDate: string
+    applicationCount: number
+    additionalServices: string
     address: string
     phone: string
     totalAmount: number
@@ -2055,6 +2071,8 @@ function ContractEditDialog({
     expiryDate: contract.expiryDate || '',
     serviceStartDate: contract.serviceStartDate || '',
     serviceEndDate: contract.serviceEndDate || '',
+    applicationCount: contract.applicationCount ? String(contract.applicationCount) : '',
+    additionalServices: contract.additionalServices || '',
     address: contract.address || '',
     phone: contract.phone || '',
     totalAmount: contract.totalAmount ? String(contract.totalAmount) : '',
@@ -2082,6 +2100,8 @@ function ContractEditDialog({
       expiryDate: form.expiryDate,
       serviceStartDate: form.serviceStartDate,
       serviceEndDate: form.serviceEndDate,
+      applicationCount: Number(form.applicationCount) || 0,
+      additionalServices: form.additionalServices,
       address: form.address,
       phone: form.phone,
       totalAmount: Number(form.totalAmount) || 0,
@@ -2129,6 +2149,14 @@ function ContractEditDialog({
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.serviceEndDate')}</Label>
             <Input type="date" value={form.serviceEndDate} onChange={e => set('serviceEndDate', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t('contracts.applicationCount')}</Label>
+            <Input type="number" value={form.applicationCount} onChange={e => set('applicationCount', e.target.value)} placeholder="예: 15" />
+          </div>
+          <div className="space-y-1 col-span-2">
+            <Label className="text-xs">{t('contracts.additionalServices')}</Label>
+            <Input value={form.additionalServices} onChange={e => set('additionalServices', e.target.value)} placeholder="예: 에세이 첨삭, EC 컨설팅" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.contact')}</Label>

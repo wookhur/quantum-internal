@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -312,6 +313,23 @@ function ProfileSection({ student, onDeleted, createdBy }: {
   const t = useT()
   const del = useDeleteServiceStudent()
 
+  const { data: contractData } = useQuery({
+    queryKey: ['contract-for-student', student.id],
+    queryFn: async () => {
+      const names = [student.name, student.koreanName].filter(Boolean)
+      if (names.length === 0) return null
+      const { data } = await supabase
+        .from('contracts')
+        .select('application_count, additional_services')
+        .in('student_name', names)
+        .limit(1)
+      return data?.[0] ?? null
+    },
+  })
+
+  const applicationCount = contractData?.application_count ?? student.applicationCount
+  const additionalServices = contractData?.additional_services ?? student.additionalServices
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -353,8 +371,8 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field label={t('student360.partners')} value={student.partners} />
         <Field label={t('student360.majors')} value={student.majors} />
         <Field label={t('student360.contractType')} value={student.contractType} />
-        <Field label={t('student360.applicationCount')} value={student.applicationCount ? String(student.applicationCount) : undefined} />
-        <Field label={t('student360.additionalServices')} value={student.additionalServices} />
+        <Field label={t('student360.applicationCount')} value={applicationCount ? String(applicationCount) : undefined} />
+        <Field label={t('student360.additionalServices')} value={additionalServices ?? undefined} />
         <Field label={t('student360.status')} value={student.status} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
         <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
