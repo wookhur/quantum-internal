@@ -86,14 +86,14 @@ function useContractStats() {
   return useQuery({
     queryKey: ['dashboard-contracts'],
     queryFn: async () => {
-      const [contractsRes, paymentsRes] = await Promise.all([
+      const [contractsRes, summaryRes] = await Promise.all([
         supabase.from('contracts').select('id, status').eq('status', 'active'),
-        supabase.from('payments').select('outstanding_amount'),
+        supabase.from('contract_payment_summary').select('outstanding, overdue_count'),
       ])
       if (contractsRes.error) throw contractsRes.error
-      if (paymentsRes.error) throw paymentsRes.error
-      const outstanding = (paymentsRes.data || []).reduce((sum, p) => sum + (p.outstanding_amount || 0), 0)
-      const overdueCount = (paymentsRes.data || []).filter(p => (p.outstanding_amount || 0) > 0).length
+      if (summaryRes.error) throw summaryRes.error
+      const outstanding = (summaryRes.data || []).reduce((sum, r) => sum + (Number(r.outstanding) || 0), 0)
+      const overdueCount = (summaryRes.data || []).reduce((sum, r) => sum + (Number(r.overdue_count) || 0), 0)
       return { activeContracts: (contractsRes.data || []).length, outstanding, overdueCount }
     },
   })

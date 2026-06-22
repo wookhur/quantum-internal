@@ -270,13 +270,21 @@ function TaskDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto" showCloseButton={false}>
+        <button
+          type="button"
+          className="absolute top-2 right-2 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors z-10"
+          onClick={onClose}
+        >
+          <X className="size-4" />
+          <span className="sr-only">Close</span>
+        </button>
         {isLoading || !task ? (
           <div className="py-12 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="text-lg">{task.title}</DialogTitle>
+              <DialogTitle className="text-lg pr-6">{task.title}</DialogTitle>
               {task.description && (
                 <DialogDescription className="whitespace-pre-wrap">{task.description}</DialogDescription>
               )}
