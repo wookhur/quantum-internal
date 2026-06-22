@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -313,22 +313,57 @@ function ProfileSection({ student, onDeleted, createdBy }: {
   const t = useT()
   const del = useDeleteServiceStudent()
 
-  const { data: contractData } = useQuery({
+  const queryClient = useQueryClient()
+  const contractQuery = useQuery({
     queryKey: ['contract-for-student', student.id],
     queryFn: async () => {
       const names = [student.name, student.koreanName].filter(Boolean)
       if (names.length === 0) return null
       const { data } = await supabase
         .from('contracts')
-        .select('application_count, additional_services')
+        .select('id, application_count, additional_services')
         .in('student_name', names)
         .limit(1)
       return data?.[0] ?? null
     },
   })
+  const contractData = contractQuery.data
 
   const applicationCount = contractData?.application_count ?? student.applicationCount
   const additionalServices = contractData?.additional_services ?? student.additionalServices
+
+  const [editingContract, setEditingContract] = useState(false)
+  const [editAppCount, setEditAppCount] = useState('')
+  const [editAddServices, setEditAddServices] = useState('')
+
+  const openContractEdit = () => {
+    setEditAppCount(applicationCount ? String(applicationCount) : '')
+    setEditAddServices(additionalServices || '')
+    setEditingContract(true)
+  }
+
+  const saveContract = useMutation({
+    mutationFn: async () => {
+      const appCount = editAppCount ? Number(editAppCount) : null
+      const addSvc = editAddServices.trim() || null
+      if (contractData?.id) {
+        await supabase.from('contracts').update({
+          application_count: appCount,
+          additional_services: addSvc,
+        }).eq('id', contractData.id)
+      } else {
+        await supabase.from('service_students').update({
+          application_count: appCount,
+          additional_services: addSvc,
+        }).eq('id', student.id)
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contract-for-student', student.id] })
+      queryClient.invalidateQueries({ queryKey: ['service-students'] })
+      setEditingContract(false)
+    },
+  })
 
   return (
     <Card>
@@ -371,8 +406,39 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field label={t('student360.partners')} value={student.partners} />
         <Field label={t('student360.majors')} value={student.majors} />
         <Field label={t('student360.contractType')} value={student.contractType} />
-        <Field label={t('student360.applicationCount')} value={applicationCount ? String(applicationCount) : undefined} />
-        <Field label={t('student360.additionalServices')} value={additionalServices ?? undefined} />
+        <div className="col-span-2 rounded-md border border-dashed p-3 grid grid-cols-2 gap-x-6 gap-y-2">
+          <div className="col-span-2 flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">{t('contracts.applicationCount')} / {t('contracts.additionalServices')}</p>
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={openContractEdit}>
+              <Pencil className="size-3 mr-1" />{t('common.edit')}
+            </Button>
+          </div>
+          <Field label={t('contracts.applicationCount')} value={applicationCount ? `${applicationCount}개` : undefined} />
+          <Field label={t('contracts.additionalServices')} value={additionalServices ?? undefined} />
+        </div>
+        <Dialog open={editingContract} onOpenChange={setEditingContract}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{t('contracts.applicationCount')} / {t('contracts.additionalServices')}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs">{t('contracts.applicationCount')}</Label>
+                <Input type="number" value={editAppCount} onChange={e => setEditAppCount(e.target.value)} placeholder="예: 15" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">{t('contracts.additionalServices')}</Label>
+                <Input value={editAddServices} onChange={e => setEditAddServices(e.target.value)} placeholder="예: 에세이 첨삭, EC 컨설팅" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setEditingContract(false)}>{t('common.cancel')}</Button>
+              <Button size="sm" onClick={() => saveContract.mutate()} disabled={saveContract.isPending}>
+                {saveContract.isPending ? <Loader2 className="size-4 animate-spin" /> : t('common.save')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <Field label={t('student360.status')} value={student.status} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
         <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
