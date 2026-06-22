@@ -391,6 +391,25 @@ export function PersonProfilePage() {
                         {c.address && <span className="ml-3"><MapPin className="size-3 inline" /> {c.address as string}</span>}
                       </div>
                     )}
+                    {/* Application count & additional services */}
+                    <div className="text-xs text-muted-foreground mt-1 flex items-center gap-4">
+                      <span>
+                        📋 원서 지원 수: <span className={c.application_count ? 'font-medium text-foreground' : 'text-red-400'}>
+                          {c.application_count ? `${c.application_count}개` : '미입력'}
+                        </span>
+                      </span>
+                      <span>
+                        ➕ 추가 서비스: <span className={c.additional_services ? 'font-medium text-foreground' : 'text-red-400'}>
+                          {(c.additional_services as string) || '미입력'}
+                        </span>
+                      </span>
+                      <Link
+                        to={`/consulting/clients/${c.id as string}`}
+                        className="text-blue-500 hover:text-blue-700 flex items-center gap-0.5"
+                      >
+                        수정 <ExternalLink className="size-2.5" />
+                      </Link>
+                    </div>
                     {/* Installment breakdown */}
                     {cInsts.length > 0 && (
                       <div className="mt-2 space-y-1">
