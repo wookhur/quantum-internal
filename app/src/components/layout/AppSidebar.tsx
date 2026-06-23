@@ -84,8 +84,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     items: [
       { labelKey: 'nav.marketingMetrics', to: '/marketing/metrics', icon: BarChart2 },
       { labelKey: 'nav.adPerformance', to: '/marketing/ads', icon: Megaphone },
-      { labelKey: 'nav.eventManagement', to: '/calendar', icon: CalendarDays },
-      { labelKey: 'nav.videoContent', to: '/marketing/videos', icon: Video },
     ],
   },
   {
