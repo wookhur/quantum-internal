@@ -25,7 +25,7 @@ import {
   getEffectiveModules, getEffectiveRoutes, getRoutesForModule,
   type FeatureModule, type FeatureAccessRecord,
 } from '@/hooks/useProfiles'
-import type { User, UserRole, Department } from '@/types'
+import type { User, UserRole, Department, EmploymentType } from '@/types'
 
 const ROLE_CONFIG: Record<UserRole, { label: string; className: string; icon: typeof Shield }> = {
   admin: { label: 'Admin', className: 'bg-red-50 text-red-700 border-red-200', icon: Shield },
@@ -63,6 +63,16 @@ function useRoleOptions() {
   ]
 }
 
+const EMPLOYMENT_TYPE_OPTIONS: { value: EmploymentType; label: string }[] = [
+  { value: 'permanent', label: '정규직' },
+  { value: 'contract', label: '계약직' },
+  { value: 'dispatch', label: '파견직' },
+  { value: 'daily', label: '일용직' },
+  { value: 'freelancer', label: '프리랜서' },
+  { value: 'commissioned', label: '위촉직' },
+  { value: 'executive', label: '등기임원' },
+]
+
 // ─── User Edit Dialog with Package + Route toggles ─────────────────────────
 
 function UserEditDialog({
@@ -90,6 +100,9 @@ function UserEditDialog({
   const [role, setRole] = useState<UserRole>(user.role)
   const [department, setDepartment] = useState<string>(user.department || '')
   const [position, setPosition] = useState<string>(user.position || '')
+  const [employmentType, setEmploymentType] = useState<string>(user.employmentType || '')
+  const [contractStartDate, setContractStartDate] = useState(user.contractStartDate || '')
+  const [contractEndDate, setContractEndDate] = useState(user.contractEndDate || '')
   const [isExternal, setIsExternal] = useState(user.isExternal)
   const [enabledModules, setEnabledModules] = useState<FeatureModule[]>(effectiveModules)
   const [enabledRoutes, setEnabledRoutes] = useState<string[]>(effectiveRoutes)
@@ -179,6 +192,9 @@ function UserEditDialog({
         role,
         department: department ? (department as Department) : null,
         position: position || null,
+        employmentType: employmentType ? (employmentType as EmploymentType) : null,
+        contractStartDate: contractStartDate || null,
+        contractEndDate: contractEndDate || null,
         isExternal,
       })
 
@@ -200,7 +216,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, isExternal, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentType, contractStartDate, contractEndDate, isExternal, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -282,6 +298,42 @@ function UserEditDialog({
                     {isExternal ? t('access.external') : t('access.internal')}
                   </span>
                 </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">근로유형</Label>
+              <Select value={employmentType || '_none'} onValueChange={v => setEmploymentType(!v || v === '_none' ? '' : v)}>
+                <SelectTrigger className="h-9">
+                  <span>{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === employmentType)?.label || '미지정'}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">미지정</SelectItem>
+                  {EMPLOYMENT_TYPE_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">계약 시작일</Label>
+                <Input
+                  type="date"
+                  value={contractStartDate}
+                  onChange={e => setContractStartDate(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">계약 종료일</Label>
+                <Input
+                  type="date"
+                  value={contractEndDate}
+                  onChange={e => setContractEndDate(e.target.value)}
+                  className="h-9"
+                />
               </div>
             </div>
           </div>
@@ -740,6 +792,7 @@ export function AccessManagementPage() {
                   <TableHead className="w-[100px]">{t('access.role')}</TableHead>
                   <TableHead className="w-[100px]">{t('access.department')}</TableHead>
                   <TableHead className="w-[90px]">{t('access.position')}</TableHead>
+                  <TableHead className="w-[80px]">근로유형</TableHead>
                   <TableHead>{t('access.accessibleFeatures')}</TableHead>
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
@@ -789,6 +842,11 @@ export function AccessManagementPage() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {profile.position || <span className="text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {profile.employmentType
+                          ? <Badge variant="outline" className="text-[10px] h-4">{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === profile.employmentType)?.label || profile.employmentType}</Badge>
+                          : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">

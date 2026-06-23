@@ -1,6 +1,7 @@
 // ============ USER & AUTH ============
 export type UserRole = 'admin' | 'c_level' | 'sales_manager' | 'service_manager' | 'marketing_manager' | 'consultant' | 'freelancer' | 'external'
 export type Department = 'management' | 'sales' | 'marketing' | 'finance' | 'service'
+export type EmploymentType = 'permanent' | 'contract' | 'dispatch' | 'daily' | 'freelancer' | 'commissioned' | 'executive'
 
 export interface User {
   id: string
@@ -9,6 +10,9 @@ export interface User {
   role: UserRole
   department?: Department
   position?: string  // 대표이사, 부대표, 이사, 팀장, etc
+  employmentType?: EmploymentType
+  contractStartDate?: string
+  contractEndDate?: string
   isExternal: boolean
   avatarUrl?: string
   createdAt: string
