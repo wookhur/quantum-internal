@@ -1562,6 +1562,7 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 labelKey="student360.assignments"
                 fallbackText={d.assignments}
                 createdBy={createdBy}
+                showToggle={false}
               />
             </div>
             </>)}
@@ -1991,13 +1992,14 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
 }
 
 // ────────────────────────── Follow-up Checklist ──────────────────────────
-function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, category = 'followup', labelKey = 'student360.followUpCommitments' }: {
+function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, category = 'followup', labelKey = 'student360.followUpCommitments', showToggle = true }: {
   studentId: string
   diaryId: string
   fallbackText?: string
   createdBy?: string
   category?: string
   labelKey?: string
+  showToggle?: boolean
 }) {
   const t = useT()
   const { data: all = [] } = useServiceFollowups(studentId)
@@ -2043,7 +2045,7 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
           {t(labelKey)}
           {items.length > 0 && (
             <span className="ml-1 text-muted-foreground/70">
-              ({doneCount}/{items.length})
+              {showToggle ? `(${doneCount}/${items.length})` : `(${items.length})`}
             </span>
           )}
         </p>
@@ -2060,12 +2062,14 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
       <ul className="space-y-1.5">
         {items.map(f => (
           <li key={f.id} className="flex items-center gap-2 text-sm">
-            <Switch
-              checked={f.done}
-              onCheckedChange={(v) => toggle.mutate({ id: f.id, studentId, done: !!v })}
-              className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-red-500"
-            />
-            <span className={`flex-1 ${f.done ? 'line-through text-muted-foreground' : ''}`}>
+            {showToggle && (
+              <Switch
+                checked={f.done}
+                onCheckedChange={(v) => toggle.mutate({ id: f.id, studentId, done: !!v })}
+                className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-red-500"
+              />
+            )}
+            <span className={`flex-1 ${showToggle && f.done ? 'line-through text-muted-foreground' : ''}`}>
               {f.text}
             </span>
             <Button
