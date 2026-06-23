@@ -42,7 +42,7 @@ import {
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { useFeatureAccess, getEffectiveRoutes, type FeatureModule } from '@/hooks/useProfiles'
+import { useFeatureAccess, getEffectiveRoutes, getEffectiveModules, type FeatureModule } from '@/hooks/useProfiles'
 import { useLanguage } from '@/i18n/LanguageContext'
 import type { TranslationKeys } from '@/i18n/translations'
 
@@ -152,8 +152,9 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
 
   // Determine which routes this user can access
   const enabledRoutes = user ? getEffectiveRoutes(user, featureAccess) : []
-  // Show ALL sections and items, but mark which ones are accessible
-  const visibleSections = NAV_SECTIONS
+  const enabledModules = user ? getEffectiveModules(user, featureAccess) : []
+  // Only show sections whose module the user can access
+  const visibleSections = NAV_SECTIONS.filter(s => enabledModules.includes(s.module))
 
   const DEPT_CONFIG: Record<string, { label: string; color: string }> = {
     sales: { label: 'Sales', color: 'bg-blue-100 text-blue-700' },
