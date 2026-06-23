@@ -275,7 +275,7 @@ const koTranslations = {
   'nav.hr': 'HR',
   'nav.attendance': '근태 관리',
   'nav.kpiTargets': 'KPI 목표 관리',
-  'nav.personalInfo': '개인정보 관리',
+  'nav.personalInfo': '직원 정보',
   'nav.accessControl': '직원 관리',
   'nav.breakTime': '쉬는 시간',
   'nav.trexRunner': '아케이드',
@@ -1585,7 +1585,7 @@ const koTranslations = {
   'tasks.total': '건 완료',
 
   // ── Personal Info (HR) ──
-  'personalInfo.title': '개인정보 관리',
+  'personalInfo.title': '직원 정보',
   'personalInfo.subtitle': '직원 개인정보를 관리하고, 작성 링크를 발송할 수 있습니다.',
   'personalInfo.totalEmployees': '전체 직원',
   'personalInfo.submitted': '제출 완료',
@@ -1903,7 +1903,7 @@ const enTranslations: Record<string, string> = {
   'nav.hr': 'HR',
   'nav.attendance': 'Attendance',
   'nav.kpiTargets': 'KPI Targets',
-  'nav.personalInfo': 'Personal Info',
+  'nav.personalInfo': 'Employee Info',
   'nav.accessControl': 'Employee Management',
   'nav.breakTime': 'Break Time',
   'nav.trexRunner': 'Arcade',
@@ -3212,7 +3212,7 @@ const enTranslations: Record<string, string> = {
   'tasks.total': 'completed',
 
   // ── Personal Info (HR) ──
-  'personalInfo.title': 'Personal Info Management',
+  'personalInfo.title': 'Employee Info',
   'personalInfo.subtitle': 'Manage employee personal information and send form links.',
   'personalInfo.totalEmployees': 'Total Employees',
   'personalInfo.submitted': 'Submitted',

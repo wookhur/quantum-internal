@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -37,6 +38,16 @@ import { useProfiles } from '@/hooks/useProfiles'
 import { useAllEmployeeInfo, useCreateFormToken, useUpsertEmployeeInfo, type EmployeeInfo } from '@/hooks/useEmployeeInfo'
 
 const PAGE_PIN = '2256'
+
+const EMPLOYMENT_TYPES: { value: string; label: string }[] = [
+  { value: 'permanent', label: '정규직' },
+  { value: 'contract', label: '계약직' },
+  { value: 'dispatch', label: '파견직' },
+  { value: 'daily', label: '일용직' },
+  { value: 'freelancer', label: '프리랜서' },
+  { value: 'commissioned', label: '위촉직' },
+  { value: 'executive', label: '등기임원' },
+]
 
 export function PersonalInfoPage() {
   const t = useT()
@@ -121,6 +132,9 @@ export function PersonalInfoPage() {
       notes: editForm.notes,
       nationality: editForm.nationality,
       visaType: editForm.visaType,
+      employmentType: editForm.employmentType,
+      contractStartDate: editForm.contractStartDate,
+      contractEndDate: editForm.contractEndDate,
     })
     setEditDialog(null)
   }
@@ -136,7 +150,10 @@ export function PersonalInfoPage() {
         [t('personalInfo.phone')]: info?.phone || '',
         [t('personalInfo.birthDate')]: info?.birthDate || '',
         [t('personalInfo.address')]: info?.address || '',
+        '근로유형': EMPLOYMENT_TYPES.find(e => e.value === info?.employmentType)?.label || '',
         [t('personalInfo.startDate')]: info?.startDate || '',
+        '계약 시작일': info?.contractStartDate || '',
+        '계약 종료일': info?.contractEndDate || '',
         [t('personalInfo.bankName')]: info?.bankName || '',
         [t('personalInfo.bankAccount')]: info?.bankAccount || '',
         [t('personalInfo.bankHolder')]: info?.bankHolder || '',
@@ -279,6 +296,7 @@ export function PersonalInfoPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('personalInfo.name')}</TableHead>
+                  <TableHead>근로유형</TableHead>
                   <TableHead>{t('personalInfo.phone')}</TableHead>
                   <TableHead>{t('personalInfo.birthDate')}</TableHead>
                   <TableHead>{t('personalInfo.bank')}</TableHead>
@@ -298,6 +316,11 @@ export function PersonalInfoPage() {
                           <div className="text-sm font-medium">{profile.name}</div>
                           <div className="text-xs text-muted-foreground">{profile.email}</div>
                         </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {info?.employmentType
+                          ? <Badge variant="outline" className="text-[10px] h-4">{EMPLOYMENT_TYPES.find(e => e.value === info.employmentType)?.label || info.employmentType}</Badge>
+                          : '-'}
                       </TableCell>
                       <TableCell className="text-sm">{info?.phone || '-'}</TableCell>
                       <TableCell className="text-sm">{info?.birthDate || '-'}</TableCell>
@@ -425,6 +448,32 @@ export function PersonalInfoPage() {
             <div className="space-y-1.5">
               <Label className="text-xs">{t('personalInfo.startDate')}</Label>
               <Input type="date" value={editForm.startDate || ''} onChange={e => setEditForm(f => ({ ...f, startDate: e.target.value }))} className="h-9" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">근로유형</Label>
+              <Select value={editForm.employmentType || '_none'} onValueChange={v => setEditForm(f => ({ ...f, employmentType: !v || v === '_none' ? null : v }))}>
+                <SelectTrigger className="h-9">
+                  <span>{EMPLOYMENT_TYPES.find(e => e.value === editForm.employmentType)?.label || '미지정'}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">미지정</SelectItem>
+                  {EMPLOYMENT_TYPES.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">계약 시작일</Label>
+                <Input type="date" value={editForm.contractStartDate || ''} onChange={e => setEditForm(f => ({ ...f, contractStartDate: e.target.value }))} className="h-9" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">계약 종료일</Label>
+                <Input type="date" value={editForm.contractEndDate || ''} onChange={e => setEditForm(f => ({ ...f, contractEndDate: e.target.value }))} className="h-9" />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

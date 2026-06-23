@@ -18,6 +18,9 @@ export interface EmployeeInfo {
   notes: string | null
   nationality: string | null
   visaType: string | null
+  employmentType: string | null
+  contractStartDate: string | null
+  contractEndDate: string | null
   updatedAt: string
 }
 
@@ -39,6 +42,9 @@ function mapRow(r: Record<string, unknown>): EmployeeInfo {
     notes: r.notes as string | null,
     nationality: r.nationality as string | null,
     visaType: r.visa_type as string | null,
+    employmentType: r.employment_type as string | null,
+    contractStartDate: r.contract_start_date as string | null,
+    contractEndDate: r.contract_end_date as string | null,
     updatedAt: r.updated_at as string,
   }
 }
@@ -116,6 +122,9 @@ export function useUpsertEmployeeInfo() {
       notes?: string | null
       nationality?: string | null
       visaType?: string | null
+      employmentType?: string | null
+      contractStartDate?: string | null
+      contractEndDate?: string | null
     }) => {
       const { error } = await supabase
         .from('employee_info')
@@ -136,6 +145,9 @@ export function useUpsertEmployeeInfo() {
             notes: input.notes || null,
             nationality: input.nationality || null,
             visa_type: input.visaType || null,
+            employment_type: input.employmentType || null,
+            contract_start_date: input.contractStartDate || null,
+            contract_end_date: input.contractEndDate || null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'profile_id' },
