@@ -74,9 +74,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     items: [
       { labelKey: 'nav.coldCall', to: '/sales/cold-call', icon: PhoneCall },
       { labelKey: 'nav.leadManagement', to: '/sales/leads', icon: Users },
-      { labelKey: 'nav.pipeline', to: '/sales/pipeline', icon: BarChart3 },
       { labelKey: 'nav.meetingRecords', to: '/sales/meetings', icon: ClipboardList },
-      { labelKey: 'nav.salesFunnel', to: '/sales/funnel', icon: Filter },
       { labelKey: 'nav.salesPerformance', to: '/sales/performance', icon: TrendingUp },
     ],
   },
