@@ -32,7 +32,8 @@ import type { Contract, PaymentInstallment } from '@/types'
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatUSD(amount: number): string {
+function formatMoney(amount: number, currency: string = 'USD'): string {
+  if (currency === 'KRW') return `₩${amount.toLocaleString('ko-KR')}`
   return `$${amount.toLocaleString('en-US')}`
 }
 
@@ -94,32 +95,43 @@ export function PartnerContractsPage() {
   // Fee rate (from first contract or default 20%)
   const feeRate = contracts[0]?.partnerFeeRate ?? 0.20
 
-  // ── Summary stats ──
-  const totalPaid = useMemo(() => payments.reduce((s, p) => s + p.paidAmount, 0), [payments])
-  const totalFee = useMemo(() => Math.round(totalPaid * feeRate), [totalPaid, feeRate])
+  // ── Summary stats by currency ──
+  const summaryByCurrency = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const p of payments) {
+      const c = contractMap.get(p.contractId)
+      const cur = c?.currency || p.currency || 'USD'
+      map[cur] = (map[cur] || 0) + p.paidAmount
+    }
+    return Object.entries(map).map(([cur, total]) => ({
+      currency: cur,
+      total,
+      fee: Math.round(total * feeRate),
+    }))
+  }, [payments, contractMap, feeRate])
   const totalContracts = contracts.length
 
-  // ── Monthly aggregation ──
+  // ── Monthly aggregation by currency ──
   const monthlySummary = useMemo(() => {
-    const map = new Map<string, { count: number; total: number }>()
+    const map = new Map<string, Record<string, { count: number; total: number }>>()
     for (const p of payments) {
       if (!p.paidDate) continue
       const ym = p.paidDate.slice(0, 7)
-      const cur = map.get(ym) || { count: 0, total: 0 }
-      cur.count += 1
-      cur.total += p.paidAmount
-      map.set(ym, cur)
+      const cur = contractMap.get(p.contractId)?.currency || p.currency || 'USD'
+      if (!map.has(ym)) map.set(ym, {})
+      const byMonth = map.get(ym)!
+      if (!byMonth[cur]) byMonth[cur] = { count: 0, total: 0 }
+      byMonth[cur].count += 1
+      byMonth[cur].total += p.paidAmount
     }
-    return [...map.entries()]
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([month, v]) => ({
-        month,
-        count: v.count,
-        total: v.total,
-        fee: Math.round(v.total * feeRate),
-        net: v.total - Math.round(v.total * feeRate),
-      }))
-  }, [payments, feeRate])
+    const rows: { month: string; currency: string; count: number; total: number; fee: number; net: number }[] = []
+    for (const [month, byCur] of map) {
+      for (const [cur, v] of Object.entries(byCur)) {
+        rows.push({ month, currency: cur, count: v.count, total: v.total, fee: Math.round(v.total * feeRate), net: v.total - Math.round(v.total * feeRate) })
+      }
+    }
+    return rows.sort((a, b) => b.month.localeCompare(a.month) || a.currency.localeCompare(b.currency))
+  }, [payments, contractMap, feeRate])
 
   // ── Contract summary with payment subtotals ──
   const contractSummary = useMemo(() => {
@@ -201,7 +213,7 @@ export function PartnerContractsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card>
           <CardContent className="py-3 flex items-center justify-between">
             <div>
@@ -215,7 +227,11 @@ export function PartnerContractsPage() {
           <CardContent className="py-3 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">총 입금액</p>
-              <p className="text-xl font-bold text-green-600">{formatUSD(totalPaid)}</p>
+              <div className="space-y-0.5">
+                {summaryByCurrency.map(s => (
+                  <p key={s.currency} className="text-lg font-bold text-green-600">{formatMoney(s.total, s.currency)}</p>
+                ))}
+              </div>
             </div>
             <DollarSign className="h-8 w-8 text-green-200" />
           </CardContent>
@@ -224,7 +240,11 @@ export function PartnerContractsPage() {
           <CardContent className="py-3 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">수수료 ({(feeRate * 100).toFixed(0)}%)</p>
-              <p className="text-xl font-bold text-amber-600">{formatUSD(totalFee)}</p>
+              <div className="space-y-0.5">
+                {summaryByCurrency.map(s => (
+                  <p key={s.currency} className="text-lg font-bold text-amber-600">{formatMoney(s.fee, s.currency)}</p>
+                ))}
+              </div>
             </div>
             <TrendingUp className="h-8 w-8 text-amber-200" />
           </CardContent>
@@ -431,13 +451,13 @@ function PaymentsTab({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right font-mono font-medium text-green-700">
-                    {formatUSD(p.paidAmount)}
+                    {formatMoney(p.paidAmount, c?.currency)}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">
                     {p.notes || ''}
                   </TableCell>
                   <TableCell className="text-right font-mono text-amber-600">
-                    {formatUSD(fee)}
+                    {formatMoney(fee, c?.currency)}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
@@ -452,18 +472,26 @@ function PaymentsTab({
                 </TableRow>
               )
             })}
-            {/* Totals row */}
-            <TableRow className="bg-muted/30 font-semibold">
-              <TableCell colSpan={6} className="text-right text-sm">합계</TableCell>
-              <TableCell className="text-right font-mono text-green-700">
-                {formatUSD(sorted.reduce((s, p) => s + p.paidAmount, 0))}
-              </TableCell>
-              <TableCell />
-              <TableCell className="text-right font-mono text-amber-600">
-                {formatUSD(Math.round(sorted.reduce((s, p) => s + p.paidAmount, 0) * feeRate))}
-              </TableCell>
-              <TableCell />
-            </TableRow>
+            {/* Totals rows by currency */}
+            {Object.entries(
+              sorted.reduce<Record<string, number>>((acc, p) => {
+                const cur = contractMap.get(p.contractId)?.currency || p.currency || 'USD'
+                acc[cur] = (acc[cur] || 0) + p.paidAmount
+                return acc
+              }, {})
+            ).map(([cur, total]) => (
+              <TableRow key={cur} className="bg-muted/30 font-semibold">
+                <TableCell colSpan={6} className="text-right text-sm">합계 ({cur})</TableCell>
+                <TableCell className="text-right font-mono text-green-700">
+                  {formatMoney(total, cur)}
+                </TableCell>
+                <TableCell />
+                <TableCell className="text-right font-mono text-amber-600">
+                  {formatMoney(Math.round(total * feeRate), cur)}
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </CardContent>
@@ -526,12 +554,12 @@ function ContractsTab({ data, feeRate }: { data: ContractWithTotals[]; feeRate: 
                 <TableCell>{c.gradeAtContract || '-'}</TableCell>
                 <TableCell className="font-mono text-sm">{c.contractDate}</TableCell>
                 <TableCell className="font-mono text-sm">{c.expiryDate}</TableCell>
-                <TableCell className="text-right font-mono">{c.deposit > 0 ? formatUSD(c.deposit) : '-'}</TableCell>
-                <TableCell className="text-right font-mono">{c.interim > 0 ? formatUSD(c.interim) : '-'}</TableCell>
-                <TableCell className="text-right font-mono">{c.balance > 0 ? formatUSD(c.balance) : '-'}</TableCell>
-                <TableCell className="text-right font-mono font-medium">{formatUSD(c.totalAmount)}</TableCell>
-                <TableCell className="text-right font-mono font-medium text-green-700">{formatUSD(c.totalPaid)}</TableCell>
-                <TableCell className="text-right font-mono text-amber-600">{formatUSD(c.fee)}</TableCell>
+                <TableCell className="text-right font-mono">{c.deposit > 0 ? formatMoney(c.deposit, c.currency) : '-'}</TableCell>
+                <TableCell className="text-right font-mono">{c.interim > 0 ? formatMoney(c.interim, c.currency) : '-'}</TableCell>
+                <TableCell className="text-right font-mono">{c.balance > 0 ? formatMoney(c.balance, c.currency) : '-'}</TableCell>
+                <TableCell className="text-right font-mono font-medium">{formatMoney(c.totalAmount, c.currency)}</TableCell>
+                <TableCell className="text-right font-mono font-medium text-green-700">{formatMoney(c.totalPaid, c.currency)}</TableCell>
+                <TableCell className="text-right font-mono text-amber-600">{formatMoney(c.fee, c.currency)}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -549,7 +577,7 @@ function MonthlyTab({
   data,
   feeRate,
 }: {
-  data: { month: string; count: number; total: number; fee: number; net: number }[]
+  data: { month: string; currency: string; count: number; total: number; fee: number; net: number }[]
   feeRate: number
 }) {
   if (data.length === 0) {
@@ -563,10 +591,14 @@ function MonthlyTab({
     )
   }
 
-  const grandTotal = data.reduce((s, d) => s + d.total, 0)
-  const grandFee = data.reduce((s, d) => s + d.fee, 0)
-  const grandNet = data.reduce((s, d) => s + d.net, 0)
-  const grandCount = data.reduce((s, d) => s + d.count, 0)
+  const grandByCurrency: Record<string, { count: number; total: number; fee: number; net: number }> = {}
+  for (const d of data) {
+    if (!grandByCurrency[d.currency]) grandByCurrency[d.currency] = { count: 0, total: 0, fee: 0, net: 0 }
+    grandByCurrency[d.currency].count += d.count
+    grandByCurrency[d.currency].total += d.total
+    grandByCurrency[d.currency].fee += d.fee
+    grandByCurrency[d.currency].net += d.net
+  }
 
   return (
     <Card>
@@ -575,30 +607,34 @@ function MonthlyTab({
           <TableHeader>
             <TableRow>
               <TableHead>연월</TableHead>
+              <TableHead>통화</TableHead>
               <TableHead className="text-right">입금 건수</TableHead>
               <TableHead className="text-right">입금 합계</TableHead>
               <TableHead className="text-right">수수료 ({(feeRate * 100).toFixed(0)}%)</TableHead>
-              <TableHead className="text-right">실수령액 (입금-수수료)</TableHead>
+              <TableHead className="text-right">실수령액</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.map(d => (
-              <TableRow key={d.month}>
+              <TableRow key={`${d.month}-${d.currency}`}>
                 <TableCell className="font-medium">{d.month}</TableCell>
+                <TableCell><Badge variant="outline" className="text-xs">{d.currency}</Badge></TableCell>
                 <TableCell className="text-right">{d.count}</TableCell>
-                <TableCell className="text-right font-mono text-green-700">{formatUSD(d.total)}</TableCell>
-                <TableCell className="text-right font-mono text-amber-600">{formatUSD(d.fee)}</TableCell>
-                <TableCell className="text-right font-mono font-medium">{formatUSD(d.net)}</TableCell>
+                <TableCell className="text-right font-mono text-green-700">{formatMoney(d.total, d.currency)}</TableCell>
+                <TableCell className="text-right font-mono text-amber-600">{formatMoney(d.fee, d.currency)}</TableCell>
+                <TableCell className="text-right font-mono font-medium">{formatMoney(d.net, d.currency)}</TableCell>
               </TableRow>
             ))}
-            {/* Grand total */}
-            <TableRow className="bg-muted/30 font-semibold">
-              <TableCell>합계</TableCell>
-              <TableCell className="text-right">{grandCount}</TableCell>
-              <TableCell className="text-right font-mono text-green-700">{formatUSD(grandTotal)}</TableCell>
-              <TableCell className="text-right font-mono text-amber-600">{formatUSD(grandFee)}</TableCell>
-              <TableCell className="text-right font-mono">{formatUSD(grandNet)}</TableCell>
-            </TableRow>
+            {Object.entries(grandByCurrency).map(([cur, g]) => (
+              <TableRow key={cur} className="bg-muted/30 font-semibold">
+                <TableCell>합계</TableCell>
+                <TableCell><Badge variant="outline" className="text-xs">{cur}</Badge></TableCell>
+                <TableCell className="text-right">{g.count}</TableCell>
+                <TableCell className="text-right font-mono text-green-700">{formatMoney(g.total, cur)}</TableCell>
+                <TableCell className="text-right font-mono text-amber-600">{formatMoney(g.fee, cur)}</TableCell>
+                <TableCell className="text-right font-mono">{formatMoney(g.net, cur)}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </CardContent>
