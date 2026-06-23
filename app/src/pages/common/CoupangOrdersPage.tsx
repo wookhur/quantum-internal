@@ -90,7 +90,7 @@ export function CoupangOrdersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">쿠팡 주문 요청</h1>
-          <p className="text-sm text-muted-foreground">필요한 물품을 요청하세요. 곽지수 이사님이 주문해 드립니다.</p>
+          <p className="text-sm text-muted-foreground">필요한 물품을 요청하세요. 각 팀 담당자가 주문해 드립니다.</p>
         </div>
         <Button size="sm" onClick={() => setShowForm(true)}>
           <Plus className="h-4 w-4 mr-1" />
