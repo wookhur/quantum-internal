@@ -141,6 +141,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/hr/personal-info', labelKey: 'nav.personalInfo', module: 'hr' },
   // ── Partner ──
   { path: '/partner/contracts', labelKey: 'nav.partnerContracts', module: 'partner' },
+  { path: '/partner/calendar', labelKey: 'nav.calendar', module: 'partner' },
   // ── Game ──
   { path: '/game', labelKey: 'nav.trexRunner', module: 'game' },
 ]

@@ -104,6 +104,7 @@ export default function App() {
                 <Route path="/finance/incentives/by-person" element={<IncentiveByPersonPage />} />
 
                 <Route path="/partner/contracts" element={<PartnerContractsPage />} />
+                <Route path="/partner/calendar" element={<CalendarPage />} />
 
                 <Route path="/service/dashboard" element={<ServiceDashboardPage />} />
                 <Route path="/service/student-360" element={<Student360Page />} />
