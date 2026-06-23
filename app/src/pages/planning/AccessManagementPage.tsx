@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Loader2, Shield, Search, UserCog, Save,
   CheckCircle2, Users, ShieldCheck, Eye, Briefcase, UserX,
-  ChevronDown, ChevronRight, Mail, UserPlus,
+  ChevronDown, ChevronRight, Mail, UserPlus, Copy, Check,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -484,23 +484,40 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
   const [role, setRole] = useState<UserRole>('external')
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [tempPassword, setTempPassword] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
+
+  const handleCopyCredentials = useCallback(() => {
+    if (!tempPassword) return
+    const text = `이메일: ${email}\n임시 비밀번호: ${tempPassword}\n로그인: ${window.location.origin}/login`
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }, [email, tempPassword])
 
   const handleSend = useCallback(async () => {
     if (!email.trim()) return
     setSending(true)
     setResult(null)
+    setTempPassword(null)
+    setCopied(false)
     try {
       const { data, error } = await supabase.functions.invoke('invite-user', {
         body: { email: email.trim(), name: name.trim() || undefined, role },
       })
       if (error) throw error
       if (data?.error) throw new Error(data.error)
-      setResult({ type: 'success', message: t('access.inviteSuccess') })
-      setEmail('')
-      setName('')
-      setRole('external')
+      if (data?.tempPassword) {
+        setTempPassword(data.tempPassword)
+        setResult({ type: 'success', message: '계정이 생성되었습니다. 아래 임시 비밀번호를 본인에게 전달해주세요.' })
+      } else {
+        setResult({ type: 'success', message: t('access.inviteSuccess') })
+        setEmail('')
+        setName('')
+        setRole('external')
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : t('access.inviteError')
       setResult({ type: 'error', message: msg })
@@ -561,6 +578,25 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
           {result && (
             <div className={`text-sm rounded p-2 ${result.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
               {result.message}
+            </div>
+          )}
+
+          {tempPassword && (
+            <div className="rounded-md border bg-amber-50 p-3 space-y-2">
+              <div className="text-xs font-medium text-amber-800">임시 로그인 정보</div>
+              <div className="text-sm font-mono bg-white rounded px-2 py-1.5 border text-gray-800">
+                <div>이메일: {email}</div>
+                <div>비밀번호: {tempPassword}</div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-1.5 h-8 text-xs"
+                onClick={handleCopyCredentials}
+              >
+                {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
+                {copied ? '복사됨' : '로그인 정보 복사'}
+              </Button>
             </div>
           )}
         </div>

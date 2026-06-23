@@ -5,6 +5,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const ALLOWED_ROLES = ['admin', 'c_level', 'sales_manager', 'service_manager']
+
+function generateTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+  let pw = ''
+  for (let i = 0; i < 12; i++) {
+    pw += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return pw + '!'
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -43,7 +54,7 @@ Deno.serve(async (req) => {
       .eq('id', caller.id)
       .single()
 
-    if (!callerProfile || !['admin', 'manager'].includes(callerProfile.role)) {
+    if (!callerProfile || !ALLOWED_ROLES.includes(callerProfile.role)) {
       return new Response(JSON.stringify({ error: 'Only admins and managers can invite users' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -64,38 +75,64 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    // Invite the user
-    const redirectTo = `${req.headers.get('origin') || 'https://quantum-internal.vercel.app'}/login`
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      email,
-      {
-        redirectTo,
-        data: {
-          full_name: name || email.split('@')[0],
-        },
-      },
-    )
+    const isCompanyEmail = email.trim().toLowerCase().endsWith('@quantumadmissions.com')
+    let userId: string | undefined
+    let tempPassword: string | undefined
 
-    if (inviteError) {
-      return new Response(JSON.stringify({ error: inviteError.message }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    if (isCompanyEmail) {
+      // Company email: send invite link (they can also use Google OAuth)
+      const redirectTo = `${req.headers.get('origin') || 'https://quantum-internal.vercel.app'}/login`
+      const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+        email,
+        {
+          redirectTo,
+          data: { full_name: name || email.split('@')[0] },
+        },
+      )
+      if (inviteError) {
+        return new Response(JSON.stringify({ error: inviteError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      userId = inviteData.user?.id
+    } else {
+      // External email: create auth user directly with temp password
+      tempPassword = generateTempPassword()
+      const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
+        email: email.trim(),
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: { full_name: name || email.split('@')[0] },
       })
+      if (createError) {
+        return new Response(JSON.stringify({ error: createError.message }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+      userId = createData.user?.id
     }
 
-    // Pre-create profile for the invited user
-    if (inviteData.user) {
+    // Pre-create profile for the user
+    if (userId) {
+      const isExternal = !isCompanyEmail
       await adminClient.from('profiles').upsert({
-        id: inviteData.user.id,
-        email,
+        id: userId,
+        email: email.trim(),
         name: name || email.split('@')[0],
-        role: role || 'staff',
-        is_external: false,
+        role: role || (isExternal ? 'external' : 'consultant'),
+        is_external: isExternal,
       }, { onConflict: 'id' })
     }
 
+    const result: Record<string, unknown> = { success: true, userId }
+    if (tempPassword) {
+      result.tempPassword = tempPassword
+    }
+
     return new Response(
-      JSON.stringify({ success: true, userId: inviteData.user?.id }),
+      JSON.stringify(result),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   } catch (err) {
