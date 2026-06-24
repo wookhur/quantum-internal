@@ -331,37 +331,32 @@ export function AttendancePage() {
     return entries
   }, [totalHoursByProfile, profileName, selectedProfile])
 
-  // Weekly hours per employee
+  // Weekly hours per employee — current week only
   const weeklyHoursSummary = useMemo(() => {
-    const weekMap = new Map<string, Map<string, number>>() // weekKey -> profileId -> mins
-    const weekLabels = new Map<string, string>()
+    const currentWeekKey = getWeekKey(new Date().toISOString().slice(0, 10))
+    const profileMap = new Map<string, number>()
+    let weekLabel = ''
     for (const a of attendances) {
       if (!a.clockIn || !a.clockOut) continue
+      if (getWeekKey(a.date) !== currentWeekKey) continue
+      if (!weekLabel) weekLabel = getWeekLabel(a.date)
       const [h1, m1] = a.clockIn.split(':').map(Number)
       const [h2, m2] = a.clockOut.split(':').map(Number)
       const mins = (h2 * 60 + m2) - (h1 * 60 + m1)
-      if (mins <= 0) continue
-      const wk = getWeekKey(a.date)
-      if (!weekMap.has(wk)) weekMap.set(wk, new Map())
-      weekLabels.set(wk, getWeekLabel(a.date))
-      const profileMap = weekMap.get(wk)!
-      profileMap.set(a.profileId, (profileMap.get(a.profileId) || 0) + mins)
+      if (mins > 0) profileMap.set(a.profileId, (profileMap.get(a.profileId) || 0) + mins)
     }
-    const weeks = Array.from(weekMap.keys()).sort()
-    return weeks.map(wk => {
-      const profileMap = weekMap.get(wk)!
-      const entries = Array.from(profileMap.entries())
-        .map(([pid, totalMins]) => ({
-          profileId: pid,
-          name: profileName(pid),
-          totalMins,
-          hours: Math.floor(totalMins / 60),
-          mins: totalMins % 60,
-        }))
-        .filter(e => selectedProfile === 'all' || e.profileId === selectedProfile)
-      entries.sort((a, b) => b.totalMins - a.totalMins)
-      return { weekKey: wk, label: weekLabels.get(wk)!, entries }
-    }).filter(w => w.entries.length > 0)
+    if (profileMap.size === 0) return []
+    const entries = Array.from(profileMap.entries())
+      .map(([pid, totalMins]) => ({
+        profileId: pid,
+        name: profileName(pid),
+        totalMins,
+        hours: Math.floor(totalMins / 60),
+        mins: totalMins % 60,
+      }))
+      .filter(e => selectedProfile === 'all' || e.profileId === selectedProfile)
+    entries.sort((a, b) => b.totalMins - a.totalMins)
+    return entries.length > 0 ? [{ weekKey: currentWeekKey, label: weekLabel, entries }] : []
   }, [attendances, profileName, selectedProfile])
 
   return (
