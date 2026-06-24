@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   FileText, Plus, Trash2, Download, CheckCircle2, XCircle,
-  Eye, Loader2, Search,
+  Eye, Loader2, Search, Upload,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -59,6 +59,86 @@ function getMonthOptions() {
   return months
 }
 
+// ─── Excel Upload Parser ──────────────────────────────────────────────────
+
+interface ParsedInvoice {
+  invoiceDate: string
+  residentNumber: string
+  phone: string
+  email: string
+  bankAccount: string
+  items: ItemRow[]
+}
+
+async function parseInvoiceExcel(file: File): Promise<ParsedInvoice> {
+  const { default: ExcelJS } = await import('exceljs')
+  const wb = new ExcelJS.Workbook()
+  const buf = await file.arrayBuffer()
+  await wb.xlsx.load(buf)
+
+  const ws = wb.worksheets[0]
+  if (!ws) throw new Error('시트를 찾을 수 없습니다')
+
+  const cell = (r: number, c: number) => {
+    const v = ws.getCell(r, c).value
+    if (v === null || v === undefined) return ''
+    if (typeof v === 'object' && 'result' in v) return String(v.result ?? '')
+    return String(v)
+  }
+  const num = (r: number, c: number) => {
+    const v = ws.getCell(r, c).value
+    if (v === null || v === undefined) return 0
+    if (typeof v === 'object' && 'result' in v) return Number(v.result) || 0
+    return Number(v) || 0
+  }
+
+  // Parse date from row 8 col C/D area
+  let invoiceDate = ''
+  const dateRaw = cell(8, 3) || cell(8, 4)
+  if (dateRaw) {
+    const d = new Date(dateRaw)
+    if (!isNaN(d.getTime())) invoiceDate = d.toISOString().slice(0, 10)
+    else invoiceDate = dateRaw
+  }
+
+  // Parse personal info
+  const residentNumber = cell(9, 8) || cell(9, 7)
+  const phone = cell(10, 6) || cell(10, 7)
+  const email = cell(11, 6) || cell(11, 7)
+  const bankAccount = cell(21, 2) || cell(21, 3) || cell(22, 2)
+
+  // Parse items from rows 15-19 (B=No, C=품명, D=수량, E=단가, F=공급가액, G=비고)
+  const items: ItemRow[] = []
+  for (let row = 15; row <= 24; row++) {
+    const itemName = cell(row, 3)
+    if (!itemName || itemName === '합     계' || itemName === '합계') break
+    items.push({
+      itemName,
+      quantity: num(row, 4) || 1,
+      unitPrice: num(row, 5),
+      remark: cell(row, 7),
+    })
+  }
+
+  if (items.length === 0) {
+    // Fallback: try to find items by scanning for non-empty itemName cells
+    for (let row = 1; row <= ws.rowCount; row++) {
+      const noVal = num(row, 2)
+      const name = cell(row, 3)
+      if (noVal >= 1 && name && name !== '품명' && name !== 'No.') {
+        items.push({
+          itemName: name,
+          quantity: num(row, 4) || 1,
+          unitPrice: num(row, 5),
+          remark: cell(row, 7),
+        })
+      }
+    }
+  }
+
+  return { invoiceDate, residentNumber, phone, email, bankAccount, items: items.length > 0 ? items : [emptyItem()] }
+}
+
 // ─── Item Row for Invoice Form ────────────────────────────────────────────
 
 interface ItemRow {
@@ -80,27 +160,31 @@ function InvoiceFormDialog({
   invoice,
   existingItems,
   userId,
+  initialData,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   invoice?: FreelancerInvoice
   existingItems?: InvoiceItem[]
   userId: string
+  initialData?: ParsedInvoice
 }) {
   const t = useT()
   const createInvoice = useCreateInvoice()
   const updateInvoice = useUpdateInvoice()
 
-  const [invoiceDate, setInvoiceDate] = useState(invoice?.invoiceDate || new Date().toISOString().slice(0, 10))
+  const [invoiceDate, setInvoiceDate] = useState(initialData?.invoiceDate || invoice?.invoiceDate || new Date().toISOString().slice(0, 10))
   const [invoiceMonth, setInvoiceMonth] = useState(invoice?.invoiceMonth || getCurrentMonth())
-  const [residentNumber, setResidentNumber] = useState(invoice?.residentNumber || '')
-  const [phone, setPhone] = useState(invoice?.phone || '')
-  const [bankAccount, setBankAccount] = useState(invoice?.bankAccount || '')
+  const [residentNumber, setResidentNumber] = useState(initialData?.residentNumber || invoice?.residentNumber || '')
+  const [phone, setPhone] = useState(initialData?.phone || invoice?.phone || '')
+  const [bankAccount, setBankAccount] = useState(initialData?.bankAccount || invoice?.bankAccount || '')
   const [note, setNote] = useState(invoice?.note || '')
   const [items, setItems] = useState<ItemRow[]>(
-    existingItems?.length
-      ? existingItems.map(it => ({ itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice, remark: it.remark || '' }))
-      : [emptyItem()],
+    initialData?.items?.length
+      ? initialData.items
+      : existingItems?.length
+        ? existingItems.map(it => ({ itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice, remark: it.remark || '' }))
+        : [emptyItem()],
   )
   const [saving, setSaving] = useState(false)
 
@@ -468,6 +552,8 @@ export function FreelancerInvoicesPage() {
   const [editInvoice, setEditInvoice] = useState<FreelancerInvoice | undefined>()
   const [detailInvoice, setDetailInvoice] = useState<FreelancerInvoice | undefined>()
   const [exporting, setExporting] = useState(false)
+  const [uploadedData, setUploadedData] = useState<ParsedInvoice | undefined>()
+  const [uploading, setUploading] = useState(false)
 
   const { data: editItems } = useInvoiceItems(editInvoice?.id)
 
@@ -507,6 +593,23 @@ export function FreelancerInvoicesPage() {
     }
   }
 
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setUploading(true)
+    try {
+      const parsed = await parseInvoiceExcel(file)
+      setUploadedData(parsed)
+      setEditInvoice(undefined)
+      setFormOpen(true)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '파일을 읽을 수 없습니다')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -522,10 +625,22 @@ export function FreelancerInvoicesPage() {
             </Button>
           )}
           {(isFreelancer || isAdmin) && (
-            <Button size="sm" className="gap-1.5" onClick={() => { setEditInvoice(undefined); setFormOpen(true) }}>
-              <Plus className="size-4" />
-              {t('fInvoice.create')}
-            </Button>
+            <>
+              <Button variant="outline" size="sm" className="gap-1.5 relative" disabled={uploading}>
+                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                엑셀 업로드
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  onChange={handleUpload}
+                />
+              </Button>
+              <Button size="sm" className="gap-1.5" onClick={() => { setEditInvoice(undefined); setUploadedData(undefined); setFormOpen(true) }}>
+                <Plus className="size-4" />
+                {t('fInvoice.create')}
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -649,10 +764,11 @@ export function FreelancerInvoicesPage() {
       {formOpen && user && (
         <InvoiceFormDialog
           open={formOpen}
-          onOpenChange={setFormOpen}
+          onOpenChange={open => { setFormOpen(open); if (!open) setUploadedData(undefined) }}
           invoice={editInvoice}
           existingItems={editItems || undefined}
           userId={editInvoice?.freelancerId || user.id}
+          initialData={uploadedData}
         />
       )}
 
