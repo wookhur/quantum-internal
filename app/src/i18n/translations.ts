@@ -2314,6 +2314,14 @@ const koTranslations = {
   'game.2048.moveHint': '이동',
   'game.2048.restartHint': '다시 시작',
   'game.2048.newGame': '새 게임',
+  'game.fps.start': '클릭하여 시작',
+  'game.fps.gameOver': 'GAME OVER',
+  'game.fps.restart': 'R키를 눌러 다시 시작',
+  'game.fps.wave': '웨이브',
+  'game.fps.hp': 'HP',
+  'game.fps.moveHint': '이동',
+  'game.fps.aimHint': '조준',
+  'game.fps.shootHint': '발사',
 } as const
 
 const enTranslations: Record<string, string> = {
@@ -4630,6 +4638,14 @@ const enTranslations: Record<string, string> = {
   'game.2048.moveHint': 'Move tiles',
   'game.2048.restartHint': 'Restart',
   'game.2048.newGame': 'New Game',
+  'game.fps.start': 'Click to start',
+  'game.fps.gameOver': 'GAME OVER',
+  'game.fps.restart': 'Press R to restart',
+  'game.fps.wave': 'Wave',
+  'game.fps.hp': 'HP',
+  'game.fps.moveHint': 'Move',
+  'game.fps.aimHint': 'Aim',
+  'game.fps.shootHint': 'Shoot',
 }
 
 export type TranslationKeys = keyof typeof koTranslations
