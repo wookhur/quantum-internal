@@ -3,13 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Trophy, Gamepad2, Loader2, Bird, Grid3X3, Crosshair, Skull } from 'lucide-react'
+import { Trophy, Gamepad2, Loader2, Bird, Grid3X3, Skull } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import { useGameLeaderboard, useSubmitScore } from '@/hooks/useGameLeaderboard'
 import { FlappyCanvas, FlappyInfo } from './FlappyGame'
 import { Game2048Canvas, Game2048Info } from './Game2048'
-import { FPSCanvas, FPSInfo } from './GameFPS'
 import { ZombieCanvas, ZombieInfo } from './GameZombie'
 
 // ─── T-Rex Dino Runner (pure canvas) ───
@@ -357,7 +356,7 @@ function Leaderboard({ game }: { game: string }) {
 
 // ─── Main Page with Tabs ───
 
-type GameTab = 'trex' | 'flappy' | '2048' | 'fps' | 'zombie'
+type GameTab = 'trex' | 'flappy' | '2048' | 'zombie'
 
 export function GamePage() {
   const t = useT()
@@ -365,7 +364,6 @@ export function GamePage() {
   const [trexScore, setTrexScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
   const [flappyScore, setFlappyScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
   const [score2048, setScore2048] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
-  const [fpsScore, setFpsScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
   const [zombieScore, setZombieScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
   const { user } = useAuth()
   const submitScore = useSubmitScore()
@@ -383,11 +381,6 @@ export function GamePage() {
   const handle2048Over = useCallback((score: number) => {
     setScore2048(prev => ({ last: score, hi: Math.max(prev.hi, score) }))
     if (user && score > 0) submitScore.mutate({ userId: user.id, score, game: '2048' })
-  }, [user, submitScore])
-
-  const handleFpsOver = useCallback((score: number) => {
-    setFpsScore(prev => ({ last: score, hi: Math.max(prev.hi, score) }))
-    if (user && score > 0) submitScore.mutate({ userId: user.id, score, game: 'fps' })
   }, [user, submitScore])
 
   const handleZombieOver = useCallback((score: number) => {
@@ -428,13 +421,6 @@ export function GamePage() {
           <Grid3X3 className="size-4" /> 2048
         </Button>
         <Button
-          variant={activeGame === 'fps' ? 'default' : 'outline'}
-          className="gap-2"
-          onClick={() => setActiveGame('fps')}
-        >
-          <Crosshair className="size-4" /> FPS Arena
-        </Button>
-        <Button
           variant={activeGame === 'zombie' ? 'default' : 'outline'}
           className="gap-2"
           onClick={() => setActiveGame('zombie')}
@@ -454,8 +440,6 @@ export function GamePage() {
                 <FlappyCanvas onGameOver={handleFlappyOver} />
               ) : activeGame === '2048' ? (
                 <Game2048Canvas onGameOver={handle2048Over} />
-              ) : activeGame === 'fps' ? (
-                <FPSCanvas onGameOver={handleFpsOver} />
               ) : (
                 <ZombieCanvas onGameOver={handleZombieOver} />
               )}
@@ -492,8 +476,6 @@ export function GamePage() {
             <FlappyInfo lastScore={flappyScore.last} highScore={flappyScore.hi} />
           ) : activeGame === '2048' ? (
             <Game2048Info score={score2048.last} bestScore={score2048.hi} />
-          ) : activeGame === 'fps' ? (
-            <FPSInfo score={fpsScore.last} bestScore={fpsScore.hi} />
           ) : (
             <ZombieInfo score={zombieScore.last} bestScore={zombieScore.hi} />
           )}
