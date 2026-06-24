@@ -2322,6 +2322,17 @@ const koTranslations = {
   'game.fps.moveHint': '이동',
   'game.fps.aimHint': '조준',
   'game.fps.shootHint': '발사',
+  'game.zombie.start': '클릭하여 시작',
+  'game.zombie.controls': 'WASD / 방향키로 이동 | 아이템을 주워 생존하세요!',
+  'game.zombie.gameOver': 'GAME OVER',
+  'game.zombie.restart': 'R키를 눌러 다시 시작',
+  'game.zombie.time': '시간',
+  'game.zombie.zombies': '좀비',
+  'game.zombie.moveHint': '이동하여 좀비를 피하세요',
+  'game.zombie.healDesc': '체력 회복',
+  'game.zombie.speedDesc': '속도 부스트',
+  'game.zombie.shieldDesc': '데미지 감소',
+  'game.zombie.bombDesc': '주변 좀비 제거',
 } as const
 
 const enTranslations: Record<string, string> = {
@@ -4646,6 +4657,17 @@ const enTranslations: Record<string, string> = {
   'game.fps.moveHint': 'Move',
   'game.fps.aimHint': 'Aim',
   'game.fps.shootHint': 'Shoot',
+  'game.zombie.start': 'Click to start',
+  'game.zombie.controls': 'WASD / Arrow keys to move | Collect items to survive!',
+  'game.zombie.gameOver': 'GAME OVER',
+  'game.zombie.restart': 'Press R to restart',
+  'game.zombie.time': 'Time',
+  'game.zombie.zombies': 'Zombies',
+  'game.zombie.moveHint': 'Move to dodge zombies',
+  'game.zombie.healDesc': 'Heal HP',
+  'game.zombie.speedDesc': 'Speed boost',
+  'game.zombie.shieldDesc': 'Reduce damage',
+  'game.zombie.bombDesc': 'Kill nearby zombies',
 }
 
 export type TranslationKeys = keyof typeof koTranslations
