@@ -7,19 +7,19 @@ const KWAK_JISOO_ID = '1a80e844-703e-41d2-87e7-763a5ea06343'
 export type OrderStatus = 'requested' | 'ordered' | 'delivered' | 'rejected'
 export type OrderCategory = 'office' | 'snack' | 'equipment' | 'living' | 'other'
 
-export const ORDER_CATEGORIES: { key: OrderCategory; label: string }[] = [
-  { key: 'office', label: '사무용품' },
-  { key: 'snack', label: '간식/음료' },
-  { key: 'equipment', label: '장비/전자기기' },
-  { key: 'living', label: '생활용품' },
-  { key: 'other', label: '기타' },
+export const ORDER_CATEGORIES: { key: OrderCategory; labelKey: string }[] = [
+  { key: 'office', labelKey: 'coupang.categoryOffice' },
+  { key: 'snack', labelKey: 'coupang.categorySnack' },
+  { key: 'equipment', labelKey: 'coupang.categoryEquipment' },
+  { key: 'living', labelKey: 'coupang.categoryLiving' },
+  { key: 'other', labelKey: 'coupang.categoryOther' },
 ]
 
-export const ORDER_STATUS_CONFIG: Record<OrderStatus, { label: string; className: string }> = {
-  requested: { label: '요청됨', className: 'bg-amber-100 text-amber-700' },
-  ordered: { label: '주문완료', className: 'bg-blue-100 text-blue-700' },
-  delivered: { label: '배송완료', className: 'bg-emerald-100 text-emerald-700' },
-  rejected: { label: '반려', className: 'bg-red-100 text-red-700' },
+export const ORDER_STATUS_CONFIG: Record<OrderStatus, { labelKey: string; className: string }> = {
+  requested: { labelKey: 'coupang.statusRequested', className: 'bg-amber-100 text-amber-700' },
+  ordered: { labelKey: 'coupang.statusOrdered', className: 'bg-blue-100 text-blue-700' },
+  delivered: { labelKey: 'coupang.statusDelivered', className: 'bg-emerald-100 text-emerald-700' },
+  rejected: { labelKey: 'coupang.statusRejected', className: 'bg-red-100 text-red-700' },
 }
 
 export interface CoupangOrder {

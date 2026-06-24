@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
+  const t = useT()
   const [step, setStep] = useState<Step>('upload')
   const [fileName, setFileName] = useState('')
   const [extractStatus, setExtractStatus] = useState('')
@@ -74,7 +76,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
 
   const processFile = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
-      setErrorMessage('PDF 파일만 업로드할 수 있습니다.')
+      setErrorMessage(t('contractPdf.onlyPdf'))
       setStep('error')
       return
     }
@@ -84,21 +86,21 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
 
     try {
       // Step 1: Try text extraction first
-      setExtractStatus('PDF에서 텍스트 추출 중...')
+      setExtractStatus(t('contractPdf.extractingText'))
       const text = await extractTextFromPdf(file)
 
       let extracted: ExtractedContractData
 
       if (text.trim().length >= 30) {
         // Text-based PDF — use text extraction
-        setExtractStatus('AI로 계약 정보 분석 중...')
+        setExtractStatus(t('contractPdf.analyzingAi'))
         extracted = await extractContractFields(text)
       } else {
         // Scanned/image PDF — render pages to images and use Vision API
-        setExtractStatus('스캔된 PDF 감지 — 이미지 변환 중...')
+        setExtractStatus(t('contractPdf.scannedDetected'))
         const images = await renderPdfPagesToImages(file, 3, 1.5)
 
-        setExtractStatus('AI Vision으로 계약 정보 분석 중...')
+        setExtractStatus(t('contractPdf.visionAnalyzing'))
         extracted = await extractContractFieldsFromImages(images)
       }
 
@@ -122,7 +124,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
 
       setStep('review')
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+      setErrorMessage(err instanceof Error ? err.message : t('contractPdf.unknownError'))
       setStep('error')
     }
   }, [])
@@ -174,7 +176,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
         setTimeout(() => handleClose(false), 1500)
       },
       onError: (err) => {
-        setErrorMessage(err instanceof Error ? err.message : '저장 실패')
+        setErrorMessage(err instanceof Error ? err.message : t('contractPdf.saveFailed'))
         setStep('error')
       },
     })
@@ -194,12 +196,12 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
       <DialogContent className={step === 'review' ? 'max-w-2xl' : 'max-w-md'}>
         <DialogHeader>
           <DialogTitle>
-            {step === 'upload' && '계약서 PDF 업로드'}
-            {step === 'extracting' && '계약서 분석 중'}
-            {step === 'review' && '추출된 계약 정보 확인'}
-            {step === 'saving' && '저장 중...'}
-            {step === 'done' && '완료'}
-            {step === 'error' && '오류'}
+            {step === 'upload' && t('contractPdf.title')}
+            {step === 'extracting' && t('contractPdf.analyzing')}
+            {step === 'review' && t('contractPdf.reviewTitle')}
+            {step === 'saving' && t('contractPdf.saving')}
+            {step === 'done' && t('contractPdf.done')}
+            {step === 'error' && t('contractPdf.error')}
           </DialogTitle>
         </DialogHeader>
 
@@ -213,10 +215,10 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
           >
             <Upload className="size-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm font-medium mb-1">
-              계약서 PDF를 드래그하거나 클릭하여 업로드
+              {t('contractPdf.dragOrClick')}
             </p>
             <p className="text-xs text-muted-foreground">
-              PDF 파일만 지원됩니다
+              {t('contractPdf.pdfOnly')}
             </p>
             <input
               ref={fileInputRef}
@@ -244,14 +246,14 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
           <div className="space-y-4 pt-2 max-h-[70vh] overflow-y-auto">
             <div className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-xs text-muted-foreground">
               <FileText className="size-4 shrink-0" />
-              <span>{fileName} — AI가 추출한 정보를 확인하고 수정하세요</span>
+              <span>{t('contractPdf.reviewNote').replace('{fileName}', fileName)}</span>
             </div>
 
             {/* Required fields */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">
-                  계약자(학부모)명 <span className="text-destructive">*</span>
+                  {t('contractPdf.contractorName')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.contractorName || ''}
@@ -261,7 +263,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">
-                  학생명 <span className="text-destructive">*</span>
+                  {t('contractPdf.studentName')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.studentName || ''}
@@ -274,7 +276,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">
-                  학교명 <span className="text-destructive">*</span>
+                  {t('contractPdf.schoolName')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   value={form.schoolName || ''}
@@ -283,7 +285,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">학년</Label>
+                <Label className="text-xs">{t('contractPdf.grade')}</Label>
                 <Input
                   value={form.gradeAtContract || ''}
                   onChange={(e) => updateField('gradeAtContract', e.target.value || null)}
@@ -294,7 +296,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">
-                  계약일 <span className="text-destructive">*</span>
+                  {t('contractPdf.contractDate')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   type="date"
@@ -305,7 +307,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">
-                  만료일 <span className="text-destructive">*</span>
+                  {t('contractPdf.expiryDate')} <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   type="date"
@@ -319,7 +321,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
             {/* Optional fields */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs">연락처</Label>
+                <Label className="text-xs">{t('contractPdf.phone')}</Label>
                 <Input
                   value={form.phone || ''}
                   onChange={(e) => updateField('phone', e.target.value || null)}
@@ -327,7 +329,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">주소</Label>
+                <Label className="text-xs">{t('contractPdf.address')}</Label>
                 <Input
                   value={form.address || ''}
                   onChange={(e) => updateField('address', e.target.value || null)}
@@ -337,7 +339,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs">계약 금액</Label>
+                <Label className="text-xs">{t('contractPdf.totalAmount')}</Label>
                 <Input
                   type="number"
                   value={form.totalAmount ?? ''}
@@ -347,13 +349,13 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">통화</Label>
+                <Label className="text-xs">{t('contractPdf.currency')}</Label>
                 <Select
                   value={form.currency || ''}
                   onValueChange={(v) => updateField('currency', (v as 'KRW' | 'USD') || null)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="선택" />
+                    <SelectValue placeholder={t('contractPdf.selectPlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="KRW">KRW (원)</SelectItem>
@@ -362,24 +364,24 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">입금 계좌</Label>
+                <Label className="text-xs">{t('contractPdf.paymentAccount')}</Label>
                 <Select
                   value={form.paymentAccount || ''}
                   onValueChange={(v) => updateField('paymentAccount', (v as 'KR' | 'US') || null)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="선택" />
+                    <SelectValue placeholder={t('contractPdf.selectPlaceholder')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="KR">한국 계좌</SelectItem>
-                    <SelectItem value="US">미국 계좌</SelectItem>
+                    <SelectItem value="KR">{t('contractPdf.accountKR')}</SelectItem>
+                    <SelectItem value="US">{t('contractPdf.accountUS')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">메모/특이사항</Label>
+              <Label className="text-xs">{t('contractPdf.memoNotes')}</Label>
               <Textarea
                 value={form.notes || ''}
                 onChange={(e) => updateField('notes', e.target.value || null)}
@@ -391,7 +393,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
             {/* Installment Schedule */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium">납입 일정</Label>
+                <Label className="text-xs font-medium">{t('contractPdf.installmentSchedule')}</Label>
                 <Button
                   type="button"
                   variant="ghost"
@@ -399,12 +401,12 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
                   className="h-6 text-xs gap-1"
                   onClick={() => setInstallmentRows(rows => [...rows, { label: '', amount: '', dueDate: '' }])}
                 >
-                  <Plus className="size-3" /> 추가
+                  <Plus className="size-3" /> {t('contractPdf.addRow')}
                 </Button>
               </div>
               <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
                 <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-[10px] text-muted-foreground font-medium px-0.5">
-                  <span>항목명</span><span>금액</span><span>납입일</span><span className="w-7" />
+                  <span>{t('contractPdf.colLabel')}</span><span>{t('contractPdf.colAmount')}</span><span>{t('contractPdf.colDueDate')}</span><span className="w-7" />
                 </div>
                 {installmentRows.map((row, idx) => (
                   <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
@@ -458,13 +460,13 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
                   return (
                     <>
                       <div className="text-[11px] text-muted-foreground pt-1 text-right">
-                        납입 합계: {formatCurrency(instTotal, curr)}
+                        {t('contractPdf.installmentTotal')}: {formatCurrency(instTotal, curr)}
                       </div>
                       {mismatch && (
                         <div className="flex items-center gap-1.5 mt-2 p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-[11px]">
                           <AlertCircle className="size-3.5 shrink-0" />
                           <span>
-                            납입 일정 합계({formatCurrency(instTotal, curr)})가 계약 금액({formatCurrency(form.totalAmount!, curr)})과 일치하지 않습니다.
+                            {t('contractPdf.mismatchWarning').replace('{instTotal}', formatCurrency(instTotal, curr)).replace('{total}', formatCurrency(form.totalAmount!, curr))}
                           </span>
                         </div>
                       )}
@@ -476,14 +478,14 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
 
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => handleClose(false)}>
-                취소
+                {t('contractPdf.cancel')}
               </Button>
               <Button
                 className="flex-1"
                 onClick={handleSave}
                 disabled={isRequiredMissing}
               >
-                계약 저장
+                {t('contractPdf.saveContract')}
               </Button>
             </div>
           </div>
@@ -493,7 +495,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
         {step === 'saving' && (
           <div className="flex flex-col items-center py-10 gap-3">
             <Loader2 className="size-8 animate-spin text-primary" />
-            <p className="text-sm">계약 정보를 저장하는 중...</p>
+            <p className="text-sm">{t('contractPdf.savingContract')}</p>
           </div>
         )}
 
@@ -501,7 +503,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
         {step === 'done' && (
           <div className="flex flex-col items-center py-10 gap-3">
             <CheckCircle2 className="size-10 text-emerald-500" />
-            <p className="text-sm font-medium">계약이 성공적으로 저장되었습니다!</p>
+            <p className="text-sm font-medium">{t('contractPdf.savedSuccess')}</p>
           </div>
         )}
 
@@ -511,7 +513,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
             <AlertCircle className="size-10 text-destructive" />
             <p className="text-sm text-center text-destructive">{errorMessage}</p>
             <Button variant="outline" onClick={reset}>
-              다시 시도
+              {t('contractPdf.retry')}
             </Button>
           </div>
         )}

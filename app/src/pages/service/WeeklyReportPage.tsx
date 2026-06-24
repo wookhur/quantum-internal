@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Printer } from 'lucide-react'
+import { useT } from '@/i18n/LanguageContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings, useAllServiceFollowupsInRange, useAllServiceDiaryInRange } from '@/hooks/useServiceDashboard'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
@@ -38,14 +39,15 @@ function pct(num: number, den: number): string {
   return `${Math.round((num / den) * 100)}%`
 }
 
-const CANCEL_BY_LABEL: Record<string, string> = {
-  client: '고객',
-  consultant: '컨설턴트',
-  other: '기타',
-  unknown: '미기입',
+const CANCEL_BY_LABEL_KEYS: Record<string, string> = {
+  client: 'weeklyReport.cancelByClient',
+  consultant: 'weeklyReport.cancelByConsultant',
+  other: 'weeklyReport.cancelByOther',
+  unknown: 'weeklyReport.cancelByUnknown',
 }
 
 export function WeeklyReportPage() {
+  const t = useT()
   const init = currentWeekRange()
   const [start, setStart] = useState(init.start)
   const [end, setEnd] = useState(init.end)
@@ -97,7 +99,7 @@ export function WeeklyReportPage() {
   const { rows, totals, cancelDist } = useMemo(() => {
     const buckets: { id: string; name: string }[] = [
       ...CONSULTANTS.map(c => ({ id: c.id, name: c.name })),
-      { id: OTHER_ID, name: '기타 · 미배정' },
+      { id: OTHER_ID, name: t('weeklyReport.otherUnassigned') },
     ]
 
     const rows: QcRow[] = buckets.map(b => {
@@ -151,14 +153,14 @@ export function WeeklyReportPage() {
 
       <div className="flex items-center justify-between gap-3 mb-5 no-print flex-wrap">
         <h1 className="text-xl font-semibold flex items-center gap-2">
-          Service QC · 주간보고서
+          {t('weeklyReport.title')}
         </h1>
         <div className="flex items-center gap-2 text-sm">
           <Input type="date" value={start} onChange={e => setStart(e.target.value)} className="w-auto" />
           <span className="text-muted-foreground">→</span>
           <Input type="date" value={end} onChange={e => setEnd(e.target.value)} className="w-auto" />
           <Button onClick={() => window.print()} className="gap-1.5">
-            <Printer className="size-4" /> PDF로 출력
+            <Printer className="size-4" /> {t('weeklyReport.printBtn')}
           </Button>
         </div>
       </div>
@@ -166,30 +168,30 @@ export function WeeklyReportPage() {
       <div id="qc-report">
         <div className="hidden print:block mb-4">
           <div className="text-lg font-semibold tracking-wide">QUANTUM ADMISSIONS</div>
-          <div className="text-sm text-gray-500">Service QC · 주간 품질관리 보고서</div>
+          <div className="text-sm text-gray-500">{t('weeklyReport.printTitle')}</div>
         </div>
-        <div className="text-sm text-gray-500 mb-4">기간: {start} ~ {end}</div>
+        <div className="text-sm text-gray-500 mb-4">{t('weeklyReport.period', { start, end })}</div>
 
         <div className="grid grid-cols-4 gap-3 mb-5">
           <div className="rounded-md bg-gray-50 p-3">
-            <div className="text-xs text-gray-500">미팅 준수율</div>
+            <div className="text-xs text-gray-500">{t('weeklyReport.meetingCompliance')}</div>
             <div className="text-2xl font-semibold text-emerald-600">{pct(totals.held, totals.expected)}</div>
-            <div className="text-[11px] text-gray-400">진행 {totals.held} / 예정 {totals.expected}</div>
+            <div className="text-[11px] text-gray-400">{t('weeklyReport.meetingComplianceDetail', { held: String(totals.held), expected: String(totals.expected) })}</div>
           </div>
           <div className="rounded-md bg-gray-50 p-3">
-            <div className="text-xs text-gray-500">취소 · 노쇼</div>
+            <div className="text-xs text-gray-500">{t('weeklyReport.cancelNoShow')}</div>
             <div className="text-2xl font-semibold text-red-600">{cancelTotal}</div>
-            <div className="text-[11px] text-gray-400">취소 {totals.cancelled} · 노쇼 {totals.noShow}</div>
+            <div className="text-[11px] text-gray-400">{t('weeklyReport.cancelNoShowDetail', { cancelled: String(totals.cancelled), noShow: String(totals.noShow) })}</div>
           </div>
           <div className="rounded-md bg-gray-50 p-3">
-            <div className="text-xs text-gray-500">리포트 제출률</div>
+            <div className="text-xs text-gray-500">{t('weeklyReport.reportSubmission')}</div>
             <div className="text-2xl font-semibold text-amber-600">{pct(totals.reportSubmitted, totals.held)}</div>
-            <div className="text-[11px] text-gray-400">제출 {totals.reportSubmitted} / 진행 {totals.held}</div>
+            <div className="text-[11px] text-gray-400">{t('weeklyReport.reportSubmissionDetail', { submitted: String(totals.reportSubmitted), held: String(totals.held) })}</div>
           </div>
           <div className="rounded-md bg-gray-50 p-3">
-            <div className="text-xs text-gray-500">Follow-up 이행률</div>
+            <div className="text-xs text-gray-500">{t('weeklyReport.followUpRate')}</div>
             <div className="text-2xl font-semibold text-amber-600">{pct(totals.fuDone, totals.fuTotal)}</div>
-            <div className="text-[11px] text-gray-400">완료 {totals.fuDone} / 총 {totals.fuTotal}</div>
+            <div className="text-[11px] text-gray-400">{t('weeklyReport.followUpRateDetail', { done: String(totals.fuDone), total: String(totals.fuTotal) })}</div>
           </div>
         </div>
 
@@ -197,15 +199,15 @@ export function WeeklyReportPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-right">
-                <th className="text-left font-medium p-2 pl-3">컨설턴트</th>
-                <th className="font-medium p-2">학생</th>
-                <th className="font-medium p-2">예정</th>
-                <th className="font-medium p-2">진행</th>
-                <th className="font-medium p-2">취소</th>
-                <th className="font-medium p-2">노쇼</th>
-                <th className="font-medium p-2">준수율</th>
-                <th className="font-medium p-2">리포트</th>
-                <th className="font-medium p-2 pr-3">F/U</th>
+                <th className="text-left font-medium p-2 pl-3">{t('weeklyReport.consultant')}</th>
+                <th className="font-medium p-2">{t('weeklyReport.students')}</th>
+                <th className="font-medium p-2">{t('weeklyReport.scheduled')}</th>
+                <th className="font-medium p-2">{t('weeklyReport.held')}</th>
+                <th className="font-medium p-2">{t('weeklyReport.cancelled')}</th>
+                <th className="font-medium p-2">{t('weeklyReport.noShowCol')}</th>
+                <th className="font-medium p-2">{t('weeklyReport.complianceRate')}</th>
+                <th className="font-medium p-2">{t('weeklyReport.reportCol')}</th>
+                <th className="font-medium p-2 pr-3">{t('weeklyReport.followUpCol')}</th>
               </tr>
             </thead>
             <tbody className="text-right">
@@ -223,11 +225,11 @@ export function WeeklyReportPage() {
                 </tr>
               ))}
               {rows.length === 0 && (
-                <tr><td colSpan={9} className="p-4 text-center text-gray-400">해당 기간 데이터가 없습니다.</td></tr>
+                <tr><td colSpan={9} className="p-4 text-center text-gray-400">{t('weeklyReport.noData')}</td></tr>
               )}
               {rows.length > 0 && (
                 <tr className="border-t-2 bg-gray-50 font-medium">
-                  <td className="text-left p-2 pl-3">전사 합계</td>
+                  <td className="text-left p-2 pl-3">{t('weeklyReport.companyTotal')}</td>
                   <td className="p-2">{totals.students}</td>
                   <td className="p-2">{totals.expected}</td>
                   <td className="p-2">{totals.held}</td>
@@ -243,15 +245,15 @@ export function WeeklyReportPage() {
         </div>
 
         <div className="border rounded-lg p-4">
-          <div className="text-sm font-medium text-gray-600 mb-2">취소 · 노쇼 사유 분포 ({cancelTotal}건)</div>
+          <div className="text-sm font-medium text-gray-600 mb-2">{t('weeklyReport.cancelDistTitle', { count: String(cancelTotal) })}</div>
           {cancelTotal === 0 ? (
-            <div className="text-sm text-gray-400">취소·노쇼가 없습니다.</div>
+            <div className="text-sm text-gray-400">{t('weeklyReport.noCancels')}</div>
           ) : (
             <ul className="text-sm text-gray-600 space-y-1">
               {Object.entries(cancelDist).filter(([, n]) => n > 0).map(([k, n]) => (
                 <li key={k} className="flex justify-between max-w-xs">
-                  <span>{CANCEL_BY_LABEL[k]}</span>
-                  <span>{n}건 · {pct(n, cancelTotal)}</span>
+                  <span>{t(CANCEL_BY_LABEL_KEYS[k])}</span>
+                  <span>{t('weeklyReport.countUnit', { n: String(n), pct: pct(n, cancelTotal) })}</span>
                 </li>
               ))}
             </ul>
@@ -260,9 +262,9 @@ export function WeeklyReportPage() {
 
         {/* Engagement status — EC programs (by consultant) */}
         <div className="border rounded-lg p-4 mt-4">
-          <div className="text-sm font-medium text-gray-600 mb-2">Engagement · EC 프로그램 (컨설턴트별)</div>
+          <div className="text-sm font-medium text-gray-600 mb-2">{t('weeklyReport.ecTitle')}</div>
           {ecByConsultant.length === 0 ? (
-            <div className="text-sm text-gray-400">EC 프로그램이 없습니다.</div>
+            <div className="text-sm text-gray-400">{t('weeklyReport.noEc')}</div>
           ) : (
             <div className="space-y-3">
               {ecByConsultant.map(([cName, items]) => (
@@ -286,7 +288,7 @@ export function WeeklyReportPage() {
         <div className="border rounded-lg p-4 mt-4">
           <div className="text-sm font-medium text-gray-600 mb-2">Risks, Issues &amp; Escalations</div>
           {criticalIssues.length === 0 ? (
-            <div className="text-sm text-gray-400">해당 기간에 보고된 Critical Issue가 없습니다.</div>
+            <div className="text-sm text-gray-400">{t('weeklyReport.noRisks')}</div>
           ) : (
             <ul className="space-y-2">
               {criticalIssues.map((c, i) => (
@@ -302,13 +304,13 @@ export function WeeklyReportPage() {
         {/* Follow-up commitments — completion status */}
         <div className="border rounded-lg p-4 mt-4">
           <div className="text-sm font-medium text-gray-600 mb-2">
-            Follow-up 완료 현황
+            {t('weeklyReport.followUpStatus')}
             {followupStatus.length > 0 && (
-              <span className="ml-1 text-gray-400">({followupStatus.filter(f => f.done).length}/{followupStatus.length} 완료)</span>
+              <span className="ml-1 text-gray-400">({followupStatus.filter(f => f.done).length}/{followupStatus.length} {t('weeklyReport.followUpCompleted')})</span>
             )}
           </div>
           {followupStatus.length === 0 ? (
-            <div className="text-sm text-gray-400">해당 기간에 마감 예정인 follow-up이 없습니다.</div>
+            <div className="text-sm text-gray-400">{t('weeklyReport.noFollowUps')}</div>
           ) : (
             <ul className="space-y-1">
               {followupStatus.map((f, i) => (

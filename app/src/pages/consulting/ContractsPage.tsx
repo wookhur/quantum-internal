@@ -86,11 +86,13 @@ const INITIAL_CONTRACT_FORM = {
   notes: '',
 }
 
-const DEFAULT_INSTALLMENTS: InstallmentRow[] = [
-  { label: '계약금', amount: '', dueDate: '' },
-  { label: '중도금', amount: '', dueDate: '' },
-  { label: '잔금', amount: '', dueDate: '' },
-]
+function getDefaultInstallments(t: (key: string) => string): InstallmentRow[] {
+  return [
+    { label: t('contracts.defaultDeposit'), amount: '', dueDate: '' },
+    { label: t('contracts.defaultInterim'), amount: '', dueDate: '' },
+    { label: t('contracts.defaultBalance'), amount: '', dueDate: '' },
+  ]
+}
 
 export function ContractsPage() {
   const navigate = useNavigate()
@@ -103,7 +105,7 @@ export function ContractsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false)
   const [form, setForm] = useState(INITIAL_CONTRACT_FORM)
-  const [installmentRows, setInstallmentRows] = useState<InstallmentRow[]>(DEFAULT_INSTALLMENTS.map(r => ({ ...r })))
+  const [installmentRows, setInstallmentRows] = useState<InstallmentRow[]>(getDefaultInstallments(t).map(r => ({ ...r })))
   const [expandedContract, setExpandedContract] = useState<string | null>(null)
   const [fromLead, setFromLead] = useState(false)
   const createContract = useCreateContract()
@@ -156,7 +158,7 @@ export function ContractsPage() {
       },
       {
         onError: (err) => {
-          alert(`계약 추가 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`)
+          alert(t('contracts.addFailed', { error: err instanceof Error ? err.message : t('contracts.unknownError') }))
         },
         onSuccess: (data) => {
           // Create installments if any have amount
@@ -174,7 +176,7 @@ export function ContractsPage() {
           }
           setDialogOpen(false)
           setForm(INITIAL_CONTRACT_FORM)
-          setInstallmentRows(DEFAULT_INSTALLMENTS.map(r => ({ ...r })))
+          setInstallmentRows(getDefaultInstallments(t).map(r => ({ ...r })))
           setFromLead(false)
           if (data?.id) navigate(`/consulting/clients/${data.id}`)
         },

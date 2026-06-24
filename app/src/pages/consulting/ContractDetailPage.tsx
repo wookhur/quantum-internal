@@ -80,6 +80,7 @@ function IncentivePersonSelect({
   placeholder: string
   addNewLabel: string
 }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [isAdding, setIsAdding] = useState(false)
@@ -187,7 +188,7 @@ function IncentivePersonSelect({
                 disabled={!newName.trim()}
                 onClick={handleAddNew}
               >
-                확인
+                {t('contractDetail.confirm')}
               </button>
             </div>
           )}
@@ -197,12 +198,15 @@ function IncentivePersonSelect({
   )
 }
 
-const EXTRA_INCENTIVE_OPTIONS = [
-  { key: 'custom', label: '커스텀 비율 설정', pct: 0, needsCustom: true },
-  { key: 'external_fee', label: '서비스 디렉터 인센티브', pct: 1, needsCustom: false },
-  { key: 'external_fee', label: '계약 담당자 인센티브', pct: 3, needsCustom: false },
-  { key: 'external_fee', label: '서비스 매니저 인센티브', pct: 1, needsCustom: false },
-] as const
+function useExtraIncentiveOptions() {
+  const t = useT()
+  return [
+    { key: 'custom', label: t('contractDetail.customRate'), pct: 0, needsCustom: true },
+    { key: 'external_fee', label: t('contractDetail.serviceDirectorIncentive'), pct: 1, needsCustom: false },
+    { key: 'external_fee', label: t('contractDetail.contractManagerIncentive'), pct: 3, needsCustom: false },
+    { key: 'external_fee', label: t('contractDetail.serviceManagerIncentive'), pct: 1, needsCustom: false },
+  ] as const
+}
 
 /** Inline form to add an incentive scoped to a specific extra installment */
 function ExtraIncentiveAddForm({
@@ -219,6 +223,7 @@ function ExtraIncentiveAddForm({
   onAddRecipient: (name: string) => void
 }) {
   const t = useT()
+  const EXTRA_INCENTIVE_OPTIONS = useExtraIncentiveOptions()
   const createIncentive = useCreateIncentive()
   const [form, setForm] = useState({ profileId: '', customName: '', selectedOption: '', customPct: '', customLabel: '' })
 
@@ -261,7 +266,7 @@ function ExtraIncentiveAddForm({
           <div className="w-[100px] space-y-1">
             <Input
               className="h-8 text-xs"
-              placeholder="이름"
+              placeholder={t('contractDetail.namePlaceholder')}
               value={form.customLabel}
               onChange={(e) => setForm(f => ({ ...f, customLabel: e.target.value }))}
             />
@@ -305,7 +310,7 @@ function ExtraIncentiveAddForm({
           }, {
             onSuccess: () => setForm({ profileId: '', customName: '', selectedOption: '', customPct: '', customLabel: '' }),
             onError: (err) => {
-              window.alert(`인센티브 추가 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`)
+              window.alert(`${t('contractDetail.incentiveAddFailed')}: ${err instanceof Error ? err.message : t('contractDetail.unknownError')}`)
             },
           })
         }}
@@ -1253,7 +1258,7 @@ export function ContractDetailPage() {
                         setIncentiveFormKey(k => k + 1)
                       },
                       onError: (err) => {
-                        window.alert(`인센티브 추가 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`)
+                        window.alert(`${t('contractDetail.incentiveAddFailed')}: ${err instanceof Error ? err.message : t('contractDetail.unknownError')}`)
                       },
                     })
                   }}
@@ -1381,7 +1386,7 @@ export function ContractDetailPage() {
               <div className="flex items-center gap-2">
                 <FileText className="size-3.5 text-muted-foreground" />
                 <span className="text-muted-foreground w-24">{t('contracts.applicationCount')}</span>
-                <span className="font-medium">{contract.applicationCount}개</span>
+                <span className="font-medium">{contract.applicationCount}{t('contractDetail.countUnit')}</span>
               </div>
             )}
             {contract.additionalServices && (
@@ -1420,7 +1425,7 @@ export function ContractDetailPage() {
             phase: 'lead',
             badge: t('contracts.leadSourceChannel'),
             badgeColor: 'bg-violet-100 text-violet-700',
-            title: `${linkedLead.sourceChannel || '유입'} → ${linkedLead.interestArea || '관심분야 미입력'}`,
+            title: `${linkedLead.sourceChannel || t('contractDetail.inflow')} → ${linkedLead.interestArea || t('contractDetail.interestNotEntered')}`,
             desc: linkedLead.memo || undefined,
             person: linkedLead.assignedUser,
             link: contract.leadId ? `/sales/leads/${contract.leadId}` : undefined,
@@ -1430,9 +1435,9 @@ export function ContractDetailPage() {
         // 2) Lead activities (calls, notes, consultations, stage changes)
         for (const act of leadActivities) {
           const typeLabels: Record<string, string> = {
-            note: '메모', call: '전화', katalk: '카톡', email: '이메일',
-            meeting: '미팅', consultation: '상담', stage_change: '단계 변경',
-            assignment_change: '담당자 변경', system: '시스템',
+            note: t('contractDetail.activityNote'), call: t('contractDetail.activityCall'), katalk: t('contractDetail.activityKatalk'), email: t('contractDetail.activityEmail'),
+            meeting: t('contractDetail.activityMeeting'), consultation: t('contractDetail.activityConsultation'), stage_change: t('contractDetail.activityStageChange'),
+            assignment_change: t('contractDetail.activityAssignmentChange'), system: t('contractDetail.activitySystem'),
           }
           const typeColors: Record<string, string> = {
             call: 'bg-orange-100 text-orange-700', consultation: 'bg-green-100 text-green-700',
@@ -1457,9 +1462,9 @@ export function ContractDetailPage() {
             id: `smtg-${m.id as string}`,
             date: (m.meeting_date as string) || (m.created_at as string),
             phase: 'sales',
-            badge: `${m.meeting_number || ''}차 상담`,
+            badge: `${m.meeting_number || ''}${t('contractDetail.nthConsultation')}`,
             badgeColor: 'bg-green-100 text-green-700',
-            title: `${m.parent_name}${m.student_name ? ` / ${m.student_name}` : ''} 상담`,
+            title: `${m.parent_name}${m.student_name ? ` / ${m.student_name}` : ''} ${t('contractDetail.consultation')}`,
             desc: typeof m.memo === 'string' ? m.memo : undefined,
             person: m.profiles?.name,
             link: '/sales/meetings',
@@ -1471,9 +1476,9 @@ export function ContractDetailPage() {
           id: `contract-${contract.id}`,
           date: contract.contractDate,
           phase: 'sales',
-          badge: '계약 체결',
+          badge: t('contractDetail.contractSigned'),
           badgeColor: 'bg-emerald-100 text-emerald-700',
-          title: `${contract.contractorName} / ${contract.studentName} 계약`,
+          title: `${contract.contractorName} / ${contract.studentName} ${t('contractDetail.contract')}`,
           desc: contract.totalAmount > 0 ? formatCurrency(contract.totalAmount, contract.currency) : undefined,
         })
 
@@ -1481,14 +1486,14 @@ export function ContractDetailPage() {
         const svcMeetings = serviceData?.meetings || []
         for (const sm of svcMeetings) {
           const consultant = CONSULTANTS[sm.consultant_id as string] || (sm.consultant_id as string) || ''
-          const reportBadge = sm.report_status === 'submitted' ? ' ✓리포트' : sm.report_status === 'pending' ? ' ⏳리포트' : ''
+          const reportBadge = sm.report_status === 'submitted' ? ` ${t('contractDetail.reportSubmitted')}` : sm.report_status === 'pending' ? ` ${t('contractDetail.reportPending')}` : ''
           items.push({
             id: `svc-${sm.id as string}`,
             date: (sm.meeting_date as string) || (sm.created_at as string),
             phase: 'service',
-            badge: `${(sm.meeting_type as string) || '미팅'}${reportBadge}`,
+            badge: `${(sm.meeting_type as string) || t('contractDetail.meetingDefault')}${reportBadge}`,
             badgeColor: 'bg-blue-100 text-blue-700',
-            title: `${contract.studentName} 서비스 미팅`,
+            title: `${contract.studentName} ${t('contractDetail.serviceMeeting')}`,
             desc: typeof sm.summary === 'string' ? sm.summary : undefined,
             person: consultant,
             link: serviceData?.student ? `/service/student-360?student=${serviceData.student.id}` : undefined,
@@ -1503,7 +1508,7 @@ export function ContractDetailPage() {
         if (!hasAnyData && !linkedLead) return null
 
         const phaseColors = { lead: 'border-l-violet-400', sales: 'border-l-green-400', service: 'border-l-blue-400' }
-        const phaseLabels = { lead: '리드/세일즈', sales: '상담/계약', service: '서비스' }
+        const phaseLabels = { lead: t('contractDetail.phaseLead'), sales: t('contractDetail.phaseSales'), service: t('contractDetail.phaseService') }
 
         return (
           <Card>
@@ -1512,7 +1517,7 @@ export function ContractDetailPage() {
                 <Clock className="size-4" />
                 {t('contracts.customerJourney')}
                 <span className="text-muted-foreground font-normal text-xs ml-1">
-                  ({items.length}건)
+                  ({items.length}{t('contractDetail.itemsCount')})
                 </span>
                 {linkedLead && (
                   <Link
@@ -1738,7 +1743,7 @@ export function ContractDetailPage() {
               <Input
                 value={baseForm.label}
                 onChange={(e) => setBaseForm(f => ({ ...f, label: e.target.value }))}
-                placeholder="계약금, 중도금, 잔금 등"
+                placeholder={t('contractDetail.installmentPlaceholder')}
               />
             </div>
             <div className="space-y-2">
@@ -1789,26 +1794,29 @@ export function ContractDetailPage() {
               <Label className="text-xs text-muted-foreground">{t('contracts.quickPresets')}</Label>
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  { label: '대회 참가비', labelEn: 'Competition Fee' },
-                  { label: '리서치 페이퍼', labelEn: 'Research Paper' },
-                  { label: '인턴십 프로그램', labelEn: 'Internship Program' },
-                  { label: 'EC 활동비', labelEn: 'EC Activity Fee' },
-                  { label: '캡스톤 프로젝트', labelEn: 'Capstone Project' },
-                  { label: '에세이 에디팅', labelEn: 'Essay Editing' },
-                ].map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
-                      chargeForm.label === preset.label
-                        ? 'bg-blue-100 border-blue-300 text-blue-700'
-                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                    }`}
-                    onClick={() => setChargeForm(f => ({ ...f, label: preset.label }))}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
+                  { key: 'contractDetail.presetCompetitionFee' },
+                  { key: 'contractDetail.presetResearchPaper' },
+                  { key: 'contractDetail.presetInternship' },
+                  { key: 'contractDetail.presetECActivity' },
+                  { key: 'contractDetail.presetCapstone' },
+                  { key: 'contractDetail.presetEssayEditing' },
+                ].map((preset) => {
+                  const label = t(preset.key)
+                  return (
+                    <button
+                      key={preset.key}
+                      type="button"
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                        chargeForm.label === label
+                          ? 'bg-blue-100 border-blue-300 text-blue-700'
+                          : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                      }`}
+                      onClick={() => setChargeForm(f => ({ ...f, label }))}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -1930,7 +1938,7 @@ export function ContractDetailPage() {
               <Input
                 value={editInstForm.label}
                 onChange={e => setEditInstForm(f => ({ ...f, label: e.target.value }))}
-                placeholder="계약금, 중도금, 잔금 등"
+                placeholder={t('contractDetail.installmentPlaceholder')}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -2152,11 +2160,11 @@ function ContractEditDialog({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.applicationCount')}</Label>
-            <Input type="number" value={form.applicationCount} onChange={e => set('applicationCount', e.target.value)} placeholder="예: 15" />
+            <Input type="number" value={form.applicationCount} onChange={e => set('applicationCount', e.target.value)} placeholder={t('contractDetail.applicationCountPlaceholder')} />
           </div>
           <div className="space-y-1 col-span-2">
             <Label className="text-xs">{t('contracts.additionalServices')}</Label>
-            <Input value={form.additionalServices} onChange={e => set('additionalServices', e.target.value)} placeholder="예: 에세이 첨삭, EC 컨설팅" />
+            <Input value={form.additionalServices} onChange={e => set('additionalServices', e.target.value)} placeholder={t('contractDetail.additionalServicesPlaceholder')} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.contact')}</Label>
@@ -2175,8 +2183,8 @@ function ContractEditDialog({
             <Select value={form.currency} onValueChange={v => set('currency', v || 'KRW')}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="KRW">KRW (원)</SelectItem>
-                <SelectItem value="USD">USD ($)</SelectItem>
+                <SelectItem value="KRW">{t('contractDetail.currencyKRW')}</SelectItem>
+                <SelectItem value="USD">{t('contractDetail.currencyUSD')}</SelectItem>
               </SelectContent>
             </Select>
           </div>

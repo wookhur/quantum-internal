@@ -18,6 +18,7 @@ import {
   FileText, CalendarDays, BarChart3,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useT } from '@/i18n/LanguageContext'
 import {
   usePartnerContracts,
   usePartnerPayments,
@@ -67,6 +68,7 @@ const emptyForm: PaymentForm = {
 
 export function PartnerContractsPage() {
   const { user } = useAuth()
+  const t = useT()
   const partnerId = user?.id
 
   // Admin can view all partner contracts — for now just show own
@@ -193,23 +195,23 @@ export function PartnerContractsPage() {
   }
 
   const handleDelete = (id: string) => {
-    if (!confirm('이 입금 기록을 삭제하시겠습니까?')) return
+    if (!confirm(t('partner.confirmDelete'))) return
     deletePayment.mutate(id)
   }
 
   // Tab config
   const tabs: { key: TabKey; label: string; icon: typeof FileText }[] = [
-    { key: 'payments', label: '입금 내역', icon: CalendarDays },
-    { key: 'contracts', label: '계약 요약', icon: FileText },
-    { key: 'monthly', label: '월별 집계', icon: BarChart3 },
+    { key: 'payments', label: t('partner.tabPayments'), icon: CalendarDays },
+    { key: 'contracts', label: t('partner.tabContracts'), icon: FileText },
+    { key: 'monthly', label: t('partner.tabMonthly'), icon: BarChart3 },
   ]
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">계약금 관리</h1>
-        <p className="text-muted-foreground text-sm">학생별 계약금 입금 내역 및 수수료 현황</p>
+        <h1 className="text-2xl font-bold">{t('partner.title')}</h1>
+        <p className="text-muted-foreground text-sm">{t('partner.subtitle')}</p>
       </div>
 
       {/* Summary Cards */}
@@ -217,7 +219,7 @@ export function PartnerContractsPage() {
         <Card>
           <CardContent className="py-3 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">총 계약 수</p>
+              <p className="text-xs text-muted-foreground">{t('partner.totalContracts')}</p>
               <p className="text-xl font-bold">{totalContracts}</p>
             </div>
             <FileText className="h-8 w-8 text-blue-200" />
@@ -226,7 +228,7 @@ export function PartnerContractsPage() {
         <Card>
           <CardContent className="py-3 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">총 입금액</p>
+              <p className="text-xs text-muted-foreground">{t('partner.totalDeposits')}</p>
               <div className="space-y-0.5">
                 {summaryByCurrency.map(s => (
                   <p key={s.currency} className="text-lg font-bold text-green-600">{formatMoney(s.total, s.currency)}</p>
@@ -239,7 +241,7 @@ export function PartnerContractsPage() {
         <Card>
           <CardContent className="py-3 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">수수료 ({(feeRate * 100).toFixed(0)}%)</p>
+              <p className="text-xs text-muted-foreground">{t('partner.fee')} ({(feeRate * 100).toFixed(0)}%)</p>
               <div className="space-y-0.5">
                 {summaryByCurrency.map(s => (
                   <p key={s.currency} className="text-lg font-bold text-amber-600">{formatMoney(s.fee, s.currency)}</p>
@@ -277,7 +279,7 @@ export function PartnerContractsPage() {
         {activeTab === 'payments' && (
           <Button size="sm" className="mb-1" onClick={openCreate} disabled={contracts.length === 0}>
             <Plus className="h-3.5 w-3.5 mr-1" />
-            입금 추가
+            {t('partner.addPayment')}
           </Button>
         )}
       </div>
@@ -305,11 +307,11 @@ export function PartnerContractsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>{editId ? '입금 수정' : '입금 추가'}</DialogTitle>
+            <DialogTitle>{editId ? t('partner.editPayment') : t('partner.addPayment')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label className="text-xs">계약 (학생) *</Label>
+              <Label className="text-xs">{t('partner.contractStudent')} *</Label>
               <Select
                 value={form.contractId}
                 onValueChange={v => v && setForm(f => ({ ...f, contractId: v }))}
@@ -319,7 +321,7 @@ export function PartnerContractsPage() {
                   <span>
                     {form.contractId
                       ? `${contractMap.get(form.contractId)?.studentName} — ${contractMap.get(form.contractId)?.schoolName}`
-                      : '선택'}
+                      : t('partner.selectPlaceholder')}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -333,23 +335,23 @@ export function PartnerContractsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">입금 구분 *</Label>
+                <Label className="text-xs">{t('partner.paymentType')} *</Label>
                 <Select value={form.label} onValueChange={v => v && setForm(f => ({ ...f, label: v }))}>
                   <SelectTrigger><span>{form.label}</span></SelectTrigger>
                   <SelectContent>
-                    {PAYMENT_TYPES.map(t => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    {PAYMENT_TYPES.map(pt => (
+                      <SelectItem key={pt} value={pt}>{pt}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">입금일 *</Label>
+                <Label className="text-xs">{t('partner.paidDate')} *</Label>
                 <Input type="date" value={form.paidDate} onChange={e => setForm(f => ({ ...f, paidDate: e.target.value }))} />
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">입금 금액 (USD) *</Label>
+              <Label className="text-xs">{t('partner.paidAmount')} *</Label>
               <Input
                 type="number"
                 value={form.paidAmount}
@@ -358,21 +360,21 @@ export function PartnerContractsPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">비고</Label>
+              <Label className="text-xs">{t('partner.notes')}</Label>
               <Input
                 value={form.notes}
                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="메모"
+                placeholder={t('partner.notesPlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('partner.cancel')}</Button>
             <Button
               onClick={handleSave}
               disabled={!form.contractId || !form.paidDate || !(parseInt(form.paidAmount) > 0)}
             >
-              저장
+              {t('partner.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -394,6 +396,7 @@ function PaymentsTab({
   onEdit: (p: PaymentInstallment) => void
   onDelete: (id: string) => void
 }) {
+  const t = useT()
   const sorted = useMemo(
     () => [...payments].sort((a, b) => (b.paidDate || '').localeCompare(a.paidDate || '')),
     [payments],
@@ -410,7 +413,7 @@ function PaymentsTab({
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
           <DollarSign className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p>입금 내역이 없습니다.</p>
+          <p>{t('partner.noPayments')}</p>
         </CardContent>
       </Card>
     )
@@ -423,14 +426,14 @@ function PaymentsTab({
           <TableHeader>
             <TableRow>
               <TableHead className="w-[50px]">No.</TableHead>
-              <TableHead>입금일</TableHead>
-              <TableHead>계약자</TableHead>
-              <TableHead>학생명</TableHead>
-              <TableHead>학교</TableHead>
-              <TableHead>구분</TableHead>
-              <TableHead className="text-right">입금액</TableHead>
-              <TableHead>비고</TableHead>
-              <TableHead className="text-right">수수료</TableHead>
+              <TableHead>{t('partner.paidDate')}</TableHead>
+              <TableHead>{t('partner.colContractor')}</TableHead>
+              <TableHead>{t('partner.colStudent')}</TableHead>
+              <TableHead>{t('partner.colSchool')}</TableHead>
+              <TableHead>{t('partner.colType')}</TableHead>
+              <TableHead className="text-right">{t('partner.colPaidAmount')}</TableHead>
+              <TableHead>{t('partner.notes')}</TableHead>
+              <TableHead className="text-right">{t('partner.colFee')}</TableHead>
               <TableHead className="w-[80px]" />
             </TableRow>
           </TableHeader>
@@ -481,7 +484,7 @@ function PaymentsTab({
               }, {})
             ).map(([cur, total]) => (
               <TableRow key={cur} className="bg-muted/30 font-semibold">
-                <TableCell colSpan={6} className="text-right text-sm">합계 ({cur})</TableCell>
+                <TableCell colSpan={6} className="text-right text-sm">{t('partner.total')} ({cur})</TableCell>
                 <TableCell className="text-right font-mono text-green-700">
                   {formatMoney(total, cur)}
                 </TableCell>
@@ -512,12 +515,13 @@ interface ContractWithTotals extends Contract {
 }
 
 function ContractsTab({ data, feeRate }: { data: ContractWithTotals[]; feeRate: number }) {
+  const t = useT()
   if (data.length === 0) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
           <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p>등록된 계약이 없습니다.</p>
+          <p>{t('partner.noContracts')}</p>
         </CardContent>
       </Card>
     )
@@ -530,18 +534,18 @@ function ContractsTab({ data, feeRate }: { data: ContractWithTotals[]; feeRate: 
           <TableHeader>
             <TableRow>
               <TableHead className="w-[50px]">No.</TableHead>
-              <TableHead>계약자</TableHead>
-              <TableHead>학생명</TableHead>
-              <TableHead>학교</TableHead>
-              <TableHead>학년</TableHead>
-              <TableHead>계약일</TableHead>
-              <TableHead>만료일</TableHead>
-              <TableHead className="text-right">계약금</TableHead>
-              <TableHead className="text-right">중도금</TableHead>
-              <TableHead className="text-right">잔금</TableHead>
-              <TableHead className="text-right">총 계약액</TableHead>
-              <TableHead className="text-right">총 납입액</TableHead>
-              <TableHead className="text-right">수수료 ({(feeRate * 100).toFixed(0)}%)</TableHead>
+              <TableHead>{t('partner.colContractor')}</TableHead>
+              <TableHead>{t('partner.colStudent')}</TableHead>
+              <TableHead>{t('partner.colSchool')}</TableHead>
+              <TableHead>{t('partner.colGrade')}</TableHead>
+              <TableHead>{t('partner.colContractDate')}</TableHead>
+              <TableHead>{t('partner.colExpiryDate')}</TableHead>
+              <TableHead className="text-right">{t('partner.colDeposit')}</TableHead>
+              <TableHead className="text-right">{t('partner.colInterim')}</TableHead>
+              <TableHead className="text-right">{t('partner.colBalance')}</TableHead>
+              <TableHead className="text-right">{t('partner.colTotalAmount')}</TableHead>
+              <TableHead className="text-right">{t('partner.colTotalPaid')}</TableHead>
+              <TableHead className="text-right">{t('partner.colFee')} ({(feeRate * 100).toFixed(0)}%)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -580,12 +584,13 @@ function MonthlyTab({
   data: { month: string; currency: string; count: number; total: number; fee: number; net: number }[]
   feeRate: number
 }) {
+  const t = useT()
   if (data.length === 0) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
           <BarChart3 className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p>입금 데이터가 없습니다.</p>
+          <p>{t('partner.noMonthlyData')}</p>
         </CardContent>
       </Card>
     )
@@ -606,12 +611,12 @@ function MonthlyTab({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>연월</TableHead>
-              <TableHead>통화</TableHead>
-              <TableHead className="text-right">입금 건수</TableHead>
-              <TableHead className="text-right">입금 합계</TableHead>
-              <TableHead className="text-right">수수료 ({(feeRate * 100).toFixed(0)}%)</TableHead>
-              <TableHead className="text-right">실수령액</TableHead>
+              <TableHead>{t('partner.colMonth')}</TableHead>
+              <TableHead>{t('partner.colCurrency')}</TableHead>
+              <TableHead className="text-right">{t('partner.colPaymentCount')}</TableHead>
+              <TableHead className="text-right">{t('partner.colPaymentTotal')}</TableHead>
+              <TableHead className="text-right">{t('partner.colFee')} ({(feeRate * 100).toFixed(0)}%)</TableHead>
+              <TableHead className="text-right">{t('partner.colNetAmount')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -627,7 +632,7 @@ function MonthlyTab({
             ))}
             {Object.entries(grandByCurrency).map(([cur, g]) => (
               <TableRow key={cur} className="bg-muted/30 font-semibold">
-                <TableCell>합계</TableCell>
+                <TableCell>{t('partner.total')}</TableCell>
                 <TableCell><Badge variant="outline" className="text-xs">{cur}</Badge></TableCell>
                 <TableCell className="text-right">{g.count}</TableCell>
                 <TableCell className="text-right font-mono text-green-700">{formatMoney(g.total, cur)}</TableCell>

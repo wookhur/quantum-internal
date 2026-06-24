@@ -264,13 +264,13 @@ function InvoiceFormDialog({
 
           <div className="space-y-1.5">
             <Label className="text-xs">{t('fInvoice.bankAccount')}</Label>
-            <Input value={bankAccount} onChange={e => setBankAccount(e.target.value)} placeholder="은행명 계좌번호 예금주" className="h-9" />
+            <Input value={bankAccount} onChange={e => setBankAccount(e.target.value)} placeholder={t('fInvoice.bankPlaceholder')} className="h-9" />
           </div>
 
           {/* Items Table */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold">항목</Label>
+              <Label className="text-xs font-semibold">{t('fInvoice.items')}</Label>
               <Button
                 variant="outline"
                 size="sm"
@@ -304,7 +304,7 @@ function InvoiceFormDialog({
                         <Input
                           value={item.itemName}
                           onChange={e => updateItem(idx, 'itemName', e.target.value)}
-                          placeholder="예: 영상편집"
+                          placeholder={t('fInvoice.itemPlaceholder')}
                           className="h-8 text-sm"
                         />
                       </TableCell>
@@ -604,7 +604,7 @@ export function FreelancerInvoicesPage() {
       setEditInvoice(undefined)
       setFormOpen(true)
     } catch (err) {
-      alert(err instanceof Error ? err.message : '파일을 읽을 수 없습니다')
+      alert(err instanceof Error ? err.message : t('fInvoice.cannotReadFile'))
     } finally {
       setUploading(false)
     }
@@ -628,7 +628,7 @@ export function FreelancerInvoicesPage() {
             <>
               <Button variant="outline" size="sm" className="gap-1.5 relative" disabled={uploading}>
                 {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-                엑셀 업로드
+                {t('fInvoice.excelUpload')}
                 <input
                   type="file"
                   accept=".xlsx,.xls"
@@ -674,12 +674,12 @@ export function FreelancerInvoicesPage() {
         {isAdmin && (
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="이름 검색..." className="h-9 pl-9" />
+            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('fInvoice.searchPlaceholder')} className="h-9 pl-9" />
           </div>
         )}
 
         <div className="ml-auto text-sm font-medium">
-          {filtered.length}건 · {formatKRW(grandTotal)}
+          {filtered.length} {t('fInvoice.count')} · {formatKRW(grandTotal)}
         </div>
       </div>
 

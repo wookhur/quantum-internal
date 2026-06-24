@@ -63,15 +63,18 @@ function useRoleOptions() {
   ]
 }
 
-const EMPLOYMENT_TYPE_OPTIONS: { value: EmploymentType; label: string }[] = [
-  { value: 'permanent', label: '정규직' },
-  { value: 'contract', label: '계약직' },
-  { value: 'dispatch', label: '파견직' },
-  { value: 'daily', label: '일용직' },
-  { value: 'freelancer', label: '프리랜서' },
-  { value: 'commissioned', label: '위촉직' },
-  { value: 'executive', label: '등기임원' },
-]
+function useEmploymentTypeOptions() {
+  const t = useT()
+  return [
+    { value: 'permanent' as EmploymentType, label: t('access.empPermanent') },
+    { value: 'contract' as EmploymentType, label: t('access.empContract') },
+    { value: 'dispatch' as EmploymentType, label: t('access.empDispatch') },
+    { value: 'daily' as EmploymentType, label: t('access.empDaily') },
+    { value: 'freelancer' as EmploymentType, label: t('access.empFreelancer') },
+    { value: 'commissioned' as EmploymentType, label: t('access.empCommissioned') },
+    { value: 'executive' as EmploymentType, label: t('access.empExecutive') },
+  ]
+}
 
 // ─── User Edit Dialog with Package + Route toggles ─────────────────────────
 
@@ -89,6 +92,7 @@ function UserEditDialog({
   const t = useT()
   const DEPT_OPTIONS = useDeptOptions()
   const ROLE_OPTIONS = useRoleOptions()
+  const EMPLOYMENT_TYPE_OPTIONS = useEmploymentTypeOptions()
   const updateProfile = useUpdateProfile()
   const updateFeatureAccess = useUpdateFeatureAccess()
   const { user: currentUser } = useAuth()
@@ -302,13 +306,13 @@ function UserEditDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">근로유형</Label>
+              <Label className="text-xs">{t('access.employmentType')}</Label>
               <Select value={employmentType || '_none'} onValueChange={v => setEmploymentType(!v || v === '_none' ? '' : v)}>
                 <SelectTrigger className="h-9">
-                  <span>{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === employmentType)?.label || '미지정'}</span>
+                  <span>{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === employmentType)?.label || t('access.employmentUnassigned')}</span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">미지정</SelectItem>
+                  <SelectItem value="_none">{t('access.employmentUnassigned')}</SelectItem>
                   {EMPLOYMENT_TYPE_OPTIONS.map(opt => (
                     <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                   ))}
@@ -318,7 +322,7 @@ function UserEditDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">계약 시작일</Label>
+                <Label className="text-xs">{t('access.contractStartDate')}</Label>
                 <Input
                   type="date"
                   value={contractStartDate}
@@ -327,7 +331,7 @@ function UserEditDialog({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">계약 종료일</Label>
+                <Label className="text-xs">{t('access.contractEndDate')}</Label>
                 <Input
                   type="date"
                   value={contractEndDate}
@@ -491,11 +495,11 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 
   const handleCopyCredentials = useCallback(() => {
     if (!tempPassword) return
-    const text = `이메일: ${email}\n임시 비밀번호: ${tempPassword}\n로그인: ${window.location.origin}/login`
+    const text = `${t('access.emailLabel')}: ${email}\n${t('access.passwordLabel')}: ${tempPassword}\nLogin: ${window.location.origin}/login`
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }, [email, tempPassword])
+  }, [email, tempPassword, t])
 
   const handleSend = useCallback(async () => {
     if (!email.trim()) return
@@ -511,7 +515,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
       if (data?.error) throw new Error(data.error)
       if (data?.tempPassword) {
         setTempPassword(data.tempPassword)
-        setResult({ type: 'success', message: '계정이 생성되었습니다. 아래 임시 비밀번호를 본인에게 전달해주세요.' })
+        setResult({ type: 'success', message: t('access.accountCreated') })
       } else {
         setResult({ type: 'success', message: t('access.inviteSuccess') })
         setEmail('')
@@ -583,10 +587,10 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 
           {tempPassword && (
             <div className="rounded-md border bg-amber-50 p-3 space-y-2">
-              <div className="text-xs font-medium text-amber-800">임시 로그인 정보</div>
+              <div className="text-xs font-medium text-amber-800">{t('access.tempLoginInfo')}</div>
               <div className="text-sm font-mono bg-white rounded px-2 py-1.5 border text-gray-800">
-                <div>이메일: {email}</div>
-                <div>비밀번호: {tempPassword}</div>
+                <div>{t('access.emailLabel')}: {email}</div>
+                <div>{t('access.passwordLabel')}: {tempPassword}</div>
               </div>
               <Button
                 variant="outline"
@@ -595,7 +599,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
                 onClick={handleCopyCredentials}
               >
                 {copied ? <Check className="size-3.5 text-green-600" /> : <Copy className="size-3.5" />}
-                {copied ? '복사됨' : '로그인 정보 복사'}
+                {copied ? t('access.copied') : t('access.copyLoginInfo')}
               </Button>
             </div>
           )}
@@ -621,6 +625,7 @@ export function AccessManagementPage() {
   const t = useT()
   const DEPT_OPTIONS = useDeptOptions()
   const ROLE_OPTIONS = useRoleOptions()
+  const EMPLOYMENT_TYPE_OPTIONS = useEmploymentTypeOptions()
   const { user: currentUser } = useAuth()
   const { data: profiles = [], isLoading: profilesLoading } = useProfiles()
   const { data: featureAccess = [], isLoading: accessLoading } = useFeatureAccess()
@@ -828,7 +833,7 @@ export function AccessManagementPage() {
                   <TableHead className="w-[100px]">{t('access.role')}</TableHead>
                   <TableHead className="w-[100px]">{t('access.department')}</TableHead>
                   <TableHead className="w-[90px]">{t('access.position')}</TableHead>
-                  <TableHead className="w-[80px]">근로유형</TableHead>
+                  <TableHead className="w-[80px]">{t('access.employmentType')}</TableHead>
                   <TableHead>{t('access.accessibleFeatures')}</TableHead>
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>

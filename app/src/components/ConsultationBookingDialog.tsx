@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import {
   format,
   addMonths,
@@ -52,25 +53,25 @@ type DurationMinutes = 30 | 60 | 90
 
 const PRIMARY = '#0073EA'
 
-const WEEKDAY_HEADERS = ['월', '화', '수', '목', '금', '토', '일']
+const WEEKDAY_HEADERS = ['consultation.mon', 'consultation.tue', 'consultation.wed', 'consultation.thu', 'consultation.fri', 'consultation.sat', 'consultation.sun']
 
-const DURATION_OPTIONS: { value: DurationMinutes; label: string }[] = [
-  { value: 30, label: '30분' },
-  { value: 60, label: '1시간' },
-  { value: 90, label: '1시간 30분' },
+const DURATION_OPTIONS: { value: DurationMinutes; labelKey: string }[] = [
+  { value: 30, labelKey: 'consultation.duration30' },
+  { value: 60, labelKey: 'consultation.duration60' },
+  { value: 90, labelKey: 'consultation.duration90' },
 ]
 
-const CONSULTATION_NUMBER_OPTIONS: { value: ConsultationNumber; label: string }[] = [
-  { value: 1, label: '1차' },
-  { value: 2, label: '2차' },
-  { value: 3, label: '3차' },
+const CONSULTATION_NUMBER_OPTIONS: { value: ConsultationNumber; labelKey: string }[] = [
+  { value: 1, labelKey: 'consultation.number1' },
+  { value: 2, labelKey: 'consultation.number2' },
+  { value: 3, labelKey: 'consultation.number3' },
 ]
 
-const CONSULTATION_METHOD_OPTIONS: { value: ConsultationMethod; label: string }[] = [
-  { value: 'zoom', label: 'Zoom' },
-  { value: 'in_person', label: '대면' },
-  { value: 'phone', label: '전화' },
-  { value: 'katalk', label: '카카오톡' },
+const CONSULTATION_METHOD_OPTIONS: { value: ConsultationMethod; labelKey: string }[] = [
+  { value: 'zoom', labelKey: 'consultation.methodZoom' },
+  { value: 'in_person', labelKey: 'consultation.methodInPerson' },
+  { value: 'phone', labelKey: 'consultation.methodPhone' },
+  { value: 'katalk', labelKey: 'consultation.methodKatalk' },
 ]
 
 const PIPELINE_STAGE_MAP: Record<ConsultationNumber, PipelineStage> = {
@@ -112,6 +113,8 @@ export default function ConsultationBookingDialog({
   lead,
   onBooked,
 }: ConsultationBookingDialogProps) {
+  const t = useT()
+
   // ─── State ──────────────────────────────────────────────────────────────────
 
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()))
@@ -293,7 +296,7 @@ export default function ConsultationBookingDialog({
             `연락처: ${lead.phone}`,
             lead.grade ? `학년: ${lead.grade}` : '',
             `상담 차수: ${consultationNumber}차`,
-            `상담 방식: ${CONSULTATION_METHOD_OPTIONS.find((o) => o.value === consultationMethod)?.label}`,
+            `상담 방식: ${t(CONSULTATION_METHOD_OPTIONS.find((o) => o.value === consultationMethod)?.labelKey || '')}`,
             memo ? `메모: ${memo}` : '',
           ]
             .filter(Boolean)
@@ -344,7 +347,7 @@ export default function ConsultationBookingDialog({
       }, 1200)
     } catch (err) {
       console.error('Booking failed:', err)
-      setError(err instanceof Error ? err.message : '예약 중 오류가 발생했습니다.')
+      setError(err instanceof Error ? err.message : t('consultation.bookingError'))
     } finally {
       setIsSubmitting(false)
     }
@@ -366,12 +369,12 @@ export default function ConsultationBookingDialog({
           >
             <Check className="h-8 w-8" style={{ color: PRIMARY }} />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">예약이 완료되었습니다</h2>
+          <h2 className="text-xl font-bold text-gray-900">{t('consultation.bookingComplete')}</h2>
           <p className="text-sm text-gray-500">
             {selectedDate && selectedSlot && (
               <>
                 {format(selectedDate, 'yyyy년 M월 d일 (EEE)', { locale: ko })}{' '}
-                {selectedSlot.label} · {DURATION_OPTIONS.find((o) => o.value === duration)?.label}
+                {selectedSlot.label} · {t(DURATION_OPTIONS.find((o) => o.value === duration)?.labelKey || '')}
               </>
             )}
           </p>
@@ -394,11 +397,11 @@ export default function ConsultationBookingDialog({
       <div className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col overflow-y-auto rounded-2xl bg-white shadow-2xl">
         {/* ── Header ───────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h2 className="text-lg font-bold text-gray-900">상담 예약</h2>
+          <h2 className="text-lg font-bold text-gray-900">{t('consultation.title')}</h2>
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-            aria-label="닫기"
+            aria-label={t('common.close')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -420,7 +423,7 @@ export default function ConsultationBookingDialog({
           {/* ── Calendar selector ─────────────────────────────────────────── */}
           {teamCalendars.length > 1 && (
             <div>
-              <SectionLabel>캘린더 선택</SectionLabel>
+              <SectionLabel>{t('consultation.calendarSelect')}</SectionLabel>
               <select
                 value={calendarId}
                 onChange={(e) => handleCalendarChange(e.target.value)}
@@ -437,14 +440,14 @@ export default function ConsultationBookingDialog({
 
           {/* ── Calendar (date picker) ─────────────────────────────────────── */}
           <div>
-            <SectionLabel>날짜 선택</SectionLabel>
+            <SectionLabel>{t('consultation.dateSelect')}</SectionLabel>
             <div className="rounded-xl border border-gray-200 p-3">
               {/* Month navigation */}
               <div className="mb-2 flex items-center justify-between">
                 <button
                   onClick={handlePrevMonth}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
-                  aria-label="이전 달"
+                  aria-label={t('consultation.prevMonth')}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
@@ -454,7 +457,7 @@ export default function ConsultationBookingDialog({
                 <button
                   onClick={handleNextMonth}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100"
-                  aria-label="다음 달"
+                  aria-label={t('consultation.nextMonth')}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
@@ -464,7 +467,7 @@ export default function ConsultationBookingDialog({
               <div className="mb-1 grid grid-cols-7 text-center">
                 {WEEKDAY_HEADERS.map((d) => (
                   <div key={d} className="py-1 text-xs font-medium text-gray-400">
-                    {d}
+                    {t(d)}
                   </div>
                 ))}
               </div>
@@ -509,7 +512,7 @@ export default function ConsultationBookingDialog({
           {selectedDate && (
             <div>
               <SectionLabel>
-                시간 선택
+                {t('consultation.timeSelect')}
                 <span className="ml-2 text-xs font-normal text-gray-400">
                   {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })}
                 </span>
@@ -541,7 +544,7 @@ export default function ConsultationBookingDialog({
               {!calendarError && calendarEvents && calendarEvents.length > 0 && (
                 <p className="mt-2 flex items-center gap-1 text-xs text-gray-400">
                   <Clock className="h-3 w-3" />
-                  빨간색 슬롯은 기존 일정이 있는 시간입니다
+                  {t('consultation.busySlotHint')}
                 </p>
               )}
             </div>
@@ -549,7 +552,7 @@ export default function ConsultationBookingDialog({
 
           {/* ── Duration ───────────────────────────────────────────────────── */}
           <div>
-            <SectionLabel>상담 시간</SectionLabel>
+            <SectionLabel>{t('consultation.duration')}</SectionLabel>
             <div className="flex gap-2">
               {DURATION_OPTIONS.map((opt) => {
                 const isSelected = duration === opt.value
@@ -569,7 +572,7 @@ export default function ConsultationBookingDialog({
                     `}
                     style={isSelected && !conflict ? { backgroundColor: PRIMARY } : undefined}
                   >
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </button>
                 )
               })}
@@ -579,7 +582,7 @@ export default function ConsultationBookingDialog({
           {/* ── Consultation number + method row ───────────────────────────── */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <SectionLabel>상담 차수</SectionLabel>
+              <SectionLabel>{t('consultation.consultationNumber')}</SectionLabel>
               <select
                 value={consultationNumber}
                 onChange={(e) => setConsultationNumber(Number(e.target.value) as ConsultationNumber)}
@@ -587,14 +590,14 @@ export default function ConsultationBookingDialog({
               >
                 {CONSULTATION_NUMBER_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <SectionLabel>상담 방식</SectionLabel>
+              <SectionLabel>{t('consultation.consultationMethod')}</SectionLabel>
               <select
                 value={consultationMethod}
                 onChange={(e) => setConsultationMethod(e.target.value as ConsultationMethod)}
@@ -602,7 +605,7 @@ export default function ConsultationBookingDialog({
               >
                 {CONSULTATION_METHOD_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </option>
                 ))}
               </select>
@@ -611,11 +614,11 @@ export default function ConsultationBookingDialog({
 
           {/* ── Memo ───────────────────────────────────────────────────────── */}
           <div>
-            <SectionLabel>메모</SectionLabel>
+            <SectionLabel>{t('consultation.memo')}</SectionLabel>
             <textarea
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
-              placeholder="상담 관련 메모를 입력하세요..."
+              placeholder={t('consultation.memoPlaceholder')}
               rows={3}
               className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
             />
@@ -635,7 +638,7 @@ export default function ConsultationBookingDialog({
             onClick={onClose}
             className="rounded-lg border border-gray-200 px-5 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
           >
-            취소
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleSubmit}
@@ -646,10 +649,10 @@ export default function ConsultationBookingDialog({
             {isSubmitting ? (
               <span className="flex items-center gap-2">
                 <Spinner />
-                예약 중...
+                {t('consultation.booking')}
               </span>
             ) : (
-              '예약 확정'
+              t('consultation.confirmBooking')
             )}
           </button>
         </div>

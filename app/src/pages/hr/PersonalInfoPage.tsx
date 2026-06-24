@@ -39,14 +39,14 @@ import { useAllEmployeeInfo, useCreateFormToken, useUpsertEmployeeInfo, type Emp
 
 const PAGE_PIN = '2256'
 
-const EMPLOYMENT_TYPES: { value: string; label: string }[] = [
-  { value: 'permanent', label: '정규직' },
-  { value: 'contract', label: '계약직' },
-  { value: 'dispatch', label: '파견직' },
-  { value: 'daily', label: '일용직' },
-  { value: 'freelancer', label: '프리랜서' },
-  { value: 'commissioned', label: '위촉직' },
-  { value: 'executive', label: '등기임원' },
+const EMPLOYMENT_TYPE_KEYS: { value: string; labelKey: string }[] = [
+  { value: 'permanent', labelKey: 'personalInfo.permanent' },
+  { value: 'contract', labelKey: 'personalInfo.contract' },
+  { value: 'dispatch', labelKey: 'personalInfo.dispatch' },
+  { value: 'daily', labelKey: 'personalInfo.daily' },
+  { value: 'freelancer', labelKey: 'personalInfo.freelancer' },
+  { value: 'commissioned', labelKey: 'personalInfo.commissioned' },
+  { value: 'executive', labelKey: 'personalInfo.executive' },
 ]
 
 export function PersonalInfoPage() {
@@ -150,10 +150,10 @@ export function PersonalInfoPage() {
         [t('personalInfo.phone')]: info?.phone || '',
         [t('personalInfo.birthDate')]: info?.birthDate || '',
         [t('personalInfo.address')]: info?.address || '',
-        '근로유형': EMPLOYMENT_TYPES.find(e => e.value === info?.employmentType)?.label || '',
+        [t('personalInfo.employmentType')]: EMPLOYMENT_TYPE_KEYS.find(e => e.value === info?.employmentType) ? t(EMPLOYMENT_TYPE_KEYS.find(e => e.value === info?.employmentType)!.labelKey) : '',
         [t('personalInfo.startDate')]: info?.startDate || '',
-        '계약 시작일': info?.contractStartDate || '',
-        '계약 종료일': info?.contractEndDate || '',
+        [t('personalInfo.contractStartDate')]: info?.contractStartDate || '',
+        [t('personalInfo.contractEndDate')]: info?.contractEndDate || '',
         [t('personalInfo.bankName')]: info?.bankName || '',
         [t('personalInfo.bankAccount')]: info?.bankAccount || '',
         [t('personalInfo.bankHolder')]: info?.bankHolder || '',
@@ -173,7 +173,7 @@ export function PersonalInfoPage() {
       wch: Math.max(key.length + 2, ...rows.map(r => String((r as Record<string, string>)[key] || '').length + 2)),
     }))
     ws['!cols'] = colWidths
-    XLSX.writeFile(wb, `개인정보_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    XLSX.writeFile(wb, `${t('personalInfo.exportFilename')}_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   const handlePinSubmit = () => {
@@ -296,7 +296,7 @@ export function PersonalInfoPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('personalInfo.name')}</TableHead>
-                  <TableHead>근로유형</TableHead>
+                  <TableHead>{t('personalInfo.employmentType')}</TableHead>
                   <TableHead>{t('personalInfo.phone')}</TableHead>
                   <TableHead>{t('personalInfo.birthDate')}</TableHead>
                   <TableHead>{t('personalInfo.bank')}</TableHead>
@@ -319,7 +319,7 @@ export function PersonalInfoPage() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {info?.employmentType
-                          ? <Badge variant="outline" className="text-[10px] h-4">{EMPLOYMENT_TYPES.find(e => e.value === info.employmentType)?.label || info.employmentType}</Badge>
+                          ? <Badge variant="outline" className="text-[10px] h-4">{EMPLOYMENT_TYPE_KEYS.find(e => e.value === info.employmentType) ? t(EMPLOYMENT_TYPE_KEYS.find(e => e.value === info.employmentType)!.labelKey) : info.employmentType}</Badge>
                           : '-'}
                       </TableCell>
                       <TableCell className="text-sm">{info?.phone || '-'}</TableCell>
@@ -451,15 +451,15 @@ export function PersonalInfoPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">근로유형</Label>
+              <Label className="text-xs">{t('personalInfo.employmentType')}</Label>
               <Select value={editForm.employmentType || '_none'} onValueChange={v => setEditForm(f => ({ ...f, employmentType: !v || v === '_none' ? null : v }))}>
                 <SelectTrigger className="h-9">
-                  <span>{EMPLOYMENT_TYPES.find(e => e.value === editForm.employmentType)?.label || '미지정'}</span>
+                  <span>{EMPLOYMENT_TYPE_KEYS.find(e => e.value === editForm.employmentType) ? t(EMPLOYMENT_TYPE_KEYS.find(e => e.value === editForm.employmentType)!.labelKey) : t('personalInfo.unspecified')}</span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="_none">미지정</SelectItem>
-                  {EMPLOYMENT_TYPES.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  <SelectItem value="_none">{t('personalInfo.unspecified')}</SelectItem>
+                  {EMPLOYMENT_TYPE_KEYS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{t(opt.labelKey)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -467,11 +467,11 @@ export function PersonalInfoPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">계약 시작일</Label>
+                <Label className="text-xs">{t('personalInfo.contractStartDate')}</Label>
                 <Input type="date" value={editForm.contractStartDate || ''} onChange={e => setEditForm(f => ({ ...f, contractStartDate: e.target.value }))} className="h-9" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">계약 종료일</Label>
+                <Label className="text-xs">{t('personalInfo.contractEndDate')}</Label>
                 <Input type="date" value={editForm.contractEndDate || ''} onChange={e => setEditForm(f => ({ ...f, contractEndDate: e.target.value }))} className="h-9" />
               </div>
             </div>
@@ -520,7 +520,7 @@ export function PersonalInfoPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">{t('personalInfo.ecRelation')}</Label>
-                  <Input value={editForm.emergencyContactRelation || ''} onChange={e => setEditForm(f => ({ ...f, emergencyContactRelation: e.target.value }))} className="h-9" placeholder="예: 배우자, 부모" />
+                  <Input value={editForm.emergencyContactRelation || ''} onChange={e => setEditForm(f => ({ ...f, emergencyContactRelation: e.target.value }))} className="h-9" placeholder={t('personalInfo.ecRelationPlaceholder')} />
                 </div>
               </div>
             </div>

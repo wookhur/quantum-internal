@@ -107,7 +107,7 @@ export function DashboardPage() {
               </CardTitle>
               {isAdmin && (
                 <Button variant="outline" size="sm" className="h-7 text-xs" onClick={openCreateForm}>
-                  <Plus className="size-3 mr-1" /> 작성
+                  <Plus className="size-3 mr-1" /> {t('dashboard.write')}
                 </Button>
               )}
             </div>
@@ -119,7 +119,7 @@ export function DashboardPage() {
               </div>
             ) : notices.length === 0 ? (
               <div className="text-sm text-muted-foreground text-center py-8">
-                등록된 공지사항이 없습니다.
+                {t('dashboard.noNotices')}
               </div>
             ) : (
               notices.map((notice) => (
@@ -140,7 +140,7 @@ export function DashboardPage() {
                       </button>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[11px] text-muted-foreground">
-                          {notice.authorName || '관리자'} · {notice.createdAt.slice(0, 10)}
+                          {notice.authorName || t('dashboard.admin')} · {notice.createdAt.slice(0, 10)}
                         </span>
                       </div>
                       {expandedNotice === notice.id && notice.content && (
@@ -213,23 +213,23 @@ export function DashboardPage() {
       <Dialog open={showNoticeForm} onOpenChange={setShowNoticeForm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingNotice ? '공지사항 수정' : '공지사항 작성'}</DialogTitle>
+            <DialogTitle>{editingNotice ? t('dashboard.editNotice') : t('dashboard.createNotice')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleNoticeSubmit} className="space-y-4">
             <div>
-              <Label>제목 *</Label>
+              <Label>{t('dashboard.noticeTitle')} *</Label>
               <Input
                 value={noticeForm.title}
                 onChange={(e) => setNoticeForm({ ...noticeForm, title: e.target.value })}
-                placeholder="공지사항 제목"
+                placeholder={t('dashboard.noticeTitlePh')}
               />
             </div>
             <div>
-              <Label>내용</Label>
+              <Label>{t('dashboard.noticeContent')}</Label>
               <Textarea
                 value={noticeForm.content}
                 onChange={(e) => setNoticeForm({ ...noticeForm, content: e.target.value })}
-                placeholder="공지사항 내용을 입력하세요"
+                placeholder={t('dashboard.noticeContentPh')}
                 rows={5}
               />
             </div>
@@ -238,13 +238,13 @@ export function DashboardPage() {
                 checked={noticeForm.pinned}
                 onCheckedChange={(v) => setNoticeForm({ ...noticeForm, pinned: v })}
               />
-              <Label className="cursor-pointer">상단 고정</Label>
+              <Label className="cursor-pointer">{t('dashboard.pinToTop')}</Label>
             </div>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setShowNoticeForm(false)}>취소</Button>
+              <Button type="button" variant="outline" onClick={() => setShowNoticeForm(false)}>{t('common.cancel')}</Button>
               <Button type="submit" disabled={!noticeForm.title.trim() || createNotice.isPending || updateNotice.isPending}>
                 {(createNotice.isPending || updateNotice.isPending) && <Loader2 className="size-4 animate-spin mr-1" />}
-                {editingNotice ? '수정' : '등록'}
+                {editingNotice ? t('dashboard.edit') : t('dashboard.register')}
               </Button>
             </div>
           </form>

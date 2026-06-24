@@ -7,6 +7,7 @@ import {
   ChevronDown, ChevronRight, Clock, AlertTriangle,
 } from 'lucide-react'
 import { useInstallments } from '@/hooks/useInstallments'
+import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
 import type { PaymentInstallment, InstallmentStatus } from '@/types'
 
@@ -63,11 +64,18 @@ function groupByContract(installments: PaymentInstallment[]): ContractGroup[] {
   return Array.from(map.values()).sort((a, b) => a.contractorName.localeCompare(b.contractorName))
 }
 
-const STATUS_CONFIG: Record<InstallmentStatus, { label: string; color: string }> = {
-  paid: { label: '완납', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  partial: { label: '일부 납부', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-  overdue: { label: '연체', color: 'bg-red-50 text-red-700 border-red-200' },
-  pending: { label: '예정', color: 'bg-gray-50 text-gray-600 border-gray-200' },
+const STATUS_COLORS: Record<InstallmentStatus, string> = {
+  paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  partial: 'bg-amber-50 text-amber-700 border-amber-200',
+  overdue: 'bg-red-50 text-red-700 border-red-200',
+  pending: 'bg-gray-50 text-gray-600 border-gray-200',
+}
+
+const STATUS_LABEL_KEYS: Record<InstallmentStatus, string> = {
+  paid: 'payments.statusPaid',
+  partial: 'payments.statusPartial',
+  overdue: 'payments.statusOverdue',
+  pending: 'payments.statusPending',
 }
 
 function ProgressBar({ progress }: { progress: number }) {
@@ -93,6 +101,7 @@ function ProgressBar({ progress }: { progress: number }) {
 }
 
 export function PaymentsPage() {
+  const t = useT()
   const { data: installments = [], isLoading, error } = useInstallments()
   const [expandedContract, setExpandedContract] = useState<string | null>(null)
 
@@ -109,9 +118,9 @@ export function PaymentsPage() {
     <div className="space-y-6">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">수금 현황</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('payments.title')}</h1>
         <p className="text-muted-foreground text-sm">
-          {isLoading ? '로딩 중...' : `총 ${groups.length}건의 계약 · ${installments.length}건의 납입 일정`}
+          {isLoading ? t('payments.loading') : t('payments.summary', { contracts: String(groups.length), installments: String(installments.length) })}
         </p>
       </div>
 
@@ -122,7 +131,7 @@ export function PaymentsPage() {
             <DollarSign className="size-5 text-primary shrink-0" />
             <div className="min-w-0">
               <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalAmount)}</div>
-              <div className="text-xs text-muted-foreground">총 계약 금액</div>
+              <div className="text-xs text-muted-foreground">{t('payments.totalContractAmount')}</div>
             </div>
           </CardContent>
         </Card>
@@ -131,7 +140,7 @@ export function PaymentsPage() {
             <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
             <div className="min-w-0">
               <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalPaid)}</div>
-              <div className="text-xs text-muted-foreground">수금 완료</div>
+              <div className="text-xs text-muted-foreground">{t('payments.collected')}</div>
             </div>
           </CardContent>
         </Card>
@@ -140,7 +149,7 @@ export function PaymentsPage() {
             <AlertCircle className="size-5 text-destructive shrink-0" />
             <div className="min-w-0">
               <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalOverdue)}</div>
-              <div className="text-xs text-muted-foreground">연체 미수금</div>
+              <div className="text-xs text-muted-foreground">{t('payments.overdueOutstanding')}</div>
             </div>
           </CardContent>
         </Card>
@@ -149,7 +158,7 @@ export function PaymentsPage() {
             <TrendingUp className="size-5 text-primary shrink-0" />
             <div className="min-w-0">
               <div className="text-lg font-bold whitespace-nowrap">{avgProgress}%</div>
-              <div className="text-xs text-muted-foreground">평균 수금률</div>
+              <div className="text-xs text-muted-foreground">{t('payments.avgCollectionRate')}</div>
             </div>
           </CardContent>
         </Card>
@@ -164,35 +173,35 @@ export function PaymentsPage() {
             </div>
           ) : error ? (
             <div className="text-center py-20 text-destructive text-sm">
-              데이터를 불러오는 중 오류가 발생했습니다.
+              {t('payments.loadError')}
             </div>
           ) : groups.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground text-sm">
-              결제 내역이 없습니다.
+              {t('payments.noPayments')}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
-                  <TableHead>계약자</TableHead>
-                  <TableHead>학생</TableHead>
-                  <TableHead>학교</TableHead>
-                  <TableHead className="text-right">총 금액</TableHead>
-                  <TableHead className="text-right">수금액</TableHead>
-                  <TableHead className="text-right">미수금</TableHead>
-                  <TableHead className="w-[160px]">수금률</TableHead>
-                  <TableHead className="w-[80px]">상태</TableHead>
+                  <TableHead>{t('payments.contractor')}</TableHead>
+                  <TableHead>{t('payments.student')}</TableHead>
+                  <TableHead>{t('payments.school')}</TableHead>
+                  <TableHead className="text-right">{t('payments.totalAmount')}</TableHead>
+                  <TableHead className="text-right">{t('payments.collectedAmount')}</TableHead>
+                  <TableHead className="text-right">{t('payments.outstanding')}</TableHead>
+                  <TableHead className="w-[160px]">{t('payments.collectionRate')}</TableHead>
+                  <TableHead className="w-[80px]">{t('payments.status')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {groups.map((group) => {
                   const isExpanded = expandedContract === group.contractId
                   const statusLabel =
-                    group.progress >= 100 ? '완납'
-                    : group.overdueAmount > 0 ? '연체'
-                    : group.progress > 0 ? '진행 중'
-                    : '미납'
+                    group.progress >= 100 ? t('payments.fullyPaid')
+                    : group.overdueAmount > 0 ? t('payments.overdue')
+                    : group.progress > 0 ? t('payments.inProgress')
+                    : t('payments.unpaid')
                   const statusVariant: 'default' | 'outline' | 'destructive' =
                     group.progress >= 100 ? 'default'
                     : group.overdueAmount > 0 ? 'destructive'
@@ -240,7 +249,8 @@ export function PaymentsPage() {
 
                       {/* Expanded installment rows */}
                       {isExpanded && group.installments.map((inst) => {
-                        const cfg = STATUS_CONFIG[inst.status]
+                        const cfgColor = STATUS_COLORS[inst.status]
+                        const cfgLabel = t(STATUS_LABEL_KEYS[inst.status])
                         return (
                           <TableRow key={inst.id} className="bg-muted/30">
                             <TableCell></TableCell>
@@ -251,13 +261,13 @@ export function PaymentsPage() {
                                 {inst.status === 'overdue' && <AlertTriangle className="size-3.5 text-red-500" />}
                                 {inst.status === 'pending' && <Clock className="size-3.5 text-gray-400" />}
                                 <span className="font-medium">{inst.label}</span>
-                                <Badge variant="outline" className={`text-[10px] h-4 ${cfg.color}`}>
-                                  {cfg.label}
+                                <Badge variant="outline" className={`text-[10px] h-4 ${cfgColor}`}>
+                                  {cfgLabel}
                                 </Badge>
                               </div>
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
-                              {inst.dueDate ? `납기: ${inst.dueDate}` : ''}
+                              {inst.dueDate ? t('payments.dueDate', { date: inst.dueDate }) : ''}
                             </TableCell>
                             <TableCell className="text-right text-xs font-mono">
                               {formatCurrency(inst.amount)}
@@ -271,7 +281,7 @@ export function PaymentsPage() {
                                 : '-'}
                             </TableCell>
                             <TableCell colSpan={2} className="text-xs text-muted-foreground">
-                              {inst.paidDate ? `납부일: ${inst.paidDate}` : ''}
+                              {inst.paidDate ? t('payments.paidDate', { date: inst.paidDate }) : ''}
                             </TableCell>
                           </TableRow>
                         )

@@ -31,11 +31,7 @@ interface InstallmentRow {
   dueDate: string
 }
 
-const DEFAULT_INSTALLMENTS: InstallmentRow[] = [
-  { label: '계약금', amount: '', dueDate: '' },
-  { label: '중도금', amount: '', dueDate: '' },
-  { label: '잔금', amount: '', dueDate: '' },
-]
+const DEFAULT_INSTALLMENT_KEYS = ['createContract.deposit', 'createContract.midPayment', 'createContract.finalPayment'] as const
 
 interface Props {
   open: boolean
@@ -68,7 +64,9 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
     notes: '',
   })
 
-  const [installmentRows, setInstallmentRows] = useState<InstallmentRow[]>(DEFAULT_INSTALLMENTS)
+  const [installmentRows, setInstallmentRows] = useState<InstallmentRow[]>(
+    DEFAULT_INSTALLMENT_KEYS.map(k => ({ label: t(k), amount: '', dueDate: '' }))
+  )
 
   // Pre-fill from lead data when dialog opens
   useEffect(() => {
@@ -89,7 +87,7 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
         serviceRep: '',
         notes: '',
       })
-      setInstallmentRows([...DEFAULT_INSTALLMENTS])
+      setInstallmentRows(DEFAULT_INSTALLMENT_KEYS.map(k => ({ label: t(k), amount: '', dueDate: '' })))
     }
   }, [open, lead, user?.id])
 
@@ -223,9 +221,9 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
             <div className="space-y-1.5">
               <Label className="text-xs">{t('contracts.currency')}</Label>
               <Select value={form.currency} onValueChange={v => set('currency', (v || 'KRW') as 'KRW' | 'USD')}>
-                <SelectTrigger><span>{form.currency === 'USD' ? 'USD ($)' : 'KRW (원)'}</span></SelectTrigger>
+                <SelectTrigger><span>{form.currency === 'USD' ? 'USD ($)' : t('createContract.krwLabel')}</span></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="KRW">KRW (원)</SelectItem>
+                  <SelectItem value="KRW">{t('createContract.krwLabel')}</SelectItem>
                   <SelectItem value="USD">USD ($)</SelectItem>
                 </SelectContent>
               </Select>
@@ -307,7 +305,7 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
               {installmentRows.map((row, idx) => (
                 <div key={idx} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
                   <Input
-                    placeholder="계약금"
+                    placeholder={t('createContract.deposit')}
                     value={row.label}
                     onChange={e => {
                       const next = [...installmentRows]

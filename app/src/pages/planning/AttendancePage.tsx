@@ -71,9 +71,13 @@ function getDaysInMonth(ym: string): string[] {
   return days
 }
 
-function getDayOfWeek(dateStr: string): string {
-  const d = new Date(dateStr)
-  return ['일', '월', '화', '수', '목', '금', '토'][d.getDay()]
+const DAY_KEYS = [
+  'attendance.daySun', 'attendance.dayMon', 'attendance.dayTue',
+  'attendance.dayWed', 'attendance.dayThu', 'attendance.dayFri', 'attendance.daySat',
+] as const
+
+function getDayOfWeekKey(dateStr: string): string {
+  return DAY_KEYS[new Date(dateStr).getDay()]
 }
 
 function isWeekend(dateStr: string): boolean {
@@ -454,7 +458,7 @@ export function AttendancePage() {
           <CardContent className="py-3 px-4">
             <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-indigo-500" />
-              주별 근무시간
+              {t('attendance.weeklyHours')}
             </h3>
             <div className="space-y-2">
               {weeklyHoursSummary.map(week => (
@@ -486,7 +490,7 @@ export function AttendancePage() {
           <CardContent className="py-3 px-4">
             <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
               <Clock className="h-4 w-4 text-blue-500" />
-              월별 근무시간 합계
+              {t('attendance.monthlyHours')}
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
               {sortedHoursSummary.map(entry => (
@@ -530,7 +534,7 @@ export function AttendancePage() {
                     </th>
                     {days.map(day => {
                       const d = parseInt(day.split('-')[2])
-                      const dow = getDayOfWeek(day)
+                      const dow = t(getDayOfWeekKey(day))
                       const weekend = isWeekend(day)
                       return (
                         <th
@@ -651,7 +655,7 @@ export function AttendancePage() {
                       <TableCell>
                         <span>{att.date}</span>
                         <Badge variant="outline" className={`ml-2 text-[10px] ${weekend ? 'bg-red-50 text-red-600 border-red-200' : ''}`}>
-                          {getDayOfWeek(att.date)}
+                          {t(getDayOfWeekKey(att.date))}
                         </Badge>
                       </TableCell>
                       <TableCell>

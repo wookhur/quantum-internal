@@ -226,7 +226,7 @@ export function Student360Page() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">전체 컨설턴트</SelectItem>
+            <SelectItem value="__all__">{t('student360.allConsultants')}</SelectItem>
             {activeConsultants.map(c => (
               <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
             ))}
@@ -251,12 +251,12 @@ export function Student360Page() {
                     {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
                   </span>
                   {statusFlags.missingReports.has(s.id) && (
-                    <span title="미팅일지 미제출">
+                    <span title={t('student360.missingReportTooltip')}>
                       <Hourglass className="size-3.5 text-red-500 shrink-0" />
                     </span>
                   )}
                   {statusFlags.pendingFollowups.has(s.id) && (
-                    <span title="미처리 Follow-up">
+                    <span title={t('student360.pendingFollowupTooltip')}>
                       <AlertTriangle className="size-3.5 text-red-500 shrink-0" />
                     </span>
                   )}
@@ -424,11 +424,11 @@ function ProfileSection({ student, onDeleted, createdBy }: {
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label className="text-xs">{t('contracts.applicationCount')}</Label>
-                <Input type="number" value={editAppCount} onChange={e => setEditAppCount(e.target.value)} placeholder="예: 15" />
+                <Input type="number" value={editAppCount} onChange={e => setEditAppCount(e.target.value)} placeholder={t('student360.placeholderAppCount')} />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">{t('contracts.additionalServices')}</Label>
-                <Input value={editAddServices} onChange={e => setEditAddServices(e.target.value)} placeholder="예: 에세이 첨삭, EC 컨설팅" />
+                <Input value={editAddServices} onChange={e => setEditAddServices(e.target.value)} placeholder={t('student360.placeholderAddServices')} />
               </div>
             </div>
             <DialogFooter>
@@ -473,24 +473,25 @@ function Field({ icon, label, value }: { icon?: ReactNode; label: string; value?
 function ECServicesSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
   const { data: activities = [] } = useECActivities(studentId)
   const del = useDeleteECActivity()
+  const t = useT()
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
           <Star className="size-5 text-primary" />
-          Extra Curricular Service
+          {t('student360.ecService')}
           <span className="text-muted-foreground font-normal">({activities.length})</span>
         </CardTitle>
         <ECActivityDialog
           studentId={studentId}
           createdBy={createdBy}
-          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />추가</Button>}
+          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
         />
       </CardHeader>
       <CardContent className="space-y-3">
         {activities.length === 0 && (
-          <p className="text-sm text-muted-foreground">등록된 EC 서비스가 없습니다.</p>
+          <p className="text-sm text-muted-foreground">{t('student360.noEcServices')}</p>
         )}
         {activities.map(a => (
           <div key={a.id} className="rounded-lg border p-3 space-y-2">
@@ -505,7 +506,7 @@ function ECServicesSection({ studentId, createdBy }: { studentId: string; create
                 />
                 <Button
                   size="sm" variant="ghost"
-                  onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: a.id, studentId }) }}
+                  onClick={() => { if (confirm(t('student360.confirmDeleteGeneric'))) del.mutate({ id: a.id, studentId }) }}
                 >
                   <Trash2 className="size-3.5" />
                 </Button>
@@ -543,6 +544,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
   const [open, setOpen] = useState(false)
   const create = useCreateECActivity()
   const update = useUpdateECActivity()
+  const t = useT()
 
   const buildForm = () => ({
     partner: activity?.partner || '',
@@ -581,7 +583,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
       <span onClick={() => setOpen(true)}>{trigger}</span>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{activity ? 'EC 서비스 수정' : 'EC 서비스 추가'}</DialogTitle>
+          <DialogTitle>{activity ? t('student360.ecServiceEdit') : t('student360.ecServiceAdd')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
           {/* Partner */}
@@ -613,7 +615,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
             <Label className="text-xs">Program</Label>
             <Textarea
               className="mt-1"
-              placeholder="프로그램 내용 및 메모..."
+              placeholder={t('student360.programPlaceholder')}
               value={form.program}
               onChange={e => set('program', e.target.value)}
               rows={3}
@@ -626,13 +628,13 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
                 {EC_SALES_PRESETS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                <SelectItem value="직접입력">직접입력</SelectItem>
+                <SelectItem value="직접입력">{t('student360.customInput')}</SelectItem>
               </SelectContent>
             </Select>
             {form.sc1Select === '직접입력' && (
               <Input
                 className="mt-1"
-                placeholder="직접 입력..."
+                placeholder={t('student360.customInputPlaceholder')}
                 value={form.sc1Custom}
                 onChange={e => set('sc1Custom', e.target.value)}
               />
@@ -645,13 +647,13 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
                 {EC_SALES_PRESETS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                <SelectItem value="직접입력">직접입력</SelectItem>
+                <SelectItem value="직접입력">{t('student360.customInput')}</SelectItem>
               </SelectContent>
             </Select>
             {form.sc2Select === '직접입력' && (
               <Input
                 className="mt-1"
-                placeholder="직접 입력..."
+                placeholder={t('student360.customInputPlaceholder')}
                 value={form.sc2Custom}
                 onChange={e => set('sc2Custom', e.target.value)}
               />
@@ -659,8 +661,8 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>취소</Button>
-          <Button onClick={submit}>저장</Button>
+          <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+          <Button onClick={submit}>{t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -671,24 +673,25 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
 function AcademicSupportSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
   const { data: items = [] } = useAcademicSupport(studentId)
   const del = useDeleteAcademicSupport()
+  const t = useT()
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
           <BookOpen className="size-5 text-primary" />
-          Academic Support
+          {t('student360.academicSupport')}
           <span className="text-muted-foreground font-normal">({items.length})</span>
         </CardTitle>
         <AcademicSupportDialog
           studentId={studentId}
           createdBy={createdBy}
-          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />추가</Button>}
+          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
         />
       </CardHeader>
       <CardContent className="space-y-3">
         {items.length === 0 && (
-          <p className="text-sm text-muted-foreground">등록된 Academic Support가 없습니다.</p>
+          <p className="text-sm text-muted-foreground">{t('student360.noAcademicSupport')}</p>
         )}
         {items.map(item => (
           <div key={item.id} className="rounded-lg border p-3 space-y-2">
@@ -703,7 +706,7 @@ function AcademicSupportSection({ studentId, createdBy }: { studentId: string; c
                 />
                 <Button
                   size="sm" variant="ghost"
-                  onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: item.id, studentId }) }}
+                  onClick={() => { if (confirm(t('student360.confirmDeleteGeneric'))) del.mutate({ id: item.id, studentId }) }}
                 >
                   <Trash2 className="size-3.5" />
                 </Button>
@@ -711,11 +714,11 @@ function AcademicSupportSection({ studentId, createdBy }: { studentId: string; c
             </div>
             <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground">과목</p>
+                <p className="text-xs text-muted-foreground">{t('student360.subject')}</p>
                 <p>{item.subject || '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">시기 / 기간</p>
+                <p className="text-xs text-muted-foreground">{t('student360.seasonPeriod')}</p>
                 <p>
                   {item.season && <span className="mr-1.5">{item.season}</span>}
                   <span className="text-xs text-muted-foreground">
@@ -724,7 +727,7 @@ function AcademicSupportSection({ studentId, createdBy }: { studentId: string; c
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">특이사항</p>
+                <p className="text-xs text-muted-foreground">{t('student360.specialNotes')}</p>
                 <p className="whitespace-pre-wrap">{item.notes || '—'}</p>
               </div>
             </div>
@@ -750,6 +753,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
   const [open, setOpen] = useState(false)
   const create = useCreateAcademicSupport()
   const update = useUpdateAcademicSupport()
+  const t = useT()
 
   const buildForm = () => ({
     academySelect: item?.academyName && (ACADEMY_PRESETS as readonly string[]).includes(item.academyName)
@@ -796,23 +800,23 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
       <span onClick={() => setOpen(true)}>{trigger}</span>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{item ? 'Academic Support 수정' : 'Academic Support 추가'}</DialogTitle>
+          <DialogTitle>{item ? t('student360.academicSupportEdit') : t('student360.academicSupportAdd')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
           {/* 학원명 */}
           <div>
-            <Label className="text-xs">학원명</Label>
+            <Label className="text-xs">{t('student360.academyName')}</Label>
             <Select value={form.academySelect || null} onValueChange={v => set('academySelect', v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
                 {ACADEMY_PRESETS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                <SelectItem value="직접입력">직접입력</SelectItem>
+                <SelectItem value="직접입력">{t('student360.customInput')}</SelectItem>
               </SelectContent>
             </Select>
             {form.academySelect === '직접입력' && (
               <Input
                 className="mt-1"
-                placeholder="학원명 직접 입력..."
+                placeholder={t('student360.academyNamePlaceholder')}
                 value={form.academyCustom}
                 onChange={e => set('academyCustom', e.target.value)}
               />
@@ -820,16 +824,16 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
           </div>
           {/* 과목명 */}
           <div>
-            <Label className="text-xs">과목명</Label>
+            <Label className="text-xs">{t('student360.subjectLabel')}</Label>
             <Input
-              placeholder="예) 수학, 영어, SAT Math..."
+              placeholder={t('student360.subjectPlaceholder')}
               value={form.subject}
               onChange={e => set('subject', e.target.value)}
             />
           </div>
           {/* 시기 + 기간 */}
           <div>
-            <Label className="text-xs">시기</Label>
+            <Label className="text-xs">{t('student360.season')}</Label>
             <Select value={form.season || null} onValueChange={v => set('season', v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
@@ -838,7 +842,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
             </Select>
           </div>
           <div>
-            <Label className="text-xs">기간</Label>
+            <Label className="text-xs">{t('student360.period')}</Label>
             <div className="grid grid-cols-2 gap-2 mt-1">
               <div>
                 <Label className="text-[10px] text-muted-foreground">Start</Label>
@@ -852,10 +856,10 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
           </div>
           {/* 특이사항 */}
           <div>
-            <Label className="text-xs">특별 요청 / 메모</Label>
+            <Label className="text-xs">{t('student360.specialRequestLabel')}</Label>
             <Textarea
               className="mt-1"
-              placeholder="특별 요청사항이나 기억해야 할 내용을 입력하세요..."
+              placeholder={t('student360.specialRequestPlaceholder')}
               value={form.notes}
               onChange={e => set('notes', e.target.value)}
               rows={3}
@@ -887,8 +891,8 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>취소</Button>
-          <Button onClick={submit}>저장</Button>
+          <Button variant="outline" onClick={() => setOpen(false)}>{t('common.cancel')}</Button>
+          <Button onClick={submit}>{t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1138,7 +1142,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
             <Select value={form.essayEditor} onValueChange={v => set('essayEditor', v === '__none__' ? '' : v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">미배정</SelectItem>
+                <SelectItem value="__none__">{t('student360.unassigned')}</SelectItem>
                 {ESSAY_EDITORS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1148,7 +1152,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
             <Select value={form.partners} onValueChange={v => set('partners', v === '__none__' ? '' : v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">미배정</SelectItem>
+                <SelectItem value="__none__">{t('student360.unassigned')}</SelectItem>
                 {PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1197,7 +1201,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
             <Label className="text-xs">{t('student360.regularMeetingSchedule')}</Label>
             <div className="grid grid-cols-3 gap-2 mt-1">
               <Select value={form.scheduleWeek} onValueChange={v => set('scheduleWeek', v)}>
-                <SelectTrigger><SelectValue placeholder="주차" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('student360.weekPlaceholder')} /></SelectTrigger>
                 <SelectContent>
                   {WEEK_PATTERNS.map(wp => (
                     <SelectItem key={wp.value} value={wp.value}>{wp.label}</SelectItem>
@@ -1205,7 +1209,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
                 </SelectContent>
               </Select>
               <Select value={form.scheduleDay} onValueChange={v => set('scheduleDay', v)}>
-                <SelectTrigger><SelectValue placeholder="요일" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('student360.dayPlaceholder')} /></SelectTrigger>
                 <SelectContent>
                   {DAYS_OF_WEEK.map(d => (
                     <SelectItem key={d} value={d}>{d}요일</SelectItem>
@@ -1213,7 +1217,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
                 </SelectContent>
               </Select>
               <Select value={form.scheduleTime} onValueChange={v => set('scheduleTime', v)}>
-                <SelectTrigger><SelectValue placeholder="시간" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('student360.timePlaceholder')} /></SelectTrigger>
                 <SelectContent>
                   {TIME_OPTIONS.map(tm => (
                     <SelectItem key={tm} value={tm}>{tm}</SelectItem>

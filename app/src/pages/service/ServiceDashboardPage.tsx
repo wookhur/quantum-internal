@@ -37,6 +37,7 @@ import {
 import { CONSULTANTS, consultantName } from '@/lib/consultants'
 import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
+import { useT } from '@/i18n/LanguageContext'
 import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus, MeetingStatus, MeetingCancelledBy } from '@/types'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -78,12 +79,12 @@ function isScheduledMeetingDate(dateStr: string, schedule: string): boolean {
   return false
 }
 
-const MILESTONE_STATUSES: { value: MilestoneStatus; label: string }[] = [
-  { value: 'upcoming',  label: '예정' },
-  { value: 'on_track',  label: '정상' },
-  { value: 'behind',    label: '지연' },
-  { value: 'urgent',    label: '긴급' },
-  { value: 'completed', label: '완료' },
+const MILESTONE_STATUS_KEYS: { value: MilestoneStatus; key: string }[] = [
+  { value: 'upcoming',  key: 'serviceDash.statusUpcoming' },
+  { value: 'on_track',  key: 'serviceDash.statusOnTrack' },
+  { value: 'behind',    key: 'serviceDash.statusBehind' },
+  { value: 'urgent',    key: 'serviceDash.statusUrgent' },
+  { value: 'completed', key: 'serviceDash.statusCompleted' },
 ]
 
 function milestoneConfig(type: MilestoneType) {
@@ -177,6 +178,7 @@ function SessionPrepPanel({
   meeting: DashboardMeeting
   onClose: () => void
 }) {
+  const t = useT()
   const { data: followups = [] } = useServiceFollowups(meeting.studentId)
   const { data: diaryEntries = [] } = useServiceDiary(meeting.studentId)
   const today = todayKST()
@@ -220,9 +222,9 @@ function SessionPrepPanel({
   const daysAgo = meeting.meetingDate ? daysFromTodayKST(meeting.meetingDate) : null
   const lastMetLabel = daysAgo === null
     ? '—'
-    : daysAgo === 0 ? '오늘'
-    : daysAgo > 0 ? `${daysAgo}일 후`
-    : `${Math.abs(daysAgo)}일 전`
+    : daysAgo === 0 ? t('serviceDash.today')
+    : daysAgo > 0 ? t('serviceDash.daysLater').replace('{n}', String(daysAgo))
+    : t('serviceDash.daysAgo').replace('{n}', String(Math.abs(daysAgo)))
 
   return (
     <div className="flex flex-col h-full">
@@ -236,7 +238,7 @@ function SessionPrepPanel({
             <div>
               <SheetTitle className="text-base font-semibold">{meeting.studentName}</SheetTitle>
               <p className="text-xs text-gray-500 mt-0.5">
-                {meeting.meetingType || '미팅'} · {consultantName(meeting.consultantId)}
+                {meeting.meetingType || t('serviceDash.meeting')} · {consultantName(meeting.consultantId)}
               </p>
             </div>
           </div>
@@ -254,18 +256,18 @@ function SessionPrepPanel({
       {/* Stats row */}
       <div className="grid grid-cols-3 divide-x border-b text-center">
         <div className="py-3 px-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">최근 미팅</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{t('serviceDash.recentMeeting')}</p>
           <p className="text-sm font-semibold text-gray-800 mt-0.5">{lastMetLabel}</p>
         </div>
         <div className="py-3 px-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">미완료 과제</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{t('serviceDash.openTasks')}</p>
           <p className="text-sm font-semibold text-gray-800 mt-0.5">
             {openFollowups.length} / {followups.length}
           </p>
         </div>
         <div className="py-3 px-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">다이어리</p>
-          <p className="text-sm font-semibold text-gray-800 mt-0.5">{diaryEntries.length}건</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{t('serviceDash.diary')}</p>
+          <p className="text-sm font-semibold text-gray-800 mt-0.5">{t('serviceDash.diaryCount').replace('{count}', String(diaryEntries.length))}</p>
         </div>
       </div>
 
@@ -276,7 +278,7 @@ function SessionPrepPanel({
           <section>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                {isThisMeetingDiary ? '이 미팅 일지' : '지난 세션에서'}
+                {isThisMeetingDiary ? t('serviceDash.thisMeetingDiary') : t('serviceDash.fromLastSession')}
               </h3>
               {lastDiary.entryDate && (
                 <span className="text-[11px] text-gray-400">{formatDateLabel(lastDiary.entryDate)}</span>
@@ -287,13 +289,13 @@ function SessionPrepPanel({
             ) : lastDiary.agendaItems ? (
               <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">{lastDiary.agendaItems}</p>
             ) : (
-              <p className="text-sm text-gray-400 italic">요약 내용이 없습니다.</p>
+              <p className="text-sm text-gray-400 italic">{t('serviceDash.noSummary')}</p>
             )}
             <Link
               to={`/service/student-360?student=${meeting.studentId}`}
               className="text-xs text-blue-500 hover:underline mt-1.5 flex items-center gap-1"
             >
-              전체 노트 보기 <ExternalLink size={11} />
+              {t('serviceDash.viewAllNotes')} <ExternalLink size={11} />
             </Link>
           </section>
         )}
@@ -302,7 +304,7 @@ function SessionPrepPanel({
         {followups.length > 0 && (
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
-              미완료 액션 아이템
+              {t('serviceDash.openActionItems')}
             </h3>
             <ul className="space-y-1.5">
               {followups.slice(0, 6).map(f => {
@@ -327,7 +329,7 @@ function SessionPrepPanel({
                 )
               })}
               {doneFollowups.length > 0 && openFollowups.length === 0 && (
-                <p className="text-xs text-emerald-600">모든 과제 완료 ✓</p>
+                <p className="text-xs text-emerald-600">{t('serviceDash.allTasksDone')}</p>
               )}
             </ul>
           </section>
@@ -336,7 +338,7 @@ function SessionPrepPanel({
         {/* Suggested agenda */}
         {lastDiary?.nextMeetingAgenda && (
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">추천 아젠다</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{t('serviceDash.suggestedAgenda')}</h3>
             <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
               {lastDiary.nextMeetingAgenda}
             </div>
@@ -347,7 +349,7 @@ function SessionPrepPanel({
             meeting doesn't surface diaries from later sessions) */}
         {recentDiaries.length > 0 && (
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">최근 다이어리</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{t('serviceDash.recentDiaries')}</h3>
             <ul className="space-y-2">
               {recentDiaries.slice(0, 4).map(d => (
                 <li key={d.id} className="flex gap-2.5 text-sm">
@@ -357,7 +359,7 @@ function SessionPrepPanel({
                     </span>
                   )}
                   <span className="text-gray-600 line-clamp-1">
-                    {d.meetingSummary || d.agendaItems || '(내용 없음)'}
+                    {d.meetingSummary || d.agendaItems || t('serviceDash.noContent')}
                   </span>
                 </li>
               ))}
@@ -367,20 +369,20 @@ function SessionPrepPanel({
 
         {/* Meeting report */}
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">미팅 리포트</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{t('serviceDash.meetingReport')}</h3>
           <div className="flex items-center gap-2">
             <Badge className={`text-[11px] ${
               meeting.reportStatus === 'submitted' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
               meeting.reportStatus === 'pending'   ? 'bg-amber-50 text-amber-700 border-amber-200' :
               'bg-gray-50 text-gray-500 border-gray-200'
             }`}>
-              {meeting.reportStatus === 'submitted' ? '제출 완료' :
-               meeting.reportStatus === 'pending'   ? '리포트 대기' : '리포트 없음'}
+              {meeting.reportStatus === 'submitted' ? t('serviceDash.reportSubmitted') :
+               meeting.reportStatus === 'pending'   ? t('serviceDash.reportPending') : t('serviceDash.reportNone')}
             </Badge>
             {meeting.reportUrl && (
               <a href={meeting.reportUrl} target="_blank" rel="noopener noreferrer"
                 className="text-xs text-blue-500 hover:underline flex items-center gap-1">
-                보기 <ExternalLink size={11} />
+                {t('serviceDash.view')} <ExternalLink size={11} />
               </a>
             )}
           </div>
@@ -402,7 +404,7 @@ function SessionPrepPanel({
           <a href={meeting.prepUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
             <Button variant="outline" size="sm" className="w-full text-xs">
               <FileText size={13} className="mr-1.5" />
-              준비 자료
+              {t('serviceDash.prepMaterials')}
             </Button>
           </a>
         )}
@@ -428,6 +430,7 @@ function MilestoneDialog({
   defaultStudentId?: string
   defaultDate?: string
 }) {
+  const t = useT()
   const { user } = useAuth()
   const createMilestone = useCreateMilestone()
   const updateMilestone = useUpdateMilestone()
@@ -466,19 +469,19 @@ function MilestoneDialog({
       onClose()
     } catch (e) {
       const msg = (e as { message?: string })?.message || String(e)
-      alert(`저장 실패: ${msg}`)
+      alert(`${t('serviceDash.saveFailed')} ${msg}`)
     }
   }
 
   async function handleDelete() {
     if (!editing) return
-    if (!window.confirm('이 일정을 삭제할까요? 되돌릴 수 없습니다.')) return
+    if (!window.confirm(t('serviceDash.confirmDeleteMilestone'))) return
     try {
       await deleteMilestone.mutateAsync({ id: editing.id, studentId: editing.studentId })
       onClose()
     } catch (e) {
       const msg = (e as { message?: string })?.message || String(e)
-      alert(`삭제 실패: ${msg}`)
+      alert(`${t('serviceDash.deleteFailed')} ${msg}`)
     }
   }
 
@@ -486,13 +489,13 @@ function MilestoneDialog({
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{editing ? '마일스톤 수정' : '마일스톤 추가'}</DialogTitle>
+          <DialogTitle>{editing ? t('serviceDash.editMilestone') : t('serviceDash.addMilestone')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
           <div className="space-y-1">
-            <Label>학생</Label>
+            <Label>{t('serviceDash.student')}</Label>
             <Select value={studentId} onValueChange={v => setStudentId(v ?? '')}>
-              <SelectTrigger><SelectValue placeholder="학생 선택" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('serviceDash.selectStudent')} /></SelectTrigger>
               <SelectContent>
                 {students.map(s => (
                   <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
@@ -502,39 +505,39 @@ function MilestoneDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>유형</Label>
+              <Label>{t('serviceDash.type')}</Label>
               <Select value={type} onValueChange={v => setType(v as MilestoneType)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {MILESTONE_TYPES.map(t => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  {MILESTONE_TYPES.map(mt => (
+                    <SelectItem key={mt.value} value={mt.value}>{mt.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>상태</Label>
+              <Label>{t('serviceDash.status')}</Label>
               <Select value={status} onValueChange={v => setStatus(v as MilestoneStatus)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {MILESTONE_STATUSES.map(s => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  {MILESTONE_STATUS_KEYS.map(s => (
+                    <SelectItem key={s.value} value={s.value}>{t(s.key)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="space-y-1">
-            <Label>제목</Label>
-            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="예: Stanford REA 제출" />
+            <Label>{t('serviceDash.title')}</Label>
+            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={t('serviceDash.titlePlaceholder')} />
           </div>
           <div className="space-y-1">
-            <Label>날짜</Label>
+            <Label>{t('serviceDash.date')}</Label>
             <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label>메모 (선택)</Label>
-            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="추가 내용..." />
+            <Label>{t('serviceDash.notesOptional')}</Label>
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder={t('serviceDash.notesPlaceholder')} />
           </div>
         </div>
         <DialogFooter className={editing ? 'sm:justify-between' : undefined}>
@@ -546,14 +549,14 @@ function MilestoneDialog({
               className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
             >
               {deleting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
-              삭제
+              {t('serviceDash.delete')}
             </Button>
           )}
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} disabled={deleting}>취소</Button>
+            <Button variant="outline" onClick={onClose} disabled={deleting}>{t('serviceDash.cancel')}</Button>
             <Button onClick={handleSave} disabled={saving || deleting || !studentId || !title || !date}>
               {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
-              {editing ? '저장' : '추가'}
+              {editing ? t('serviceDash.save') : t('serviceDash.add')}
             </Button>
           </div>
         </DialogFooter>
@@ -564,24 +567,24 @@ function MilestoneDialog({
 
 // ─── Meeting Dialog ───────────────────────────────────────────────────────────
 
-const REPORT_STATUS_OPTIONS: { value: ServiceReportStatus; label: string }[] = [
-  { value: 'none',      label: '리포트 없음' },
-  { value: 'pending',   label: '리포트 대기' },
-  { value: 'submitted', label: '제출 완료' },
+const REPORT_STATUS_KEYS: { value: ServiceReportStatus; key: string }[] = [
+  { value: 'none',      key: 'serviceDash.reportStatusNone' },
+  { value: 'pending',   key: 'serviceDash.reportStatusPending' },
+  { value: 'submitted', key: 'serviceDash.reportStatusSubmitted' },
 ]
 
-const MEETING_STATUS_OPTIONS: { value: MeetingStatus; label: string }[] = [
-  { value: 'held',        label: '진행 완료' },
-  { value: 'scheduled',   label: '예정' },
-  { value: 'cancelled',   label: '취소' },
-  { value: 'no_show',     label: '노쇼' },
-  { value: 'rescheduled', label: '일정 변경' },
+const MEETING_STATUS_KEYS: { value: MeetingStatus; key: string }[] = [
+  { value: 'held',        key: 'serviceDash.meetingStatusHeld' },
+  { value: 'scheduled',   key: 'serviceDash.meetingStatusScheduled' },
+  { value: 'cancelled',   key: 'serviceDash.meetingStatusCancelled' },
+  { value: 'no_show',     key: 'serviceDash.meetingStatusNoShow' },
+  { value: 'rescheduled', key: 'serviceDash.meetingStatusRescheduled' },
 ]
 
-const CANCELLED_BY_OPTIONS: { value: MeetingCancelledBy; label: string }[] = [
-  { value: 'client',     label: '고객' },
-  { value: 'consultant', label: '컨설턴트' },
-  { value: 'other',      label: '기타' },
+const CANCELLED_BY_KEYS: { value: MeetingCancelledBy; key: string }[] = [
+  { value: 'client',     key: 'serviceDash.cancelledByClient' },
+  { value: 'consultant', key: 'serviceDash.cancelledByConsultant' },
+  { value: 'other',      key: 'serviceDash.cancelledByOther' },
 ]
 
 function MeetingDialog({
@@ -593,6 +596,7 @@ function MeetingDialog({
   onClose: () => void
   meeting: DashboardMeeting | null
 }) {
+  const t = useT()
   const qc = useQueryClient()
   const updateMeeting = useUpdateServiceMeeting()
   const deleteMeeting = useDeleteServiceMeeting()
@@ -648,20 +652,20 @@ function MeetingDialog({
       onClose()
     } catch (e) {
       const msg = (e as { message?: string })?.message || String(e)
-      alert(`저장 실패: ${msg}`)
+      alert(`${t('serviceDash.saveFailed')} ${msg}`)
     }
   }
 
   async function handleDelete() {
     if (!meeting) return
-    if (!window.confirm('이 미팅 일정을 삭제할까요? 되돌릴 수 없습니다.')) return
+    if (!window.confirm(t('serviceDash.confirmDeleteMeeting'))) return
     try {
       await deleteMeeting.mutateAsync({ id: meeting.id, studentId: meeting.studentId })
       qc.invalidateQueries({ queryKey: ['dashboard_meetings'] })
       onClose()
     } catch (e) {
       const msg = (e as { message?: string })?.message || String(e)
-      alert(`삭제 실패: ${msg}`)
+      alert(`${t('serviceDash.deleteFailed')} ${msg}`)
     }
   }
 
@@ -669,23 +673,23 @@ function MeetingDialog({
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>미팅 수정{meeting ? ` · ${meeting.studentName}` : ''}</DialogTitle>
+          <DialogTitle>{t('serviceDash.editMeeting')}{meeting ? ` · ${meeting.studentName}` : ''}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>유형</Label>
-              <Input value={meetingType} onChange={e => setMeetingType(e.target.value)} placeholder="예: Regular" />
+              <Label>{t('serviceDash.type')}</Label>
+              <Input value={meetingType} onChange={e => setMeetingType(e.target.value)} placeholder={t('serviceDash.meetingTypePlaceholder')} />
             </div>
             <div className="space-y-1">
-              <Label>날짜</Label>
+              <Label>{t('serviceDash.date')}</Label>
               <Input type="date" value={date} onChange={e => setDate(e.target.value)} />
             </div>
           </div>
           <div className="space-y-1">
-            <Label>컨설턴트</Label>
+            <Label>{t('serviceDash.consultant')}</Label>
             <Select value={consultantId} onValueChange={v => setConsultantId(v ?? '')}>
-              <SelectTrigger><SelectValue placeholder="컨설턴트 선택" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('serviceDash.selectConsultant')} /></SelectTrigger>
               <SelectContent>
                 {CONSULTANTS.map(c => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -694,12 +698,12 @@ function MeetingDialog({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>진행 상태</Label>
+            <Label>{t('serviceDash.meetingStatus')}</Label>
             <Select value={status} onValueChange={v => setStatus(v as MeetingStatus)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {MEETING_STATUS_OPTIONS.map(s => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                {MEETING_STATUS_KEYS.map(s => (
+                  <SelectItem key={s.value} value={s.value}>{t(s.key)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -707,39 +711,39 @@ function MeetingDialog({
           {isCancelled && (
             <div className="grid grid-cols-2 gap-3 rounded-md border border-red-200 bg-red-50/50 p-3">
               <div className="space-y-1">
-                <Label>취소 주체</Label>
+                <Label>{t('serviceDash.cancelledByLabel')}</Label>
                 <Select value={cancelledBy} onValueChange={v => setCancelledBy(v as MeetingCancelledBy)}>
-                  <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t('serviceDash.selectPlaceholder')} /></SelectTrigger>
                   <SelectContent>
-                    {CANCELLED_BY_OPTIONS.map(c => (
-                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    {CANCELLED_BY_KEYS.map(c => (
+                      <SelectItem key={c.value} value={c.value}>{t(c.key)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>취소 사유</Label>
-                <Input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="예: 고객 개인 사정" />
+                <Label>{t('serviceDash.cancelReason')}</Label>
+                <Input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder={t('serviceDash.cancelReasonPlaceholder')} />
               </div>
             </div>
           )}
           <div className="space-y-1">
-            <Label>리포트 상태</Label>
+            <Label>{t('serviceDash.reportStatus')}</Label>
             <Select value={reportStatus} onValueChange={v => setReportStatus(v as ServiceReportStatus)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {REPORT_STATUS_OPTIONS.map(s => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                {REPORT_STATUS_KEYS.map(s => (
+                  <SelectItem key={s.value} value={s.value}>{t(s.key)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>리포트 링크 (선택)</Label>
+            <Label>{t('serviceDash.reportLinkOptional')}</Label>
             <Input value={reportUrl} onChange={e => setReportUrl(e.target.value)} placeholder="https://..." />
           </div>
           <div className="space-y-1">
-            <Label>준비 자료 링크 (선택)</Label>
+            <Label>{t('serviceDash.prepLinkOptional')}</Label>
             <Input value={prepUrl} onChange={e => setPrepUrl(e.target.value)} placeholder="https://..." />
           </div>
         </div>
@@ -751,13 +755,13 @@ function MeetingDialog({
             className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
           >
             {deleting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
-            삭제
+            {t('serviceDash.delete')}
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} disabled={deleting}>취소</Button>
+            <Button variant="outline" onClick={onClose} disabled={deleting}>{t('serviceDash.cancel')}</Button>
             <Button onClick={handleSave} disabled={saving || deleting || !date}>
               {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
-              저장
+              {t('serviceDash.save')}
             </Button>
           </div>
         </DialogFooter>
@@ -789,6 +793,7 @@ function WeekCalendar({
   onAddMilestone: (dateStr: string) => void
   onEditMilestone: (m: DashboardMilestone) => void
 }) {
+  const t = useT()
   const today = todayKST()
   const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
@@ -837,7 +842,7 @@ function WeekCalendar({
                   key={m.id}
                   onClick={() => onEditMeeting(m)}
                   className={`w-full text-left text-[11px] px-1.5 py-1 rounded border font-medium truncate hover:opacity-80 transition-opacity ${MEETING_COLOR}`}
-                  title={`${m.studentName} 미팅 (클릭하여 수정)`}
+                  title={`${m.studentName} ${t('serviceDash.meeting')} (${t('serviceDash.clickToEdit')})`}
                 >
                   {m.studentName}
                   {m.meetingType && <span className="opacity-70"> · {m.meetingType}</span>}
@@ -859,7 +864,7 @@ function WeekCalendar({
                     key={m.id}
                     onClick={() => onEditMilestone(m)}
                     className={`w-full text-left text-[11px] px-1.5 py-1 rounded border font-medium truncate hover:opacity-80 transition-opacity ${cfg.color}`}
-                    title={`${m.studentName}: ${m.title} (클릭하여 수정)`}
+                    title={`${m.studentName}: ${m.title} (${t('serviceDash.clickToEdit')})`}
                   >
                     {m.studentName} · {m.title}
                   </button>
@@ -913,6 +918,7 @@ function MonthCalendar({
   onSelectMeeting: (m: DashboardMeeting) => void
   onEditMilestone: (m: DashboardMilestone) => void
 }) {
+  const t = useT()
   const today = todayKST()
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
   const grid = getMonthGrid(year, month)
@@ -982,7 +988,7 @@ function MonthCalendar({
                         key={m.id}
                         onClick={() => onEditMilestone(m)}
                         className={`w-full text-left text-[10px] px-1 py-0.5 rounded truncate hover:opacity-80 transition-opacity ${cfg.color}`}
-                        title={`${m.studentName}: ${m.title} (클릭하여 수정)`}
+                        title={`${m.studentName}: ${m.title} (${t('serviceDash.clickToEdit')})`}
                       >
                         {m.studentName}
                       </button>
@@ -994,7 +1000,7 @@ function MonthCalendar({
                     </div>
                   ))}
                   {(dm.length + gm.length + mm.length + ff.length) > 3 && (
-                    <p className="text-[10px] text-gray-400 pl-1">+{dm.length + gm.length + mm.length + ff.length - 3}개</p>
+                    <p className="text-[10px] text-gray-400 pl-1">{t('serviceDash.moreItems').replace('{n}', String(dm.length + gm.length + mm.length + ff.length - 3))}</p>
                   )}
                 </div>
               </div>
@@ -1023,6 +1029,7 @@ function CycleOverview({
   onAddMilestone: (studentId: string) => void
   onEditMilestone: (m: DashboardMilestone) => void
 }) {
+  const t = useT()
   const today = todayKST()
   const ref = new Date(today + 'T00:00:00')
   const months = getCycleMonths(ref, 2, 6)
@@ -1088,7 +1095,7 @@ function CycleOverview({
       <div className="border rounded-lg overflow-hidden">
         {/* Header row */}
         <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: '11rem repeat(' + months.length + ', 1fr)' }}>
-          <div className="px-3 py-2 text-[11px] font-semibold text-gray-400 uppercase">학생</div>
+          <div className="px-3 py-2 text-[11px] font-semibold text-gray-400 uppercase">{t('serviceDash.student')}</div>
           {months.map(({ year, month }) => {
             const key = `${year}-${String(month).padStart(2, '0')}`
             const isCurrentMonth = key === currentMonthKey
@@ -1103,7 +1110,7 @@ function CycleOverview({
 
         {/* Student rows */}
         {filteredStudents.length === 0 ? (
-          <div className="py-12 text-center text-sm text-gray-400">표시할 학생이 없습니다.</div>
+          <div className="py-12 text-center text-sm text-gray-400">{t('serviceDash.noStudents')}</div>
         ) : (
           filteredStudents.map(student => {
             const sm = milestonesMap.get(student.id)
@@ -1136,7 +1143,7 @@ function CycleOverview({
                           <button
                             onClick={() => onAddMilestone(student.id)}
                             className="w-5 h-5 rounded-full border-2 border-dashed border-gray-200 hover:border-gray-400 transition-colors"
-                            title="마일스톤 추가"
+                            title={t('serviceDash.addMilestoneTooltip')}
                           />
                         ) : (
                           monthMilestones.map(m => {
@@ -1149,7 +1156,7 @@ function CycleOverview({
                                 className={`group relative w-5 h-5 rounded-full border-2 border-white shadow-sm flex items-center justify-center hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 ${cfg.dot} ${
                                   m.status === 'completed' ? 'opacity-40' : isPast ? 'opacity-70' : ''
                                 } ${isCurrentMonth ? 'ring-2 ring-offset-1 ring-blue-300' : ''}`}
-                                title={`${m.title} · ${MILESTONE_STATUSES.find(s => s.value === m.status)?.label} (클릭하여 수정)`}
+                                title={`${m.title} · ${t(MILESTONE_STATUS_KEYS.find(s => s.value === m.status)?.key ?? 'serviceDash.statusUpcoming')} (${t('serviceDash.clickToEdit')})`}
                               >
                                 {m.status === 'urgent' && (
                                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
@@ -1171,17 +1178,17 @@ function CycleOverview({
       {/* Legend + status summary */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-wrap">
-          {MILESTONE_TYPES.map(t => (
-            <div key={t.value} className="flex items-center gap-1.5">
-              <span className={`w-3 h-3 rounded-full ${t.dot}`} />
-              <span className="text-[11px] text-gray-500">{t.label}</span>
+          {MILESTONE_TYPES.map(mt => (
+            <div key={mt.value} className="flex items-center gap-1.5">
+              <span className={`w-3 h-3 rounded-full ${mt.dot}`} />
+              <span className="text-[11px] text-gray-500">{mt.label}</span>
             </div>
           ))}
         </div>
         <div className="flex items-center gap-3 text-[12px] shrink-0">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" /><span className="text-gray-600">{statusCounts.onTrack} 정상</span></span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" /><span className="text-gray-600">{statusCounts.behind} 지연</span></span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /><span className="text-gray-600">{statusCounts.urgent} 긴급</span></span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" /><span className="text-gray-600">{statusCounts.onTrack} {t('serviceDash.onTrackCount')}</span></span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" /><span className="text-gray-600">{statusCounts.behind} {t('serviceDash.behindCount')}</span></span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /><span className="text-gray-600">{statusCounts.urgent} {t('serviceDash.urgentCount')}</span></span>
         </div>
       </div>
     </div>
@@ -1191,6 +1198,7 @@ function CycleOverview({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export function ServiceDashboardPage() {
+  const t = useT()
   const today = todayKST()
   const todayDate = new Date(today + 'T00:00:00')
 
@@ -1327,7 +1335,7 @@ export function ServiceDashboardPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체 컨설턴트</SelectItem>
+                <SelectItem value="all">{t('serviceDash.allConsultants')}</SelectItem>
                 {CONSULTANTS.map(c => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
@@ -1340,19 +1348,19 @@ export function ServiceDashboardPage() {
                 onClick={() => setView('calendar')}
                 className={`px-3 h-8 text-sm font-medium ${view === 'calendar' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
-                <Calendar size={14} className="inline mr-1.5" />캘린더
+                <Calendar size={14} className="inline mr-1.5" />{t('serviceDash.calendar')}
               </button>
               <button
                 onClick={() => setView('cycle')}
                 className={`px-3 h-8 text-sm font-medium border-l ${view === 'cycle' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
-                <Users size={14} className="inline mr-1.5" />사이클
+                <Users size={14} className="inline mr-1.5" />{t('serviceDash.cycle')}
               </button>
             </div>
 
             {/* Add milestone */}
             <Button size="sm" className="h-8 gap-1.5" onClick={() => { setEditingMilestone(null); setDefaultMilestoneStudentId(undefined); setDefaultMilestoneDate(undefined); setShowAddMilestone(true) }}>
-              <Plus size={14} />마일스톤
+              <Plus size={14} />{t('serviceDash.milestone')}
             </Button>
           </div>
         </div>
@@ -1364,7 +1372,7 @@ export function ServiceDashboardPage() {
               <button onClick={() => navigate(-1)} className="p-1 rounded hover:bg-gray-100">
                 <ChevronLeft size={16} />
               </button>
-              <button onClick={goToday} className="px-2 py-0.5 text-sm border rounded hover:bg-gray-50">오늘</button>
+              <button onClick={goToday} className="px-2 py-0.5 text-sm border rounded hover:bg-gray-50">{t('serviceDash.today')}</button>
               <button onClick={() => navigate(1)} className="p-1 rounded hover:bg-gray-100">
                 <ChevronRight size={16} />
               </button>
@@ -1376,11 +1384,11 @@ export function ServiceDashboardPage() {
               <button
                 onClick={() => setCalMode('week')}
                 className={`px-3 h-7 text-xs font-medium ${calMode === 'week' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'}`}
-              >주간</button>
+              >{t('serviceDash.weekly')}</button>
               <button
                 onClick={() => setCalMode('month')}
                 className={`px-3 h-7 text-xs font-medium border-l ${calMode === 'month' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'}`}
-              >월간</button>
+              >{t('serviceDash.monthly')}</button>
             </div>
           </div>
         )}
@@ -1389,17 +1397,17 @@ export function ServiceDashboardPage() {
         {view === 'cycle' && (
           <div className="flex items-center gap-2 mt-3">
             <p className="text-xs text-gray-500">
-              {consultantFilter === 'all' ? '전체 컨설턴트' : consultantName(consultantFilter)}
-              {' · '}활성 학생 {students.filter(s => s.status === 'active' || !s.status).length}명
+              {consultantFilter === 'all' ? t('serviceDash.allConsultants') : consultantName(consultantFilter)}
+              {' · '}{t('serviceDash.activeStudents')} {students.filter(s => s.status === 'active' || !s.status).length}{t('serviceDash.studentsUnit')}
             </p>
             <div className="flex rounded-md border overflow-hidden ml-auto">
               <button onClick={() => setCycleFilter('all')}
                 className={`px-3 h-7 text-xs font-medium ${cycleFilter === 'all' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-                전체
+                {t('serviceDash.all')}
               </button>
               <button onClick={() => setCycleFilter('at_risk')}
                 className={`px-3 h-7 text-xs font-medium border-l ${cycleFilter === 'at_risk' ? 'bg-red-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-                <AlertCircle size={11} className="inline mr-1" />위험
+                <AlertCircle size={11} className="inline mr-1" />{t('serviceDash.atRisk')}
               </button>
             </div>
           </div>
@@ -1414,30 +1422,30 @@ export function ServiceDashboardPage() {
           <div className="grid grid-cols-4 gap-3">
             <Card className="border-0 bg-gray-50">
               <CardContent className="px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">학생 세션</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{t('serviceDash.studentSessions')}</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">{stats.sessions}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{calMode === 'week' ? '이번 주' : '이번 달'}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{calMode === 'week' ? t('serviceDash.thisWeek') : t('serviceDash.thisMonth')}</p>
               </CardContent>
             </Card>
             <Card className="border-0 bg-gray-50">
               <CardContent className="px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">원서 마감</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{t('serviceDash.appDeadlines')}</p>
                 <p className="text-2xl font-bold text-orange-500 mt-1">{stats.deadlines}</p>
-                <p className="text-xs text-gray-400 mt-0.5">원서 + 대회</p>
+                <p className="text-xs text-gray-400 mt-0.5">{t('serviceDash.appAndComp')}</p>
               </CardContent>
             </Card>
             <Card className="border-0 bg-gray-50">
               <CardContent className="px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">EC 마일스톤</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{t('serviceDash.ecMilestones')}</p>
                 <p className="text-2xl font-bold text-purple-600 mt-1">{stats.ecMilestones}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{calMode === 'week' ? '이번 주' : '이번 달'}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{calMode === 'week' ? t('serviceDash.thisWeek') : t('serviceDash.thisMonth')}</p>
               </CardContent>
             </Card>
             <Card className="border-0 bg-gray-50">
               <CardContent className="px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">노트 대기</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{t('serviceDash.notesPending')}</p>
                 <p className="text-2xl font-bold text-amber-500 mt-1">{stats.notesPending}</p>
-                <p className="text-xs text-gray-400 mt-0.5">리포트 미제출</p>
+                <p className="text-xs text-gray-400 mt-0.5">{t('serviceDash.reportNotSubmitted')}</p>
               </CardContent>
             </Card>
           </div>
@@ -1448,21 +1456,21 @@ export function ServiceDashboardPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-violet-200 border border-violet-300" />
-              <span className="text-[11px] text-gray-500">학생 미팅</span>
+              <span className="text-[11px] text-gray-500">{t('serviceDash.studentMeeting')}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded border border-dashed border-violet-400" />
-              <span className="text-[11px] text-gray-500">정기 미팅 예정</span>
+              <span className="text-[11px] text-gray-500">{t('serviceDash.regularMeetingScheduled')}</span>
             </div>
-            {MILESTONE_TYPES.map(t => (
-              <div key={t.value} className="flex items-center gap-1.5">
-                <span className={`w-3 h-3 rounded ${t.dot}`} />
-                <span className="text-[11px] text-gray-500">{t.label}</span>
+            {MILESTONE_TYPES.map(mt => (
+              <div key={mt.value} className="flex items-center gap-1.5">
+                <span className={`w-3 h-3 rounded ${mt.dot}`} />
+                <span className="text-[11px] text-gray-500">{mt.label}</span>
               </div>
             ))}
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded bg-yellow-200 border border-yellow-300" />
-              <span className="text-[11px] text-gray-500">과제 마감</span>
+              <span className="text-[11px] text-gray-500">{t('serviceDash.taskDeadline')}</span>
             </div>
           </div>
         )}
@@ -1510,11 +1518,11 @@ export function ServiceDashboardPage() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
                     <AlertCircle size={14} className="text-orange-500" />
-                    다가오는 마감 (14일)
+                    {t('serviceDash.upcomingDeadlines14')}
                   </h3>
                 </div>
                 {upcomingDeadlines.length === 0 ? (
-                  <p className="text-sm text-gray-400">예정된 마감이 없습니다.</p>
+                  <p className="text-sm text-gray-400">{t('serviceDash.noUpcomingDeadlines')}</p>
                 ) : (
                   <ul className="space-y-2">
                     {upcomingDeadlines.map(m => {
@@ -1523,7 +1531,7 @@ export function ServiceDashboardPage() {
                       return (
                         <li key={m.id} className="flex items-center gap-2.5">
                           <span className={`text-[11px] font-semibold w-14 shrink-0 ${days <= 3 ? 'text-red-600' : days <= 7 ? 'text-amber-600' : 'text-gray-500'}`}>
-                            {days === 0 ? '오늘' : days === 1 ? '내일' : `${days}일 후`}
+                            {days === 0 ? t('serviceDash.today') : days === 1 ? t('serviceDash.tomorrow') : t('serviceDash.daysLater').replace('{n}', String(days))}
                           </span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded border ${cfg.color}`}>{cfg.label}</span>
                           <span className="text-sm text-gray-700 flex-1 truncate">{m.studentName} — {m.title}</span>
@@ -1541,11 +1549,11 @@ export function ServiceDashboardPage() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
                     <FileText size={14} className="text-amber-500" />
-                    노트 대기 ({notesPendingList.length})
+                    {t('serviceDash.notesPending')} ({notesPendingList.length})
                   </h3>
                 </div>
                 {notesPendingList.length === 0 ? (
-                  <p className="text-sm text-gray-400">대기 중인 노트가 없습니다.</p>
+                  <p className="text-sm text-gray-400">{t('serviceDash.noNotesPending')}</p>
                 ) : (
                   <ul className="space-y-2">
                     {notesPendingList.map(m => (
@@ -1563,7 +1571,7 @@ export function ServiceDashboardPage() {
                           onClick={() => setSelectedMeeting(m)}
                           className="text-xs text-blue-500 hover:underline shrink-0"
                         >
-                          보기
+                          {t('serviceDash.view')}
                         </button>
                       </li>
                     ))}

@@ -5,6 +5,7 @@ import {
   Loader2, GraduationCap, CalendarDays, FileText, ShieldCheck, AlertTriangle,
 } from 'lucide-react'
 import { usePortalData } from '@/hooks/usePortalTokens'
+import { useT } from '@/i18n/LanguageContext'
 
 // Consultant name lookup (matches Student360Page)
 const CONSULTANTS: Record<string, string> = {
@@ -16,10 +17,16 @@ const CONSULTANTS: Record<string, string> = {
   liz: '유리즈',
 }
 
-const REPORT_BADGE: Record<string, { label: string; className: string }> = {
-  none: { label: '리포트 없음', className: 'bg-gray-100 text-gray-600' },
-  pending: { label: '리포트 대기', className: 'bg-amber-100 text-amber-700' },
-  submitted: { label: '리포트 제출', className: 'bg-emerald-100 text-emerald-700' },
+const REPORT_BADGE_STYLE: Record<string, string> = {
+  none: 'bg-gray-100 text-gray-600',
+  pending: 'bg-amber-100 text-amber-700',
+  submitted: 'bg-emerald-100 text-emerald-700',
+}
+
+const REPORT_BADGE_KEY: Record<string, string> = {
+  none: 'studentPortal.reportNone',
+  pending: 'studentPortal.reportPending',
+  submitted: 'studentPortal.reportSubmitted',
 }
 
 /** Safely extract string from unknown Supabase row value */
@@ -28,6 +35,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '')
 export function StudentPortalPage() {
   const { token } = useParams<{ token: string }>()
   const { data, isLoading, error } = usePortalData(token)
+  const t = useT()
 
   if (isLoading) {
     return (
@@ -47,14 +55,14 @@ export function StudentPortalPage() {
           <CardContent className="py-12 text-center">
             <AlertTriangle className="size-12 mx-auto mb-4 text-amber-500" />
             <h2 className="text-lg font-bold mb-2">
-              {isExpired ? '링크가 만료되었습니다' : isInvalid ? '유효하지 않은 링크입니다' : '오류가 발생했습니다'}
+              {isExpired ? t('studentPortal.linkExpired') : isInvalid ? t('studentPortal.invalidLink') : t('studentPortal.errorOccurred')}
             </h2>
             <p className="text-sm text-muted-foreground">
               {isExpired
-                ? '이 포털 링크의 유효기간이 지났습니다. 담당 컨설턴트에게 새 링크를 요청해주세요.'
+                ? t('studentPortal.linkExpiredDesc')
                 : isInvalid
-                  ? '이 링크는 존재하지 않거나 비활성화되었습니다. 담당 컨설턴트에게 문의해주세요.'
-                  : '데이터를 불러오는 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'}
+                  ? t('studentPortal.invalidLinkDesc')
+                  : t('studentPortal.errorDesc')}
             </p>
           </CardContent>
         </Card>
@@ -83,7 +91,7 @@ export function StudentPortalPage() {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <ShieldCheck className="size-3.5 text-emerald-500" />
-            보안 링크
+            {t('studentPortal.secureLink')}
           </div>
         </div>
       </header>
@@ -101,14 +109,14 @@ export function StudentPortalPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3 text-sm">
-              <PortalField label="학교" value={str(s.school)} />
-              <PortalField label="학년" value={str(s.grade)} />
-              <PortalField label="담당 컨설턴트" value={CONSULTANTS[str(s.assigned_consultant)] || str(s.assigned_consultant)} />
-              <PortalField label="에세이 에디터" value={str(s.essay_editor)} />
-              <PortalField label="파트너" value={str(s.partners)} />
-              <PortalField label="전공" value={str(s.majors)} />
-              <PortalField label="시작일" value={str(s.start_date)} />
-              {str(s.accepted_uni) && <PortalField label="합격 대학" value={str(s.accepted_uni)} />}
+              <PortalField label={t('studentPortal.school')} value={str(s.school)} />
+              <PortalField label={t('studentPortal.grade')} value={str(s.grade)} />
+              <PortalField label={t('studentPortal.consultant')} value={CONSULTANTS[str(s.assigned_consultant)] || str(s.assigned_consultant)} />
+              <PortalField label={t('studentPortal.essayEditor')} value={str(s.essay_editor)} />
+              <PortalField label={t('studentPortal.partner')} value={str(s.partners)} />
+              <PortalField label={t('studentPortal.major')} value={str(s.majors)} />
+              <PortalField label={t('studentPortal.startDate')} value={str(s.start_date)} />
+              {str(s.accepted_uni) && <PortalField label={t('studentPortal.acceptedUni')} value={str(s.accepted_uni)} />}
             </div>
           </CardContent>
         </Card>
@@ -118,17 +126,18 @@ export function StudentPortalPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <CalendarDays className="size-5 text-blue-500" />
-              미팅 · 리포트
+              {t('studentPortal.meetingsReports')}
               <span className="text-muted-foreground font-normal">({data.meetings.length})</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {data.meetings.length === 0 && (
-              <p className="text-sm text-muted-foreground">미팅 기록이 없습니다.</p>
+              <p className="text-sm text-muted-foreground">{t('studentPortal.noMeetings')}</p>
             )}
             {data.meetings.map((m) => {
               const status = str(m.report_status) || 'none'
-              const reportMeta = REPORT_BADGE[status] || REPORT_BADGE.none
+              const badgeStyle = REPORT_BADGE_STYLE[status] || REPORT_BADGE_STYLE.none
+              const badgeKey = REPORT_BADGE_KEY[status] || REPORT_BADGE_KEY.none
               return (
                 <div key={str(m.id)} className="rounded-lg border p-4">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -139,9 +148,9 @@ export function StudentPortalPage() {
                         {CONSULTANTS[str(m.consultant_id)] || str(m.consultant_id)}
                       </span>
                     </div>
-                    <Badge className={reportMeta.className}>
+                    <Badge className={badgeStyle}>
                       <FileText className="size-3 mr-1" />
-                      {reportMeta.label}
+                      {t(badgeKey)}
                     </Badge>
                   </div>
                   {str(m.summary) && (
@@ -154,7 +163,7 @@ export function StudentPortalPage() {
                       rel="noreferrer"
                       className="text-xs text-blue-600 underline mt-2 inline-block"
                     >
-                      리포트 보기{str(m.report_date) ? ` · ${str(m.report_date)}` : ''}
+                      {t('studentPortal.viewReport')}{str(m.report_date) ? ` · ${str(m.report_date)}` : ''}
                     </a>
                   )}
                 </div>
@@ -166,7 +175,7 @@ export function StudentPortalPage() {
         {/* Footer */}
         <div className="text-center py-6 text-xs text-muted-foreground">
           <p>© {new Date().getFullYear()} Quantum Admissions. All rights reserved.</p>
-          <p className="mt-1">이 페이지는 보안 링크를 통해서만 접근 가능합니다.</p>
+          <p className="mt-1">{t('studentPortal.securePageNote')}</p>
         </div>
       </main>
     </div>

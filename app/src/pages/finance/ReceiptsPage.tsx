@@ -70,7 +70,7 @@ export function ReceiptsPage() {
       paymentMethod: form.paymentMethod,
       paidDate: form.paidDate,
       description: form.description || undefined,
-      items: [{ label: form.description || '서비스 이용료', amount: Number(form.amount) }],
+      items: [{ label: form.description || t('receipts.defaultItemLabel'), amount: Number(form.amount) }],
       autoSend: !!form.recipientEmail,
     }, {
       onSuccess: () => {
@@ -111,9 +111,9 @@ export function ReceiptsPage() {
 
   const paymentMethodLabel = (method?: string) => {
     switch (method) {
-      case 'bank_transfer': return '계좌이체'
-      case 'card': return '카드결제'
-      case 'us_wire': return '해외송금'
+      case 'bank_transfer': return t('receipts.bankTransfer')
+      case 'card': return t('receipts.card')
+      case 'us_wire': return t('receipts.usWire')
       default: return method || '-'
     }
   }
@@ -266,9 +266,9 @@ export function ReceiptsPage() {
                 <Select value={form.paymentMethod} onValueChange={(v) => setForm(f => ({ ...f, paymentMethod: v || 'bank_transfer' }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="bank_transfer">계좌이체</SelectItem>
-                    <SelectItem value="card">카드결제</SelectItem>
-                    <SelectItem value="us_wire">해외송금</SelectItem>
+                    <SelectItem value="bank_transfer">{t('receipts.bankTransfer')}</SelectItem>
+                    <SelectItem value="card">{t('receipts.card')}</SelectItem>
+                    <SelectItem value="us_wire">{t('receipts.usWire')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

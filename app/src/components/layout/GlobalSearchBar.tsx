@@ -277,6 +277,8 @@ export function GlobalSearchBar() {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function StageBadge({ type, stage }: { type: string; stage: string }) {
+  const t = useT()
+
   if (type === 'lead') {
     const config = getStageConfig(stage as PipelineStage)
     return (
@@ -289,6 +291,16 @@ function StageBadge({ type, stage }: { type: string; stage: string }) {
   }
 
   // Contract / project stage labels
+  const stageKeyMap: Record<string, string> = {
+    '진행 중': 'search.stageActive',
+    '만료 임박': 'search.stageExpiringSoon',
+    '만료': 'search.stageExpired',
+    '취소': 'search.stageCancelled',
+    '대기': 'search.stageWaiting',
+    '완료': 'search.stageCompleted',
+    '지연': 'search.stageDelayed',
+  }
+
   const colorMap: Record<string, string> = {
     '진행 중': 'bg-blue-100 text-blue-700',
     '만료 임박': 'bg-amber-100 text-amber-700',
@@ -301,7 +313,7 @@ function StageBadge({ type, stage }: { type: string; stage: string }) {
 
   return (
     <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colorMap[stage] || 'bg-gray-100 text-gray-600'}`}>
-      {stage}
+      {stageKeyMap[stage] ? t(stageKeyMap[stage]) : stage}
     </span>
   )
 }

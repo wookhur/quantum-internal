@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Trophy, Gamepad2, Loader2, Bird } from 'lucide-react'
+import { Trophy, Gamepad2, Loader2, Bird, Grid3X3 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import { useGameLeaderboard, useSubmitScore } from '@/hooks/useGameLeaderboard'
 import { FlappyCanvas, FlappyInfo } from './FlappyGame'
+import { Game2048Canvas, Game2048Info } from './Game2048'
 
 // ─── T-Rex Dino Runner (pure canvas) ───
 
@@ -354,13 +355,14 @@ function Leaderboard({ game }: { game: string }) {
 
 // ─── Main Page with Tabs ───
 
-type GameTab = 'trex' | 'flappy'
+type GameTab = 'trex' | 'flappy' | '2048'
 
 export function GamePage() {
   const t = useT()
   const [activeGame, setActiveGame] = useState<GameTab>('trex')
   const [trexScore, setTrexScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
   const [flappyScore, setFlappyScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
+  const [score2048, setScore2048] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
   const { user } = useAuth()
   const submitScore = useSubmitScore()
 
@@ -372,6 +374,11 @@ export function GamePage() {
   const handleFlappyOver = useCallback((score: number, hi: number) => {
     setFlappyScore({ last: score, hi })
     if (user && score > 0) submitScore.mutate({ userId: user.id, score, game: 'flappy' })
+  }, [user, submitScore])
+
+  const handle2048Over = useCallback((score: number) => {
+    setScore2048(prev => ({ last: score, hi: Math.max(prev.hi, score) }))
+    if (user && score > 0) submitScore.mutate({ userId: user.id, score, game: '2048' })
   }, [user, submitScore])
 
   return (
@@ -399,6 +406,13 @@ export function GamePage() {
         >
           <Bird className="size-4" /> Flappy Bird
         </Button>
+        <Button
+          variant={activeGame === '2048' ? 'default' : 'outline'}
+          className="gap-2"
+          onClick={() => setActiveGame('2048')}
+        >
+          <Grid3X3 className="size-4" /> 2048
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -408,8 +422,10 @@ export function GamePage() {
             <CardContent className="p-0">
               {activeGame === 'trex' ? (
                 <DinoCanvas onGameOver={handleTrexOver} />
-              ) : (
+              ) : activeGame === 'flappy' ? (
                 <FlappyCanvas onGameOver={handleFlappyOver} />
+              ) : (
+                <Game2048Canvas onGameOver={handle2048Over} />
               )}
             </CardContent>
           </Card>
@@ -440,8 +456,10 @@ export function GamePage() {
                 </p>
               </div>
             </>
-          ) : (
+          ) : activeGame === 'flappy' ? (
             <FlappyInfo lastScore={flappyScore.last} highScore={flappyScore.hi} />
+          ) : (
+            <Game2048Info score={score2048.last} bestScore={score2048.hi} />
           )}
         </div>
 

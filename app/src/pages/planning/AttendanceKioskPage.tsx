@@ -3,6 +3,7 @@ import { LogIn, LogOut, ChevronLeft, Check, Clock } from 'lucide-react'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAttendances, useUpsertAttendance } from '@/hooks/useAttendances'
 import { useKioskExcludedIds } from '@/hooks/useKioskSettings'
+import { useT } from '@/i18n/LanguageContext'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,6 +40,7 @@ const AVATAR_COLORS = [
 type KioskStep = 'select' | 'action' | 'done'
 
 export function AttendanceKioskPage() {
+  const t = useT()
   const { data: profiles = [] } = useProfiles()
   const { data: attendances = [] } = useAttendances(currentMonth())
   const upsertMut = useUpsertAttendance()
@@ -137,7 +139,7 @@ export function AttendanceKioskPage() {
         </div>
 
         <div className="px-6 pb-3">
-          <h2 className="text-lg font-semibold text-slate-700 text-center">직원을 선택하세요</h2>
+          <h2 className="text-lg font-semibold text-slate-700 text-center">{t('kiosk.selectEmployee')}</h2>
         </div>
 
         {/* Employee grid */}
@@ -162,11 +164,11 @@ export function AttendanceKioskPage() {
                       <div className={`w-2 h-2 rounded-full ${todayRec.clockOut ? 'bg-slate-400' : 'bg-green-500 animate-pulse'}`} />
                       <span className="text-xs text-slate-500">
                         {todayRec.clockIn}
-                        {todayRec.clockOut ? ` ~ ${todayRec.clockOut}` : ' 근무중'}
+                        {todayRec.clockOut ? ` ~ ${todayRec.clockOut}` : ` ${t('kiosk.working')}`}
                       </span>
                     </div>
                   ) : (
-                    <span className="text-xs text-slate-400">미출근</span>
+                    <span className="text-xs text-slate-400">{t('kiosk.notCheckedIn')}</span>
                   )}
                 </button>
               )
@@ -198,7 +200,7 @@ export function AttendanceKioskPage() {
             className="flex items-center gap-1 text-slate-500 active:text-slate-800 transition-colors"
           >
             <ChevronLeft className="h-5 w-5" />
-            <span className="text-sm">돌아가기</span>
+            <span className="text-sm">{t('kiosk.back')}</span>
           </button>
         </div>
 
@@ -224,8 +226,8 @@ export function AttendanceKioskPage() {
             <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
               <Clock className="h-4 w-4 text-slate-500" />
               <span className="text-sm text-slate-600">
-                출근 {selectedTodayRecord!.clockIn}
-                {hasClockOut && ` · 퇴근 ${selectedTodayRecord!.clockOut}`}
+                {t('kiosk.clockIn')} {selectedTodayRecord!.clockIn}
+                {hasClockOut && ` · ${t('kiosk.clockOut')} ${selectedTodayRecord!.clockOut}`}
               </span>
             </div>
           )}
@@ -244,7 +246,7 @@ export function AttendanceKioskPage() {
             }`}
           >
             <LogIn className="h-7 w-7" />
-            {hasClockIn ? `출근 완료 (${selectedTodayRecord!.clockIn})` : '출근'}
+            {hasClockIn ? `${t('kiosk.clockInDone')} (${selectedTodayRecord!.clockIn})` : t('kiosk.clockIn')}
           </button>
 
           {/* Clock Out */}
@@ -260,17 +262,17 @@ export function AttendanceKioskPage() {
             }`}
           >
             <LogOut className="h-7 w-7" />
-            {hasClockOut ? `퇴근 완료 (${selectedTodayRecord!.clockOut})` : '퇴근'}
+            {hasClockOut ? `${t('kiosk.clockOutDone')} (${selectedTodayRecord!.clockOut})` : t('kiosk.clockOut')}
           </button>
 
           {hasClockIn && !hasClockOut && (
             <p className="text-sm text-green-600 mt-2 flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              근무 중
+              {t('kiosk.currentlyWorking')}
             </p>
           )}
           {hasClockIn && hasClockOut && (
-            <p className="text-sm text-slate-500 mt-2">오늘 근무가 완료되었습니다.</p>
+            <p className="text-sm text-slate-500 mt-2">{t('kiosk.workCompleted')}</p>
           )}
         </div>
 
@@ -291,12 +293,12 @@ export function AttendanceKioskPage() {
         </div>
         <h2 className="text-3xl font-bold text-slate-800 mb-2">{selectedProfile.name}</h2>
         <p className={`text-xl font-semibold ${doneAction === 'in' ? 'text-green-600' : 'text-blue-600'}`}>
-          {doneAction === 'in' ? '출근' : '퇴근'} 완료
+          {doneAction === 'in' ? t('kiosk.clockInDone') : t('kiosk.clockOutDone')}
         </p>
         <p className="text-4xl font-mono font-bold text-slate-800 mt-4">
           {nowTime()}
         </p>
-        <p className="text-sm text-slate-400 mt-8">3초 후 자동으로 돌아갑니다...</p>
+        <p className="text-sm text-slate-400 mt-8">{t('kiosk.autoReturn')}</p>
       </div>
     )
   }

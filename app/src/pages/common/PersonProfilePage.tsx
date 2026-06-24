@@ -180,9 +180,9 @@ export function PersonProfilePage() {
   if (hasSales) {
     for (const act of leadActivities) {
       const typeLabels: Record<string, string> = {
-        note: '메모', call: '전화', katalk: '카톡', email: '이메일',
-        meeting: '미팅', consultation: '상담', stage_change: '단계 변경',
-        assignment_change: '담당자 변경', system: '시스템',
+        note: t('personProfile.memo'), call: t('personProfile.call'), katalk: t('personProfile.katalk'), email: t('personProfile.email'),
+        meeting: t('personProfile.meeting'), consultation: t('personProfile.consultation'), stage_change: t('personProfile.stageChange'),
+        assignment_change: t('personProfile.assignmentChange'), system: t('personProfile.system'),
       }
       const typeColors: Record<string, string> = {
         call: 'bg-orange-100 text-orange-700', consultation: 'bg-green-100 text-green-700',
@@ -206,9 +206,9 @@ export function PersonProfilePage() {
         id: `smtg-${m.id as string}`,
         date: (m.meeting_date as string) || (m.created_at as string),
         phase: 'sales',
-        badge: `${m.meeting_number || ''}차 상담`,
+        badge: t('personProfile.nthConsultation').replace('{n}', String(m.meeting_number || '')),
         badgeColor: 'bg-green-100 text-green-700',
-        title: `${m.parent_name}${m.student_name ? ` / ${m.student_name}` : ''} 상담`,
+        title: t('personProfile.consultationTitle').replace('{parent}', m.parent_name as string).replace('{student}', m.student_name ? ` / ${m.student_name}` : ''),
         desc: typeof m.memo === 'string' ? m.memo : undefined,
         person: m.profiles?.name,
       })
@@ -222,7 +222,7 @@ export function PersonProfilePage() {
         id: `contract-${c.id as string}`,
         date: c.contract_date as string,
         phase: 'contract',
-        badge: '계약 체결',
+        badge: t('personProfile.contractSigned'),
         badgeColor: 'bg-emerald-100 text-emerald-700',
         title: `${c.contractor_name} / ${c.student_name}`,
         desc: (c.total_amount as number) > 0
@@ -237,14 +237,14 @@ export function PersonProfilePage() {
   if (hasService) {
     for (const sm of serviceMeetings) {
       const consultant = CONSULTANTS[sm.consultant_id as string] || (sm.consultant_id as string) || ''
-      const reportBadge = sm.report_status === 'submitted' ? ' ✓리포트' : sm.report_status === 'pending' ? ' ⏳리포트' : ''
+      const reportBadge = sm.report_status === 'submitted' ? t('personProfile.reportSubmitted') : sm.report_status === 'pending' ? t('personProfile.reportPending') : ''
       timeline.push({
         id: `svc-${sm.id as string}`,
         date: (sm.meeting_date as string) || (sm.created_at as string),
         phase: 'service',
-        badge: `${(sm.meeting_type as string) || '미팅'}${reportBadge}`,
+        badge: `${(sm.meeting_type as string) || t('personProfile.meeting')}${reportBadge}`,
         badgeColor: 'bg-blue-100 text-blue-700',
-        title: '서비스 미팅',
+        title: t('personProfile.serviceMeeting'),
         desc: typeof sm.summary === 'string' ? sm.summary : undefined,
         person: consultant,
       })
@@ -255,7 +255,7 @@ export function PersonProfilePage() {
   timeline.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   const phaseColors = { lead: 'border-l-violet-400', sales: 'border-l-green-400', contract: 'border-l-emerald-400', service: 'border-l-blue-400' }
-  const phaseLabels = { lead: '리드', sales: '세일즈 상담', contract: '계약', service: '서비스' }
+  const phaseLabels = { lead: t('personProfile.phaseLead'), sales: t('personProfile.phaseSales'), contract: t('personProfile.phaseContract'), service: t('personProfile.phaseService') }
   const phaseDots = { lead: 'bg-violet-400', sales: 'bg-green-400', contract: 'bg-emerald-400', service: 'bg-blue-400' }
 
   return (
@@ -394,15 +394,15 @@ export function PersonProfilePage() {
                     {/* Application count */}
                     <div className="text-xs text-muted-foreground mt-1 flex items-center gap-4">
                       <span>
-                        📋 원서 지원 수: <span className={c.application_count ? 'font-medium text-foreground' : 'text-red-400'}>
-                          {c.application_count ? `${c.application_count}개` : '미입력'}
+                        📋 {t('personProfile.applicationCount')}: <span className={c.application_count ? 'font-medium text-foreground' : 'text-red-400'}>
+                          {c.application_count ? t('personProfile.items').replace('{n}', String(c.application_count)) : t('personProfile.notEntered')}
                         </span>
                       </span>
                       <Link
                         to={`/consulting/clients/${c.id as string}`}
                         className="text-blue-500 hover:text-blue-700 flex items-center gap-0.5"
                       >
-                        수정 <ExternalLink className="size-2.5" />
+                        {t('personProfile.edit')} <ExternalLink className="size-2.5" />
                       </Link>
                     </div>
                     {/* Additional services (extra installments) */}
@@ -411,7 +411,7 @@ export function PersonProfilePage() {
                       if (extras.length === 0) return null
                       return (
                         <div className="mt-2 space-y-1">
-                          <span className="text-[10px] text-muted-foreground font-medium">➕ 추가 서비스</span>
+                          <span className="text-[10px] text-muted-foreground font-medium">{'➕ ' + t('personProfile.additionalServices')}</span>
                           {extras.map(inst => {
                             const amount = (inst.amount as number) || 0
                             const status = inst.status as string
@@ -422,7 +422,7 @@ export function PersonProfilePage() {
                               overdue: 'bg-red-100 text-red-600',
                             }
                             const statusText: Record<string, string> = {
-                              paid: '수금완료', partial: '부분수금', pending: '미수금', overdue: '연체',
+                              paid: t('personProfile.statusPaid'), partial: t('personProfile.statusPartial'), pending: t('personProfile.statusPending'), overdue: t('personProfile.statusOverdue'),
                             }
                             return (
                               <div key={inst.id as string} className="flex items-center gap-2 text-xs bg-purple-50 rounded px-2 py-1">
@@ -454,14 +454,14 @@ export function PersonProfilePage() {
                             overdue: 'bg-red-100 text-red-600',
                           }
                           const statusText: Record<string, string> = {
-                            paid: '수금완료', partial: '부분수금', pending: '미수금', overdue: '연체',
+                            paid: t('personProfile.statusPaid'), partial: t('personProfile.statusPartial'), pending: t('personProfile.statusPending'), overdue: t('personProfile.statusOverdue'),
                           }
                           return (
                             <div key={inst.id as string} className="flex items-center gap-2 text-xs bg-muted/30 rounded px-2 py-1">
                               <span className="font-medium w-20 truncate">{inst.label as string}</span>
                               <span className="font-mono">{formatCurrency(amount, currency)}</span>
                               {paid > 0 && paid < amount && (
-                                <span className="font-mono text-muted-foreground">({formatCurrency(paid, currency)} 수금)</span>
+                                <span className="font-mono text-muted-foreground">({formatCurrency(paid, currency)} {t('personProfile.collected')})</span>
                               )}
                               <Badge variant="outline" className={`text-[9px] h-3.5 ml-auto ${statusBadge[status] || 'bg-gray-100'}`}>
                                 {statusText[status] || status}

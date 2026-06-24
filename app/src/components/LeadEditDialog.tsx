@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { useUpdateLead } from '@/hooks/useLeads'
+import { useT } from '@/i18n/LanguageContext'
 import { PIPELINE_STAGES, SOURCE_CHANNELS, INTEREST_AREAS, REGIONS, GRADES } from '@/types'
 import type { Lead, PipelineStage } from '@/types'
 
@@ -16,6 +17,7 @@ interface LeadEditDialogProps {
 export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogProps) {
   const updateLead = useUpdateLead()
   const navigate = useNavigate()
+  const t = useT()
 
   const [form, setForm] = useState({
     parentName: '',
@@ -61,7 +63,7 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
 
   const handleSave = async () => {
     if (!form.parentName.trim() || !form.phone.trim()) {
-      setError('학부모 이름과 연락처는 필수입니다.')
+      setError(t('leadEdit.requiredFieldsError'))
       return
     }
     setError(null)
@@ -104,7 +106,7 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
         navigate(`/consulting/clients?${params.toString()}`)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '저장 중 오류가 발생했습니다.')
+      setError(err instanceof Error ? err.message : t('leadEdit.saveError'))
     }
   }
 
@@ -118,7 +120,7 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
       <div className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col overflow-y-auto rounded-2xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h2 className="text-lg font-bold text-gray-900">리드 정보 수정</h2>
+          <h2 className="text-lg font-bold text-gray-900">{t('leadEdit.title')}</h2>
           <button
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
@@ -130,34 +132,34 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
         <div className="flex flex-col gap-4 px-6 py-5">
           {/* Row: Parent + Student */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="학부모 이름 *" value={form.parentName} onChange={v => handleChange('parentName', v)} />
-            <Field label="학생 이름" value={form.studentName} onChange={v => handleChange('studentName', v)} />
+            <Field label={t('leadEdit.parentName') + ' *'} value={form.parentName} onChange={v => handleChange('parentName', v)} />
+            <Field label={t('leadEdit.studentName')} value={form.studentName} onChange={v => handleChange('studentName', v)} />
           </div>
 
           {/* Row: Phone + Email */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="연락처 *" value={form.phone} onChange={v => handleChange('phone', v)} />
-            <Field label="이메일" value={form.email} onChange={v => handleChange('email', v)} />
+            <Field label={t('leadEdit.phone') + ' *'} value={form.phone} onChange={v => handleChange('phone', v)} />
+            <Field label={t('leadEdit.email')} value={form.email} onChange={v => handleChange('email', v)} />
           </div>
 
           {/* Row: School + Grade */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label="학교" value={form.currentSchool} onChange={v => handleChange('currentSchool', v)} />
-            <SelectField label="학년" value={form.grade} onChange={v => handleChange('grade', v)} options={[...GRADES]} allowEmpty />
+            <Field label={t('leadEdit.school')} value={form.currentSchool} onChange={v => handleChange('currentSchool', v)} />
+            <SelectField label={t('leadEdit.grade')} value={form.grade} onChange={v => handleChange('grade', v)} options={[...GRADES]} allowEmpty />
           </div>
 
           {/* Row: Region + Source */}
           <div className="grid grid-cols-2 gap-3">
-            <SelectField label="지역" value={form.region} onChange={v => handleChange('region', v)} options={[...REGIONS]} allowEmpty />
-            <SelectField label="유입 채널" value={form.sourceChannel} onChange={v => handleChange('sourceChannel', v)} options={[...SOURCE_CHANNELS]} />
+            <SelectField label={t('leadEdit.region')} value={form.region} onChange={v => handleChange('region', v)} options={[...REGIONS]} allowEmpty />
+            <SelectField label={t('leadEdit.sourceChannel')} value={form.sourceChannel} onChange={v => handleChange('sourceChannel', v)} options={[...SOURCE_CHANNELS]} />
           </div>
 
           {/* Interest Area */}
-          <SelectField label="관심 분야" value={form.interestArea} onChange={v => handleChange('interestArea', v)} options={[...INTEREST_AREAS]} allowEmpty />
+          <SelectField label={t('leadEdit.interestArea')} value={form.interestArea} onChange={v => handleChange('interestArea', v)} options={[...INTEREST_AREAS]} allowEmpty />
 
           {/* Pipeline Stage */}
           <SelectField
-            label="파이프라인 단계"
+            label={t('leadEdit.pipelineStage')}
             value={form.pipelineStage}
             onChange={v => handleChange('pipelineStage', v)}
             options={PIPELINE_STAGES.map(s => ({ value: s.key, label: s.label }))}
@@ -165,19 +167,25 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
 
           {/* Contact Channel */}
           <SelectField
-            label="연락 채널"
+            label={t('leadEdit.contactChannel')}
             value={form.contactChannel}
             onChange={v => handleChange('contactChannel', v)}
-            options={['단톡방', '카카오 비즈', '전화', '이메일', '기타']}
+            options={[
+              { value: '단톡방', label: t('leadEdit.contactChannelOptions.groupChat') },
+              { value: '카카오 비즈', label: t('leadEdit.contactChannelOptions.kakaoBiz') },
+              { value: '전화', label: t('leadEdit.contactChannelOptions.phone') },
+              { value: '이메일', label: t('leadEdit.contactChannelOptions.email') },
+              { value: '기타', label: t('leadEdit.contactChannelOptions.other') },
+            ]}
             allowEmpty
           />
 
           {/* Required Action */}
-          <Field label="필요 조치" value={form.requiredAction} onChange={v => handleChange('requiredAction', v)} placeholder="예: 콜백 필요, 자료 전송" />
+          <Field label={t('leadEdit.requiredAction')} value={form.requiredAction} onChange={v => handleChange('requiredAction', v)} placeholder={t('leadEdit.requiredActionPlaceholder')} />
 
           {/* Memo */}
           <div>
-            <label className="mb-1.5 block text-sm font-semibold text-gray-700">메모</label>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700">{t('leadEdit.memo')}</label>
             <textarea
               value={form.memo}
               onChange={e => handleChange('memo', e.target.value)}
@@ -200,7 +208,7 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
             onClick={onClose}
             className="rounded-lg border border-gray-200 px-5 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
           >
-            취소
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleSave}
@@ -208,7 +216,7 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
             className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
             style={{ backgroundColor: PRIMARY }}
           >
-            {updateLead.isPending ? '저장 중...' : '저장'}
+            {updateLead.isPending ? t('leadEdit.saving') : t('common.save')}
           </button>
         </div>
       </div>
@@ -245,6 +253,7 @@ function SelectField({
   options: (string | { value: string; label: string })[]
   allowEmpty?: boolean
 }) {
+  const t = useT()
   return (
     <div>
       <label className="mb-1.5 block text-sm font-semibold text-gray-700">{label}</label>
@@ -253,7 +262,7 @@ function SelectField({
         onChange={e => onChange(e.target.value)}
         className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
       >
-        {allowEmpty && <option value="">선택 안함</option>}
+        {allowEmpty && <option value="">{t('leadEdit.noSelection')}</option>}
         {options.map(opt => {
           const val = typeof opt === 'string' ? opt : opt.value
           const lbl = typeof opt === 'string' ? opt : opt.label
