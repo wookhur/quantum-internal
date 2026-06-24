@@ -44,8 +44,11 @@ function generateSteps(startY: number, count: number, lastDir: 'left' | 'right',
   let dir = lastDir
   for (let i = 0; i < count; i++) {
     dir = Math.random() < 0.5 ? 'left' : 'right'
-    x += dir === 'left' ? -STEP_W * 0.7 : STEP_W * 0.7
-    x = Math.max(STEP_W, Math.min(CW - STEP_W, x))
+    const offset = STEP_W * 0.7
+    let nx = x + (dir === 'left' ? -offset : offset)
+    if (nx < STEP_W) { nx = x + offset; dir = 'right' }
+    else if (nx > CW - STEP_W) { nx = x - offset; dir = 'left' }
+    x = nx
     y -= 45
     steps.push({ x, y, dir })
   }
