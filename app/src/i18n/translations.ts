@@ -2325,6 +2325,16 @@ const koTranslations = {
   'game.zombie.speedDesc': '속도 부스트',
   'game.zombie.shieldDesc': '데미지 감소',
   'game.zombie.bombDesc': '주변 좀비 제거',
+  'game.dodge.title': '똥피하기',
+  'game.dodge.start': '클릭 또는 스페이스바로 시작',
+  'game.dodge.controls': '← → / A D 키로 이동 | 아이템을 모으고 똥을 피하세요!',
+  'game.dodge.gameOver': 'GAME OVER',
+  'game.dodge.restart': 'R키를 눌러 다시 시작',
+  'game.dodge.maxCombo': '최대 콤보',
+  'game.dodge.moveHint': '좌우 이동으로 똥을 피하세요',
+  'game.dodge.poopDesc': '피하기 (맞으면 HP -1)',
+  'game.dodge.starDesc': '+10점',
+  'game.dodge.goldDesc': '+5점',
 } as const
 
 const enTranslations: Record<string, string> = {
@@ -4652,6 +4662,16 @@ const enTranslations: Record<string, string> = {
   'game.zombie.speedDesc': 'Speed boost',
   'game.zombie.shieldDesc': 'Reduce damage',
   'game.zombie.bombDesc': 'Kill nearby zombies',
+  'game.dodge.title': 'Poop Dodge',
+  'game.dodge.start': 'Click or press Space to start',
+  'game.dodge.controls': '← → / A D to move | Collect items and dodge the poop!',
+  'game.dodge.gameOver': 'GAME OVER',
+  'game.dodge.restart': 'Press R to restart',
+  'game.dodge.maxCombo': 'Max Combo',
+  'game.dodge.moveHint': 'Move left/right to dodge',
+  'game.dodge.poopDesc': 'Dodge (HP -1 if hit)',
+  'game.dodge.starDesc': '+10 pts',
+  'game.dodge.goldDesc': '+5 pts',
 }
 
 export type TranslationKeys = keyof typeof koTranslations
