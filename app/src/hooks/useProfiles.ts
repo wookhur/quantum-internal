@@ -129,6 +129,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/finance/wire-invoice', labelKey: 'nav.wireInvoice', module: 'finance' },
   { path: '/finance/incentives/by-contract', labelKey: 'nav.incentives', module: 'finance' },
   { path: '/finance/incentives/by-person', labelKey: 'nav.incentives', module: 'finance' },
+  { path: '/finance/freelancer-invoices', labelKey: 'nav.freelancerInvoices', module: 'finance' },
   // ── Planning ──
   { path: '/planning/overview', labelKey: 'nav.overview', module: 'planning' },
   { path: '/planning/projection', labelKey: 'nav.revenueProjection', module: 'planning' },
@@ -181,7 +182,7 @@ export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
   service_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'hr', 'game'],
   marketing_manager: ['dashboard', 'marketing', 'game'],
   consultant: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'hr', 'game', 'my_incentive'],
-  freelancer: ['dashboard', 'service', 'game', 'my_incentive'],
+  freelancer: ['dashboard', 'service', 'finance', 'game', 'my_incentive'],
   external: ['dashboard', 'game'],
 }
 

@@ -48,6 +48,7 @@ import { TaskBoardPage } from '@/pages/common/TaskBoardPage'
 import { PersonProfilePage } from '@/pages/common/PersonProfilePage'
 import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
 import { PartnerContractsPage } from '@/pages/partner/PartnerContractsPage'
+import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
 import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
 
 const queryClient = new QueryClient({
@@ -102,6 +103,7 @@ export default function App() {
                 <Route path="/finance/wire-invoice" element={<WireInvoicePage />} />
                 <Route path="/finance/incentives/by-contract" element={<IncentiveByContractPage />} />
                 <Route path="/finance/incentives/by-person" element={<IncentiveByPersonPage />} />
+                <Route path="/finance/freelancer-invoices" element={<FreelancerInvoicesPage />} />
 
                 <Route path="/partner/contracts" element={<PartnerContractsPage />} />
                 <Route path="/partner/calendar" element={<CalendarPage />} />
