@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useT } from '@/i18n/LanguageContext'
 
 const CW = 500
-const CH = 600
+const CH = 400
 const PLAYER_W = 36
 const POOP_SIZE = 28
 const STAR_SIZE = 22
