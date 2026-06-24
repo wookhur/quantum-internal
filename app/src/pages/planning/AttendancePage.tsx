@@ -91,6 +91,23 @@ function formatTime(t: string | null | undefined): string {
   return t || ''
 }
 
+function getWeekLabel(dateStr: string): string {
+  const d = new Date(dateStr)
+  const mon = new Date(d)
+  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  const sun = new Date(mon)
+  sun.setDate(mon.getDate() + 6)
+  const fmt = (dt: Date) => `${dt.getMonth() + 1}/${dt.getDate()}`
+  return `${fmt(mon)}~${fmt(sun)}`
+}
+
+function getWeekKey(dateStr: string): string {
+  const d = new Date(dateStr)
+  const mon = new Date(d)
+  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return mon.toISOString().slice(0, 10)
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -314,6 +331,39 @@ export function AttendancePage() {
     return entries
   }, [totalHoursByProfile, profileName, selectedProfile])
 
+  // Weekly hours per employee
+  const weeklyHoursSummary = useMemo(() => {
+    const weekMap = new Map<string, Map<string, number>>() // weekKey -> profileId -> mins
+    const weekLabels = new Map<string, string>()
+    for (const a of attendances) {
+      if (!a.clockIn || !a.clockOut) continue
+      const [h1, m1] = a.clockIn.split(':').map(Number)
+      const [h2, m2] = a.clockOut.split(':').map(Number)
+      const mins = (h2 * 60 + m2) - (h1 * 60 + m1)
+      if (mins <= 0) continue
+      const wk = getWeekKey(a.date)
+      if (!weekMap.has(wk)) weekMap.set(wk, new Map())
+      weekLabels.set(wk, getWeekLabel(a.date))
+      const profileMap = weekMap.get(wk)!
+      profileMap.set(a.profileId, (profileMap.get(a.profileId) || 0) + mins)
+    }
+    const weeks = Array.from(weekMap.keys()).sort()
+    return weeks.map(wk => {
+      const profileMap = weekMap.get(wk)!
+      const entries = Array.from(profileMap.entries())
+        .map(([pid, totalMins]) => ({
+          profileId: pid,
+          name: profileName(pid),
+          totalMins,
+          hours: Math.floor(totalMins / 60),
+          mins: totalMins % 60,
+        }))
+        .filter(e => selectedProfile === 'all' || e.profileId === selectedProfile)
+      entries.sort((a, b) => b.totalMins - a.totalMins)
+      return { weekKey: wk, label: weekLabels.get(wk)!, entries }
+    }).filter(w => w.entries.length > 0)
+  }, [attendances, profileName, selectedProfile])
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -402,6 +452,38 @@ export function AttendancePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Weekly hours per employee */}
+      {weeklyHoursSummary.length > 0 && (
+        <Card>
+          <CardContent className="py-3 px-4">
+            <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+              <Calendar className="h-4 w-4 text-indigo-500" />
+              주별 근무시간
+            </h3>
+            <div className="space-y-2">
+              {weeklyHoursSummary.map(week => (
+                <div key={week.weekKey}>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">{week.label}</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                    {week.entries.map(entry => (
+                      <div
+                        key={entry.profileId}
+                        className="flex items-center justify-between bg-indigo-50/60 rounded-lg px-3 py-1.5"
+                      >
+                        <span className="text-sm font-medium truncate mr-2">{entry.name}</span>
+                        <span className={`text-sm font-mono font-bold whitespace-nowrap ${entry.totalMins > 52 * 60 ? 'text-red-600' : 'text-indigo-600'}`}>
+                          {entry.hours}h{entry.mins > 0 ? ` ${entry.mins}m` : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Monthly total hours per employee */}
       {sortedHoursSummary.length > 0 && (
