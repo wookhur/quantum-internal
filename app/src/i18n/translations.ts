@@ -2335,6 +2335,14 @@ const koTranslations = {
   'game.dodge.poopDesc': '피하기 (맞으면 HP -1)',
   'game.dodge.starDesc': '+10점',
   'game.dodge.goldDesc': '+5점',
+  'game.stairs.title': '무한의 계단',
+  'game.stairs.start': '클릭 또는 아무 키를 눌러 시작',
+  'game.stairs.controls': '← → 계단 방향에 맞게 입력 | 틀리면 게임 오버!',
+  'game.stairs.gameOver': 'GAME OVER',
+  'game.stairs.restart': 'R키를 눌러 다시 시작',
+  'game.stairs.leftHint': '왼쪽 계단',
+  'game.stairs.rightHint': '오른쪽 계단',
+  'game.stairs.desc': '계단 방향에 맞춰 빠르게 입력! 시간 내에 올라가세요.',
 } as const
 
 const enTranslations: Record<string, string> = {
@@ -4672,6 +4680,14 @@ const enTranslations: Record<string, string> = {
   'game.dodge.poopDesc': 'Dodge (HP -1 if hit)',
   'game.dodge.starDesc': '+10 pts',
   'game.dodge.goldDesc': '+5 pts',
+  'game.stairs.title': 'Infinite Stairs',
+  'game.stairs.start': 'Click or press any key to start',
+  'game.stairs.controls': '← → Match the stair direction | Wrong = Game Over!',
+  'game.stairs.gameOver': 'GAME OVER',
+  'game.stairs.restart': 'Press R to restart',
+  'game.stairs.leftHint': 'Left stair',
+  'game.stairs.rightHint': 'Right stair',
+  'game.stairs.desc': 'Match the stair direction quickly! Beat the timer.',
 }
 
 export type TranslationKeys = keyof typeof koTranslations
