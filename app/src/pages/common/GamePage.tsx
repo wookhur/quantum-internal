@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Trophy, Gamepad2, Loader2, Bird, Grid3X3, Skull, Zap, ArrowUpRight } from 'lucide-react'
+import { Trophy, Gamepad2, Loader2, Bird, Grid3X3, Skull, Zap, ArrowUpRight, Worm } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import { useGameLeaderboard, useSubmitScore } from '@/hooks/useGameLeaderboard'
@@ -12,6 +12,7 @@ import { Game2048Canvas, Game2048Info } from './Game2048'
 import { ZombieCanvas, ZombieInfo } from './GameZombie'
 import { DodgeCanvas, DodgeInfo } from './GameDodge'
 import { StairsCanvas, StairsInfo } from './GameStairs'
+import { SnakeCanvas, SnakeInfo } from './GameSnake'
 
 // ─── T-Rex Dino Runner (pure canvas) ───
 
@@ -358,7 +359,7 @@ function Leaderboard({ game }: { game: string }) {
 
 // ─── Main Page with Tabs ───
 
-type GameTab = 'trex' | 'flappy' | '2048' | 'zombie' | 'dodge' | 'stairs'
+type GameTab = 'trex' | 'flappy' | '2048' | 'zombie' | 'dodge' | 'stairs' | 'snake'
 
 export function GamePage() {
   const t = useT()
@@ -369,6 +370,7 @@ export function GamePage() {
   const [zombieScore, setZombieScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
   const [dodgeScore, setDodgeScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
   const [stairsScore, setStairsScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
+  const [snakeScore, setSnakeScore] = useState<{ last: number | null; hi: number }>({ last: null, hi: 0 })
   const { user } = useAuth()
   const submitScore = useSubmitScore()
 
@@ -400,6 +402,11 @@ export function GamePage() {
   const handleStairsOver = useCallback((score: number) => {
     setStairsScore(prev => ({ last: score, hi: Math.max(prev.hi, score) }))
     if (user && score > 0) submitScore.mutate({ userId: user.id, score, game: 'stairs' })
+  }, [user, submitScore])
+
+  const handleSnakeOver = useCallback((score: number) => {
+    setSnakeScore(prev => ({ last: score, hi: Math.max(prev.hi, score) }))
+    if (user && score > 0) submitScore.mutate({ userId: user.id, score, game: 'snake' })
   }, [user, submitScore])
 
   return (
@@ -455,6 +462,13 @@ export function GamePage() {
         >
           <ArrowUpRight className="size-4" /> 무한의 계단
         </Button>
+        <Button
+          variant={activeGame === 'snake' ? 'default' : 'outline'}
+          className="gap-2"
+          onClick={() => setActiveGame('snake')}
+        >
+          <Worm className="size-4" /> {t('game.snake.title')}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -472,8 +486,10 @@ export function GamePage() {
                 <ZombieCanvas onGameOver={handleZombieOver} />
               ) : activeGame === 'dodge' ? (
                 <DodgeCanvas onGameOver={handleDodgeOver} />
-              ) : (
+              ) : activeGame === 'stairs' ? (
                 <StairsCanvas onGameOver={handleStairsOver} />
+              ) : (
+                <SnakeCanvas onGameOver={handleSnakeOver} />
               )}
             </CardContent>
           </Card>
@@ -512,8 +528,10 @@ export function GamePage() {
             <ZombieInfo score={zombieScore.last} bestScore={zombieScore.hi} />
           ) : activeGame === 'dodge' ? (
             <DodgeInfo score={dodgeScore.last} bestScore={dodgeScore.hi} />
-          ) : (
+          ) : activeGame === 'stairs' ? (
             <StairsInfo score={stairsScore.last} bestScore={stairsScore.hi} />
+          ) : (
+            <SnakeInfo score={snakeScore.last} bestScore={snakeScore.hi} />
           )}
         </div>
 

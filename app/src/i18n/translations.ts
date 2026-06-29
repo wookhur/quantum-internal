@@ -2343,6 +2343,15 @@ const koTranslations = {
   'game.stairs.leftHint': '왼쪽 계단',
   'game.stairs.rightHint': '오른쪽 계단',
   'game.stairs.desc': '계단 방향에 맞춰 빠르게 입력! 시간 내에 올라가세요.',
+  'game.snake.title': '지렁이',
+  'game.snake.start': '아무 키를 누르거나 클릭해서 시작',
+  'game.snake.controls': '방향키 / WASD 로 이동 | 벽과 자기 몸을 피하세요!',
+  'game.snake.gameOver': 'GAME OVER',
+  'game.snake.restart': 'R키를 눌러 다시 시작',
+  'game.snake.length': '길이',
+  'game.snake.moveHint': '방향 전환 (반대 방향은 무시)',
+  'game.snake.foodDesc': '먹이 +1점 (먹을수록 빨라짐)',
+  'game.snake.bonusDesc': '보너스 +5점 (제한 시간 있음)',
 } as const
 
 const enTranslations: Record<string, string> = {
@@ -4688,6 +4697,15 @@ const enTranslations: Record<string, string> = {
   'game.stairs.leftHint': 'Left stair',
   'game.stairs.rightHint': 'Right stair',
   'game.stairs.desc': 'Match the stair direction quickly! Beat the timer.',
+  'game.snake.title': 'Snake',
+  'game.snake.start': 'Click or press any key to start',
+  'game.snake.controls': 'Arrow keys / WASD to move | Avoid walls and your own body!',
+  'game.snake.gameOver': 'GAME OVER',
+  'game.snake.restart': 'Press R to restart',
+  'game.snake.length': 'Length',
+  'game.snake.moveHint': 'Change direction (opposite direction ignored)',
+  'game.snake.foodDesc': 'Food +1 (snake speeds up)',
+  'game.snake.bonusDesc': 'Bonus +5 (time limited)',
 }
 
 export type TranslationKeys = keyof typeof koTranslations
