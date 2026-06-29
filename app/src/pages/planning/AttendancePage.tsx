@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +30,7 @@ import {
   ChevronRight,
   Calendar,
   Download,
+  Upload,
   Loader2,
   Plus,
   Pencil,
@@ -38,10 +39,11 @@ import {
   AlertTriangle,
   Settings2,
   Check,
+  X,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useProfiles } from '@/hooks/useProfiles'
-import { useAttendances, useUpsertAttendance, useDeleteAttendance } from '@/hooks/useAttendances'
+import { useAttendances, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances } from '@/hooks/useAttendances'
 import { useKioskExcludedIds, useUpdateKioskExcludedIds } from '@/hooks/useKioskSettings'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
@@ -113,6 +115,144 @@ function getWeekKey(dateStr: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// SHIFTY / Shiftee import helpers
+// ---------------------------------------------------------------------------
+
+interface ImportRow {
+  rowIndex: number       // original sheet row (1-based, for error messages)
+  rawName: string
+  matchedProfileId: string | null
+  date: string           // YYYY-MM-DD
+  clockIn: string | null // HH:mm
+  clockOut: string | null
+  scheduleStart: string | null
+  scheduleEnd: string | null
+  note: string | null
+  error: string | null
+}
+
+function normalizeTime(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null
+  // Excel cell with time format may come as a fraction of day
+  if (typeof v === 'number' && v > 0 && v < 2) {
+    const total = Math.round(v * 24 * 60)
+    const h = Math.floor(total / 60) % 24
+    const m = total % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  }
+  const s = String(v).trim()
+  if (!s) return null
+  // Accept "9:00", "09:00", "9:00:00", "09:00 AM"
+  const ampm = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM|am|pm)?$/)
+  if (ampm) {
+    let h = parseInt(ampm[1], 10)
+    const m = parseInt(ampm[2], 10)
+    const suf = ampm[3]?.toUpperCase()
+    if (suf === 'PM' && h < 12) h += 12
+    if (suf === 'AM' && h === 12) h = 0
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  }
+  return null
+}
+
+function normalizeDate(v: unknown): string | null {
+  if (v === null || v === undefined || v === '') return null
+  // Excel serial date
+  if (typeof v === 'number') {
+    const d = XLSX.SSF.parse_date_code(v)
+    if (!d) return null
+    return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`
+  }
+  const s = String(v).trim()
+  // YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
+  const m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/)
+  if (m) {
+    return `${m[1]}-${String(parseInt(m[2], 10)).padStart(2, '0')}-${String(parseInt(m[3], 10)).padStart(2, '0')}`
+  }
+  return null
+}
+
+/** Find a profile by name (exact, then trimmed loose match). */
+function matchProfile(name: string, profiles: { id: string; name: string }[]): string | null {
+  if (!name) return null
+  const exact = profiles.find(p => p.name === name)
+  if (exact) return exact.id
+  const trimmed = name.replace(/\s+/g, '')
+  const loose = profiles.find(p => p.name.replace(/\s+/g, '') === trimmed)
+  return loose?.id ?? null
+}
+
+/**
+ * Parse SHIFTY/Shiftee attendance export.
+ * Column layout (matches our export):
+ *   0: 사원번호  1: 직원이름  2: 날짜
+ *   3: 시작시간  4: 종료시간  5: 조직  6: 직무
+ *   7: 출근시간  8: 퇴근시간  9: 근무노트
+ * Tries to autodetect header row.
+ */
+function parseShiftyFile(rows: unknown[][], profiles: { id: string; name: string }[]): ImportRow[] {
+  // Find header row: row containing "직원이름" and "날짜"
+  let headerIdx = -1
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const r = rows[i] || []
+    const joined = r.map(c => String(c ?? '')).join('|')
+    if (joined.includes('직원이름') && joined.includes('날짜')) {
+      headerIdx = i
+      break
+    }
+  }
+  // Determine column indices from header (fallback to fixed positions)
+  let nameCol = 1, dateCol = 2, schedStartCol = 3, schedEndCol = 4
+  let clockInCol = 7, clockOutCol = 8, noteCol = 9
+  if (headerIdx >= 0) {
+    const h = rows[headerIdx].map(c => String(c ?? ''))
+    const findCol = (kw: string[]) => h.findIndex(c => kw.some(k => c.includes(k)))
+    const i1 = findCol(['직원이름', '이름']); if (i1 >= 0) nameCol = i1
+    const i2 = findCol(['날짜']); if (i2 >= 0) dateCol = i2
+    const i3 = findCol(['시작시간']); if (i3 >= 0) schedStartCol = i3
+    const i4 = findCol(['종료시간']); if (i4 >= 0) schedEndCol = i4
+    const i5 = findCol(['출근시간', '출근']); if (i5 >= 0) clockInCol = i5
+    const i6 = findCol(['퇴근시간', '퇴근']); if (i6 >= 0) clockOutCol = i6
+    const i7 = findCol(['근무노트', '메모', '비고']); if (i7 >= 0) noteCol = i7
+  }
+  const startRow = headerIdx >= 0 ? headerIdx + 1 : 1
+
+  const out: ImportRow[] = []
+  for (let i = startRow; i < rows.length; i++) {
+    const r = rows[i] || []
+    const rawName = String(r[nameCol] ?? '').trim()
+    const date = normalizeDate(r[dateCol])
+    if (!rawName && !date) continue // skip blank rows
+
+    const clockIn = normalizeTime(r[clockInCol])
+    const clockOut = normalizeTime(r[clockOutCol])
+    const schedStart = normalizeTime(r[schedStartCol])
+    const schedEnd = normalizeTime(r[schedEndCol])
+    const note = String(r[noteCol] ?? '').trim() || null
+    const matched = matchProfile(rawName, profiles)
+
+    let error: string | null = null
+    if (!rawName) error = 'missing_name'
+    else if (!date) error = 'invalid_date'
+    else if (!matched) error = 'unknown_employee'
+    else if (!clockIn && !clockOut && !schedStart && !schedEnd) error = 'empty_row'
+
+    out.push({
+      rowIndex: i + 1,
+      rawName,
+      matchedProfileId: matched,
+      date: date || '',
+      clockIn, clockOut,
+      scheduleStart: schedStart,
+      scheduleEnd: schedEnd,
+      note,
+      error,
+    })
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -131,6 +271,7 @@ export function AttendancePage() {
   const { data: attendances = [], isLoading } = useAttendances(currentMonth)
   const upsertMut = useUpsertAttendance()
   const deleteMut = useDeleteAttendance()
+  const bulkUpsertMut = useBulkUpsertAttendances()
   const { data: kioskExcludedIds = [] } = useKioskExcludedIds()
   const updateKioskExcluded = useUpdateKioskExcludedIds()
 
@@ -140,6 +281,12 @@ export function AttendancePage() {
   const [form, setForm] = useState<AttendanceForm>({ profileId: '', date: '', clockIn: '', clockOut: '', note: '' })
   const [kioskSettingsOpen, setKioskSettingsOpen] = useState(false)
   const [kioskExcludedDraft, setKioskExcludedDraft] = useState<Set<string>>(new Set())
+
+  // ── Import state ──
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importRows, setImportRows] = useState<ImportRow[]>([])
+  const [importError, setImportError] = useState<string | null>(null)
 
   const isCurrentMonth = currentMonth === getCurrentMonth()
   const [year, month] = currentMonth.split('-').map(Number)
@@ -294,6 +441,56 @@ export function AttendancePage() {
     saveAs(blob, `shiftee-attendances-${currentMonth}.xlsx`)
   }
 
+  // ─── Import handlers ───
+  const handleFilePick = () => fileInputRef.current?.click()
+
+  const handleFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = '' // reset so picking same file again works
+    setImportError(null)
+    try {
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: 'array', cellDates: false })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      if (!ws) {
+        setImportError(t('attendance.import.emptyFile'))
+        return
+      }
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null })
+      const parsed = parseShiftyFile(rows, profiles)
+      if (parsed.length === 0) {
+        setImportError(t('attendance.import.noRows'))
+        return
+      }
+      setImportRows(parsed)
+      setImportDialogOpen(true)
+    } catch (err) {
+      console.error(err)
+      setImportError(String(err instanceof Error ? err.message : err))
+    }
+  }
+
+  const importValidRows = useMemo(() => importRows.filter(r => !r.error), [importRows])
+  const importErrorRows = useMemo(() => importRows.filter(r => r.error), [importRows])
+
+  const handleImportConfirm = async () => {
+    if (importValidRows.length === 0) return
+    await bulkUpsertMut.mutateAsync(
+      importValidRows.map(r => ({
+        profileId: r.matchedProfileId!,
+        date: r.date,
+        clockIn: r.clockIn,
+        clockOut: r.clockOut,
+        scheduleStart: r.scheduleStart,
+        scheduleEnd: r.scheduleEnd,
+        note: r.note,
+      }))
+    )
+    setImportDialogOpen(false)
+    setImportRows([])
+  }
+
   // ─── Calendar view data ───
   const calendarProfiles = useMemo(() => {
     if (selectedProfile === 'all') return activeProfiles
@@ -411,6 +608,22 @@ export function AttendancePage() {
           <Download className="h-3.5 w-3.5 mr-1" />
           {t('attendance.export')}
         </Button>
+        <Button variant="outline" size="sm" className="h-8" onClick={handleFilePick}>
+          <Upload className="h-3.5 w-3.5 mr-1" />
+          {t('attendance.import.button')}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          onChange={handleFileChosen}
+        />
+        {importError && (
+          <span className="text-xs text-red-600 flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" />{importError}
+          </span>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -738,6 +951,91 @@ export function AttendancePage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={handleSave} disabled={!form.profileId || !form.date}>
               {t('common.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Preview Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="sm:max-w-[820px] max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="size-5" />
+              {t('attendance.import.title')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-3 text-sm">
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              <Check className="h-3 w-3 mr-1" />
+              {t('attendance.import.matched')}: {importValidRows.length}
+            </Badge>
+            {importErrorRows.length > 0 && (
+              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                <X className="h-3 w-3 mr-1" />
+                {t('attendance.import.skipped')}: {importErrorRows.length}
+              </Badge>
+            )}
+            <span className="text-xs text-muted-foreground ml-auto">
+              {t('attendance.import.upsertNote')}
+            </span>
+          </div>
+          <div className="flex-1 overflow-auto border rounded-md">
+            <Table>
+              <TableHeader className="sticky top-0 bg-background z-10">
+                <TableRow>
+                  <TableHead className="w-[40px]">#</TableHead>
+                  <TableHead>{t('attendance.employee')}</TableHead>
+                  <TableHead>{t('attendance.date')}</TableHead>
+                  <TableHead>{t('attendance.clockIn')}</TableHead>
+                  <TableHead>{t('attendance.clockOut')}</TableHead>
+                  <TableHead>{t('attendance.note')}</TableHead>
+                  <TableHead className="w-[100px]">{t('attendance.import.status')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {importRows.map(r => (
+                  <TableRow key={r.rowIndex} className={r.error ? 'bg-red-50/40' : ''}>
+                    <TableCell className="text-xs text-muted-foreground">{r.rowIndex}</TableCell>
+                    <TableCell className="text-sm">
+                      {r.matchedProfileId ? (
+                        <span className="font-medium">{profileName(r.matchedProfileId)}</span>
+                      ) : (
+                        <span className="text-red-600">{r.rawName || '(empty)'}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm font-mono">{r.date || '-'}</TableCell>
+                    <TableCell className="text-sm font-mono">{r.clockIn || '-'}</TableCell>
+                    <TableCell className="text-sm font-mono">{r.clockOut || '-'}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[160px] truncate">
+                      {r.note || ''}
+                    </TableCell>
+                    <TableCell>
+                      {r.error ? (
+                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-[10px]">
+                          {t(`attendance.import.err.${r.error}`)}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px]">
+                          <Check className="h-3 w-3 mr-0.5" /> OK
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={handleImportConfirm}
+              disabled={importValidRows.length === 0 || bulkUpsertMut.isPending}
+            >
+              {bulkUpsertMut.isPending && <Loader2 className="h-3 w-3 mr-2 animate-spin" />}
+              {t('attendance.import.confirm', { count: String(importValidRows.length) })}
             </Button>
           </DialogFooter>
         </DialogContent>
