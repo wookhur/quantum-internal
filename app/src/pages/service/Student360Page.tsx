@@ -124,6 +124,27 @@ function ecSalesFinal(select: string, custom: string): string | undefined {
 }
 
 const ESSAY_EDITORS = ['Somee Park', 'Danny Kim', '한상범+양은영'] as const
+
+// KPI dot color legend, expressed as % of KPI_MAX so it always matches kpiDotColor().
+const KPI_LEGEND = [
+  { color: 'bg-emerald-500', label: `≥${Math.round((9 / KPI_MAX) * 100)}%` },
+  { color: 'bg-yellow-400', label: `≥${Math.round((7 / KPI_MAX) * 100)}%` },
+  { color: 'bg-red-500', label: `≥${Math.round((5 / KPI_MAX) * 100)}%` },
+  { color: 'bg-black', label: `<${Math.round((5 / KPI_MAX) * 100)}%` },
+]
+
+/** Tooltip text for the hourglass: lists which meetings are missing a summary report. */
+function missingReportTitle(items: { date?: string; type?: string }[] | undefined, header: string): string {
+  if (!items || items.length === 0) return header
+  const lines = items
+    .slice()
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+    .map(it => {
+      const d = it.date ? `${Number(it.date.slice(5, 7))}/${Number(it.date.slice(8, 10))}` : '날짜미상'
+      return `· ${d}${it.type ? ` ${it.type}` : ''}`
+    })
+  return `${header} (${items.length})\n${lines.join('\n')}`
+}
 const PARTNERS = ['Ryan Pruitt(BAY)', 'Dr.Lee Woorin(IRIS)', 'Evelyn Jenny Nam', 'Dr.Lee Gwangmi'] as const
 
 function reportSaveError(e: unknown) {
@@ -248,6 +269,14 @@ export function Student360Page() {
             ))}
           </SelectContent>
         </Select>
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-muted-foreground">
+          <span className="font-medium">KPI</span>
+          {KPI_LEGEND.map(l => (
+            <span key={l.label} className="flex items-center gap-1">
+              <span className={`inline-block size-2 rounded-full ${l.color}`} />{l.label}
+            </span>
+          ))}
+        </div>
         <div className="flex-1 overflow-y-auto space-y-1.5">
           {isLoading && <p className="text-sm text-muted-foreground px-1">{t('common.loading')}</p>}
           {!isLoading && filtered.length === 0 && (
@@ -267,7 +296,7 @@ export function Student360Page() {
                     {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
                   </span>
                   {statusFlags.missingReports.has(s.id) && (
-                    <span title={t('student360.missingReportTooltip')}>
+                    <span title={missingReportTitle(statusFlags.missingReportDetails.get(s.id), t('student360.missingReportTooltip'))}>
                       <Hourglass className="size-3.5 text-red-500 shrink-0" />
                     </span>
                   )}
@@ -283,7 +312,9 @@ export function Student360Page() {
                   )}
                   <span
                     className={`inline-block size-2 rounded-full shrink-0 ${kpiDotColor(studentKpis[s.id]?.score)}`}
-                    title={studentKpis[s.id] ? `KPI ${studentKpis[s.id].score.toFixed(1)} / ${KPI_MAX}` : 'KPI —'}
+                    title={studentKpis[s.id]
+                      ? `KPI ${studentKpis[s.id].score.toFixed(1)}/${KPI_MAX} (${Math.round((studentKpis[s.id].score / KPI_MAX) * 100)}%)`
+                      : 'KPI —'}
                   />
                 </div>
                 {s.status && (

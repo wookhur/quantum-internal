@@ -162,9 +162,16 @@ export function useAllServiceDiaryInRange(startDate: string, endDate: string) {
   })
 }
 
+export interface MissingReportMeeting {
+  date?: string
+  type?: string
+}
+
 export interface StudentStatusFlags {
   missingReports: Set<string>
   pendingFollowups: Set<string>
+  /** Per student, the meetings (last 30d) whose summary report is not submitted. */
+  missingReportDetails: Map<string, MissingReportMeeting[]>
 }
 
 export function useStudentStatusFlags() {
@@ -175,18 +182,18 @@ export function useStudentStatusFlags() {
   }, [])
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
 
-  const { data: missingReportIds = [] } = useQuery({
+  const { data: missingReportRows = [] } = useQuery({
     queryKey: ['student_status_missing_reports', thirtyDaysAgo],
     refetchInterval: 5 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('service_meetings')
-        .select('student_id')
+        .select('student_id, meeting_date, meeting_type')
         .neq('report_status', 'submitted')
         .lte('meeting_date', today)
         .gte('meeting_date', thirtyDaysAgo)
       if (error) return []
-      return (data || []).map((r: Record<string, unknown>) => r.student_id as string)
+      return (data || []) as Record<string, unknown>[]
     },
   })
 
@@ -203,8 +210,21 @@ export function useStudentStatusFlags() {
     },
   })
 
-  return useMemo<StudentStatusFlags>(() => ({
-    missingReports: new Set(missingReportIds),
-    pendingFollowups: new Set(pendingFollowupIds),
-  }), [missingReportIds, pendingFollowupIds])
+  return useMemo<StudentStatusFlags>(() => {
+    const missingReports = new Set<string>()
+    const missingReportDetails = new Map<string, MissingReportMeeting[]>()
+    for (const r of missingReportRows) {
+      const sid = r.student_id as string
+      if (!sid) continue
+      missingReports.add(sid)
+      const arr = missingReportDetails.get(sid) || []
+      arr.push({ date: (r.meeting_date as string) || undefined, type: (r.meeting_type as string) || undefined })
+      missingReportDetails.set(sid, arr)
+    }
+    return {
+      missingReports,
+      pendingFollowups: new Set(pendingFollowupIds),
+      missingReportDetails,
+    }
+  }, [missingReportRows, pendingFollowupIds])
 }
