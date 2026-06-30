@@ -172,16 +172,26 @@ export function Student360Page() {
   const consultantPool = useConsultantPool()
   const consultantName = useConsultantName()
 
-  // Consultants who actually have at least one student (for the filter dropdown)
+  // Consultants who actually have at least one student (for the filter dropdown).
+  // Match by NAME so legacy slug IDs (e.g. 'yeonse') and live profile UUIDs
+  // referring to the same person both count as "in use".
   const activeConsultants = useMemo(() => {
-    const ids = new Set(students.map(s => s.assignedConsultant).filter(Boolean))
-    return consultantPool.filter(c => ids.has(c.id))
-  }, [students, consultantPool])
+    const usedNames = new Set(
+      students
+        .map(s => s.assignedConsultant)
+        .filter((id): id is string => !!id)
+        .map(id => consultantName(id))
+    )
+    return consultantPool.filter(c => usedNames.has(c.name))
+  }, [students, consultantPool, consultantName])
 
+  // Selected filter resolves to a canonical name so a pick of 남연서 (live UUID)
+  // also matches legacy 'yeonse' rows and vice versa.
+  const filterName = consultantFilter ? consultantName(consultantFilter) : ''
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return students.filter(s => {
-      if (consultantFilter && s.assignedConsultant !== consultantFilter) return false
+      if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
       if (!q) return true
       return (
         s.name.toLowerCase().includes(q) ||
@@ -190,7 +200,7 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     })
-  }, [students, search, consultantFilter])
+  }, [students, search, filterName, consultantName])
 
   const selected = students.find(s => s.id === selectedId) || null
 
