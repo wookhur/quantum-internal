@@ -495,6 +495,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
         <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
         <Field label={t('student360.preferredLanguage')} value={student.preferredLanguage} />
+        <Field label="생일 (Birthday)" value={student.birthDate} />
         <div className="col-span-2 grid grid-cols-2 gap-x-6 gap-y-3">
           <Field label={t('student360.startDate')} value={student.startDate} />
           <Field label={t('student360.endDate')} value={student.endDate} />
@@ -1105,6 +1106,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     additionalServices: student?.additionalServices || '',
     communicationPlatform: student?.communicationPlatform || '',
     preferredLanguage: student?.preferredLanguage || '',
+    birthDate: student?.birthDate || '',
     startDate: student?.startDate || '',
     endDate: student?.endDate || '',
     status: student?.status || '',
@@ -1161,6 +1163,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
       additionalServices: form.additionalServices || undefined,
       communicationPlatform: form.communicationPlatform || undefined,
       preferredLanguage: form.preferredLanguage || undefined,
+      birthDate: form.birthDate || undefined,
       startDate: form.startDate || undefined,
       endDate: form.endDate || undefined,
       status: form.status || undefined,
@@ -1191,6 +1194,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
         <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
           <LabeledInput label={`${t('student360.name')} *`} value={form.name} onChange={v => set('name', v)} />
           <LabeledInput label={t('student360.koreanName')} value={form.koreanName} onChange={v => set('koreanName', v)} />
+          <LabeledInput label="생일 (Birthday)" value={form.birthDate} onChange={v => set('birthDate', v)} type="date" />
           <LabeledInput label={t('student360.email')} value={form.email} onChange={v => set('email', v)} />
           <LabeledInput label={t('student360.parentEmail')} value={form.parentEmail} onChange={v => set('parentEmail', v)} />
           <LabeledInput label={t('student360.contact')} value={form.contact} onChange={v => set('contact', v)} />
@@ -1334,11 +1338,11 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
   )
 }
 
-function LabeledInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function LabeledInput({ label, value, onChange, type }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
   return (
     <div>
       <Label className="text-xs">{label}</Label>
-      <Input value={value} onChange={e => onChange(e.target.value)} />
+      <Input type={type} value={value} onChange={e => onChange(e.target.value)} />
     </div>
   )
 }

@@ -33,6 +33,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     additionalServices: (row.additional_services as string) || undefined,
     communicationPlatform: (row.communication_platform as string) || undefined,
     preferredLanguage: (row.preferred_language as string) || undefined,
+    birthDate: (row.birth_date as string) || undefined,
     startDate: (row.start_date as string) || undefined,
     endDate: (row.end_date as string) || undefined,
     status: (row.status as string) || undefined,
@@ -130,6 +131,7 @@ export function useCreateServiceStudent() {
       additionalServices?: string
       communicationPlatform?: string
       preferredLanguage?: string
+      birthDate?: string
       startDate?: string
       endDate?: string
       status?: string
@@ -159,6 +161,7 @@ export function useCreateServiceStudent() {
         additional_services: s.additionalServices || null,
         communication_platform: s.communicationPlatform,
         preferred_language: s.preferredLanguage,
+        birth_date: s.birthDate || null,
         start_date: s.startDate || null,
         end_date: s.endDate || null,
         status: s.status || 'active',
@@ -199,6 +202,7 @@ export function useUpdateServiceStudent() {
       additionalServices?: string
       communicationPlatform?: string
       preferredLanguage?: string
+      birthDate?: string | null
       startDate?: string | null
       endDate?: string | null
       status?: string
@@ -228,6 +232,7 @@ export function useUpdateServiceStudent() {
       if (rest.additionalServices !== undefined) update.additional_services = rest.additionalServices || null
       if (rest.communicationPlatform !== undefined) update.communication_platform = rest.communicationPlatform
       if (rest.preferredLanguage !== undefined) update.preferred_language = rest.preferredLanguage
+      if (rest.birthDate !== undefined) update.birth_date = rest.birthDate || null
       if (rest.startDate !== undefined) update.start_date = rest.startDate
       if (rest.endDate !== undefined) update.end_date = rest.endDate
       if (rest.status !== undefined) update.status = rest.status

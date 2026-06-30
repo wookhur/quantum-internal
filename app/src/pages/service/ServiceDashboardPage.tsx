@@ -30,7 +30,7 @@ import { useECActivities } from '@/hooks/useECActivities'
 import { useAcademicSupport } from '@/hooks/useAcademicSupport'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import {
-  useAllServiceMeetings, useAllServiceFollowupsDue,
+  useAllServiceMeetings, useAllServiceFollowupsDue, useEmployeeBirthdays,
   type DashboardMeeting, type DashboardFollowup,
 } from '@/hooks/useServiceDashboard'
 import {
@@ -57,6 +57,11 @@ const MILESTONE_TYPES: { value: MilestoneType; label: string; color: string; dot
 const MEETING_COLOR = 'bg-violet-100 text-violet-700 border-violet-200'
 const GHOST_MEETING_COLOR = 'border-violet-400 text-violet-400 bg-transparent'
 const FOLLOWUP_COLOR = 'bg-yellow-100 text-yellow-700 border-yellow-200'
+const EMP_BDAY_COLOR = 'bg-rose-100 text-rose-700 border-rose-200'
+const STU_BDAY_COLOR = 'bg-sky-100 text-sky-700 border-sky-200'
+
+export type BirthdayEvent = { name: string; kind: 'employee' | 'student' }
+export type BirthdayMap = Map<string, BirthdayEvent[]>  // keyed by 'MM-DD'
 
 interface GhostMeeting {
   studentId: string
@@ -817,6 +822,7 @@ function WeekCalendar({
   followups,
   ghostMeetings,
   consultantFilter,
+  birthdaysByMmdd,
   onEditMeeting,
   onAddMilestone,
   onEditMilestone,
@@ -827,6 +833,7 @@ function WeekCalendar({
   followups: DashboardFollowup[]
   ghostMeetings: GhostMeeting[]
   consultantFilter: string
+  birthdaysByMmdd: BirthdayMap
   onEditMeeting: (m: DashboardMeeting) => void
   onAddMilestone: (dateStr: string) => void
   onEditMilestone: (m: DashboardMilestone) => void
@@ -917,7 +924,16 @@ function WeekCalendar({
                   {f.studentName} · {f.text}
                 </div>
               ))}
-              {dm.length === 0 && gm.length === 0 && mm.length === 0 && ff.length === 0 && (
+              {(birthdaysByMmdd.get(dateStr.slice(5)) || []).map((b, i) => (
+                <div
+                  key={`bd-${i}`}
+                  className={`w-full text-[11px] px-1.5 py-1 rounded border font-medium truncate ${b.kind === 'employee' ? EMP_BDAY_COLOR : STU_BDAY_COLOR}`}
+                  title={`${b.name} 생일 (${b.kind === 'employee' ? '직원' : '학생'})`}
+                >
+                  🎂 {b.name}
+                </div>
+              ))}
+              {dm.length === 0 && gm.length === 0 && mm.length === 0 && ff.length === 0 && (birthdaysByMmdd.get(dateStr.slice(5))?.length ?? 0) === 0 && (
                 <button
                   onClick={() => onAddMilestone(dateStr)}
                   className="w-full h-8 flex items-center justify-center text-gray-200 hover:text-gray-400 hover:bg-gray-50 rounded transition-colors"
@@ -943,6 +959,7 @@ function MonthCalendar({
   followups,
   ghostMeetings,
   consultantFilter,
+  birthdaysByMmdd,
   onSelectMeeting,
   onEditMilestone,
 }: {
@@ -953,6 +970,7 @@ function MonthCalendar({
   followups: DashboardFollowup[]
   ghostMeetings: GhostMeeting[]
   consultantFilter: string
+  birthdaysByMmdd: BirthdayMap
   onSelectMeeting: (m: DashboardMeeting) => void
   onEditMilestone: (m: DashboardMilestone) => void
 }) {
@@ -1035,6 +1053,15 @@ function MonthCalendar({
                   {ff.slice(0, 1).map(f => (
                     <div key={f.id} className={`text-[10px] px-1 py-0.5 rounded truncate ${FOLLOWUP_COLOR}`}>
                       {f.studentName}
+                    </div>
+                  ))}
+                  {(birthdaysByMmdd.get(dateStr.slice(5)) || []).map((b, i) => (
+                    <div
+                      key={`bd-${i}`}
+                      className={`text-[10px] px-1 py-0.5 rounded border truncate font-medium ${b.kind === 'employee' ? EMP_BDAY_COLOR : STU_BDAY_COLOR}`}
+                      title={`${b.name} 생일 (${b.kind === 'employee' ? '직원' : '학생'})`}
+                    >
+                      🎂 {b.name}
                     </div>
                   ))}
                   {(dm.length + gm.length + mm.length + ff.length) > 3 && (
@@ -1497,6 +1524,21 @@ export function ServiceDashboardPage() {
   const vMilestones = visibleStudentIds ? milestones.filter(m => visibleStudentIds.has(m.studentId)) : milestones
   const vFollowups  = visibleStudentIds ? followupsDue.filter(f => visibleStudentIds.has(f.studentId)) : followupsDue
 
+  // Birthdays (employees + students) keyed by MM-DD for the calendar.
+  const { data: employeeBirthdays = [] } = useEmployeeBirthdays()
+  const birthdaysByMmdd = useMemo<BirthdayMap>(() => {
+    const map: BirthdayMap = new Map()
+    const add = (mmdd: string, name: string, kind: 'employee' | 'student') => {
+      if (!mmdd) return
+      const a = map.get(mmdd) || []
+      a.push({ name, kind })
+      map.set(mmdd, a)
+    }
+    if (!isPartner) employeeBirthdays.forEach(e => add(e.mmdd, e.name, 'employee'))
+    vStudents.forEach(s => { if (s.birthDate && s.birthDate.length >= 10) add(s.birthDate.slice(5, 10), s.name, 'student') })
+    return map
+  }, [employeeBirthdays, isPartner, vStudents])
+
   // Ghost meetings from regular schedule (future dates only, no existing meeting on that day)
   const ghostMeetings = useMemo<GhostMeeting[]>(() => {
     const result: GhostMeeting[] = []
@@ -1722,6 +1764,14 @@ export function ServiceDashboardPage() {
               <span className="w-3 h-3 rounded bg-yellow-200 border border-yellow-300" />
               <span className="text-[11px] text-gray-500">{t('serviceDash.taskDeadline')}</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-rose-200 border border-rose-300" />
+              <span className="text-[11px] text-gray-500">🎂 직원 생일</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded bg-sky-200 border border-sky-300" />
+              <span className="text-[11px] text-gray-500">🎂 학생 생일</span>
+            </div>
           </div>
         )}
 
@@ -1734,6 +1784,7 @@ export function ServiceDashboardPage() {
             followups={filteredFollowups}
             ghostMeetings={ghostMeetings}
             consultantFilter={consultantFilter}
+            birthdaysByMmdd={birthdaysByMmdd}
             onEditMeeting={openEditMeeting}
             onAddMilestone={dateStr => {
               setDefaultMilestoneStudentId(undefined)
@@ -1754,6 +1805,7 @@ export function ServiceDashboardPage() {
             followups={filteredFollowups}
             ghostMeetings={ghostMeetings}
             consultantFilter={consultantFilter}
+            birthdaysByMmdd={birthdaysByMmdd}
             onSelectMeeting={setSelectedMeeting}
             onEditMilestone={openEditMilestone}
           />

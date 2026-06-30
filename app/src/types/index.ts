@@ -439,6 +439,7 @@ export interface ServiceStudent {
   additionalServices?: string
   communicationPlatform?: string
   preferredLanguage?: string
+  birthDate?: string
   startDate?: string
   endDate?: string
   status?: string

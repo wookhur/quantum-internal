@@ -162,6 +162,35 @@ export function useAllServiceDiaryInRange(startDate: string, endDate: string) {
   })
 }
 
+export interface BirthdayPerson {
+  name: string
+  mmdd: string   // 'MM-DD'
+}
+
+/** Employee birthdays (from employee_info), as MM-DD for recurring display. */
+export function useEmployeeBirthdays() {
+  return useQuery({
+    queryKey: ['dashboard_employee_birthdays'],
+    queryFn: async () => {
+      const [info, profiles] = await Promise.all([
+        supabase.from('employee_info').select('profile_id, birth_date').not('birth_date', 'is', null),
+        supabase.from('profiles').select('id, name'),
+      ])
+      if (info.error || profiles.error) return []
+      const nameById = new Map<string, string>()
+      ;(profiles.data || []).forEach((p: Record<string, unknown>) => nameById.set(p.id as string, p.name as string))
+      const out: BirthdayPerson[] = []
+      ;(info.data || []).forEach((r: Record<string, unknown>) => {
+        const bd = r.birth_date as string | null
+        const name = nameById.get(r.profile_id as string)
+        if (!bd || bd.length < 10 || !name) return
+        out.push({ name, mmdd: bd.slice(5, 10) })
+      })
+      return out
+    },
+  })
+}
+
 export interface MissingReportMeeting {
   date?: string
   type?: string
