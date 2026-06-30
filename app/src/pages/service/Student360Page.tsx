@@ -342,7 +342,9 @@ export function Student360Page() {
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} />
             <MeetingsSection studentId={selected.id} createdBy={user?.id} authorName={user?.name} />
-            <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} />
+            {selected.essayEditor && (
+              <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} />
+            )}
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} />
             <ArchiveSection studentId={selected.id} createdBy={user?.id} />
           </div>
@@ -1378,15 +1380,15 @@ function MeetingsSection({ studentId, createdBy, authorName }: {
 }
 
 // ─── Essay-editor meetings (simple memo, separate from consultant meetings) ───
-function EditorMeetingsSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
+function EditorMeetingsSection({ studentId, createdBy, defaultEditor }: { studentId: string; createdBy?: string; defaultEditor?: string }) {
   const { data: items = [] } = useEditorMeetings(studentId)
   const create = useCreateEditorMeeting()
   const update = useUpdateEditorMeeting()
   const del = useDeleteEditorMeeting()
 
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ meetingDate: '', editor: '', content: '' })
-  const reset = () => { setEditingId(null); setForm({ meetingDate: '', editor: '', content: '' }) }
+  const [form, setForm] = useState({ meetingDate: '', editor: defaultEditor || '', content: '' })
+  const reset = () => { setEditingId(null); setForm({ meetingDate: '', editor: defaultEditor || '', content: '' }) }
 
   const startEdit = (m: EditorMeeting) => {
     setEditingId(m.id)
