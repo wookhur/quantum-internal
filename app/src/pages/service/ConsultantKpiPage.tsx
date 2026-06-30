@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { ChevronDown, ChevronRight, ExternalLink, AlertTriangle } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
-import { CONSULTANTS } from '@/lib/consultants'
+import { useConsultantPool } from '@/lib/consultants'
 import { kpiDotColor } from '@/lib/kpi'
 import { useKpiData, KPI_MAX, type StudentKpi } from '@/hooks/useConsultantKpis'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -25,6 +25,7 @@ function tierOf(score: number | undefined): Tier {
 
 export function ConsultantKpiPage() {
   const t = useT()
+  const consultantPool = useConsultantPool()
   const { data: kpiData, isLoading } = useKpiData()
   const { data: students = [] } = useServiceStudents()
   const [attentionOnly, setAttentionOnly] = useState(false)
@@ -91,7 +92,7 @@ export function ConsultantKpiPage() {
 
       {/* ── Per-consultant cards ── */}
       <div className="space-y-3">
-        {CONSULTANTS.map(c => {
+        {consultantPool.map(c => {
           const roster = studentsByConsultant[c.id] || []
           const filteredRoster = attentionOnly
             ? roster.filter(s => (kpiData?.byStudent[s.id]?.score ?? 0) < ATTENTION_THRESHOLD)

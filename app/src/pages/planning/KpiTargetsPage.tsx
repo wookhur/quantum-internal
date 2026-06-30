@@ -71,7 +71,7 @@ import {
 } from '@/hooks/useKpiAssignments'
 import { useKpiData, KPI_MAX, type StudentKpi } from '@/hooks/useConsultantKpis'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
-import { CONSULTANTS } from '@/lib/consultants'
+import { useConsultantPool } from '@/lib/consultants'
 import { kpiDotColor } from '@/lib/kpi'
 
 // ---------------------------------------------------------------------------
@@ -525,6 +525,7 @@ function StudentMetricRow({
 }
 
 function ServiceKpiTab({ t }: { t: (key: string) => string }) {
+  const consultantPool = useConsultantPool()
   const { data: kpiData, isLoading } = useKpiData()
   const { data: students = [] } = useServiceStudents()
   const [attentionOnly, setAttentionOnly] = useState(false)
@@ -581,7 +582,7 @@ function ServiceKpiTab({ t }: { t: (key: string) => string }) {
       {isLoading && <p className="text-sm text-muted-foreground">{t('common.loading')}</p>}
 
       <div className="space-y-3">
-        {CONSULTANTS.map(c => {
+        {consultantPool.map(c => {
           const roster = studentsByConsultant[c.id] || []
           const filteredRoster = attentionOnly
             ? roster.filter(s => (kpiData?.byStudent[s.id]?.score ?? 0) < ATTENTION_THRESHOLD)

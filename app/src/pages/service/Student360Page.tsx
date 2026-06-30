@@ -51,7 +51,7 @@ import type {
 } from '@/types'
 
 // Consultant pool + helpers (shared with KPI page)
-import { CONSULTANTS, consultantName } from '@/lib/consultants'
+import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { kpiDotColor } from '@/lib/kpi'
 import { useStudentKpis, KPI_MAX } from '@/hooks/useConsultantKpis'
 import { useStudentStatusFlags } from '@/hooks/useServiceDashboard'
@@ -169,12 +169,14 @@ export function Student360Page() {
   const { data: students = [], isLoading } = useServiceStudents()
   const { data: studentKpis = {} } = useStudentKpis()
   const statusFlags = useStudentStatusFlags()
+  const consultantPool = useConsultantPool()
+  const consultantName = useConsultantName()
 
   // Consultants who actually have at least one student (for the filter dropdown)
   const activeConsultants = useMemo(() => {
     const ids = new Set(students.map(s => s.assignedConsultant).filter(Boolean))
-    return CONSULTANTS.filter(c => ids.has(c.id))
-  }, [students])
+    return consultantPool.filter(c => ids.has(c.id))
+  }, [students, consultantPool])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -311,6 +313,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
   createdBy?: string
 }) {
   const t = useT()
+  const consultantName = useConsultantName()
   const del = useDeleteServiceStudent()
 
   const queryClient = useQueryClient()
@@ -750,6 +753,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
   trigger: ReactNode
   createdBy?: string
 }) {
+  const consultantPool = useConsultantPool()
   const [open, setOpen] = useState(false)
   const create = useCreateAcademicSupport()
   const update = useUpdateAcademicSupport()
@@ -871,7 +875,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
             <Select value={form.salesContributor1 || null} onValueChange={v => set('salesContributor1', v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
-                {CONSULTANTS.map(c => (
+                {consultantPool.map(c => (
                   <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -883,7 +887,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
             <Select value={form.salesContributor2 || null} onValueChange={v => set('salesContributor2', v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
-                {CONSULTANTS.map(c => (
+                {consultantPool.map(c => (
                   <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -1028,6 +1032,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
   createdBy?: string
 }) {
   const t = useT()
+  const consultantPool = useConsultantPool()
   const [open, setOpen] = useState(false)
   const create = useCreateServiceStudent()
   const update = useUpdateServiceStudent()
@@ -1133,7 +1138,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
             <Select value={form.assignedConsultant} onValueChange={v => set('assignedConsultant', v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
-                {CONSULTANTS.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {consultantPool.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -1256,6 +1261,7 @@ function MeetingsSection({ studentId, createdBy, authorName }: {
   authorName?: string
 }) {
   const t = useT()
+  const consultantName = useConsultantName()
   const { data: meetings = [] } = useServiceMeetings(studentId)
   const del = useDeleteServiceMeeting()
 
@@ -1332,6 +1338,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
   createdBy?: string
 }) {
   const t = useT()
+  const consultantPool = useConsultantPool()
   const [open, setOpen] = useState(false)
   const create = useCreateServiceMeeting()
   const update = useUpdateServiceMeeting()
@@ -1393,7 +1400,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
             <Select value={form.consultantId} onValueChange={v => set('consultantId', v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
-                {CONSULTANTS.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {consultantPool.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

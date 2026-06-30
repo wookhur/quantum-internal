@@ -6,7 +6,7 @@ import { useT } from '@/i18n/LanguageContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings, useAllServiceFollowupsInRange, useAllServiceDiaryInRange } from '@/hooks/useServiceDashboard'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
-import { CONSULTANTS, consultantName } from '@/lib/consultants'
+import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { countScheduledMeetings } from '@/lib/meetingSchedule'
 
 const OTHER_ID = '__other__'
@@ -58,7 +58,9 @@ export function WeeklyReportPage() {
   const { data: diaries = [] } = useAllServiceDiaryInRange(start, end)
   const { data: programs = [] } = useAllServiceProgramFees()
 
-  const knownIds = useMemo(() => new Set<string>(CONSULTANTS.map(c => c.id)), [])
+  const consultantPool = useConsultantPool()
+  const consultantName = useConsultantName()
+  const knownIds = useMemo(() => new Set<string>(consultantPool.map(c => c.id)), [consultantPool])
   const bucketOf = (id?: string) => (id && knownIds.has(id) ? id : OTHER_ID)
 
   // student id -> assigned consultant (for grouping EC programs)
@@ -98,7 +100,7 @@ export function WeeklyReportPage() {
 
   const { rows, totals, cancelDist } = useMemo(() => {
     const buckets: { id: string; name: string }[] = [
-      ...CONSULTANTS.map(c => ({ id: c.id, name: c.name })),
+      ...consultantPool.map(c => ({ id: c.id, name: c.name })),
       { id: OTHER_ID, name: t('weeklyReport.otherUnassigned') },
     ]
 

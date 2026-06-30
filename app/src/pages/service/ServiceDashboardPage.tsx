@@ -34,7 +34,7 @@ import {
   useAllStudentMilestones, useCreateMilestone, useUpdateMilestone, useDeleteMilestone,
   type DashboardMilestone,
 } from '@/hooks/useStudentMilestones'
-import { CONSULTANTS, consultantName } from '@/lib/consultants'
+import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
@@ -179,6 +179,7 @@ function SessionPrepPanel({
   onClose: () => void
 }) {
   const t = useT()
+  const consultantName = useConsultantName()
   const { data: followups = [] } = useServiceFollowups(meeting.studentId)
   const { data: diaryEntries = [] } = useServiceDiary(meeting.studentId)
   const today = todayKST()
@@ -597,6 +598,7 @@ function MeetingDialog({
   meeting: DashboardMeeting | null
 }) {
   const t = useT()
+  const consultantPool = useConsultantPool()
   const qc = useQueryClient()
   const updateMeeting = useUpdateServiceMeeting()
   const deleteMeeting = useDeleteServiceMeeting()
@@ -691,7 +693,7 @@ function MeetingDialog({
             <Select value={consultantId} onValueChange={v => setConsultantId(v ?? '')}>
               <SelectTrigger><SelectValue placeholder={t('serviceDash.selectConsultant')} /></SelectTrigger>
               <SelectContent>
-                {CONSULTANTS.map(c => (
+                {consultantPool.map(c => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
@@ -1199,6 +1201,8 @@ function CycleOverview({
 
 export function ServiceDashboardPage() {
   const t = useT()
+  const consultantPool = useConsultantPool()
+  const consultantName = useConsultantName()
   const today = todayKST()
   const todayDate = new Date(today + 'T00:00:00')
 
@@ -1336,7 +1340,7 @@ export function ServiceDashboardPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('serviceDash.allConsultants')}</SelectItem>
-                {CONSULTANTS.map(c => (
+                {consultantPool.map(c => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
