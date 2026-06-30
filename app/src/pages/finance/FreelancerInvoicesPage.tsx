@@ -394,7 +394,9 @@ function InvoiceDetailDialog({
   const { user } = useAuth()
   const { data: items = [] } = useInvoiceItems(invoice.id)
   const updateStatus = useUpdateInvoiceStatus()
+  const deleteInvoice = useDeleteInvoice()
   const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
+  const canDelete = isAdmin || (invoice.freelancerId === user?.id && invoice.status !== 'approved')
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -456,27 +458,54 @@ function InvoiceDetailDialog({
           )}
         </div>
 
-        {isAdmin && invoice.status === 'submitted' && (
-          <DialogFooter>
-            <Button
-              variant="outline"
-              className="gap-1.5 text-red-600 hover:text-red-700"
-              onClick={async () => { await updateStatus.mutateAsync({ id: invoice.id, status: 'rejected' }); onOpenChange(false) }}
-              disabled={updateStatus.isPending}
-            >
-              <XCircle className="size-4" />
-              {t('fInvoice.reject')}
-            </Button>
-            <Button
-              className="gap-1.5"
-              onClick={async () => { await updateStatus.mutateAsync({ id: invoice.id, status: 'approved' }); onOpenChange(false) }}
-              disabled={updateStatus.isPending}
-            >
-              <CheckCircle2 className="size-4" />
-              {t('fInvoice.approve')}
-            </Button>
+        {(isAdmin && invoice.status === 'submitted') || canDelete ? (
+          <DialogFooter className="gap-2">
+            {canDelete && (
+              <Button
+                variant="outline"
+                className="gap-1.5 text-red-600 hover:text-red-700 mr-auto"
+                disabled={deleteInvoice.isPending}
+                onClick={async () => {
+                  const isApproved = invoice.status === 'approved'
+                  const confirmMsg = isApproved
+                    ? t('fInvoice.deleteApprovedConfirm', {
+                        name: invoice.freelancerName || '',
+                        amount: formatKRW(invoice.totalAmount),
+                      })
+                    : t('fInvoice.deleteConfirm')
+                  if (confirm(confirmMsg)) {
+                    await deleteInvoice.mutateAsync(invoice.id)
+                    onOpenChange(false)
+                  }
+                }}
+              >
+                <Trash2 className="size-4" />
+                {t('fInvoice.delete')}
+              </Button>
+            )}
+            {isAdmin && invoice.status === 'submitted' && (
+              <>
+                <Button
+                  variant="outline"
+                  className="gap-1.5 text-red-600 hover:text-red-700"
+                  onClick={async () => { await updateStatus.mutateAsync({ id: invoice.id, status: 'rejected' }); onOpenChange(false) }}
+                  disabled={updateStatus.isPending}
+                >
+                  <XCircle className="size-4" />
+                  {t('fInvoice.reject')}
+                </Button>
+                <Button
+                  className="gap-1.5"
+                  onClick={async () => { await updateStatus.mutateAsync({ id: invoice.id, status: 'approved' }); onOpenChange(false) }}
+                  disabled={updateStatus.isPending}
+                >
+                  <CheckCircle2 className="size-4" />
+                  {t('fInvoice.approve')}
+                </Button>
+              </>
+            )}
           </DialogFooter>
-        )}
+        ) : null}
       </DialogContent>
     </Dialog>
   )
@@ -726,29 +755,39 @@ export function FreelancerInvoicesPage() {
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setDetailInvoice(inv)}>
                           <Eye className="size-3.5" />
                         </Button>
+                        {/* Edit: own invoice (any non-approved) or admin (non-approved only) */}
                         {(inv.freelancerId === user?.id || isAdmin) && inv.status !== 'approved' && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              onClick={() => { setEditInvoice(inv); setFormOpen(true) }}
-                            >
-                              <FileText className="size-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
-                              onClick={async () => {
-                                if (confirm(t('fInvoice.deleteConfirm'))) {
-                                  await deleteInvoice.mutateAsync(inv.id)
-                                }
-                              }}
-                            >
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => { setEditInvoice(inv); setFormOpen(true) }}
+                          >
+                            <FileText className="size-3.5" />
+                          </Button>
+                        )}
+                        {/* Delete: admin always, freelancer only if not approved */}
+                        {(isAdmin || (inv.freelancerId === user?.id && inv.status !== 'approved')) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
+                            disabled={deleteInvoice.isPending}
+                            onClick={async () => {
+                              const isApproved = inv.status === 'approved'
+                              const confirmMsg = isApproved
+                                ? t('fInvoice.deleteApprovedConfirm', {
+                                    name: inv.freelancerName || '',
+                                    amount: formatKRW(inv.totalAmount),
+                                  })
+                                : t('fInvoice.deleteConfirm')
+                              if (confirm(confirmMsg)) {
+                                await deleteInvoice.mutateAsync(inv.id)
+                              }
+                            }}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
                         )}
                       </div>
                     </TableCell>
