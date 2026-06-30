@@ -677,7 +677,8 @@ function MeetingDialog({
         meetingDate: date || null,
         meetingType,
         consultantId: consultantId || null,
-        reportStatus,
+        // A report link implies the report is submitted — auto-promote from 'none'.
+        reportStatus: (reportUrl && reportStatus === 'none') ? 'submitted' : reportStatus,
         reportUrl,
         prepUrl,
         status,

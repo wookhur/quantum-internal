@@ -190,6 +190,7 @@ export function useStudentStatusFlags() {
         .from('service_meetings')
         .select('student_id, meeting_date, meeting_type')
         .neq('report_status', 'submitted')
+        .is('report_url', null)
         .lte('meeting_date', today)
         .gte('meeting_date', thirtyDaysAgo)
       if (error) return []

@@ -667,7 +667,8 @@ function ConsultantInvoicePanel() {
   const completedByStudent = useMemo(() => {
     const map = new Map<string, number>()
     for (const mt of meetings) {
-      if (mt.reportStatus === 'submitted' && mt.status !== 'cancelled') {
+      // A meeting counts as completed if its summary report is submitted OR a report link exists.
+      if ((mt.reportStatus === 'submitted' || !!mt.reportUrl) && mt.status !== 'cancelled') {
         map.set(mt.studentId, (map.get(mt.studentId) || 0) + 1)
       }
     }

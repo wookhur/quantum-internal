@@ -341,7 +341,11 @@ export function useCreateServiceMeeting() {
       if (error) throw error
       return mapMeeting(data as Record<string, unknown>)
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_meetings', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['service_meetings', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['dashboard_meetings'] })
+      qc.invalidateQueries({ queryKey: ['student_status_missing_reports'] })
+    },
   })
 }
 
@@ -381,7 +385,11 @@ export function useUpdateServiceMeeting() {
       const { error } = await supabase.from('service_meetings').update(update).eq('id', id)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_meetings', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['service_meetings', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['dashboard_meetings'] })
+      qc.invalidateQueries({ queryKey: ['student_status_missing_reports'] })
+    },
   })
 }
 
@@ -392,7 +400,11 @@ export function useDeleteServiceMeeting() {
       const { error } = await supabase.from('service_meetings').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_meetings', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['service_meetings', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['dashboard_meetings'] })
+      qc.invalidateQueries({ queryKey: ['student_status_missing_reports'] })
+    },
   })
 }
 

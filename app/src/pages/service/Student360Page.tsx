@@ -1479,13 +1479,17 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
   const submit = () => {
+    // A report link implies the report is submitted — auto-promote from 'none'.
+    const effectiveReportStatus = (form.reportUrl && form.reportStatus === 'none')
+      ? 'submitted'
+      : (form.reportStatus as ServiceReportStatus)
     const payload = {
       meetingDate: form.meetingDate || undefined,
       meetingType: form.meetingType || undefined,
       consultantId: form.consultantId || undefined,
       summary: form.summary || undefined,
       prepUrl: form.prepUrl || undefined,
-      reportStatus: form.reportStatus as ServiceReportStatus,
+      reportStatus: effectiveReportStatus,
       reportUrl: form.reportUrl || undefined,
       reportDate: form.reportDate || undefined,
     }
@@ -1982,6 +1986,7 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
   const t = useT()
   const create = useCreateServiceDiary()
   const bulkCreateFollowups = useBulkCreateFollowups()
+  const updateMeeting = useUpdateServiceMeeting()
   const [open, setOpen] = useState(false)
   const [url, setUrl] = useState('')
   const [text, setText] = useState('')
@@ -2064,6 +2069,14 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
                 })
               }
             }
+            // The meeting diary IS the report — mark the meeting as submitted so
+            // dashboards/KPI/invoices stop showing it as 미제출.
+            updateMeeting.mutate({
+              id: meeting.id,
+              studentId,
+              reportStatus: 'submitted',
+              reportUrl: url || meeting.reportUrl || undefined,
+            })
             setOpen(false)
           },
           onError: (e) => setError((e as { message?: string })?.message || String(e)),
