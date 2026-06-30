@@ -26,6 +26,8 @@ import {
   useUpdateServiceMeeting, useDeleteServiceMeeting,
 } from '@/hooks/useServiceStudents'
 import { useServiceFollowups } from '@/hooks/useServiceFollowups'
+import { useECActivities } from '@/hooks/useECActivities'
+import { useAcademicSupport } from '@/hooks/useAcademicSupport'
 import {
   useAllServiceMeetings, useAllServiceFollowupsDue,
   type DashboardMeeting, type DashboardFollowup,
@@ -443,6 +445,23 @@ function MilestoneDialog({
   const [date,      setDate]      = useState(editing?.date ?? defaultDate ?? todayKST())
   const [status,    setStatus]    = useState<MilestoneStatus>(editing?.status ?? 'upcoming')
   const [notes,     setNotes]     = useState(editing?.notes ?? '')
+  const [program,   setProgram]   = useState('')
+
+  // Program options come from the selected student's Student 360 EC/Academic records.
+  const { data: ecList = [] } = useECActivities(studentId || undefined)
+  const { data: acList = [] } = useAcademicSupport(studentId || undefined)
+  const programOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = []
+    ecList.forEach(e => opts.push({ value: `ec-${e.id}`, label: `EC · ${e.program || e.partner || '프로그램'}` }))
+    acList.forEach(a => opts.push({ value: `ac-${a.id}`, label: `Academic · ${a.subject || '과목'}` }))
+    return opts
+  }, [ecList, acList])
+
+  const onPickProgram = (v: string) => {
+    setProgram(v)
+    const opt = programOptions.find(o => o.value === v)
+    if (opt) { setType('ec_activity'); setTitle(opt.label) }
+  }
 
   // Reset state every time the dialog opens
   useEffect(() => {
@@ -453,6 +472,7 @@ function MilestoneDialog({
       setDate(editing?.date ?? defaultDate ?? todayKST())
       setStatus(editing?.status ?? 'upcoming')
       setNotes(editing?.notes ?? '')
+      setProgram('')
     }
   }, [open])
 
@@ -504,6 +524,20 @@ function MilestoneDialog({
               </SelectContent>
             </Select>
           </div>
+          {studentId && programOptions.length > 0 && (
+            <div className="space-y-1">
+              <Label>프로그램 (선택)</Label>
+              <Select value={program} onValueChange={v => v && onPickProgram(v)}>
+                <SelectTrigger><SelectValue placeholder="EC/Academic 프로그램 선택" /></SelectTrigger>
+                <SelectContent>
+                  {programOptions.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-gray-400">프로그램을 고르면 제목·유형이 자동 채워집니다. 대회·리서치 기한·프로젝트 등 상세는 아래 메모에 입력하세요.</p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>{t('serviceDash.type')}</Label>
@@ -1414,15 +1448,31 @@ export function ServiceDashboardPage() {
 
   const loading = loadingStudents || loadingMeetings || loadingFollowups || loadingMilestones
 
+  // Partner (freelancer/external) users only see students they're linked to via the
+  // student's "partners" field, so they can view/input schedules only for those.
+  const { user } = useAuth()
+  const isPartner = user?.role === 'freelancer' || user?.role === 'external'
+  const partnerKey = (user?.name || '').trim().toLowerCase()
+  const visibleStudentIds = useMemo<Set<string> | null>(() => {
+    if (!isPartner) return null
+    const set = new Set<string>()
+    if (partnerKey) students.forEach(s => { if ((s.partners || '').toLowerCase().includes(partnerKey)) set.add(s.id) })
+    return set
+  }, [isPartner, partnerKey, students])
+  const vStudents   = visibleStudentIds ? students.filter(s => visibleStudentIds.has(s.id)) : students
+  const vMeetings   = visibleStudentIds ? meetings.filter(m => visibleStudentIds.has(m.studentId)) : meetings
+  const vMilestones = visibleStudentIds ? milestones.filter(m => visibleStudentIds.has(m.studentId)) : milestones
+  const vFollowups  = visibleStudentIds ? followupsDue.filter(f => visibleStudentIds.has(f.studentId)) : followupsDue
+
   // Ghost meetings from regular schedule (future dates only, no existing meeting on that day)
   const ghostMeetings = useMemo<GhostMeeting[]>(() => {
     const result: GhostMeeting[] = []
-    const existingKey = new Set(meetings.map(m => `${m.studentId}|${m.meetingDate}`))
+    const existingKey = new Set(vMeetings.map(m => `${m.studentId}|${m.meetingDate}`))
     const dates: string[] = []
     let d = new Date(viewStartDate + 'T00:00:00')
     const endD = new Date(viewEndDate + 'T00:00:00')
     while (d <= endD) { dates.push(toDateStr(d)); d = addDays(d, 1) }
-    students.forEach(s => {
+    vStudents.forEach(s => {
       if (!s.regularMeetingSchedule) return
       const time = s.regularMeetingSchedule.split('|')[2] || ''
       dates.forEach(dateStr => {
@@ -1434,12 +1484,12 @@ export function ServiceDashboardPage() {
       })
     })
     return result
-  }, [students, meetings, viewStartDate, viewEndDate, today])
+  }, [vStudents, vMeetings, viewStartDate, viewEndDate, today])
 
   // Stats (filtered by consultant)
-  const filteredMeetings   = consultantFilter === 'all' ? meetings   : meetings.filter(m   => m.studentConsultant  === consultantFilter)
-  const filteredMilestones = consultantFilter === 'all' ? milestones : milestones.filter(m  => m.studentConsultant === consultantFilter)
-  const filteredFollowups  = consultantFilter === 'all' ? followupsDue : followupsDue.filter(f => f.studentConsultant === consultantFilter)
+  const filteredMeetings   = consultantFilter === 'all' ? vMeetings   : vMeetings.filter(m   => m.studentConsultant  === consultantFilter)
+  const filteredMilestones = consultantFilter === 'all' ? vMilestones : vMilestones.filter(m  => m.studentConsultant === consultantFilter)
+  const filteredFollowups  = consultantFilter === 'all' ? vFollowups : vFollowups.filter(f => f.studentConsultant === consultantFilter)
 
   const viewMilestones = filteredMilestones.filter(m => m.date >= viewStartDate && m.date <= viewEndDate)
 
@@ -1565,7 +1615,7 @@ export function ServiceDashboardPage() {
           <div className="flex items-center gap-2 mt-3">
             <p className="text-xs text-gray-500">
               {consultantFilter === 'all' ? t('serviceDash.allConsultants') : consultantName(consultantFilter)}
-              {' · '}{t('serviceDash.activeStudents')} {students.filter(s => s.status === 'active' || !s.status).length}{t('serviceDash.studentsUnit')}
+              {' · '}{t('serviceDash.activeStudents')} {vStudents.filter(s => s.status === 'active' || !s.status).length}{t('serviceDash.studentsUnit')}
             </p>
             <div className="flex rounded-md border overflow-hidden ml-auto">
               <button onClick={() => setCycleFilter('all')}
@@ -1752,7 +1802,7 @@ export function ServiceDashboardPage() {
         {/* Cycle overview */}
         {view === 'cycle' && (
           <CycleOverview
-            students={students.map(s => ({ id: s.id, name: s.name, assignedConsultant: s.assignedConsultant, status: s.status }))}
+            students={vStudents.map(s => ({ id: s.id, name: s.name, assignedConsultant: s.assignedConsultant, status: s.status }))}
             milestones={filteredMilestones}
             consultantFilter={consultantFilter}
             cycleFilter={cycleFilter}
@@ -1764,8 +1814,8 @@ export function ServiceDashboardPage() {
         {/* By-student schedule (item 2) */}
         {view === 'student' && (
           <StudentScheduleView
-            students={students.map(s => ({ id: s.id, name: s.name, koreanName: s.koreanName, assignedConsultant: s.assignedConsultant }))}
-            milestones={milestones}
+            students={vStudents.map(s => ({ id: s.id, name: s.name, koreanName: s.koreanName, assignedConsultant: s.assignedConsultant }))}
+            milestones={vMilestones}
             onSelectMeeting={setSelectedMeeting}
             onEditMilestone={openEditMilestone}
           />
@@ -1788,7 +1838,7 @@ export function ServiceDashboardPage() {
       <MilestoneDialog
         open={showAddMilestone}
         onClose={() => { setShowAddMilestone(false); setEditingMilestone(null) }}
-        students={students.map(s => ({ id: s.id, name: s.name }))}
+        students={vStudents.map(s => ({ id: s.id, name: s.name }))}
         editing={editingMilestone}
         defaultStudentId={defaultMilestoneStudentId}
         defaultDate={defaultMilestoneDate}
