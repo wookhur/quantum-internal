@@ -56,6 +56,23 @@ function shiftMonth(ym: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+/**
+ * Canonicalize a display name for incentive grouping.
+ * Strips ALL whitespace + zero-width chars + control chars + ASCII punctuation,
+ * NFKC-normalizes (collapses fullwidth/compatibility variants), and lowercases.
+ * This ensures "김지현", " 김지현 ", "김 지현", "김지현​" all collapse to
+ * the same key, so the same person never appears twice.
+ */
+function normalizeName(raw: string | null | undefined): string {
+  if (!raw) return ''
+  return raw
+    .normalize('NFKC')
+    // Strip whitespace + invisible chars: standard ws, NBSP, zero-width
+    // space/non-joiner/joiner, word joiner, Hangul filler, BOM, controls.
+    .replace(/[\s\u00A0\u200B-\u200D\u2060\u3164\uFEFF\u0000-\u001F]+/gu, '')
+    .toLowerCase()
+}
+
 interface InstallmentDetail {
   key: string
   contractId: string
@@ -120,7 +137,7 @@ export function IncentiveByPersonPage() {
     const map = new Map<string, PersonGroup>()
 
     for (const entry of filtered) {
-      const groupKey = `name:${(entry.displayName || '').replace(/\s+/g, '').toLowerCase()}`
+      const groupKey = `name:${normalizeName(entry.displayName)}`
       let group = map.get(groupKey)
       if (!group) {
         group = {
@@ -215,7 +232,7 @@ export function IncentiveByPersonPage() {
       } else {
         const map = new Map<string, ExportPersonRow & { installments: Set<string> }>()
         for (const entry of rangeEntries) {
-          const gk = `name:${(entry.displayName || '').replace(/\s+/g, '').toLowerCase()}`
+          const gk = `name:${normalizeName(entry.displayName)}`
           if (!map.has(gk)) {
             map.set(gk, { displayName: entry.displayName, paymentCount: 0, amountByType: {}, totalIncentiveAmount: 0, installments: new Set() })
           }
