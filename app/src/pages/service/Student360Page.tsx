@@ -23,6 +23,10 @@ import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import {
+  useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
+  type EditorMeeting,
+} from '@/hooks/useEditorMeetings'
+import {
   useServiceStudents, useCreateServiceStudent, useUpdateServiceStudent, useDeleteServiceStudent,
   useServiceMeetings, useCreateServiceMeeting, useUpdateServiceMeeting, useDeleteServiceMeeting,
   useServiceDiary, useCreateServiceDiary, useUpdateServiceDiary, useDeleteServiceDiary,
@@ -307,6 +311,7 @@ export function Student360Page() {
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} />
             <MeetingsSection studentId={selected.id} createdBy={user?.id} authorName={user?.name} />
+            <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} />
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} />
             <ArchiveSection studentId={selected.id} createdBy={user?.id} />
           </div>
@@ -1336,6 +1341,80 @@ function MeetingsSection({ studentId, createdBy, authorName }: {
             )}
           </div>
         ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Essay-editor meetings (simple memo, separate from consultant meetings) ───
+function EditorMeetingsSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
+  const { data: items = [] } = useEditorMeetings(studentId)
+  const create = useCreateEditorMeeting()
+  const update = useUpdateEditorMeeting()
+  const del = useDeleteEditorMeeting()
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState({ meetingDate: '', editor: '', content: '' })
+  const reset = () => { setEditingId(null); setForm({ meetingDate: '', editor: '', content: '' }) }
+
+  const startEdit = (m: EditorMeeting) => {
+    setEditingId(m.id)
+    setForm({ meetingDate: m.meetingDate || '', editor: m.editor || '', content: m.content || '' })
+  }
+
+  const save = () => {
+    if (!form.content.trim() && !form.meetingDate) return
+    const payload = { studentId, meetingDate: form.meetingDate || undefined, editor: form.editor || undefined, content: form.content || undefined }
+    if (editingId) {
+      update.mutate({ id: editingId, ...payload }, { onSuccess: reset })
+    } else {
+      create.mutate({ ...payload, createdBy }, { onSuccess: reset })
+    }
+  }
+
+  return (
+    <Card className="border-teal-200">
+      <CardHeader className="bg-teal-50/40 rounded-t-xl">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <NotebookPen className="size-5 text-teal-600" />
+          에세이 에디터 미팅 <span className="text-muted-foreground font-normal">({items.length})</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {items.length === 0 && <p className="text-sm text-muted-foreground">기록이 없습니다.</p>}
+        {items.map(m => (
+          <div key={m.id} className="rounded-lg border border-teal-100 bg-teal-50/30 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <span>{m.meetingDate || '—'}</span>
+                {m.editor && <Badge variant="outline" className="border-teal-300 text-teal-700">{m.editor}</Badge>}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" onClick={() => startEdit(m)}><Pencil className="size-3.5" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: m.id, studentId }) }}><Trash2 className="size-3.5" /></Button>
+              </div>
+            </div>
+            {m.content && <p className="text-sm mt-2 whitespace-pre-wrap">{m.content}</p>}
+          </div>
+        ))}
+
+        <div className="rounded-lg border border-dashed p-3 space-y-2">
+          <div className="text-xs font-medium text-muted-foreground">{editingId ? '미팅 수정' : '미팅 추가'}</div>
+          <div className="flex gap-2">
+            <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} className="h-8 text-sm w-40" />
+            <Select value={form.editor} onValueChange={v => setForm(f => ({ ...f, editor: v ?? '' }))}>
+              <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="에디터 선택" /></SelectTrigger>
+              <SelectContent>{ESSAY_EDITORS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <Textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="미팅 내용 메모..." rows={2} className="text-sm" />
+          <div className="flex justify-end gap-2">
+            {editingId && <Button size="sm" variant="outline" onClick={reset}>취소</Button>}
+            <Button size="sm" onClick={save} disabled={create.isPending || update.isPending || (!form.content.trim() && !form.meetingDate)}>
+              <Plus className="size-3.5 mr-1" />{editingId ? '저장' : '추가'}
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
