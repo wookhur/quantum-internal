@@ -145,6 +145,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/hr/personal-info', labelKey: 'nav.personalInfo', module: 'hr' },
   // ── Partner ──
   { path: '/partner/students', labelKey: 'nav.partnerStudents', module: 'partner' },
+  { path: '/partner/companies', labelKey: 'nav.partnerCompanies', module: 'partner' },
   { path: '/partner/contracts', labelKey: 'nav.partnerContracts', module: 'partner' },
   { path: '/partner/calendar', labelKey: 'nav.calendar', module: 'partner' },
   // ── Game ──
