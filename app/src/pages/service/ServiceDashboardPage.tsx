@@ -1274,6 +1274,8 @@ interface ScheduleItem {
   ownerId?: string
   meeting?: DashboardMeeting
   milestone?: DashboardMilestone
+  done?: boolean
+  cancelled?: boolean
 }
 
 function StudentScheduleView({
@@ -1313,10 +1315,14 @@ function StudentScheduleView({
       })
     })
     allMeetings.filter(m => m.studentId === studentId && m.meetingDate).forEach(m => {
+      const date = m.meetingDate as string
+      const cancelled = m.status === 'cancelled' || m.status === 'no_show'
+      // A meeting record means it happened: held / has report / already in the past.
+      const done = !cancelled && (m.status === 'held' || m.reportStatus === 'submitted' || !!m.reportUrl || date < today)
       out.push({
-        key: `mt-${m.id}`, date: m.meetingDate as string, days: daysFromTodayKST(m.meetingDate as string),
+        key: `mt-${m.id}`, date, days: daysFromTodayKST(date),
         kind: 'meeting', title: m.meetingType || t('serviceDash.studentMeeting'),
-        ownerId: m.consultantId || m.studentConsultant, meeting: m,
+        ownerId: m.consultantId || m.studentConsultant, meeting: m, done, cancelled,
       })
     })
     followups.filter(f => !f.done && f.dueDate).forEach(f => {
@@ -1327,8 +1333,13 @@ function StudentScheduleView({
     })
     return out
       .filter(i => i.days >= -30)
-      .sort((a, b) => a.date.localeCompare(b.date))
-  }, [studentId, milestones, allMeetings, followups, t])
+      .sort((a, b) => {
+        const aResolved = (a.done || a.cancelled) ? 1 : 0
+        const bResolved = (b.done || b.cancelled) ? 1 : 0
+        if (aResolved !== bResolved) return aResolved - bResolved      // pending first
+        return aResolved ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
+      })
+  }, [studentId, milestones, allMeetings, followups, today, t])
 
   return (
     <div className="space-y-4">
@@ -1359,6 +1370,11 @@ function StudentScheduleView({
             const owner = it.ownerId ? consultantName(it.ownerId) : ''
             const km = KIND_META[it.kind]
             const clickable = it.kind !== 'followup'
+            // A meeting record reflects whether it actually happened — don't show
+            // conducted/past meetings as a pending P0.
+            const mCancelled = !!it.cancelled
+            const mDone = !!it.done
+            const muted = mCancelled || mDone
             return (
               <div
                 key={it.key}
@@ -1367,12 +1383,18 @@ function StudentScheduleView({
                   if (it.kind === 'meeting' && it.meeting) onSelectMeeting(it.meeting)
                   else if (it.kind === 'milestone' && it.milestone) onEditMilestone(it.milestone)
                 }}
-                className={`flex items-center gap-3 px-4 py-2.5 ${clickable ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                className={`flex items-center gap-3 px-4 py-2.5 ${clickable ? 'cursor-pointer hover:bg-gray-50' : ''} ${muted ? 'opacity-70' : ''}`}
               >
-                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded w-9 text-center shrink-0 ${p.cls}`}>{p.label}</span>
+                {mCancelled ? (
+                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded w-10 text-center shrink-0 bg-gray-200 text-gray-500">취소</span>
+                ) : mDone ? (
+                  <span className="text-[11px] font-bold px-1.5 py-0.5 rounded w-10 text-center shrink-0 bg-emerald-100 text-emerald-700">완료</span>
+                ) : (
+                  <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded w-10 text-center shrink-0 ${p.cls}`}>{p.label}</span>
+                )}
                 <div className="w-24 shrink-0 text-xs">
                   <div className="font-medium text-gray-700">{formatDateLabel(it.date)}</div>
-                  <div className={days0Class(it.days)}>{dayLabel(it.days)}</div>
+                  <div className={muted ? 'text-gray-400' : days0Class(it.days)}>{dayLabel(it.days)}</div>
                 </div>
                 <Badge variant="outline" className={`text-[10px] shrink-0 ${km.cls}`}>{km.label}</Badge>
                 <span className="text-sm text-gray-800 flex-1 truncate">{it.title}</span>
