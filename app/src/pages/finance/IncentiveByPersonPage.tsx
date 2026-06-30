@@ -113,12 +113,14 @@ export function IncentiveByPersonPage() {
     [allEntries, currentMonth],
   )
 
-  // Group by person (profileId or displayName)
+  // Group by person — dedupe by normalized display name so the same person
+  // entered under both a legacy slug profileId and a new UUID (or as a custom
+  // recipient) collapses into one row.
   const personGroups = useMemo(() => {
     const map = new Map<string, PersonGroup>()
 
     for (const entry of filtered) {
-      const groupKey = entry.profileId || `custom:${entry.displayName}`
+      const groupKey = `name:${(entry.displayName || '').replace(/\s+/g, '').toLowerCase()}`
       let group = map.get(groupKey)
       if (!group) {
         group = {
@@ -213,7 +215,7 @@ export function IncentiveByPersonPage() {
       } else {
         const map = new Map<string, ExportPersonRow & { installments: Set<string> }>()
         for (const entry of rangeEntries) {
-          const gk = entry.profileId || `custom:${entry.displayName}`
+          const gk = `name:${(entry.displayName || '').replace(/\s+/g, '').toLowerCase()}`
           if (!map.has(gk)) {
             map.set(gk, { displayName: entry.displayName, paymentCount: 0, amountByType: {}, totalIncentiveAmount: 0, installments: new Set() })
           }
