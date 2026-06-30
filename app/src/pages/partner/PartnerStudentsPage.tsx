@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Pencil, Trash2, NotebookPen, GraduationCap } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
-import { usePartnerContracts } from '@/hooks/usePartnerContracts'
+import { useServiceStudents } from '@/hooks/useServiceStudents'
 import {
   usePartnerStudentMeetings, useCreatePartnerStudentMeeting,
   useUpdatePartnerStudentMeeting, useDeletePartnerStudentMeeting,
@@ -19,18 +19,22 @@ export function PartnerStudentsPage() {
   const t = useT()
   const { user } = useAuth()
   const partnerId = user?.id
-  const { data: contracts = [], isLoading } = usePartnerContracts(partnerId)
+  const { data: allStudents = [], isLoading } = useServiceStudents()
   const { data: meetings = [] } = usePartnerStudentMeetings(partnerId)
   const create = useCreatePartnerStudentMeeting()
   const update = useUpdatePartnerStudentMeeting()
   const del = useDeletePartnerStudentMeeting()
 
-  // The partner's students come from their partner contracts (distinct by name).
+  // A partner's students are the Student 360 students whose "partners" field
+  // (set from the Student 360 partner dropdown) names this partner.
+  const partnerKey = (user?.name || '').trim().toLowerCase()
   const students = useMemo(() => {
-    const map = new Map<string, { name: string; school?: string }>()
-    contracts.forEach(c => { if (c.studentName) map.set(c.studentName, { name: c.studentName, school: c.schoolName }) })
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [contracts])
+    if (!partnerKey) return []
+    return allStudents
+      .filter(s => (s.partners || '').toLowerCase().includes(partnerKey))
+      .map(s => ({ name: s.name, koreanName: s.koreanName, school: s.school }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }, [allStudents, partnerKey])
 
   const [selected, setSelected] = useState('')
   useEffect(() => {
@@ -75,7 +79,7 @@ export function PartnerStudentsPage() {
 
       {students.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
-          {isLoading ? '불러오는 중…' : '배정된 학생이 없습니다. (파트너 계약에 등록된 학생이 여기에 표시됩니다)'}
+          {isLoading ? '불러오는 중…' : 'Student 360에서 partners(파트너)로 지정된 학생이 여기에 표시됩니다.'}
         </CardContent></Card>
       ) : (
         <div className="grid grid-cols-[260px_1fr] gap-4">
@@ -88,7 +92,7 @@ export function PartnerStudentsPage() {
                   onClick={() => { setSelected(s.name); reset() }}
                   className={`w-full text-left rounded-lg border p-3 transition-colors ${s.name === selected ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'}`}
                 >
-                  <div className="font-medium text-sm">{s.name}</div>
+                  <div className="font-medium text-sm">{s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}</div>
                   {s.school && (
                     <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                       <GraduationCap className="size-3" />{s.school}
