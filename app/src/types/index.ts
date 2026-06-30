@@ -14,6 +14,7 @@ export interface User {
   contractStartDate?: string
   contractEndDate?: string
   isExternal: boolean
+  isPartner?: boolean
   avatarUrl?: string
   createdAt: string
 }

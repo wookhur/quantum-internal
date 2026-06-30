@@ -26,6 +26,7 @@ import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
   type EditorMeeting,
 } from '@/hooks/useEditorMeetings'
+import { useProfiles } from '@/hooks/useProfiles'
 import {
   useServiceStudents, useCreateServiceStudent, useUpdateServiceStudent, useDeleteServiceStudent,
   useServiceMeetings, useCreateServiceMeeting, useUpdateServiceMeeting, useDeleteServiceMeeting,
@@ -1117,11 +1118,22 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
   const [form, setForm] = useState(buildForm)
   const [partnerCustom, setPartnerCustom] = useState(false)
 
+  // Partner options = accounts designated as partners in 직원 관리, merged with
+  // the legacy preset list.
+  const { data: profiles = [] } = useProfiles()
+  const partnerOptions = useMemo(() => {
+    const designated = profiles.filter(p => p.isPartner && p.name).map(p => p.name)
+    return Array.from(new Set<string>([...designated, ...PARTNERS])).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [profiles])
+  // Show the free-text input when explicitly chosen, or when the saved value
+  // isn't one of the known options.
+  const showPartnerInput = partnerCustom || (!!form.partners && !partnerOptions.includes(form.partners))
+
   // Reset to a clean form (or the student's values) every time the dialog opens
   useEffect(() => {
     if (open) {
       setForm(buildForm())
-      setPartnerCustom(!!student?.partners && !(PARTNERS as readonly string[]).includes(student.partners))
+      setPartnerCustom(false)
     }
   }, [open])
 
@@ -1208,7 +1220,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           </div>
           <div>
             <Label className="text-xs">{t('student360.partners')}</Label>
-            {partnerCustom ? (
+            {showPartnerInput ? (
               <div className="flex gap-2">
                 <Input
                   value={form.partners}
@@ -1233,7 +1245,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
                 <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">{t('student360.unassigned')}</SelectItem>
-                  {PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  {partnerOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   <SelectItem value="__custom__">+ 직접 입력…</SelectItem>
                 </SelectContent>
               </Select>

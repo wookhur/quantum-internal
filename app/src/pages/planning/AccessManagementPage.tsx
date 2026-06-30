@@ -108,6 +108,7 @@ function UserEditDialog({
   const [contractStartDate, setContractStartDate] = useState(user.contractStartDate || '')
   const [contractEndDate, setContractEndDate] = useState(user.contractEndDate || '')
   const [isExternal, setIsExternal] = useState(user.isExternal)
+  const [isPartner, setIsPartner] = useState(user.isPartner || false)
   const [enabledModules, setEnabledModules] = useState<FeatureModule[]>(effectiveModules)
   const [enabledRoutes, setEnabledRoutes] = useState<string[]>(effectiveRoutes)
   const [useCustomAccess, setUseCustomAccess] = useState(
@@ -200,6 +201,7 @@ function UserEditDialog({
         contractStartDate: contractStartDate || null,
         contractEndDate: contractEndDate || null,
         isExternal,
+        isPartner,
       })
 
       if (useCustomAccess) {
@@ -220,7 +222,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentType, contractStartDate, contractEndDate, isExternal, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentType, contractStartDate, contractEndDate, isExternal, isPartner, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -300,6 +302,15 @@ function UserEditDialog({
                   <Switch checked={isExternal} onCheckedChange={setIsExternal} />
                   <span className="text-xs text-muted-foreground">
                     {isExternal ? t('access.external') : t('access.internal')}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">파트너사</Label>
+                <div className="flex items-center gap-2 h-9">
+                  <Switch checked={isPartner} onCheckedChange={setIsPartner} />
+                  <span className="text-xs text-muted-foreground">
+                    {isPartner ? '파트너사 계정' : '아니오'}
                   </span>
                 </div>
               </div>
