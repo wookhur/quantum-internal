@@ -57,7 +57,10 @@ export function useCreateFollowup() {
       if (error) throw error
       return mapFollowup(data as Record<string, unknown>)
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_followups', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['service_followups', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['student_status_pending_followups'] })
+    },
   })
 }
 
@@ -83,7 +86,10 @@ export function useBulkCreateFollowups() {
       const { error } = await supabase.from('service_followups').insert(rows)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_followups', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['service_followups', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['student_status_pending_followups'] })
+    },
   })
 }
 
@@ -97,7 +103,10 @@ export function useToggleFollowup() {
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_followups', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['service_followups', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['student_status_pending_followups'] })
+    },
   })
 }
 
@@ -108,7 +117,10 @@ export function useDeleteFollowup() {
       const { error } = await supabase.from('service_followups').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_followups', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['service_followups', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['student_status_pending_followups'] })
+    },
   })
 }
 

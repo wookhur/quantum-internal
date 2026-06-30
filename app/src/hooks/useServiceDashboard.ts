@@ -202,10 +202,13 @@ export function useStudentStatusFlags() {
     queryKey: ['student_status_pending_followups'],
     refetchInterval: 5 * 60 * 1000,
     queryFn: async () => {
+      // Only follow-up commitments count toward the warning — assignments are
+      // student tasks (no completion toggle) and must not keep the flag red.
       const { data, error } = await supabase
         .from('service_followups')
         .select('student_id')
         .eq('done', false)
+        .or('category.is.null,category.eq.followup')
       if (error) return []
       return (data || []).map((r: Record<string, unknown>) => r.student_id as string)
     },
