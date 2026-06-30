@@ -28,6 +28,7 @@ import {
 import { useServiceFollowups } from '@/hooks/useServiceFollowups'
 import { useECActivities } from '@/hooks/useECActivities'
 import { useAcademicSupport } from '@/hooks/useAcademicSupport'
+import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import {
   useAllServiceMeetings, useAllServiceFollowupsDue,
   type DashboardMeeting, type DashboardFollowup,
@@ -1453,12 +1454,21 @@ export function ServiceDashboardPage() {
   const { user } = useAuth()
   const isPartner = user?.role === 'freelancer' || user?.role === 'external'
   const partnerKey = (user?.name || '').trim().toLowerCase()
+  const { data: programFees = [] } = useAllServiceProgramFees()
   const visibleStudentIds = useMemo<Set<string> | null>(() => {
     if (!isPartner) return null
     const set = new Set<string>()
-    if (partnerKey) students.forEach(s => { if ((s.partners || '').toLowerCase().includes(partnerKey)) set.add(s.id) })
+    if (partnerKey) {
+      // Linked via the student's "partners" field …
+      students.forEach(s => { if ((s.partners || '').toLowerCase().includes(partnerKey)) set.add(s.id) })
+      // … or via being the partner/contributor on the student's EC/Academic program.
+      programFees.forEach(f => {
+        const hit = [f.label, f.contributor1, f.contributor2].some(x => (x || '').toLowerCase().includes(partnerKey))
+        if (hit) set.add(f.studentId)
+      })
+    }
     return set
-  }, [isPartner, partnerKey, students])
+  }, [isPartner, partnerKey, students, programFees])
   const vStudents   = visibleStudentIds ? students.filter(s => visibleStudentIds.has(s.id)) : students
   const vMeetings   = visibleStudentIds ? meetings.filter(m => visibleStudentIds.has(m.studentId)) : meetings
   const vMilestones = visibleStudentIds ? milestones.filter(m => visibleStudentIds.has(m.studentId)) : milestones
