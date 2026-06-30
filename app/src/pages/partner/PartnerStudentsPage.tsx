@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import {
-  usePartnerStudentMeetings, useCreatePartnerStudentMeeting,
+  usePartnerStudentMeetings, useAllPartnerStudentMeetings, useCreatePartnerStudentMeeting,
   useUpdatePartnerStudentMeeting, useDeletePartnerStudentMeeting,
   type PartnerStudentMeeting,
 } from '@/hooks/usePartnerStudentMeetings'
@@ -19,22 +19,30 @@ export function PartnerStudentsPage() {
   const t = useT()
   const { user } = useAuth()
   const partnerId = user?.id
+  const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
+  const partnerKey = (user?.name || '').trim().toLowerCase()
+
   const { data: allStudents = [], isLoading } = useServiceStudents()
-  const { data: meetings = [] } = usePartnerStudentMeetings(partnerId)
+  const { data: myMeetings = [] } = usePartnerStudentMeetings(isAdmin ? undefined : partnerId)
+  const { data: allMeetings = [] } = useAllPartnerStudentMeetings(isAdmin)
+  const meetings = isAdmin ? allMeetings : myMeetings
   const create = useCreatePartnerStudentMeeting()
   const update = useUpdatePartnerStudentMeeting()
   const del = useDeletePartnerStudentMeeting()
 
   // A partner's students are the Student 360 students whose "partners" field
   // (set from the Student 360 partner dropdown) names this partner.
-  const partnerKey = (user?.name || '').trim().toLowerCase()
+  // Admins/관리자 see every partner-assigned student for oversight.
   const students = useMemo(() => {
-    if (!partnerKey) return []
     return allStudents
-      .filter(s => (s.partners || '').toLowerCase().includes(partnerKey))
-      .map(s => ({ name: s.name, koreanName: s.koreanName, school: s.school }))
+      .filter(s => {
+        const partners = (s.partners || '').trim()
+        if (!partners) return false
+        return isAdmin || (!!partnerKey && partners.toLowerCase().includes(partnerKey))
+      })
+      .map(s => ({ name: s.name, koreanName: s.koreanName, school: s.school, partners: s.partners || '' }))
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [allStudents, partnerKey])
+  }, [allStudents, partnerKey, isAdmin])
 
   const [selected, setSelected] = useState('')
   useEffect(() => {
@@ -79,7 +87,11 @@ export function PartnerStudentsPage() {
 
       {students.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
-          {isLoading ? '불러오는 중…' : 'Student 360에서 partners(파트너)로 지정된 학생이 여기에 표시됩니다.'}
+          {isLoading
+            ? '불러오는 중…'
+            : isAdmin
+              ? 'Student 360에서 파트너가 지정된 학생이 아직 없습니다.'
+              : '배정된 학생이 없습니다. (Student 360 partners 필드에 내 계정 이름이 지정돼야 표시됩니다)'}
         </CardContent></Card>
       ) : (
         <div className="grid grid-cols-[260px_1fr] gap-4">
@@ -97,6 +109,9 @@ export function PartnerStudentsPage() {
                     <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                       <GraduationCap className="size-3" />{s.school}
                     </div>
+                  )}
+                  {s.partners && (
+                    <div className="text-[11px] text-primary/80 mt-0.5 truncate">🤝 {s.partners}</div>
                   )}
                 </button>
               ))}

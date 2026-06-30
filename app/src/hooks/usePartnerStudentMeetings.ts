@@ -45,6 +45,22 @@ export function usePartnerStudentMeetings(partnerId?: string) {
   })
 }
 
+/** All partner meetings (admin/oversight). */
+export function useAllPartnerStudentMeetings(enabled = true) {
+  return useQuery({
+    queryKey: ['partner_student_meetings', 'all'],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('partner_student_meetings')
+        .select('*')
+        .order('meeting_date', { ascending: false, nullsFirst: false })
+      if (error) throw error
+      return (data || []).map(mapRow)
+    },
+  })
+}
+
 export function useCreatePartnerStudentMeeting() {
   const qc = useQueryClient()
   return useMutation({
@@ -69,7 +85,7 @@ export function useCreatePartnerStudentMeeting() {
       if (error) throw error
       return mapRow(data as Record<string, unknown>)
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['partner_student_meetings', v.partnerId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['partner_student_meetings'] }),
   })
 }
 
@@ -84,7 +100,7 @@ export function useUpdatePartnerStudentMeeting() {
       const { error } = await supabase.from('partner_student_meetings').update(row).eq('id', a.id)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['partner_student_meetings', v.partnerId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['partner_student_meetings'] }),
   })
 }
 
@@ -95,6 +111,6 @@ export function useDeletePartnerStudentMeeting() {
       const { error } = await supabase.from('partner_student_meetings').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['partner_student_meetings', v.partnerId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['partner_student_meetings'] }),
   })
 }
