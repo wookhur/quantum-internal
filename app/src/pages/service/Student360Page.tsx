@@ -1115,9 +1115,15 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     scheduleTime: student?.regularMeetingSchedule?.split('|')[2] || '',
   })
   const [form, setForm] = useState(buildForm)
+  const [partnerCustom, setPartnerCustom] = useState(false)
 
   // Reset to a clean form (or the student's values) every time the dialog opens
-  useEffect(() => { if (open) setForm(buildForm()) }, [open])
+  useEffect(() => {
+    if (open) {
+      setForm(buildForm())
+      setPartnerCustom(!!student?.partners && !(PARTNERS as readonly string[]).includes(student.partners))
+    }
+  }, [open])
 
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
@@ -1202,13 +1208,36 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           </div>
           <div>
             <Label className="text-xs">{t('student360.partners')}</Label>
-            <Select value={form.partners} onValueChange={v => set('partners', v === '__none__' ? '' : v)}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">{t('student360.unassigned')}</SelectItem>
-                {PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            {partnerCustom ? (
+              <div className="flex gap-2">
+                <Input
+                  value={form.partners}
+                  onChange={e => set('partners', e.target.value)}
+                  placeholder="파트너사 직접 입력"
+                  className="h-9"
+                  autoFocus
+                />
+                <Button
+                  type="button" variant="outline" size="sm" className="h-9 shrink-0"
+                  onClick={() => { setPartnerCustom(false); set('partners', '') }}
+                >목록</Button>
+              </div>
+            ) : (
+              <Select
+                value={form.partners}
+                onValueChange={v => {
+                  if (v === '__custom__') { setPartnerCustom(true); set('partners', '') }
+                  else set('partners', v === '__none__' ? '' : v)
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">{t('student360.unassigned')}</SelectItem>
+                  {PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  <SelectItem value="__custom__">+ 직접 입력…</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />
