@@ -17,6 +17,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
+import { useConsultantName } from '@/lib/consultants'
+import { useProfiles } from '@/hooks/useProfiles'
 import {
   useFreelancerInvoices,
   useMyInvoices,
@@ -649,12 +651,16 @@ async function generateConsultantInvoiceExcel(consultant: string, names: string[
 
 function AutoGenerateInvoiceTab() {
   const [month, setMonth] = useState(getCurrentMonth())
-  const [consultant, setConsultant] = useState<string>('')
+  const [consultant, setConsultant] = useState<string>('')   // consultant display NAME
   const [generating, setGenerating] = useState(false)
+  const [creating, setCreating] = useState(false)
 
+  const consultantName = useConsultantName()
+  const { data: profiles = [] } = useProfiles()
   const { data: students = [] } = useServiceStudents()
   const { start, end } = monthRange(month)
   const { data: meetings = [] } = useAllServiceMeetings(start, end)
+  const createInvoice = useCreateInvoice()
 
   // Count meetings with an uploaded summary report, per student, this month.
   const completedByStudent = useMemo(() => {
@@ -672,22 +678,32 @@ function AutoGenerateInvoiceTab() {
     [students],
   )
 
-  const consultants = useMemo(() => {
-    const set = new Set<string>()
-    activeStudents.forEach(s => { if (s.assignedConsultant) set.add(s.assignedConsultant) })
-    return Array.from(set).sort()
-  }, [activeStudents])
+  // Group active students by their consultant's display NAME (resolves slug/UUID ids).
+  const consultantGroups = useMemo(() => {
+    const map = new Map<string, typeof activeStudents>()
+    activeStudents.forEach(s => {
+      const nm = consultantName(s.assignedConsultant)
+      const arr = map.get(nm) || []
+      arr.push(s)
+      map.set(nm, arr)
+    })
+    return map
+  }, [activeStudents, consultantName])
+
+  const consultants = useMemo(
+    () => Array.from(consultantGroups.keys()).sort((a, b) => a.localeCompare(b, 'ko')),
+    [consultantGroups],
+  )
 
   const rows = useMemo(() => {
-    if (!consultant) return []
-    return activeStudents
-      .filter(s => s.assignedConsultant === consultant)
+    const list = consultant ? (consultantGroups.get(consultant) || []) : []
+    return list
       .map(s => {
         const done = completedByStudent.get(s.id) || 0
         return { id: s.id, label: studentLabel(s.name, s.koreanName), done, billable: done >= 2 }
       })
       .sort((a, b) => Number(b.billable) - Number(a.billable) || a.label.localeCompare(b.label))
-  }, [consultant, activeStudents, completedByStudent])
+  }, [consultant, consultantGroups, completedByStudent])
 
   const billable = rows.filter(r => r.billable)
 
@@ -700,6 +716,30 @@ function AutoGenerateInvoiceTab() {
       alert(e instanceof Error ? e.message : '엑셀 생성에 실패했습니다.')
     } finally {
       setGenerating(false)
+    }
+  }
+
+  const handleAddInvoice = async () => {
+    if (!consultant || billable.length === 0) return
+    const profile = profiles.find(p => p.name === consultant)
+    if (!profile) {
+      alert(`'${consultant}' 직원 계정을 찾을 수 없어 인보이스를 만들 수 없습니다.\n직원정보에 등록된 이름과 일치해야 합니다.`)
+      return
+    }
+    if (!confirm(`${consultant} · ${month}\n청구 가능 ${billable.length}명으로 인보이스를 추가할까요?`)) return
+    setCreating(true)
+    try {
+      await createInvoice.mutateAsync({
+        freelancerId: profile.id,
+        invoiceDate: new Date().toISOString().slice(0, 10),
+        invoiceMonth: month,
+        items: billable.map(r => ({ itemName: r.label, quantity: 1, unitPrice: 0 })),
+      })
+      alert(`인보이스가 추가되었습니다 (${billable.length}명).\n'인보이스 목록' 탭에서 금액 입력·승인하세요.`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '인보이스 추가에 실패했습니다.')
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -723,9 +763,13 @@ function AutoGenerateInvoiceTab() {
             </SelectContent>
           </Select>
         </div>
-        <Button className="gap-1.5" disabled={!consultant || billable.length === 0 || generating} onClick={handleGenerate}>
+        <Button className="gap-1.5" disabled={!consultant || billable.length === 0 || creating} onClick={handleAddInvoice}>
+          {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          인보이스 추가
+        </Button>
+        <Button variant="outline" className="gap-1.5" disabled={!consultant || billable.length === 0 || generating} onClick={handleGenerate}>
           {generating ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-          엑셀 인보이스 다운로드
+          엑셀 다운로드
         </Button>
       </div>
 
