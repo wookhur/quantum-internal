@@ -18,7 +18,7 @@ import {
 import {
   ChevronLeft, ChevronRight, Plus, X, ExternalLink,
   Users, Calendar, AlertCircle, FileText, CheckSquare,
-  Loader2, Trash2,
+  Loader2, Trash2, UserSearch,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
@@ -1199,6 +1199,163 @@ function CycleOverview({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+// ─── By-student schedule view (item 2) ──────────────────────────────────────
+
+function studentDisplayName(name?: string, koreanName?: string): string {
+  const ko = (koreanName || '').trim()
+  const en = (name || '').trim()
+  if (ko && en && ko !== en) return `${ko} (${en})`
+  return ko || en || '—'
+}
+
+/** Priority escalates as the deadline approaches (overdue/≤3d = P0). */
+function priorityBadge(days: number): { label: string; cls: string } {
+  if (days <= 3) return { label: 'P0', cls: 'bg-red-600 text-white' }
+  if (days <= 7) return { label: 'P1', cls: 'bg-orange-500 text-white' }
+  if (days <= 14) return { label: 'P2', cls: 'bg-amber-400 text-gray-900' }
+  if (days <= 30) return { label: 'P3', cls: 'bg-sky-500 text-white' }
+  return { label: 'P4', cls: 'bg-gray-200 text-gray-600' }
+}
+
+function dayLabel(days: number): string {
+  if (days === 0) return '오늘'
+  if (days > 0) return `D-${days}`
+  return `${-days}일 지남`
+}
+
+const KIND_META: Record<'meeting' | 'milestone' | 'followup', { label: string; cls: string }> = {
+  meeting:   { label: '미팅',       cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  milestone: { label: '마일스톤',   cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  followup:  { label: 'Follow-up',  cls: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+}
+
+interface ScheduleItem {
+  key: string
+  date: string
+  days: number
+  kind: 'meeting' | 'milestone' | 'followup'
+  title: string
+  ownerId?: string
+  meeting?: DashboardMeeting
+  milestone?: DashboardMilestone
+}
+
+function StudentScheduleView({
+  students, milestones, onSelectMeeting, onEditMilestone,
+}: {
+  students: { id: string; name: string; koreanName?: string; assignedConsultant?: string }[]
+  milestones: DashboardMilestone[]
+  onSelectMeeting: (m: DashboardMeeting) => void
+  onEditMilestone: (m: DashboardMilestone) => void
+}) {
+  const t = useT()
+  const consultantName = useConsultantName()
+  const today = todayKST()
+  const [studentId, setStudentId] = useState('')
+
+  // Pull the student's meetings over a broad window (−1mo .. +6mo).
+  const todayDate = new Date(today + 'T00:00:00')
+  const rangeStart = toDateStr(addMonths(todayDate, -1))
+  const rangeEnd = toDateStr(addMonths(todayDate, 6))
+  const { data: allMeetings = [] } = useAllServiceMeetings(rangeStart, rangeEnd)
+  const { data: followups = [] } = useServiceFollowups(studentId || undefined)
+
+  const sortedStudents = useMemo(
+    () => [...students].sort((a, b) =>
+      studentDisplayName(a.name, a.koreanName).localeCompare(studentDisplayName(b.name, b.koreanName), 'ko')),
+    [students],
+  )
+
+  const items = useMemo<ScheduleItem[]>(() => {
+    if (!studentId) return []
+    const out: ScheduleItem[] = []
+    milestones.filter(m => m.studentId === studentId && m.date).forEach(m => {
+      out.push({
+        key: `ms-${m.id}`, date: m.date, days: daysFromTodayKST(m.date),
+        kind: 'milestone', title: m.title || milestoneConfig(m.type).label,
+        ownerId: m.studentConsultant, milestone: m,
+      })
+    })
+    allMeetings.filter(m => m.studentId === studentId && m.meetingDate).forEach(m => {
+      out.push({
+        key: `mt-${m.id}`, date: m.meetingDate as string, days: daysFromTodayKST(m.meetingDate as string),
+        kind: 'meeting', title: m.meetingType || t('serviceDash.studentMeeting'),
+        ownerId: m.consultantId || m.studentConsultant, meeting: m,
+      })
+    })
+    followups.filter(f => !f.done && f.dueDate).forEach(f => {
+      out.push({
+        key: `fu-${f.id}`, date: f.dueDate as string, days: daysFromTodayKST(f.dueDate as string),
+        kind: 'followup', title: f.text,
+      })
+    })
+    return out
+      .filter(i => i.days >= -30)
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [studentId, milestones, allMeetings, followups, t])
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <Select value={studentId} onValueChange={v => setStudentId(v ?? '')}>
+          <SelectTrigger className="h-9 w-72">
+            <SelectValue placeholder="학생 선택 (이름)" />
+          </SelectTrigger>
+          <SelectContent className="max-h-80">
+            {sortedStudents.map(s => (
+              <SelectItem key={s.id} value={s.id}>{studentDisplayName(s.name, s.koreanName)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {studentId && <span className="text-sm text-gray-500">{items.length}개 일정 · 마감 임박순</span>}
+      </div>
+
+      {!studentId ? (
+        <Card><CardContent className="py-12 text-center text-sm text-gray-400">
+          학생을 선택하면 일정이 <b>마감 임박순(P0→P4)</b>으로 표시됩니다. 일정에 마우스를 올리면 담당자, 클릭하면 상세가 열립니다.
+        </CardContent></Card>
+      ) : items.length === 0 ? (
+        <Card><CardContent className="py-12 text-center text-sm text-gray-400">표시할 일정이 없습니다.</CardContent></Card>
+      ) : (
+        <Card><CardContent className="p-0 divide-y">
+          {items.map(it => {
+            const p = priorityBadge(it.days)
+            const owner = it.ownerId ? consultantName(it.ownerId) : ''
+            const km = KIND_META[it.kind]
+            const clickable = it.kind !== 'followup'
+            return (
+              <div
+                key={it.key}
+                title={owner ? `담당: ${owner}` : ''}
+                onClick={() => {
+                  if (it.kind === 'meeting' && it.meeting) onSelectMeeting(it.meeting)
+                  else if (it.kind === 'milestone' && it.milestone) onEditMilestone(it.milestone)
+                }}
+                className={`flex items-center gap-3 px-4 py-2.5 ${clickable ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+              >
+                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded w-9 text-center shrink-0 ${p.cls}`}>{p.label}</span>
+                <div className="w-24 shrink-0 text-xs">
+                  <div className="font-medium text-gray-700">{formatDateLabel(it.date)}</div>
+                  <div className={days0Class(it.days)}>{dayLabel(it.days)}</div>
+                </div>
+                <Badge variant="outline" className={`text-[10px] shrink-0 ${km.cls}`}>{km.label}</Badge>
+                <span className="text-sm text-gray-800 flex-1 truncate">{it.title}</span>
+                {owner && <span className="text-[11px] text-gray-400 shrink-0 max-w-[100px] truncate">{owner}</span>}
+              </div>
+            )
+          })}
+        </CardContent></Card>
+      )}
+    </div>
+  )
+}
+
+function days0Class(days: number): string {
+  if (days < 0) return 'text-red-500'
+  if (days <= 3) return 'text-orange-500'
+  return 'text-gray-400'
+}
+
 export function ServiceDashboardPage() {
   const t = useT()
   const consultantPool = useConsultantPool()
@@ -1206,7 +1363,7 @@ export function ServiceDashboardPage() {
   const today = todayKST()
   const todayDate = new Date(today + 'T00:00:00')
 
-  const [view,             setView]             = useState<'calendar' | 'cycle'>('calendar')
+  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student'>('calendar')
   const [calMode,          setCalMode]          = useState<'week' | 'month'>('week')
   const [refDate,          setRefDate]          = useState<Date>(todayDate)
   const [consultantFilter, setConsultantFilter] = useState('all')
@@ -1359,6 +1516,12 @@ export function ServiceDashboardPage() {
                 className={`px-3 h-8 text-sm font-medium border-l ${view === 'cycle' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 <Users size={14} className="inline mr-1.5" />{t('serviceDash.cycle')}
+              </button>
+              <button
+                onClick={() => setView('student')}
+                className={`px-3 h-8 text-sm font-medium border-l ${view === 'student' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              >
+                <UserSearch size={14} className="inline mr-1.5" />학생별
               </button>
             </div>
 
@@ -1594,6 +1757,16 @@ export function ServiceDashboardPage() {
             consultantFilter={consultantFilter}
             cycleFilter={cycleFilter}
             onAddMilestone={studentId => { setDefaultMilestoneStudentId(studentId); setDefaultMilestoneDate(undefined); setEditingMilestone(null); setShowAddMilestone(true) }}
+            onEditMilestone={openEditMilestone}
+          />
+        )}
+
+        {/* By-student schedule (item 2) */}
+        {view === 'student' && (
+          <StudentScheduleView
+            students={students.map(s => ({ id: s.id, name: s.name, koreanName: s.koreanName, assignedConsultant: s.assignedConsultant }))}
+            milestones={milestones}
+            onSelectMeeting={setSelectedMeeting}
             onEditMilestone={openEditMilestone}
           />
         )}
