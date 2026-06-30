@@ -19,6 +19,7 @@ import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useConsultantName } from '@/lib/consultants'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useAllEditorMeetingsInRange } from '@/hooks/useEditorMeetings'
 import {
   useFreelancerInvoices,
   useMyInvoices,
@@ -649,7 +650,7 @@ async function generateConsultantInvoiceExcel(consultant: string, names: string[
   URL.revokeObjectURL(url)
 }
 
-function AutoGenerateInvoiceTab() {
+function ConsultantInvoicePanel() {
   const [month, setMonth] = useState(getCurrentMonth())
   const [consultant, setConsultant] = useState<string>('')   // consultant display NAME
   const [generating, setGenerating] = useState(false)
@@ -812,6 +813,160 @@ function AutoGenerateInvoiceTab() {
           </CardContent>
         </Card>
       )}
+    </div>
+  )
+}
+
+function EditorInvoicePanel() {
+  const [month, setMonth] = useState(getCurrentMonth())
+  const [editor, setEditor] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [creating, setCreating] = useState(false)
+
+  const { data: profiles = [] } = useProfiles()
+  const { start, end } = monthRange(month)
+  const { data: editorMeetings = [] } = useAllEditorMeetingsInRange(start, end)
+  const createInvoice = useCreateInvoice()
+
+  const editors = useMemo(() => {
+    const set = new Set<string>()
+    editorMeetings.forEach(m => { if (m.editor) set.add(m.editor) })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [editorMeetings])
+
+  const rows = useMemo(() => {
+    if (!editor) return []
+    return editorMeetings
+      .filter(m => m.editor === editor)
+      .map(m => ({
+        id: m.id,
+        date: m.meetingDate || '',
+        student: studentLabel(m.studentName, m.studentKoreanName),
+        content: m.content || '',
+      }))
+  }, [editor, editorMeetings])
+
+  const count = rows.length
+  const itemLabel = (r: { student: string; date: string }) =>
+    `${r.student}${r.date ? ` (${r.date.slice(5).replace('-', '/')})` : ''}`
+
+  const handleGenerate = async () => {
+    if (!editor || count === 0) return
+    setGenerating(true)
+    try {
+      await generateConsultantInvoiceExcel(editor, rows.map(itemLabel), month)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '엑셀 생성에 실패했습니다.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const handleAddInvoice = async () => {
+    if (!editor || count === 0) return
+    const profile = profiles.find(p => p.name === editor)
+    if (!profile) {
+      alert(`'${editor}' 직원 계정을 찾을 수 없어 인보이스를 만들 수 없습니다.\n직원정보에 등록된 이름과 일치해야 합니다.`)
+      return
+    }
+    if (!confirm(`${editor} · ${month}\n미팅 ${count}회로 인보이스를 추가할까요?`)) return
+    setCreating(true)
+    try {
+      await createInvoice.mutateAsync({
+        freelancerId: profile.id,
+        invoiceDate: new Date().toISOString().slice(0, 10),
+        invoiceMonth: month,
+        items: rows.map(r => ({ itemName: itemLabel(r), quantity: 1, unitPrice: 0 })),
+      })
+      alert(`인보이스가 추가되었습니다 (${count}회).\n'인보이스 목록' 탭에서 금액 입력·승인하세요.`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '인보이스 추가에 실패했습니다.')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-end gap-3 flex-wrap">
+        <div>
+          <Label className="text-xs">정산월</Label>
+          <Input type="month" value={month} onChange={e => setMonth(e.target.value)} className="h-9 w-40" />
+        </div>
+        <div className="min-w-[220px]">
+          <Label className="text-xs">에세이 에디터</Label>
+          <Select value={editor} onValueChange={v => v && setEditor(v)}>
+            <SelectTrigger className="h-9"><span>{editor || '에디터 선택'}</span></SelectTrigger>
+            <SelectContent>
+              {editors.length === 0
+                ? <div className="px-2 py-1.5 text-sm text-muted-foreground">이 달에 미팅 기록이 있는 에디터가 없습니다</div>
+                : editors.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button className="gap-1.5" disabled={!editor || count === 0 || creating} onClick={handleAddInvoice}>
+          {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          인보이스 추가
+        </Button>
+        <Button variant="outline" className="gap-1.5" disabled={!editor || count === 0 || generating} onClick={handleGenerate}>
+          {generating ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          엑셀 다운로드
+        </Button>
+      </div>
+
+      {editor && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-4 text-sm flex-wrap">
+              <span className="font-semibold text-base">{editor}</span>
+              <span>진행 미팅 <span className="font-bold text-emerald-600 text-base">{count}</span>회</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              ※ 에세이 에디터 미팅일지에 <b>진행일자</b>가 입력된 미팅만 집계됩니다. 미팅 1회당 1건으로 인보이스에 들어갑니다.
+            </p>
+            <Table>
+              <TableHeader>
+                <TableRow className="text-xs">
+                  <TableHead className="w-28">날짜</TableHead>
+                  <TableHead>학생</TableHead>
+                  <TableHead>메모</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map(r => (
+                  <TableRow key={r.id}>
+                    <TableCell>{r.date || '—'}</TableCell>
+                    <TableCell className="font-medium">{r.student}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[280px] truncate">{r.content || '—'}</TableCell>
+                  </TableRow>
+                ))}
+                {count === 0 && (
+                  <TableRow><TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">진행한 미팅이 없습니다.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+function AutoGenerateInvoiceTab() {
+  const [mode, setMode] = useState<'consultant' | 'editor'>('consultant')
+  return (
+    <div className="space-y-4">
+      <div className="inline-flex rounded-md border overflow-hidden">
+        <button
+          onClick={() => setMode('consultant')}
+          className={`px-3 h-8 text-sm font-medium ${mode === 'consultant' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+        >컨설턴트</button>
+        <button
+          onClick={() => setMode('editor')}
+          className={`px-3 h-8 text-sm font-medium border-l ${mode === 'editor' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+        >에세이 에디터</button>
+      </div>
+      {mode === 'consultant' ? <ConsultantInvoicePanel /> : <EditorInvoicePanel />}
     </div>
   )
 }

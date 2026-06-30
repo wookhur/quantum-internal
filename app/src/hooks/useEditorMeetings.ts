@@ -84,3 +84,33 @@ export function useDeleteEditorMeeting() {
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['editor_meetings', v.studentId] }),
   })
 }
+
+export interface EditorMeetingWithStudent extends EditorMeeting {
+  studentName?: string
+  studentKoreanName?: string
+}
+
+/** All dated editor meetings in a month range, with the student's name joined. */
+export function useAllEditorMeetingsInRange(start?: string, end?: string) {
+  return useQuery({
+    queryKey: ['editor_meetings_range', start, end],
+    enabled: !!start && !!end,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('service_editor_meetings')
+        .select('*, service_students:student_id(name, korean_name)')
+        .gte('meeting_date', start as string)
+        .lte('meeting_date', end as string)
+        .order('meeting_date', { ascending: true })
+      if (error) throw error
+      return (data || []).map((row: Record<string, unknown>) => {
+        const s = row.service_students as Record<string, unknown> | null
+        return {
+          ...mapRow(row),
+          studentName: (s?.name as string) || undefined,
+          studentKoreanName: (s?.korean_name as string) || undefined,
+        } as EditorMeetingWithStudent
+      })
+    },
+  })
+}
