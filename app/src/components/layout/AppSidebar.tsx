@@ -130,6 +130,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     titleKey: 'nav.partner',
     module: 'partner',
     items: [
+      { labelKey: 'nav.partnerStudents', to: '/partner/students', icon: UserSearch },
       { labelKey: 'nav.partnerContracts', to: '/partner/contracts', icon: FileText },
       { labelKey: 'nav.calendar', to: '/partner/calendar', icon: Calendar },
     ],
