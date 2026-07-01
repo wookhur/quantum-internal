@@ -314,16 +314,18 @@ export function SeminarsPage() {
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>날짜</Label>
-                <Input
+                <input
                   type="date"
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   value={form.date}
                   onChange={e => setForm({ ...form, date: e.target.value })}
                 />
               </div>
               <div>
                 <Label>시간</Label>
-                <Input
+                <input
                   type="time"
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   value={form.time}
                   onChange={e => setForm({ ...form, time: e.target.value })}
                 />
