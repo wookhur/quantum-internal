@@ -52,6 +52,8 @@ import { PartnerStudentsPage } from '@/pages/partner/PartnerStudentsPage'
 import { PartnerCompaniesPage } from '@/pages/partner/PartnerCompaniesPage'
 import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
 import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
+import { SeminarsPage } from '@/pages/marketing/SeminarsPage'
+import { SeminarRegisterPage } from '@/pages/public/SeminarRegisterPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -70,6 +72,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/portal/:token" element={<StudentPortalPage />} />
             <Route path="/employee-form/:token" element={<EmployeeFormPage />} />
+            <Route path="/seminar/:id" element={<SeminarRegisterPage />} />
 
             <Route element={<ProtectedRoute />}>
               {/* Full-screen kiosk (no sidebar) */}
@@ -95,6 +98,7 @@ export default function App() {
                 <Route path="/marketing/ads" element={<AdCampaignsPage />} />
                 <Route path="/marketing/events" element={<Navigate to="/calendar" replace />} />
                 <Route path="/marketing/videos" element={<VideoProjectsPage />} />
+                <Route path="/marketing/seminars" element={<SeminarsPage />} />
 
                 <Route path="/consulting/clients" element={<ContractsPage />} />
                 <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />

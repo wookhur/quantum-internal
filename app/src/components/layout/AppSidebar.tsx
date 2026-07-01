@@ -38,6 +38,7 @@ import {
   Lock,
   Target,
   ShoppingCart,
+  Presentation,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -81,6 +82,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     items: [
       { labelKey: 'nav.marketingMetrics', to: '/marketing/metrics', icon: BarChart2 },
       { labelKey: 'nav.adPerformance', to: '/marketing/ads', icon: Megaphone },
+      { labelKey: 'nav.seminars', to: '/marketing/seminars', icon: Presentation },
     ],
   },
   {
