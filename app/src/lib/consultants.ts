@@ -58,5 +58,9 @@ export function useConsultantName(): (id?: string) => string {
 
 /** Static fallback for non-React contexts. Only resolves legacy slug ids. */
 export function consultantName(id?: string) {
-  return LEGACY_CONSULTANTS.find(c => c.id === id)?.name || id || '—'
+  const legacy = LEGACY_CONSULTANTS.find(c => c.id === id)?.name
+  if (legacy) return legacy
+  if (!id) return '—'
+  // Never surface a raw profile UUID to the user (account has no proper name).
+  return UUID_RE.test(id) ? '(이름 미설정)' : id
 }
