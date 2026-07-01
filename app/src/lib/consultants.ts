@@ -24,12 +24,17 @@ export const CONSULTANTS = LEGACY_CONSULTANTS
  * (current UUID id + current display name) UNION legacy slug entries that
  * no live profile has displaced (deduped by name). Sorted by name.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function useConsultantPool(): { id: string; name: string }[] {
   const { data: profiles = [] } = useProfiles()
   return useMemo(() => {
     const live = profiles
       .filter(p => p.role === 'consultant' && !p.isExternal)
-      .map(p => ({ id: p.id, name: p.name }))
+      .map(p => ({ id: p.id, name: (p.name || '').trim() }))
+      // Skip misconfigured profiles whose name is empty or just a UUID —
+      // they'd otherwise surface as a raw id in consultant dropdowns.
+      .filter(c => c.name && !UUID_RE.test(c.name))
     const liveNames = new Set(live.map(c => c.name))
     const legacy = LEGACY_CONSULTANTS
       .filter(c => !liveNames.has(c.name))

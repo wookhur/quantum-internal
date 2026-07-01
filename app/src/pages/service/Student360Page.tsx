@@ -261,7 +261,9 @@ export function Student360Page() {
           onValueChange={v => setConsultantFilter(v === '__all__' ? '' : (v ?? ''))}
         >
           <SelectTrigger className="mb-3">
-            <SelectValue />
+            <span className="truncate">
+              {consultantFilter ? consultantName(consultantFilter) : t('student360.allConsultants')}
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">{t('student360.allConsultants')}</SelectItem>
