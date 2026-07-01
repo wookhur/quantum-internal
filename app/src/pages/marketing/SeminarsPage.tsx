@@ -42,6 +42,17 @@ import {
   type Seminar,
 } from '@/hooks/useSeminars'
 
+function formatSeminarDate(raw: string): string {
+  const [datePart, timePart] = raw.split(' ')
+  if (!datePart) return raw
+  const [y, m, d] = datePart.split('-')
+  const days = ['일', '월', '화', '수', '목', '금', '토']
+  const dt = new Date(Number(y), Number(m) - 1, Number(d))
+  const dayName = days[dt.getDay()]
+  const base = `${Number(y)}년 ${Number(m)}월 ${Number(d)}일 (${dayName})`
+  return timePart ? `${base} ${timePart}` : base
+}
+
 function CopyLinkButton({ seminarId }: { seminarId: string }) {
   const [copied, setCopied] = useState(false)
   const url = `${window.location.origin}/seminar/${seminarId}`
@@ -165,6 +176,7 @@ export function SeminarsPage() {
     title: '',
     description: '',
     date: '',
+    time: '',
     location: '',
     maxCapacity: '',
   })
@@ -175,14 +187,17 @@ export function SeminarsPage() {
     if (!form.title.trim()) return
     setError(null)
     try {
+      const dateStr = form.date && form.time
+        ? `${form.date} ${form.time}`
+        : form.date || null
       await createMut.mutateAsync({
         title: form.title.trim(),
         description: form.description.trim() || null,
-        date: form.date || null,
+        date: dateStr,
         location: form.location.trim() || null,
         maxCapacity: form.maxCapacity ? Number(form.maxCapacity) : null,
       })
-      setForm({ title: '', description: '', date: '', location: '', maxCapacity: '' })
+      setForm({ title: '', description: '', date: '', time: '', location: '', maxCapacity: '' })
       setShowCreate(false)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '세미나 생성에 실패했습니다.')
@@ -222,7 +237,7 @@ export function SeminarsPage() {
                       </Badge>
                     </CardTitle>
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                      {s.date && <span>{s.date}</span>}
+                      {s.date && <span>{formatSeminarDate(s.date)}</span>}
                       {s.location && <span>{s.location}</span>}
                       {s.maxCapacity && <span>정원 {s.maxCapacity}명</span>}
                     </div>
@@ -296,13 +311,21 @@ export function SeminarsPage() {
                 rows={3}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>날짜</Label>
                 <Input
+                  type="date"
                   value={form.date}
                   onChange={e => setForm({ ...form, date: e.target.value })}
-                  placeholder="2026년 7월 15일 (화) 14:00"
+                />
+              </div>
+              <div>
+                <Label>시간</Label>
+                <Input
+                  type="time"
+                  value={form.time}
+                  onChange={e => setForm({ ...form, time: e.target.value })}
                 />
               </div>
               <div>

@@ -9,6 +9,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, CheckCircle2, CalendarDays, MapPin } from 'lucide-react'
 import { useSeminarById, useSubmitRegistration } from '@/hooks/useSeminars'
 
+function formatSeminarDate(raw: string): string {
+  const [datePart, timePart] = raw.split(' ')
+  if (!datePart) return raw
+  const [y, m, d] = datePart.split('-')
+  const days = ['일', '월', '화', '수', '목', '금', '토']
+  const dt = new Date(Number(y), Number(m) - 1, Number(d))
+  const dayName = days[dt.getDay()]
+  const base = `${Number(y)}년 ${Number(m)}월 ${Number(d)}일 (${dayName})`
+  return timePart ? `${base} ${timePart}` : base
+}
+
 const GRADES = [
   '중1', '중2', '중3',
   '고1', '고2', '고3',
@@ -117,7 +128,7 @@ export function SeminarRegisterPage() {
             {seminar.date && (
               <span className="flex items-center gap-1">
                 <CalendarDays className="size-4" />
-                {seminar.date}
+                {formatSeminarDate(seminar.date)}
               </span>
             )}
             {seminar.location && (
