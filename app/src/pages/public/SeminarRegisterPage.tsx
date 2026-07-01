@@ -20,11 +20,9 @@ function formatSeminarDate(raw: string): string {
   return timePart ? `${base} ${timePart}` : base
 }
 
-const GRADES = [
-  '중1', '중2', '중3',
-  '고1', '고2', '고3',
-  '대학생', '기타',
-]
+const GRADES = Array.from({ length: 12 }, (_, i) => `G${i + 1}`)
+const YEARS = Array.from({ length: 12 }, (_, i) => `Y${i + 1}`)
+const GRADE_OPTIONS = [...GRADES, ...YEARS]
 
 export function SeminarRegisterPage() {
   const { id } = useParams<{ id: string }>()
@@ -198,7 +196,7 @@ export function SeminarRegisterPage() {
                       <SelectValue placeholder="학년 선택" />
                     </SelectTrigger>
                     <SelectContent>
-                      {GRADES.map(g => (
+                      {GRADE_OPTIONS.map(g => (
                         <SelectItem key={g} value={g}>{g}</SelectItem>
                       ))}
                     </SelectContent>
