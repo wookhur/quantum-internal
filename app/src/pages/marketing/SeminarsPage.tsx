@@ -169,17 +169,24 @@ export function SeminarsPage() {
     maxCapacity: '',
   })
 
+  const [error, setError] = useState<string | null>(null)
+
   const handleCreate = async () => {
     if (!form.title.trim()) return
-    await createMut.mutateAsync({
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      date: form.date || null,
-      location: form.location.trim() || null,
-      maxCapacity: form.maxCapacity ? Number(form.maxCapacity) : null,
-    })
-    setForm({ title: '', description: '', date: '', location: '', maxCapacity: '' })
-    setShowCreate(false)
+    setError(null)
+    try {
+      await createMut.mutateAsync({
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        date: form.date || null,
+        location: form.location.trim() || null,
+        maxCapacity: form.maxCapacity ? Number(form.maxCapacity) : null,
+      })
+      setForm({ title: '', description: '', date: '', location: '', maxCapacity: '' })
+      setShowCreate(false)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : '세미나 생성에 실패했습니다.')
+    }
   }
 
   return (
@@ -317,6 +324,9 @@ export function SeminarsPage() {
               />
             </div>
           </div>
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>취소</Button>
             <Button onClick={handleCreate} disabled={createMut.isPending || !form.title.trim()}>
