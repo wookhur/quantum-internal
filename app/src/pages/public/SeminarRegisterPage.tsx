@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2, CheckCircle2, CalendarDays, MapPin } from 'lucide-react'
 import { useSeminarById, useSubmitRegistration } from '@/hooks/useSeminars'
+import type { SeminarSession } from '@/hooks/useSeminars'
 
 function formatSeminarDate(raw: string): string {
   const [datePart, timePart] = raw.split(' ')
@@ -40,10 +41,24 @@ export function SeminarRegisterPage() {
     interest: '',
     memo: '',
   })
+  const [pickedSessions, setPickedSessions] = useState<Set<string>>(new Set())
+
+  const hasSessions = !!seminar && seminar.sessions.length > 0
+  const needsSessionPick = hasSessions && pickedSessions.size === 0
+
+  const toggleSession = (label: string) => {
+    setPickedSessions(prev => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      return next
+    })
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!id || !form.parentName.trim() || !form.phone.trim() || !form.studentName.trim()) return
+    if (needsSessionPick) return
     await submitMut.mutateAsync({
       seminarId: id,
       parentName: form.parentName.trim(),
@@ -54,6 +69,7 @@ export function SeminarRegisterPage() {
       school: form.school.trim() || null,
       interest: form.interest.trim() || null,
       memo: form.memo.trim() || null,
+      sessionLabels: Array.from(pickedSessions),
     })
     setSubmitted(true)
   }
@@ -93,6 +109,7 @@ export function SeminarRegisterPage() {
   }
 
   if (submitted) {
+    const picked = Array.from(pickedSessions)
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
@@ -101,9 +118,17 @@ export function SeminarRegisterPage() {
             <div>
               <p className="text-xl font-bold text-gray-800">신청이 완료되었습니다!</p>
               <p className="text-sm text-gray-500 mt-2">
-                {seminar.title} 세미나 신청이 접수되었습니다.<br />
-                확인 연락을 드리겠습니다. 감사합니다.
+                {seminar.title} 세미나 신청이 접수되었습니다.
               </p>
+              {picked.length > 0 && (
+                <div className="mt-3 mx-auto max-w-xs text-left bg-gray-50 rounded-md border p-3 space-y-1">
+                  <p className="text-xs font-semibold text-gray-600">신청하신 세션</p>
+                  {picked.map(l => (
+                    <p key={l} className="text-sm text-gray-800 leading-snug">· {l}</p>
+                  ))}
+                </div>
+              )}
+              <p className="text-sm text-gray-500 mt-3">확인 연락을 드리겠습니다. 감사합니다.</p>
             </div>
           </CardContent>
         </Card>
@@ -123,7 +148,7 @@ export function SeminarRegisterPage() {
             <p className="text-gray-600 text-sm whitespace-pre-wrap">{seminar.description}</p>
           )}
           <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
-            {seminar.date && (
+            {!hasSessions && seminar.date && (
               <span className="flex items-center gap-1">
                 <CalendarDays className="size-4" />
                 {formatSeminarDate(seminar.date)}
@@ -145,6 +170,37 @@ export function SeminarRegisterPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Session picker — only when the seminar defines a schedule */}
+              {hasSessions && (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-gray-700 border-b pb-1">
+                    신청하시는 세션 일정 <span className="text-red-500">*</span>
+                    <span className="text-xs text-gray-400 font-normal ml-1">(중복 선택 가능)</span>
+                  </p>
+                  <div className="space-y-2">
+                    {seminar.sessions.map((s: SeminarSession, idx: number) => {
+                      const checked = pickedSessions.has(s.label)
+                      return (
+                        <label
+                          key={`${s.label}-${idx}`}
+                          className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition ${
+                            checked ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 size-4 accent-indigo-600"
+                            checked={checked}
+                            onChange={() => toggleSession(s.label)}
+                          />
+                          <span className="text-sm text-gray-800 leading-snug">{s.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Parent info */}
               <div className="space-y-3">
                 <p className="text-sm font-medium text-gray-700 border-b pb-1">학부모 정보</p>
@@ -230,9 +286,19 @@ export function SeminarRegisterPage() {
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={submitMut.isPending || !form.parentName.trim() || !form.phone.trim() || !form.studentName.trim()}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={
+                  submitMut.isPending ||
+                  !form.parentName.trim() ||
+                  !form.phone.trim() ||
+                  !form.studentName.trim() ||
+                  needsSessionPick
+                }
+              >
                 {submitMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
-                신청하기
+                {needsSessionPick ? '세션 일정을 선택해주세요' : '신청하기'}
               </Button>
             </form>
           </CardContent>

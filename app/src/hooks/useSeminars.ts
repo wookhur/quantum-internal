@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
+export interface SeminarSession {
+  /** UI label shown as the checkbox text, e.g. "7/18 (토) Natural Science". */
+  label: string
+  /** Optional "YYYY-MM-DD HH:mm" so future sorting/analytics have structured data. */
+  datetime?: string | null
+}
+
 export interface Seminar {
   id: string
   title: string
@@ -9,6 +16,8 @@ export interface Seminar {
   location: string | null
   maxCapacity: number | null
   active: boolean
+  /** When non-empty, the public form renders checkboxes for these instead of the single `date`. */
+  sessions: SeminarSession[]
   createdAt: string
 }
 
@@ -23,10 +32,23 @@ export interface SeminarRegistration {
   school: string | null
   interest: string | null
   memo: string | null
+  /** Session labels the registrant selected. Empty for legacy single-date seminars. */
+  sessionLabels: string[]
   createdAt: string
 }
 
 function mapSeminar(r: Record<string, unknown>): Seminar {
+  const rawSessions = r.sessions
+  let sessions: SeminarSession[] = []
+  if (Array.isArray(rawSessions)) {
+    sessions = rawSessions
+      .filter((s): s is Record<string, unknown> => !!s && typeof s === 'object')
+      .map(s => ({
+        label: String(s.label ?? ''),
+        datetime: (s.datetime as string | null | undefined) ?? null,
+      }))
+      .filter(s => s.label)
+  }
   return {
     id: r.id as string,
     title: r.title as string,
@@ -35,6 +57,7 @@ function mapSeminar(r: Record<string, unknown>): Seminar {
     location: r.location as string | null,
     maxCapacity: r.max_capacity as number | null,
     active: r.active as boolean,
+    sessions,
     createdAt: r.created_at as string,
   }
 }
@@ -51,6 +74,7 @@ function mapRegistration(r: Record<string, unknown>): SeminarRegistration {
     school: r.school as string | null,
     interest: r.interest as string | null,
     memo: r.memo as string | null,
+    sessionLabels: Array.isArray(r.session_labels) ? (r.session_labels as string[]) : [],
     createdAt: r.created_at as string,
   }
 }
@@ -94,6 +118,7 @@ export function useCreateSeminar() {
       date?: string | null
       location?: string | null
       maxCapacity?: number | null
+      sessions?: SeminarSession[]
     }) => {
       const { data, error } = await supabase
         .from('seminars')
@@ -103,6 +128,7 @@ export function useCreateSeminar() {
           date: params.date ?? null,
           location: params.location ?? null,
           max_capacity: params.maxCapacity ?? null,
+          sessions: params.sessions ?? [],
         })
         .select()
         .single()
@@ -124,6 +150,7 @@ export function useUpdateSeminar() {
       location?: string | null
       maxCapacity?: number | null
       active?: boolean
+      sessions?: SeminarSession[]
     }) => {
       const updates: Record<string, unknown> = {}
       if (params.title !== undefined) updates.title = params.title
@@ -132,6 +159,7 @@ export function useUpdateSeminar() {
       if (params.location !== undefined) updates.location = params.location
       if (params.maxCapacity !== undefined) updates.max_capacity = params.maxCapacity
       if (params.active !== undefined) updates.active = params.active
+      if (params.sessions !== undefined) updates.sessions = params.sessions
       const { error } = await supabase.from('seminars').update(updates).eq('id', params.id)
       if (error) throw error
     },
@@ -178,6 +206,7 @@ export function useSubmitRegistration() {
       school?: string | null
       interest?: string | null
       memo?: string | null
+      sessionLabels?: string[]
     }) => {
       const { error } = await supabase.from('seminar_registrations').insert({
         seminar_id: params.seminarId,
@@ -189,6 +218,7 @@ export function useSubmitRegistration() {
         school: params.school ?? null,
         interest: params.interest ?? null,
         memo: params.memo ?? null,
+        session_labels: params.sessionLabels ?? [],
       })
       if (error) throw error
     },
