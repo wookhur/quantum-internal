@@ -84,7 +84,7 @@ function CollectionStatusBadge({ progress, hasOverdue }: { progress: number; has
   if (progress > 0) {
     return <Badge variant="outline" className="border-blue-500 text-blue-600 bg-blue-50 text-[10px] h-5">{t('contracts.status.inProgress')}</Badge>
   }
-  return <Badge variant="outline" className="text-[10px] h-5">{t('contracts.status.unpaid')}</Badge>
+  return <Badge className="bg-red-100 text-red-700 border border-red-300 text-[10px] h-5">{t('contracts.status.unpaid')}</Badge>
 }
 
 type InstallmentRow = { label: string; amount: string; dueDate: string }
@@ -221,15 +221,14 @@ export function ContractsPage() {
   const statusConfig = StatusConfig(t)
 
   // Summary stats
-  const { total, totalPaid, totalOutstanding, overdueContracts, cancelledCount, activeCount, endedCount } = useMemo(() => {
+  const { total, totalPaid, totalOutstanding, cancelledCount, activeCount, endedCount } = useMemo(() => {
     const cnt = allContracts.length
     const paid = allContracts.reduce((s, c) => s + (c.paidAmount || 0), 0)
     const outstanding = allContracts.reduce((s, c) => s + (c.outstandingAmount || 0), 0)
-    const overdue = allContracts.filter(c => c.installments?.some(i => i.status === 'overdue')).length
     const cancelled = allContracts.filter(c => c.status === 'cancelled' || c.status === 'terminated').length
     const active = allContracts.filter(c => c.status === 'active' || c.status === 'expiring_soon').length
     const ended = allContracts.filter(c => c.status === 'expired').length
-    return { total: cnt, totalPaid: paid, totalOutstanding: outstanding, overdueContracts: overdue, cancelledCount: cancelled, activeCount: active, endedCount: ended }
+    return { total: cnt, totalPaid: paid, totalOutstanding: outstanding, cancelledCount: cancelled, activeCount: active, endedCount: ended }
   }, [allContracts])
 
   return (
@@ -486,41 +485,40 @@ export function ContractsPage() {
         </div>
       </div>
 
-      {/* Summary Cards — counts (clickable filters) grouped left, amounts right */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
-        <StatCard
-          icon={<FileText className="size-5 text-gray-500 shrink-0" />}
-          value={`${total}건`} label="총 계약건수"
-          active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}
-        />
-        <StatCard
-          icon={<PlayCircle className="size-5 text-emerald-500 shrink-0" />}
-          value={`${activeCount}건`} label="서비스 진행중"
-          active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}
-        />
-        <StatCard
-          icon={<Flag className="size-5 text-slate-500 shrink-0" />}
-          value={`${endedCount}건`} label="서비스 완료"
-          active={statusFilter === 'expired'} onClick={() => setStatusFilter('expired')}
-        />
-        <StatCard
-          icon={<AlertTriangle className="size-5 text-red-500 shrink-0" />}
-          value={`${overdueContracts}건`} label={t('contracts.overdueContracts')}
-          active={statusFilter === 'overdue'} onClick={() => setStatusFilter('overdue')}
-        />
-        <StatCard
-          icon={<Ban className="size-5 text-gray-400 shrink-0" />}
-          value={`${cancelledCount}건`} label={t('contracts.cancelledCount')}
-          active={statusFilter === 'inactive'} onClick={() => setStatusFilter('inactive')}
-        />
-        <StatCard
-          icon={<CheckCircle2 className="size-5 text-emerald-500 shrink-0" />}
-          value={formatCurrency(totalPaid)} label={t('contracts.collectionComplete')}
-        />
-        <StatCard
-          icon={<Clock className="size-5 text-blue-500 shrink-0" />}
-          value={formatCurrency(totalOutstanding)} label={t('contracts.outstanding')}
-        />
+      {/* Summary — clickable count cards (left) + amount cards (right, wider) */}
+      <div className="flex flex-col lg:flex-row gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:flex-1">
+          <StatCard
+            icon={<FileText className="size-5 text-gray-500 shrink-0" />}
+            value={`${total}건`} label="총 계약건수"
+            active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}
+          />
+          <StatCard
+            icon={<PlayCircle className="size-5 text-emerald-500 shrink-0" />}
+            value={`${activeCount}건`} label="서비스 진행중"
+            active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}
+          />
+          <StatCard
+            icon={<Flag className="size-5 text-slate-500 shrink-0" />}
+            value={`${endedCount}건`} label="서비스 완료"
+            active={statusFilter === 'expired'} onClick={() => setStatusFilter('expired')}
+          />
+          <StatCard
+            icon={<Ban className="size-5 text-gray-400 shrink-0" />}
+            value={`${cancelledCount}건`} label={t('contracts.cancelledCount')}
+            active={statusFilter === 'inactive'} onClick={() => setStatusFilter('inactive')}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:w-[460px] shrink-0">
+          <StatCard
+            icon={<CheckCircle2 className="size-5 text-emerald-500 shrink-0" />}
+            value={formatCurrency(totalPaid)} label={t('contracts.collectionComplete')}
+          />
+          <StatCard
+            icon={<Clock className="size-5 text-blue-500 shrink-0" />}
+            value={formatCurrency(totalOutstanding)} label={t('contracts.outstanding')}
+          />
+        </div>
       </div>
 
       {/* Filters */}
