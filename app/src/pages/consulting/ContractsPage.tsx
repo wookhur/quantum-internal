@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Search, Plus, Loader2, DollarSign, CheckCircle2, AlertTriangle, Clock,
-  Upload, Ban, ChevronRight, ChevronDown, TrendingUp, Trash2,
+  Upload, Ban, ChevronRight, ChevronDown, Trash2,
   FileText, PlayCircle, Flag,
 } from 'lucide-react'
 import { useContractsWithInstallments, useCreateContract } from '@/hooks/useContracts'
@@ -51,6 +51,25 @@ function ProgressBar({ progress }: { progress: number }) {
         {progress}%
       </span>
     </div>
+  )
+}
+
+function StatCard({ icon, value, label, active, onClick }: {
+  icon: ReactNode; value: ReactNode; label: string; active?: boolean; onClick?: () => void
+}) {
+  return (
+    <Card
+      className={`${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''} ${active ? 'ring-2 ring-primary' : ''}`}
+      onClick={onClick}
+    >
+      <CardContent className="py-3 flex items-center gap-3">
+        {icon}
+        <div className="min-w-0">
+          <div className="text-lg font-bold whitespace-nowrap">{value}</div>
+          <div className="text-xs text-muted-foreground">{label}</div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -189,15 +208,20 @@ export function ContractsPage() {
     search: search || undefined,
   })
   // Status is computed client-side (expiry-aware), so filter by it client-side too.
-  const contracts = useMemo(
-    () => statusFilter === 'all' ? allContracts : allContracts.filter(c => c.status === statusFilter),
-    [allContracts, statusFilter],
-  )
+  const contracts = useMemo(() => {
+    if (statusFilter === 'all') return allContracts
+    return allContracts.filter(c => {
+      if (statusFilter === 'active') return c.status === 'active' || c.status === 'expiring_soon'
+      if (statusFilter === 'inactive') return c.status === 'cancelled' || c.status === 'terminated'
+      if (statusFilter === 'overdue') return c.installments?.some(i => i.status === 'overdue') || false
+      return c.status === statusFilter
+    })
+  }, [allContracts, statusFilter])
 
   const statusConfig = StatusConfig(t)
 
   // Summary stats
-  const { total, totalPaid, totalOutstanding, overdueContracts, cancelledCount, avgProgress, activeCount, endedCount } = useMemo(() => {
+  const { total, totalPaid, totalOutstanding, overdueContracts, cancelledCount, activeCount, endedCount } = useMemo(() => {
     const cnt = allContracts.length
     const paid = allContracts.reduce((s, c) => s + (c.paidAmount || 0), 0)
     const outstanding = allContracts.reduce((s, c) => s + (c.outstandingAmount || 0), 0)
@@ -205,11 +229,7 @@ export function ContractsPage() {
     const cancelled = allContracts.filter(c => c.status === 'cancelled' || c.status === 'terminated').length
     const active = allContracts.filter(c => c.status === 'active' || c.status === 'expiring_soon').length
     const ended = allContracts.filter(c => c.status === 'expired').length
-    const activeContracts = allContracts.filter(c => c.status !== 'cancelled' && c.totalAmount > 0)
-    const avg = activeContracts.length > 0
-      ? Math.round(activeContracts.reduce((s, c) => s + (c.totalAmount > 0 ? ((c.paidAmount || 0) / c.totalAmount * 100) : 0), 0) / activeContracts.length)
-      : 0
-    return { total: cnt, totalPaid: paid, totalOutstanding: outstanding, overdueContracts: overdue, cancelledCount: cancelled, avgProgress: avg, activeCount: active, endedCount: ended }
+    return { total: cnt, totalPaid: paid, totalOutstanding: outstanding, overdueContracts: overdue, cancelledCount: cancelled, activeCount: active, endedCount: ended }
   }, [allContracts])
 
   return (
@@ -466,80 +486,41 @@ export function ContractsPage() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <FileText className="size-5 text-gray-500 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-lg font-bold whitespace-nowrap">{total}건</div>
-              <div className="text-xs text-muted-foreground">총 계약건수</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <PlayCircle className="size-5 text-emerald-500 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-lg font-bold whitespace-nowrap">{activeCount}건</div>
-              <div className="text-xs text-muted-foreground">서비스 진행중</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <Flag className="size-5 text-slate-500 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-lg font-bold whitespace-nowrap">{endedCount}건</div>
-              <div className="text-xs text-muted-foreground">서비스 완료</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalPaid)}</div>
-              <div className="text-xs text-muted-foreground">{t('contracts.collectionComplete')}</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <Clock className="size-5 text-blue-500 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-lg font-bold whitespace-nowrap">{formatCurrency(totalOutstanding)}</div>
-              <div className="text-xs text-muted-foreground">{t('contracts.outstanding')}</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <AlertTriangle className="size-5 text-red-500 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-lg font-bold whitespace-nowrap">{overdueContracts}</div>
-              <div className="text-xs text-muted-foreground">{t('contracts.overdueContracts')}</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <TrendingUp className="size-5 text-primary shrink-0" />
-            <div className="min-w-0">
-              <div className="text-lg font-bold whitespace-nowrap">{avgProgress}%</div>
-              <div className="text-xs text-muted-foreground">{t('contracts.avgCollectionRate')}</div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 flex items-center gap-3">
-            <Ban className="size-5 text-gray-400 shrink-0" />
-            <div className="min-w-0">
-              <div className="text-lg font-bold whitespace-nowrap">{cancelledCount}</div>
-              <div className="text-xs text-muted-foreground">{t('contracts.cancelledCount')}</div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Summary Cards — counts (clickable filters) grouped left, amounts right */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+        <StatCard
+          icon={<FileText className="size-5 text-gray-500 shrink-0" />}
+          value={`${total}건`} label="총 계약건수"
+          active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}
+        />
+        <StatCard
+          icon={<PlayCircle className="size-5 text-emerald-500 shrink-0" />}
+          value={`${activeCount}건`} label="서비스 진행중"
+          active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}
+        />
+        <StatCard
+          icon={<Flag className="size-5 text-slate-500 shrink-0" />}
+          value={`${endedCount}건`} label="서비스 완료"
+          active={statusFilter === 'expired'} onClick={() => setStatusFilter('expired')}
+        />
+        <StatCard
+          icon={<AlertTriangle className="size-5 text-red-500 shrink-0" />}
+          value={`${overdueContracts}건`} label={t('contracts.overdueContracts')}
+          active={statusFilter === 'overdue'} onClick={() => setStatusFilter('overdue')}
+        />
+        <StatCard
+          icon={<Ban className="size-5 text-gray-400 shrink-0" />}
+          value={`${cancelledCount}건`} label={t('contracts.cancelledCount')}
+          active={statusFilter === 'inactive'} onClick={() => setStatusFilter('inactive')}
+        />
+        <StatCard
+          icon={<CheckCircle2 className="size-5 text-emerald-500 shrink-0" />}
+          value={formatCurrency(totalPaid)} label={t('contracts.collectionComplete')}
+        />
+        <StatCard
+          icon={<Clock className="size-5 text-blue-500 shrink-0" />}
+          value={formatCurrency(totalOutstanding)} label={t('contracts.outstanding')}
+        />
       </div>
 
       {/* Filters */}
@@ -557,7 +538,17 @@ export function ContractsPage() {
             </div>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v || 'all')}>
               <SelectTrigger className="w-[150px] h-9">
-                <SelectValue placeholder={t('common.status')} />
+                <span className="truncate">
+                  {statusFilter === 'all' ? t('common.all')
+                    : statusFilter === 'active' ? t('contracts.active')
+                    : statusFilter === 'expiring_soon' ? t('contracts.expiringSoon')
+                    : statusFilter === 'expired' ? t('contracts.expired')
+                    : statusFilter === 'terminated' ? t('contracts.terminated')
+                    : statusFilter === 'cancelled' ? t('contracts.cancelled')
+                    : statusFilter === 'inactive' ? t('contracts.cancelledCount')
+                    : statusFilter === 'overdue' ? t('contracts.overdueContracts')
+                    : t('common.status')}
+                </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('common.all')}</SelectItem>
