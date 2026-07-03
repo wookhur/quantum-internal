@@ -26,7 +26,6 @@ import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
   type EditorMeeting,
 } from '@/hooks/useEditorMeetings'
-import { useProfiles } from '@/hooks/useProfiles'
 import {
   useServiceStudents, useCreateServiceStudent, useUpdateServiceStudent, useDeleteServiceStudent,
   useServiceMeetings, useCreateServiceMeeting, useUpdateServiceMeeting, useDeleteServiceMeeting,
@@ -146,7 +145,6 @@ function missingReportTitle(items: { date?: string; type?: string }[] | undefine
     })
   return `${header} (${items.length})\n${lines.join('\n')}`
 }
-const PARTNERS = ['Ryan Pruitt(BAY)', 'Dr.Lee Woorin(IRIS)', 'Evelyn Jenny Nam', 'Dr.Lee Gwangmi'] as const
 
 function reportSaveError(e: unknown) {
   const msg = (e as { message?: string })?.message || String(e)
@@ -457,7 +455,6 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
         <Field label={t('student360.consultant')} value={consultantName(student.assignedConsultant)} />
         <Field label={t('student360.essayEditor')} value={student.essayEditor} />
-        <Field label={t('student360.partners')} value={student.partners} />
         <Field label={t('student360.majors')} value={student.majors} />
         <Field label={t('student360.contractType')} value={student.contractType} />
         <div className="col-span-2 rounded-md border border-dashed p-3 grid grid-cols-2 gap-x-6 gap-y-2">
@@ -1101,7 +1098,6 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     school: student?.school || '',
     assignedConsultant: student?.assignedConsultant || '',
     essayEditor: student?.essayEditor || '',
-    partners: student?.partners || '',
     majors: student?.majors || '',
     contractType: student?.contractType || '',
     applicationCount: student?.applicationCount ? String(student.applicationCount) : '',
@@ -1120,26 +1116,9 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
     scheduleTime: student?.regularMeetingSchedule?.split('|')[2] || '',
   })
   const [form, setForm] = useState(buildForm)
-  const [partnerCustom, setPartnerCustom] = useState(false)
-
-  // Partner options = accounts designated as partners in 직원 관리, merged with
-  // the legacy preset list.
-  const { data: profiles = [] } = useProfiles()
-  const partnerOptions = useMemo(() => {
-    const designated = profiles.filter(p => p.isPartner && p.name).map(p => p.name)
-    return Array.from(new Set<string>([...designated, ...PARTNERS])).sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [profiles])
-  // Show the free-text input when explicitly chosen, or when the saved value
-  // isn't one of the known options.
-  const showPartnerInput = partnerCustom || (!!form.partners && !partnerOptions.includes(form.partners))
 
   // Reset to a clean form (or the student's values) every time the dialog opens
-  useEffect(() => {
-    if (open) {
-      setForm(buildForm())
-      setPartnerCustom(false)
-    }
-  }, [open])
+  useEffect(() => { if (open) setForm(buildForm()) }, [open])
 
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
@@ -1158,7 +1137,6 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
       school: form.school || undefined,
       assignedConsultant: form.assignedConsultant || undefined,
       essayEditor: form.essayEditor || undefined,
-      partners: form.partners || undefined,
       majors: form.majors || undefined,
       contractType: form.contractType || undefined,
       applicationCount: form.applicationCount ? Number(form.applicationCount) : undefined,
@@ -1223,39 +1201,6 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
                 {ESSAY_EDITORS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label className="text-xs">{t('student360.partners')}</Label>
-            {showPartnerInput ? (
-              <div className="flex gap-2">
-                <Input
-                  value={form.partners}
-                  onChange={e => set('partners', e.target.value)}
-                  placeholder="파트너사 직접 입력"
-                  className="h-9"
-                  autoFocus
-                />
-                <Button
-                  type="button" variant="outline" size="sm" className="h-9 shrink-0"
-                  onClick={() => { setPartnerCustom(false); set('partners', '') }}
-                >목록</Button>
-              </div>
-            ) : (
-              <Select
-                value={form.partners}
-                onValueChange={v => {
-                  if (v === '__custom__') { setPartnerCustom(true); set('partners', '') }
-                  else set('partners', v === '__none__' ? '' : v)
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">{t('student360.unassigned')}</SelectItem>
-                  {partnerOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  <SelectItem value="__custom__">+ 직접 입력…</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
           </div>
           <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />

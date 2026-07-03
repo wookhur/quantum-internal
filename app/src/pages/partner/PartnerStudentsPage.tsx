@@ -9,6 +9,7 @@ import { Plus, Pencil, Trash2, NotebookPen, GraduationCap } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
+import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import {
   usePartnerStudentMeetings, useAllPartnerStudentMeetings, useCreatePartnerStudentMeeting,
   useUpdatePartnerStudentMeeting, useDeletePartnerStudentMeeting,
@@ -23,6 +24,7 @@ export function PartnerStudentsPage() {
   const partnerKey = (user?.name || '').trim().toLowerCase()
 
   const { data: allStudents = [], isLoading } = useServiceStudents()
+  const { data: programFees = [] } = useAllServiceProgramFees()
   const { data: myMeetings = [] } = usePartnerStudentMeetings(isAdmin ? undefined : partnerId)
   const { data: allMeetings = [] } = useAllPartnerStudentMeetings(isAdmin)
   const meetings = isAdmin ? allMeetings : myMeetings
@@ -30,19 +32,34 @@ export function PartnerStudentsPage() {
   const update = useUpdatePartnerStudentMeeting()
   const del = useDeletePartnerStudentMeeting()
 
-  // A partner's students are the Student 360 students whose "partners" field
-  // (set from the Student 360 partner dropdown) names this partner.
-  // Admins/관리자 see every partner-assigned student for oversight.
+  // A partner services a student when one of that student's Extra Curricular /
+  // Academic programs names the partner (as the program partner or a contributor).
+  const studentPartners = useMemo(() => {
+    const map = new Map<string, { names: Set<string>; display: Set<string> }>()
+    programFees.forEach(f => {
+      const raw = [f.label, f.contributor1, f.contributor2].filter(Boolean) as string[]
+      if (!raw.length) return
+      const entry = map.get(f.studentId) || { names: new Set<string>(), display: new Set<string>() }
+      raw.forEach(n => { entry.names.add(n.toLowerCase()); entry.display.add(n) })
+      map.set(f.studentId, entry)
+    })
+    return map
+  }, [programFees])
+
+  // Admins/관리자 see every student with a partner program for oversight.
   const students = useMemo(() => {
     return allStudents
       .filter(s => {
-        const partners = (s.partners || '').trim()
-        if (!partners) return false
-        return isAdmin || (!!partnerKey && partners.toLowerCase().includes(partnerKey))
+        const entry = studentPartners.get(s.id)
+        if (!entry) return false
+        return isAdmin || (!!partnerKey && Array.from(entry.names).some(n => n.includes(partnerKey)))
       })
-      .map(s => ({ name: s.name, koreanName: s.koreanName, school: s.school, partners: s.partners || '' }))
+      .map(s => ({
+        name: s.name, koreanName: s.koreanName, school: s.school,
+        partners: Array.from(studentPartners.get(s.id)?.display || []).join(', '),
+      }))
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [allStudents, partnerKey, isAdmin])
+  }, [allStudents, studentPartners, partnerKey, isAdmin])
 
   const [selected, setSelected] = useState('')
   useEffect(() => {
@@ -90,8 +107,8 @@ export function PartnerStudentsPage() {
           {isLoading
             ? '불러오는 중…'
             : isAdmin
-              ? 'Student 360에서 파트너가 지정된 학생이 아직 없습니다.'
-              : '배정된 학생이 없습니다. (Student 360 partners 필드에 내 계정 이름이 지정돼야 표시됩니다)'}
+              ? 'Extra Curricular / Academic 프로그램에 파트너가 지정된 학생이 아직 없습니다.'
+              : '배정된 학생이 없습니다. (Student 360의 EC/Academic 프로그램 파트너·기여자에 내 계정 이름이 지정돼야 표시됩니다)'}
         </CardContent></Card>
       ) : (
         <div className="grid grid-cols-[260px_1fr] gap-4">

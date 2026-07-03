@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Trash2, Building2, GraduationCap, Save, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
+import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import {
   usePartnerCompanies, useCreatePartnerCompany, useUpdatePartnerCompany, useDeletePartnerCompany,
 } from '@/hooks/usePartnerCompanies'
@@ -40,6 +41,25 @@ export function PartnerCompaniesPage() {
 
   const { data: companies = [] } = usePartnerCompanies()
   const { data: allStudents = [] } = useServiceStudents()
+  const { data: programFees = [] } = useAllServiceProgramFees()
+
+  // studentId → lowercase partner names from EC/Academic programs.
+  const studentPartnerNames = useMemo(() => {
+    const map = new Map<string, string[]>()
+    programFees.forEach(f => {
+      const raw = [f.label, f.contributor1, f.contributor2].filter(Boolean) as string[]
+      if (!raw.length) return
+      const arr = map.get(f.studentId) || []
+      raw.forEach(n => arr.push(n.toLowerCase()))
+      map.set(f.studentId, arr)
+    })
+    return map
+  }, [programFees])
+  const studentsForCompany = (companyName: string) => {
+    const key = companyName.trim().toLowerCase()
+    if (!key) return []
+    return allStudents.filter(s => (studentPartnerNames.get(s.id) || []).some(n => n.includes(key)))
+  }
   const create = useCreatePartnerCompany()
   const update = useUpdatePartnerCompany()
   const del = useDeletePartnerCompany()
@@ -68,11 +88,10 @@ export function PartnerCompaniesPage() {
     infoScope: f.infoScope.includes(key) ? f.infoScope.filter(x => x !== key) : [...f.infoScope, key],
   }))
 
-  const companyNameForStudents = (selected?.name || form.name || '').trim().toLowerCase()
-  const servicedStudents = useMemo(() => {
-    if (!companyNameForStudents) return []
-    return allStudents.filter(s => (s.partners || '').toLowerCase().includes(companyNameForStudents))
-  }, [allStudents, companyNameForStudents])
+  const servicedStudents = useMemo(
+    () => studentsForCompany(selected?.name || form.name || ''),
+    [selected, form.name, studentPartnerNames, allStudents], // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
   const startCreate = () => { setCreating(true); setSelectedId(null); setForm(EMPTY_FORM) }
   const showForm = creating || !!selected
@@ -119,7 +138,7 @@ export function PartnerCompaniesPage() {
           <CardContent className="p-2 space-y-1">
             {companies.length === 0 && <p className="text-sm text-muted-foreground p-3">등록된 업체가 없습니다.</p>}
             {companies.map(c => {
-              const count = allStudents.filter(s => (s.partners || '').toLowerCase().includes(c.name.trim().toLowerCase())).length
+              const count = studentsForCompany(c.name).length
               return (
                 <button
                   key={c.id}
@@ -202,7 +221,7 @@ export function PartnerCompaniesPage() {
               {/* Serviced students */}
               <div>
                 <Label className="text-xs flex items-center gap-1.5"><GraduationCap className="size-3.5" />서비스 중인 학생 ({servicedStudents.length})</Label>
-                <p className="text-[11px] text-muted-foreground mb-1.5">Student 360 partners에 이 업체명이 지정된 학생입니다.</p>
+                <p className="text-[11px] text-muted-foreground mb-1.5">EC/Academic 프로그램의 파트너·기여자에 이 업체명이 지정된 학생입니다.</p>
                 {servicedStudents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">없음</p>
                 ) : (
