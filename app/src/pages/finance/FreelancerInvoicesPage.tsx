@@ -124,8 +124,27 @@ function InvoiceFormDialog({
         : [emptyItem()],
   )
   const [saving, setSaving] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   const totalAmount = useMemo(() => items.reduce((s, it) => s + it.quantity * it.unitPrice, 0), [items])
+
+  const handleDownload = async () => {
+    if (!invoice) return
+    setDownloading(true)
+    try {
+      await downloadInvoiceExcel(
+        { ...invoice, invoiceDate, residentNumber, phone, bankAccount, totalAmount },
+        items.filter(it => it.itemName.trim() || it.unitPrice).map(it => ({
+          itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice,
+          supplyAmount: it.quantity * it.unitPrice, remark: it.remark,
+        })),
+      )
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   const updateItem = useCallback((idx: number, field: keyof ItemRow, value: string | number) => {
     setItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it))
@@ -204,21 +223,9 @@ function InvoiceFormDialog({
             <Input value={bankAccount} onChange={e => setBankAccount(e.target.value)} placeholder={t('fInvoice.bankPlaceholder')} className="h-9" />
           </div>
 
-          {/* Items Table */}
+          {/* Items Table (fixed to authorized students — no manual add) */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold">{t('fInvoice.items')}</Label>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1 text-xs"
-                onClick={() => setItems(prev => [...prev, emptyItem()])}
-                disabled={items.length >= 10}
-              >
-                <Plus className="size-3" />
-                {t('fInvoice.addItem')}
-              </Button>
-            </div>
+            <Label className="text-xs font-semibold">{t('fInvoice.items')}</Label>
 
             <div className="rounded-md border">
               <Table>
@@ -305,6 +312,12 @@ function InvoiceFormDialog({
         </div>
 
         <DialogFooter>
+          {invoice && (
+            <Button variant="outline" className="gap-1.5 mr-auto" disabled={downloading} onClick={handleDownload}>
+              {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+              엑셀 다운로드
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleSave} disabled={saving || !items.some(it => it.itemName.trim())} className="gap-1.5">
             {saving && <Loader2 className="size-3.5 animate-spin" />}
@@ -319,7 +332,10 @@ function InvoiceFormDialog({
 // ─── Invoice Detail Dialog ────────────────────────────────────────────────
 
 /** Download a single invoice as the uploaded 견적서 template, filled in. */
-async function downloadInvoiceExcel(invoice: FreelancerInvoice, items: InvoiceItem[]) {
+async function downloadInvoiceExcel(
+  invoice: FreelancerInvoice,
+  items: { itemName: string; quantity: number; unitPrice: number; supplyAmount: number; remark?: string | null }[],
+) {
   const { default: ExcelJS } = await import('exceljs')
   const res = await fetch('/freelancer-invoice-template.xlsx')
   if (!res.ok) throw new Error('견적서 양식 파일을 불러올 수 없습니다.')
