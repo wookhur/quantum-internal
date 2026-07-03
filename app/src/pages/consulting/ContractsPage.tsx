@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   Search, Plus, Loader2, DollarSign, CheckCircle2, AlertTriangle, Clock,
   Upload, Ban, ChevronRight, ChevronDown, TrendingUp, Trash2,
+  FileText, PlayCircle, Flag,
 } from 'lucide-react'
 import { useContractsWithInstallments, useCreateContract } from '@/hooks/useContracts'
 import { useCreateInstallments } from '@/hooks/useInstallments'
@@ -20,7 +21,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ContractPdfUploadDialog } from '@/components/ContractPdfUploadDialog'
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
-import type { ContractStatus, PaymentInstallment, InstallmentStatus } from '@/types'
+import type { PaymentInstallment, InstallmentStatus } from '@/types'
 
 function StatusConfig(t: (key: string) => string): Record<InstallmentStatus, { label: string; color: string }> {
   return {
@@ -184,26 +185,32 @@ export function ContractsPage() {
     )
   }
 
-  const { data: contracts = [], isLoading, error } = useContractsWithInstallments({
-    status: statusFilter !== 'all' ? statusFilter as ContractStatus : undefined,
+  const { data: allContracts = [], isLoading, error } = useContractsWithInstallments({
     search: search || undefined,
   })
+  // Status is computed client-side (expiry-aware), so filter by it client-side too.
+  const contracts = useMemo(
+    () => statusFilter === 'all' ? allContracts : allContracts.filter(c => c.status === statusFilter),
+    [allContracts, statusFilter],
+  )
 
   const statusConfig = StatusConfig(t)
 
   // Summary stats
-  const { total, totalPaid, totalOutstanding, overdueContracts, cancelledCount, avgProgress } = useMemo(() => {
-    const cnt = contracts.length
-    const paid = contracts.reduce((s, c) => s + (c.paidAmount || 0), 0)
-    const outstanding = contracts.reduce((s, c) => s + (c.outstandingAmount || 0), 0)
-    const overdue = contracts.filter(c => c.installments?.some(i => i.status === 'overdue')).length
-    const cancelled = contracts.filter(c => c.status === 'cancelled').length
-    const activeContracts = contracts.filter(c => c.status !== 'cancelled' && c.totalAmount > 0)
+  const { total, totalPaid, totalOutstanding, overdueContracts, cancelledCount, avgProgress, activeCount, endedCount } = useMemo(() => {
+    const cnt = allContracts.length
+    const paid = allContracts.reduce((s, c) => s + (c.paidAmount || 0), 0)
+    const outstanding = allContracts.reduce((s, c) => s + (c.outstandingAmount || 0), 0)
+    const overdue = allContracts.filter(c => c.installments?.some(i => i.status === 'overdue')).length
+    const cancelled = allContracts.filter(c => c.status === 'cancelled' || c.status === 'terminated').length
+    const active = allContracts.filter(c => c.status === 'active' || c.status === 'expiring_soon').length
+    const ended = allContracts.filter(c => c.status === 'expired').length
+    const activeContracts = allContracts.filter(c => c.status !== 'cancelled' && c.totalAmount > 0)
     const avg = activeContracts.length > 0
       ? Math.round(activeContracts.reduce((s, c) => s + (c.totalAmount > 0 ? ((c.paidAmount || 0) / c.totalAmount * 100) : 0), 0) / activeContracts.length)
       : 0
-    return { total: cnt, totalPaid: paid, totalOutstanding: outstanding, overdueContracts: overdue, cancelledCount: cancelled, avgProgress: avg }
-  }, [contracts])
+    return { total: cnt, totalPaid: paid, totalOutstanding: outstanding, overdueContracts: overdue, cancelledCount: cancelled, avgProgress: avg, activeCount: active, endedCount: ended }
+  }, [allContracts])
 
   return (
     <div className="space-y-6">
@@ -460,7 +467,34 @@ export function ContractsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
+        <Card>
+          <CardContent className="py-3 flex items-center gap-3">
+            <FileText className="size-5 text-gray-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{total}건</div>
+              <div className="text-xs text-muted-foreground">총 계약건수</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3 flex items-center gap-3">
+            <PlayCircle className="size-5 text-emerald-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{activeCount}건</div>
+              <div className="text-xs text-muted-foreground">서비스 진행중</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3 flex items-center gap-3">
+            <Flag className="size-5 text-slate-500 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-lg font-bold whitespace-nowrap">{endedCount}건</div>
+              <div className="text-xs text-muted-foreground">서비스 완료</div>
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="py-3 flex items-center gap-3">
             <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
@@ -530,6 +564,7 @@ export function ContractsPage() {
                 <SelectItem value="active">{t('contracts.active')}</SelectItem>
                 <SelectItem value="expiring_soon">{t('contracts.expiringSoon')}</SelectItem>
                 <SelectItem value="expired">{t('contracts.expired')}</SelectItem>
+                <SelectItem value="terminated">{t('contracts.terminated')}</SelectItem>
                 <SelectItem value="cancelled">{t('contracts.cancelled')}</SelectItem>
               </SelectContent>
             </Select>
@@ -572,6 +607,8 @@ export function ContractsPage() {
               <TableBody>
                 {contracts.map((contract) => {
                   const isCancelled = contract.status === 'cancelled'
+                  const isExpired = contract.status === 'expired'
+                  const isTerminated = contract.status === 'terminated'
                   const isExpanded = expandedContract === contract.id
                   const progress = contract.totalAmount > 0
                     ? Math.round(((contract.paidAmount || 0) / contract.totalAmount) * 100)
@@ -628,9 +665,13 @@ export function ContractsPage() {
                           ) : null}
                         </TableCell>
                         <TableCell>
-                          {!isCancelled && contract.totalAmount > 0 && (
+                          {isExpired ? (
+                            <Badge className="bg-slate-100 text-slate-600 border border-slate-300 text-[10px] h-5">종료</Badge>
+                          ) : isTerminated ? (
+                            <Badge className="bg-amber-100 text-amber-700 border border-amber-300 text-[10px] h-5">중도해지</Badge>
+                          ) : !isCancelled && contract.totalAmount > 0 ? (
                             <CollectionStatusBadge progress={progress} hasOverdue={hasOverdue} />
-                          )}
+                          ) : null}
                         </TableCell>
                         <TableCell>
                           <ChevronRight className="size-4 text-muted-foreground" />

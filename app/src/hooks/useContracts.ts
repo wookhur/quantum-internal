@@ -61,9 +61,11 @@ function mapContract(row: Record<string, unknown>): Contract {
   const expiry = (row.expiry_date as string) || ''
   const today = new Date().toISOString().slice(0, 10)
   // A past expiry date means the contract period is over — reflect it even when
-  // the stored status was never updated (unless the contract was cancelled).
+  // the stored status was never updated. Cancelled/terminated are left as-is.
   const status: ContractStatus =
-    rawStatus !== 'cancelled' && expiry && expiry < today ? 'expired' : rawStatus
+    rawStatus !== 'cancelled' && rawStatus !== 'terminated' && expiry && expiry < today
+      ? 'expired'
+      : rawStatus
   return {
     id: row.id as string,
     leadId: row.lead_id as string,

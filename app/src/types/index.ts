@@ -153,7 +153,7 @@ export interface LeadActivity {
 }
 
 // ============ CONTRACTS ============
-export type ContractStatus = 'active' | 'expiring_soon' | 'expired' | 'cancelled'
+export type ContractStatus = 'active' | 'expiring_soon' | 'expired' | 'cancelled' | 'terminated'
 
 export interface Contract {
   id: string
