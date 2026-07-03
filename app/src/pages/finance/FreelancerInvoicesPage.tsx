@@ -19,7 +19,7 @@ import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useConsultantName } from '@/lib/consultants'
 import { useProfiles } from '@/hooks/useProfiles'
-import { useAllEditorMeetingsInRange } from '@/hooks/useEditorMeetings'
+import { useSendMessage } from '@/hooks/useMessages'
 import {
   useFreelancerInvoices,
   useMyInvoices,
@@ -401,8 +401,8 @@ function InvoiceDetailDialog({
   const { data: items = [] } = useInvoiceItems(invoice.id)
   const updateStatus = useUpdateInvoiceStatus()
   const deleteInvoice = useDeleteInvoice()
-  const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
-  const canDelete = isAdmin || (invoice.freelancerId === user?.id && invoice.status !== 'approved')
+  const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
+  const canDelete = isAccounting || (invoice.freelancerId === user?.id && invoice.status !== 'approved')
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -464,7 +464,7 @@ function InvoiceDetailDialog({
           )}
         </div>
 
-        {(isAdmin && invoice.status === 'submitted') || canDelete ? (
+        {(isAccounting && invoice.status === 'submitted') || canDelete ? (
           <DialogFooter className="gap-2">
             {canDelete && (
               <Button
@@ -489,7 +489,7 @@ function InvoiceDetailDialog({
                 {t('fInvoice.delete')}
               </Button>
             )}
-            {isAdmin && invoice.status === 'submitted' && (
+            {isAccounting && invoice.status === 'submitted' && (
               <>
                 <Button
                   variant="outline"
@@ -593,383 +593,36 @@ function studentLabel(name?: string, koreanName?: string): string {
   return ko || en || '—'
 }
 
-/** Fill the uploaded 견적서 template: B=품명(학생이름), C=수량(1). Amounts left blank. */
-async function generateConsultantInvoiceExcel(consultant: string, names: string[], month: string) {
-  const { default: ExcelJS } = await import('exceljs')
-  const res = await fetch('/freelancer-invoice-template.xlsx')
-  if (!res.ok) throw new Error('인보이스 양식 파일을 불러올 수 없습니다.')
-  const buf = await res.arrayBuffer()
-  const wb = new ExcelJS.Workbook()
-  await wb.xlsx.load(buf)
+// ─── Shared: accounting access + billable students ─────────────────────────
 
-  // Keep only the first sheet, name it for the month.
-  const ws = wb.worksheets[0]
-  const [y, m] = month.split('-').map(Number)
-  for (let i = wb.worksheets.length - 1; i >= 1; i--) wb.removeWorksheet(wb.worksheets[i].id)
-  ws.name = `${m}월`
+const ACCOUNTING_EMAIL = 'accounting@quantumadmissions.com'
 
-  // Invoice date (template uses M.D.YYYY in C5)
-  try { ws.getCell('C5').value = `${m}.1.${y}` } catch { /* ignore */ }
+export interface BillableStudent { id: string; label: string; done: number; billable: boolean }
 
-  // Find the 합계(total) row so we don't overwrite it.
-  let sumRow = 23
-  for (let r = 15; r <= 80; r++) {
-    const v = ws.getCell(r, 1).value
-    if (v != null && String(v).includes('합')) { sumRow = r; break }
-  }
-  const dataStart = 15
-  let capacity = sumRow - dataStart
-  if (names.length > capacity) {
-    const extra = names.length - capacity
-    ws.spliceRows(sumRow, 0, ...Array.from({ length: extra }, () => [] as unknown[]))
-    sumRow += extra
-    capacity += extra
-  }
-  for (let i = 0; i < capacity; i++) {
-    const r = dataStart + i
-    if (i < names.length) {
-      ws.getCell(r, 1).value = i + 1     // No.
-      ws.getCell(r, 2).value = names[i]  // 품명 = 학생이름
-      ws.getCell(r, 3).value = 1         // 수량 = 1
-    } else {
-      ws.getCell(r, 1).value = null
-      ws.getCell(r, 2).value = null
-      ws.getCell(r, 3).value = null
-    }
-  }
-
-  const out = await wb.xlsx.writeBuffer()
-  const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `프리랜서_인보이스_${consultant}_${month}.xlsx`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
-
-function ConsultantInvoicePanel() {
-  const [month, setMonth] = useState(getCurrentMonth())
-  const [consultant, setConsultant] = useState<string>('')   // consultant display NAME
-  const [generating, setGenerating] = useState(false)
-  const [creating, setCreating] = useState(false)
-
+/** Per consultant NAME → their active students with billable flag (>=2 report-uploaded meetings this month). */
+function useConsultantBillable(month: string) {
   const consultantName = useConsultantName()
-  const { data: profiles = [] } = useProfiles()
   const { data: students = [] } = useServiceStudents()
   const { start, end } = monthRange(month)
   const { data: meetings = [] } = useAllServiceMeetings(start, end)
-  const createInvoice = useCreateInvoice()
 
-  // Count meetings with an uploaded summary report, per student, this month.
-  const completedByStudent = useMemo(() => {
-    const map = new Map<string, number>()
+  return useMemo(() => {
+    const completed = new Map<string, number>()
     for (const mt of meetings) {
-      // A meeting counts as completed if its summary report is submitted OR a report link exists.
       if ((mt.reportStatus === 'submitted' || !!mt.reportUrl) && mt.status !== 'cancelled') {
-        map.set(mt.studentId, (map.get(mt.studentId) || 0) + 1)
+        completed.set(mt.studentId, (completed.get(mt.studentId) || 0) + 1)
       }
     }
-    return map
-  }, [meetings])
-
-  const activeStudents = useMemo(
-    () => students.filter(s => isActiveStudent(s.status) && s.assignedConsultant),
-    [students],
-  )
-
-  // Group active students by their consultant's display NAME (resolves slug/UUID ids).
-  const consultantGroups = useMemo(() => {
-    const map = new Map<string, typeof activeStudents>()
-    activeStudents.forEach(s => {
+    const byConsultant = new Map<string, BillableStudent[]>()
+    students.filter(s => isActiveStudent(s.status) && s.assignedConsultant).forEach(s => {
       const nm = consultantName(s.assignedConsultant)
-      const arr = map.get(nm) || []
-      arr.push(s)
-      map.set(nm, arr)
+      const done = completed.get(s.id) || 0
+      const arr = byConsultant.get(nm) || []
+      arr.push({ id: s.id, label: studentLabel(s.name, s.koreanName), done, billable: done >= 2 })
+      byConsultant.set(nm, arr)
     })
-    return map
-  }, [activeStudents, consultantName])
-
-  const consultants = useMemo(
-    () => Array.from(consultantGroups.keys()).sort((a, b) => a.localeCompare(b, 'ko')),
-    [consultantGroups],
-  )
-
-  const rows = useMemo(() => {
-    const list = consultant ? (consultantGroups.get(consultant) || []) : []
-    return list
-      .map(s => {
-        const done = completedByStudent.get(s.id) || 0
-        return { id: s.id, label: studentLabel(s.name, s.koreanName), done, billable: done >= 2 }
-      })
-      .sort((a, b) => Number(b.billable) - Number(a.billable) || a.label.localeCompare(b.label))
-  }, [consultant, consultantGroups, completedByStudent])
-
-  const billable = rows.filter(r => r.billable)
-
-  const handleGenerate = async () => {
-    if (!consultant || billable.length === 0) return
-    setGenerating(true)
-    try {
-      await generateConsultantInvoiceExcel(consultant, billable.map(r => r.label), month)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '엑셀 생성에 실패했습니다.')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  const handleAddInvoice = async () => {
-    if (!consultant || billable.length === 0) return
-    const profile = profiles.find(p => p.name === consultant)
-    if (!profile) {
-      alert(`'${consultant}' 직원 계정을 찾을 수 없어 인보이스를 만들 수 없습니다.\n직원정보에 등록된 이름과 일치해야 합니다.`)
-      return
-    }
-    if (!confirm(`${consultant} · ${month}\n청구 가능 ${billable.length}명으로 인보이스를 추가할까요?`)) return
-    setCreating(true)
-    try {
-      await createInvoice.mutateAsync({
-        freelancerId: profile.id,
-        invoiceDate: new Date().toISOString().slice(0, 10),
-        invoiceMonth: month,
-        items: billable.map(r => ({ itemName: r.label, quantity: 1, unitPrice: 0 })),
-      })
-      alert(`인보이스가 추가되었습니다 (${billable.length}명).\n'인보이스 목록' 탭에서 금액 입력·승인하세요.`)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '인보이스 추가에 실패했습니다.')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-end gap-3 flex-wrap">
-        <div>
-          <Label className="text-xs">정산월</Label>
-          <Input type="month" value={month} onChange={e => setMonth(e.target.value)} className="h-9 w-40" />
-        </div>
-        <div className="min-w-[220px]">
-          <Label className="text-xs">컨설턴트</Label>
-          <Select value={consultant} onValueChange={v => v && setConsultant(v)}>
-            <SelectTrigger className="h-9">
-              <span>{consultant || '컨설턴트 선택'}</span>
-            </SelectTrigger>
-            <SelectContent>
-              {consultants.length === 0
-                ? <div className="px-2 py-1.5 text-sm text-muted-foreground">active 학생이 있는 컨설턴트가 없습니다</div>
-                : consultants.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button className="gap-1.5" disabled={!consultant || billable.length === 0 || creating} onClick={handleAddInvoice}>
-          {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-          인보이스 추가
-        </Button>
-        <Button variant="outline" className="gap-1.5" disabled={!consultant || billable.length === 0 || generating} onClick={handleGenerate}>
-          {generating ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-          엑셀 다운로드
-        </Button>
-      </div>
-
-      {consultant && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-4 text-sm flex-wrap">
-              <span className="font-semibold text-base">{consultant}</span>
-              <span>청구 가능 <span className="font-bold text-emerald-600 text-base">{billable.length}</span>명</span>
-              <span className="text-muted-foreground">/ active {rows.length}명</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              ※ 해당 월에 상담요약보고서가 업로드된 미팅이 <b>2회 이상</b>인 학생만 청구 가능합니다. 다운로드 시 청구 가능 학생만 품명에 채워집니다.
-            </p>
-            <Table>
-              <TableHeader>
-                <TableRow className="text-xs">
-                  <TableHead>학생</TableHead>
-                  <TableHead className="text-center w-36">완료 미팅(보고서)</TableHead>
-                  <TableHead className="text-center w-24">청구 가능</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map(r => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.label}</TableCell>
-                    <TableCell className="text-center">{r.done} / 2</TableCell>
-                    <TableCell className="text-center">
-                      {r.billable
-                        ? <Badge className="bg-emerald-100 text-emerald-700">가능</Badge>
-                        : <Badge variant="outline" className="text-muted-foreground">미달</Badge>}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {rows.length === 0 && (
-                  <TableRow><TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">학생이 없습니다.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
-}
-
-function EditorInvoicePanel() {
-  const [month, setMonth] = useState(getCurrentMonth())
-  const [editor, setEditor] = useState('')
-  const [generating, setGenerating] = useState(false)
-  const [creating, setCreating] = useState(false)
-
-  const { data: profiles = [] } = useProfiles()
-  const { start, end } = monthRange(month)
-  const { data: editorMeetings = [] } = useAllEditorMeetingsInRange(start, end)
-  const createInvoice = useCreateInvoice()
-
-  const editors = useMemo(() => {
-    const set = new Set<string>()
-    editorMeetings.forEach(m => { if (m.editor) set.add(m.editor) })
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [editorMeetings])
-
-  const rows = useMemo(() => {
-    if (!editor) return []
-    return editorMeetings
-      .filter(m => m.editor === editor)
-      .map(m => ({
-        id: m.id,
-        date: m.meetingDate || '',
-        student: studentLabel(m.studentName, m.studentKoreanName),
-        content: m.content || '',
-      }))
-  }, [editor, editorMeetings])
-
-  const count = rows.length
-  const itemLabel = (r: { student: string; date: string }) =>
-    `${r.student}${r.date ? ` (${r.date.slice(5).replace('-', '/')})` : ''}`
-
-  const handleGenerate = async () => {
-    if (!editor || count === 0) return
-    setGenerating(true)
-    try {
-      await generateConsultantInvoiceExcel(editor, rows.map(itemLabel), month)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '엑셀 생성에 실패했습니다.')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  const handleAddInvoice = async () => {
-    if (!editor || count === 0) return
-    const profile = profiles.find(p => p.name === editor)
-    if (!profile) {
-      alert(`'${editor}' 직원 계정을 찾을 수 없어 인보이스를 만들 수 없습니다.\n직원정보에 등록된 이름과 일치해야 합니다.`)
-      return
-    }
-    if (!confirm(`${editor} · ${month}\n미팅 ${count}회로 인보이스를 추가할까요?`)) return
-    setCreating(true)
-    try {
-      await createInvoice.mutateAsync({
-        freelancerId: profile.id,
-        invoiceDate: new Date().toISOString().slice(0, 10),
-        invoiceMonth: month,
-        items: rows.map(r => ({ itemName: itemLabel(r), quantity: 1, unitPrice: 0 })),
-      })
-      alert(`인보이스가 추가되었습니다 (${count}회).\n'인보이스 목록' 탭에서 금액 입력·승인하세요.`)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '인보이스 추가에 실패했습니다.')
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-end gap-3 flex-wrap">
-        <div>
-          <Label className="text-xs">정산월</Label>
-          <Input type="month" value={month} onChange={e => setMonth(e.target.value)} className="h-9 w-40" />
-        </div>
-        <div className="min-w-[220px]">
-          <Label className="text-xs">에세이 에디터</Label>
-          <Select value={editor} onValueChange={v => v && setEditor(v)}>
-            <SelectTrigger className="h-9"><span>{editor || '에디터 선택'}</span></SelectTrigger>
-            <SelectContent>
-              {editors.length === 0
-                ? <div className="px-2 py-1.5 text-sm text-muted-foreground">이 달에 미팅 기록이 있는 에디터가 없습니다</div>
-                : editors.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <Button className="gap-1.5" disabled={!editor || count === 0 || creating} onClick={handleAddInvoice}>
-          {creating ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-          인보이스 추가
-        </Button>
-        <Button variant="outline" className="gap-1.5" disabled={!editor || count === 0 || generating} onClick={handleGenerate}>
-          {generating ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-          엑셀 다운로드
-        </Button>
-      </div>
-
-      {editor && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-4 text-sm flex-wrap">
-              <span className="font-semibold text-base">{editor}</span>
-              <span>진행 미팅 <span className="font-bold text-emerald-600 text-base">{count}</span>회</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              ※ 에세이 에디터 미팅일지에 <b>진행일자</b>가 입력된 미팅만 집계됩니다. 미팅 1회당 1건으로 인보이스에 들어갑니다.
-            </p>
-            <Table>
-              <TableHeader>
-                <TableRow className="text-xs">
-                  <TableHead className="w-28">날짜</TableHead>
-                  <TableHead>학생</TableHead>
-                  <TableHead>메모</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map(r => (
-                  <TableRow key={r.id}>
-                    <TableCell>{r.date || '—'}</TableCell>
-                    <TableCell className="font-medium">{r.student}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-[280px] truncate">{r.content || '—'}</TableCell>
-                  </TableRow>
-                ))}
-                {count === 0 && (
-                  <TableRow><TableCell colSpan={3} className="text-center text-sm text-muted-foreground py-6">진행한 미팅이 없습니다.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
-}
-
-function AutoGenerateInvoiceTab() {
-  const [mode, setMode] = useState<'consultant' | 'editor'>('consultant')
-  return (
-    <div className="space-y-4">
-      <div className="inline-flex rounded-md border overflow-hidden">
-        <button
-          onClick={() => setMode('consultant')}
-          className={`px-3 h-8 text-sm font-medium ${mode === 'consultant' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-        >컨설턴트</button>
-        <button
-          onClick={() => setMode('editor')}
-          className={`px-3 h-8 text-sm font-medium border-l ${mode === 'editor' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-        >에세이 에디터</button>
-      </div>
-      {mode === 'consultant' ? <ConsultantInvoicePanel /> : <EditorInvoicePanel />}
-    </div>
-  )
+    return byConsultant
+  }, [students, meetings, consultantName])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
@@ -977,8 +630,7 @@ function AutoGenerateInvoiceTab() {
 export function FreelancerInvoicesPage() {
   const t = useT()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
-  const isFreelancer = user?.role === 'freelancer' || user?.role === 'external'
+  const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth())
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -993,15 +645,15 @@ export function FreelancerInvoicesPage() {
   const { data: editItems } = useInvoiceItems(editInvoice?.id)
 
   const { data: allInvoices = [], isLoading: allLoading } = useFreelancerInvoices(
-    isAdmin ? (selectedMonth === 'all' ? undefined : selectedMonth) : undefined,
+    isAccounting ? (selectedMonth === 'all' ? undefined : selectedMonth) : undefined,
   )
   const { data: myInvoices = [], isLoading: myLoading } = useMyInvoices(
-    !isAdmin ? user?.id : undefined,
+    !isAccounting ? user?.id : undefined,
   )
   const deleteInvoice = useDeleteInvoice()
 
-  const invoices = isAdmin ? allInvoices : myInvoices
-  const loading = isAdmin ? allLoading : myLoading
+  const invoices = isAccounting ? allInvoices : myInvoices
+  const loading = isAccounting ? allLoading : myLoading
 
   const filtered = useMemo(() => {
     let list = invoices
@@ -1045,31 +697,35 @@ export function FreelancerInvoicesPage() {
     }
   }
 
+  // The freelancer's own billable students (>=2 report-uploaded meetings) this month.
+  const issueMonth = selectedMonth === 'all' ? getCurrentMonth() : selectedMonth
+  const byConsultant = useConsultantBillable(issueMonth)
+  const myBillable = useMemo(() => {
+    const rows = (user?.name && byConsultant.get(user.name)) || []
+    return rows.filter(r => r.billable)
+  }, [byConsultant, user?.name])
+
+  // "인보이스 발행" — open the form pre-filled with this month's billable students.
+  const openIssueInvoice = () => {
+    const initial: ParsedInvoice = {
+      invoiceDate: new Date().toISOString().slice(0, 10),
+      residentNumber: '', phone: '', email: user?.email || '', bankAccount: '',
+      items: myBillable.length
+        ? myBillable.map(r => ({ itemName: r.label, quantity: 1, unitPrice: 0, remark: '' }))
+        : [emptyItem()],
+    }
+    setEditInvoice(undefined)
+    setUploadedData(initial)
+    setFormOpen(true)
+  }
+
   const listActions = (
         <div className="flex items-center gap-2 justify-end">
-          {isAdmin && (
+          {isAccounting && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport} disabled={exporting || filtered.length === 0}>
               {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               {t('fInvoice.exportExcel')}
             </Button>
-          )}
-          {(isFreelancer || isAdmin) && (
-            <>
-              <Button variant="outline" size="sm" className="gap-1.5 relative" disabled={uploading}>
-                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-                {t('fInvoice.excelUpload')}
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                  onChange={handleUpload}
-                />
-              </Button>
-              <Button size="sm" className="gap-1.5" onClick={() => { setEditInvoice(undefined); setUploadedData(undefined); setFormOpen(true) }}>
-                <Plus className="size-4" />
-                {t('fInvoice.create')}
-              </Button>
-            </>
           )}
         </div>
   )
@@ -1080,7 +736,7 @@ export function FreelancerInvoicesPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
-        {isAdmin && (
+        {isAccounting && (
           <Select value={selectedMonth} onValueChange={v => v && setSelectedMonth(v)}>
             <SelectTrigger className="w-40 h-9">
               <span>{selectedMonth === 'all' ? t('fInvoice.all') : selectedMonth}</span>
@@ -1104,7 +760,7 @@ export function FreelancerInvoicesPage() {
           </SelectContent>
         </Select>
 
-        {isAdmin && (
+        {isAccounting && (
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('fInvoice.searchPlaceholder')} className="h-9 pl-9" />
@@ -1129,7 +785,7 @@ export function FreelancerInvoicesPage() {
             <Table>
               <TableHeader>
                 <TableRow className="text-xs">
-                  {isAdmin && <TableHead>{t('fInvoice.freelancer')}</TableHead>}
+                  {isAccounting && <TableHead>{t('fInvoice.freelancer')}</TableHead>}
                   <TableHead>{t('fInvoice.month')}</TableHead>
                   <TableHead>{t('fInvoice.date')}</TableHead>
                   <TableHead className="text-right">{t('fInvoice.totalAmount')}</TableHead>
@@ -1141,7 +797,7 @@ export function FreelancerInvoicesPage() {
               <TableBody>
                 {filtered.map(inv => (
                   <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setDetailInvoice(inv)}>
-                    {isAdmin && (
+                    {isAccounting && (
                       <TableCell className="font-medium">
                         <div>{inv.freelancerName}</div>
                         <div className="text-xs text-muted-foreground">{inv.freelancerEmail}</div>
@@ -1160,7 +816,7 @@ export function FreelancerInvoicesPage() {
                           <Eye className="size-3.5" />
                         </Button>
                         {/* Edit: own invoice (any non-approved) or admin (non-approved only) */}
-                        {(inv.freelancerId === user?.id || isAdmin) && inv.status !== 'approved' && (
+                        {(inv.freelancerId === user?.id || isAccounting) && inv.status !== 'approved' && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1171,7 +827,7 @@ export function FreelancerInvoicesPage() {
                           </Button>
                         )}
                         {/* Delete: admin always, freelancer only if not approved */}
-                        {(isAdmin || (inv.freelancerId === user?.id && inv.status !== 'approved')) && (
+                        {(isAccounting || (inv.freelancerId === user?.id && inv.status !== 'approved')) && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1205,23 +861,65 @@ export function FreelancerInvoicesPage() {
     </div>
   )
 
+  const freelancerView = (
+    <div className="space-y-4">
+      <div className="flex items-end gap-3 flex-wrap">
+        <div>
+          <Label className="text-xs">정산월</Label>
+          <Select value={issueMonth} onValueChange={v => v && setSelectedMonth(v)}>
+            <SelectTrigger className="h-9 w-40"><span>{issueMonth}</span></SelectTrigger>
+            <SelectContent>{monthOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <Button className="gap-1.5" onClick={openIssueInvoice}>
+          <Plus className="size-4" />인보이스 발행
+        </Button>
+        <Button variant="outline" size="sm" className="gap-1.5 relative h-9" disabled={uploading}>
+          {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+          엑셀 업로드
+          <input type="file" accept=".xlsx,.xls" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUpload} />
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="p-4 space-y-2">
+          <div className="text-sm">
+            <b>{issueMonth}</b> 청구 가능 학생 <span className="font-bold text-emerald-600">{myBillable.length}</span>명
+            <span className="text-muted-foreground"> · 미팅리포트 월 2회 업로드 완료 학생만 발행 가능</span>
+          </div>
+          {myBillable.length === 0 ? (
+            <p className="text-sm text-muted-foreground">이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {myBillable.map(r => <Badge key={r.id} variant="outline">{r.label}</Badge>)}
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">"인보이스 발행"을 누르면 위 학생이 품명에 채워진 견적서 폼이 열립니다. 사업자정보·단가·입금계좌를 채우고 제출하세요. 사업자정보가 다르면 여러 건 발행할 수 있습니다.</p>
+        </CardContent>
+      </Card>
+
+      <div className="text-sm font-semibold text-gray-700">내 인보이스</div>
+      {listView}
+    </div>
+  )
+
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-bold">{isAdmin ? t('fInvoice.title') : t('fInvoice.myTitle')}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{isAdmin ? t('fInvoice.subtitle') : t('fInvoice.mySubtitle')}</p>
+        <h1 className="text-xl font-bold">{isAccounting ? '프리랜서 인보이스 (재무)' : '인보이스 발행'}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{isAccounting ? '제출된 인보이스를 확인·승인하고 엑셀로 다운로드합니다.' : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.'}</p>
       </div>
 
-      {isFreelancer ? listView : (
+      {isAccounting ? (
         <Tabs defaultValue="list" className="space-y-4">
           <TabsList>
             <TabsTrigger value="list">인보이스 목록</TabsTrigger>
-            <TabsTrigger value="auto">자동 생성</TabsTrigger>
+            <TabsTrigger value="missing">미제출 현황</TabsTrigger>
           </TabsList>
           <TabsContent value="list">{listView}</TabsContent>
-          <TabsContent value="auto"><AutoGenerateInvoiceTab /></TabsContent>
+          <TabsContent value="missing"><MissingInvoices month={issueMonth} /></TabsContent>
         </Tabs>
-      )}
+      ) : freelancerView}
 
       {/* Dialogs */}
       {formOpen && user && (
@@ -1243,5 +941,85 @@ export function FreelancerInvoicesPage() {
         />
       )}
     </div>
+  )
+}
+
+// ─── Missing-invoice tracking (accounting) ─────────────────────────────────
+
+function MissingInvoices({ month }: { month: string }) {
+  const { data: invoices = [] } = useFreelancerInvoices(month)
+  const { data: profiles = [] } = useProfiles()
+  const byConsultant = useConsultantBillable(month)
+  const send = useSendMessage()
+  const [sending, setSending] = useState<string | null>(null)
+
+  const rows = useMemo(() => {
+    const out: { name: string; billableCount: number; status: 'none' | 'submitted' | 'approved' }[] = []
+    byConsultant.forEach((students, name) => {
+      const billableCount = students.filter(s => s.billable).length
+      if (billableCount === 0) return
+      const theirs = invoices.filter(inv => inv.freelancerName === name)
+      const status = theirs.some(i => i.status === 'approved') ? 'approved'
+        : theirs.some(i => i.status === 'submitted') ? 'submitted' : 'none'
+      out.push({ name, billableCount, status })
+    })
+    return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }, [byConsultant, invoices])
+
+  const request = async (name: string) => {
+    const profile = profiles.find(p => p.name === name)
+    if (!profile) { alert(`'${name}' 직원 계정을 찾을 수 없습니다.`); return }
+    setSending(name)
+    try {
+      await send.mutateAsync({ receiverId: profile.id, content: `[인보이스 요청] ${month} 프리랜서 인보이스를 발행·제출해 주세요. (청구 가능 학생이 있습니다)` })
+      alert(`${name}님에게 인보이스 요청 메시지를 보냈습니다.`)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '전송에 실패했습니다.')
+    } finally {
+      setSending(null)
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="p-4 text-sm text-muted-foreground">
+          {month} 청구 대상 컨설턴트별 인보이스 제출 현황입니다. '승인완료'가 아닌 대상에게 요청 메시지를 보낼 수 있습니다.
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow className="text-xs">
+              <TableHead>컨설턴트</TableHead>
+              <TableHead className="text-center w-28">청구 가능</TableHead>
+              <TableHead className="w-40">상태</TableHead>
+              <TableHead className="w-28"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 && (
+              <TableRow><TableCell colSpan={4} className="text-center py-8 text-sm text-muted-foreground">청구 대상이 없습니다.</TableCell></TableRow>
+            )}
+            {rows.map(r => (
+              <TableRow key={r.name}>
+                <TableCell className="font-medium">{r.name}</TableCell>
+                <TableCell className="text-center">{r.billableCount}명</TableCell>
+                <TableCell>
+                  {r.status === 'approved' ? <Badge className="bg-green-100 text-green-700">승인완료</Badge>
+                    : r.status === 'submitted' ? <Badge className="bg-blue-100 text-blue-700">제출됨(미승인)</Badge>
+                    : <Badge className="bg-red-100 text-red-700">미제출</Badge>}
+                </TableCell>
+                <TableCell>
+                  {r.status !== 'approved' && (
+                    <Button size="sm" variant="outline" disabled={sending === r.name} onClick={() => request(r.name)}>
+                      {sending === r.name ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}요청
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   )
 }
