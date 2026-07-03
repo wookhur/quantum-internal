@@ -26,41 +26,65 @@ export const CONSULTANTS = LEGACY_CONSULTANTS
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+/** Same person listed under different display names → one canonical name. */
+const CONSULTANT_NAME_ALIASES: Record<string, string> = {
+  'julie kim': '김지현',
+}
+
+/** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현). */
+export function canonicalConsultantName(name?: string): string {
+  const n = (name || '').trim()
+  return CONSULTANT_NAME_ALIASES[n.toLowerCase()] || n
+}
+
 export function useConsultantPool(): { id: string; name: string }[] {
   const { data: profiles = [] } = useProfiles()
   return useMemo(() => {
     const live = profiles
       .filter(p => p.role === 'consultant' && !p.isExternal)
-      .map(p => ({ id: p.id, name: (p.name || '').trim() }))
-      // Skip misconfigured profiles whose name is empty or just a UUID —
-      // they'd otherwise surface as a raw id in consultant dropdowns.
+      .map(p => ({ id: p.id, name: canonicalConsultantName(p.name) }))
+      // Skip misconfigured profiles whose name is empty or just a UUID.
       .filter(c => c.name && !UUID_RE.test(c.name))
-    const liveNames = new Set(live.map(c => c.name))
-    const legacy = LEGACY_CONSULTANTS
-      .filter(c => !liveNames.has(c.name))
-      .map(c => ({ id: c.id, name: c.name }))
-    return [...live, ...legacy].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    const legacy = LEGACY_CONSULTANTS.map(c => ({ id: c.id, name: canonicalConsultantName(c.name) }))
+    // One entry per canonical name, preferring the live profile.
+    const seen = new Set<string>()
+    const merged: { id: string; name: string }[] = []
+    for (const c of [...live, ...legacy]) {
+      if (seen.has(c.name)) continue
+      seen.add(c.name)
+      merged.push(c)
+    }
+    return merged.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   }, [profiles])
 }
 
 /**
- * ID → name lookup that resolves both legacy slug IDs and current profile UUIDs.
- * Returns a stable function suitable for use inside `.map()` etc.
+ * ID → canonical name lookup, resolving legacy slug IDs and profile UUIDs.
+ * Built from every consultant profile (not the deduped pool) so both an
+ * aliased profile and its canonical twin still resolve.
  */
 export function useConsultantName(): (id?: string) => string {
-  const pool = useConsultantPool()
+  const { data: profiles = [] } = useProfiles()
   return useMemo(() => {
     const map = new Map<string, string>()
-    for (const c of pool) map.set(c.id, c.name)
-    return (id?: string) => (id && map.get(id)) || consultantName(id)
-  }, [pool])
+    for (const c of LEGACY_CONSULTANTS) map.set(c.id, canonicalConsultantName(c.name))
+    for (const p of profiles) {
+      if ((p.name || '').trim()) map.set(p.id, canonicalConsultantName(p.name))
+    }
+    return (id?: string) => {
+      if (!id) return '—'
+      const n = map.get(id)
+      if (n) return n
+      return UUID_RE.test(id) ? '(이름 미설정)' : canonicalConsultantName(id)
+    }
+  }, [profiles])
 }
 
 /** Static fallback for non-React contexts. Only resolves legacy slug ids. */
 export function consultantName(id?: string) {
   const legacy = LEGACY_CONSULTANTS.find(c => c.id === id)?.name
-  if (legacy) return legacy
+  if (legacy) return canonicalConsultantName(legacy)
   if (!id) return '—'
   // Never surface a raw profile UUID to the user (account has no proper name).
-  return UUID_RE.test(id) ? '(이름 미설정)' : id
+  return UUID_RE.test(id) ? '(이름 미설정)' : canonicalConsultantName(id)
 }

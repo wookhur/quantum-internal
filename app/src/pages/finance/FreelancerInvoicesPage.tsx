@@ -17,7 +17,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
-import { useConsultantName } from '@/lib/consultants'
+import { useConsultantName, canonicalConsultantName } from '@/lib/consultants'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
 import {
@@ -693,7 +693,7 @@ export function FreelancerInvoicesPage() {
   const issueMonth = selectedMonth === 'all' ? getCurrentMonth() : selectedMonth
   const byConsultant = useConsultantBillable(issueMonth)
   const myBillable = useMemo(() => {
-    const rows = (user?.name && byConsultant.get(user.name)) || []
+    const rows = byConsultant.get(canonicalConsultantName(user?.name)) || []
     return rows.filter(r => r.billable)
   }, [byConsultant, user?.name])
 
@@ -945,7 +945,7 @@ function MissingInvoices({ month }: { month: string }) {
     byConsultant.forEach((students, name) => {
       const billableCount = students.filter(s => s.billable).length
       if (billableCount === 0) return
-      const theirs = invoices.filter(inv => inv.freelancerName === name)
+      const theirs = invoices.filter(inv => canonicalConsultantName(inv.freelancerName) === name)
       const status = theirs.some(i => i.status === 'approved') ? 'approved'
         : theirs.some(i => i.status === 'submitted') ? 'submitted' : 'none'
       out.push({ name, billableCount, status })
@@ -954,7 +954,7 @@ function MissingInvoices({ month }: { month: string }) {
   }, [byConsultant, invoices])
 
   const request = async (name: string) => {
-    const profile = profiles.find(p => p.name === name)
+    const profile = profiles.find(p => canonicalConsultantName(p.name) === name)
     if (!profile) { alert(`'${name}' 직원 계정을 찾을 수 없습니다.`); return }
     setSending(name)
     try {
