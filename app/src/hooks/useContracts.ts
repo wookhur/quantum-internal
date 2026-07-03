@@ -57,6 +57,13 @@ async function ensureServiceStudent(opts: {
 }
 
 function mapContract(row: Record<string, unknown>): Contract {
+  const rawStatus = row.status as ContractStatus
+  const expiry = (row.expiry_date as string) || ''
+  const today = new Date().toISOString().slice(0, 10)
+  // A past expiry date means the contract period is over — reflect it even when
+  // the stored status was never updated (unless the contract was cancelled).
+  const status: ContractStatus =
+    rawStatus !== 'cancelled' && expiry && expiry < today ? 'expired' : rawStatus
   return {
     id: row.id as string,
     leadId: row.lead_id as string,
@@ -77,7 +84,7 @@ function mapContract(row: Record<string, unknown>): Contract {
     paymentAccount: (row.payment_account as 'KR' | 'US') || 'KR',
     salesRep: (row.sales_rep as string) || undefined,
     serviceRep: (row.service_rep as string) || undefined,
-    status: row.status as ContractStatus,
+    status,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
