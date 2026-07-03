@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   FileText, Plus, Trash2, Download, CheckCircle2, XCircle,
-  Eye, Loader2, Search, Upload,
+  Eye, Loader2, Search,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -65,7 +65,7 @@ function getMonthOptions() {
   return months
 }
 
-// ─── Excel Upload Parser ──────────────────────────────────────────────────
+// ─── Parsed invoice shape (used to pre-fill the form) ──────────────────────
 
 interface ParsedInvoice {
   invoiceDate: string
@@ -74,75 +74,6 @@ interface ParsedInvoice {
   email: string
   bankAccount: string
   items: ItemRow[]
-}
-
-async function parseInvoiceExcel(file: File): Promise<ParsedInvoice> {
-  const { default: ExcelJS } = await import('exceljs')
-  const wb = new ExcelJS.Workbook()
-  const buf = await file.arrayBuffer()
-  await wb.xlsx.load(buf)
-
-  const ws = wb.worksheets[0]
-  if (!ws) throw new Error('시트를 찾을 수 없습니다')
-
-  const cell = (r: number, c: number) => {
-    const v = ws.getCell(r, c).value
-    if (v === null || v === undefined) return ''
-    if (typeof v === 'object' && 'result' in v) return String(v.result ?? '')
-    return String(v)
-  }
-  const num = (r: number, c: number) => {
-    const v = ws.getCell(r, c).value
-    if (v === null || v === undefined) return 0
-    if (typeof v === 'object' && 'result' in v) return Number(v.result) || 0
-    return Number(v) || 0
-  }
-
-  // Parse date from row 8 col C/D area
-  let invoiceDate = ''
-  const dateRaw = cell(8, 3) || cell(8, 4)
-  if (dateRaw) {
-    const d = new Date(dateRaw)
-    if (!isNaN(d.getTime())) invoiceDate = d.toISOString().slice(0, 10)
-    else invoiceDate = dateRaw
-  }
-
-  // Parse personal info
-  const residentNumber = cell(9, 8) || cell(9, 7)
-  const phone = cell(10, 6) || cell(10, 7)
-  const email = cell(11, 6) || cell(11, 7)
-  const bankAccount = cell(21, 2) || cell(21, 3) || cell(22, 2)
-
-  // Parse items from rows 15-19 (B=No, C=품명, D=수량, E=단가, F=공급가액, G=비고)
-  const items: ItemRow[] = []
-  for (let row = 15; row <= 24; row++) {
-    const itemName = cell(row, 3)
-    if (!itemName || itemName === '합     계' || itemName === '합계') break
-    items.push({
-      itemName,
-      quantity: num(row, 4) || 1,
-      unitPrice: num(row, 5),
-      remark: cell(row, 7),
-    })
-  }
-
-  if (items.length === 0) {
-    // Fallback: try to find items by scanning for non-empty itemName cells
-    for (let row = 1; row <= ws.rowCount; row++) {
-      const noVal = num(row, 2)
-      const name = cell(row, 3)
-      if (noVal >= 1 && name && name !== '품명' && name !== 'No.') {
-        items.push({
-          itemName: name,
-          quantity: num(row, 4) || 1,
-          unitPrice: num(row, 5),
-          remark: cell(row, 7),
-        })
-      }
-    }
-  }
-
-  return { invoiceDate, residentNumber, phone, email, bankAccount, items: items.length > 0 ? items : [emptyItem()] }
 }
 
 // ─── Item Row for Invoice Form ────────────────────────────────────────────
@@ -387,6 +318,71 @@ function InvoiceFormDialog({
 
 // ─── Invoice Detail Dialog ────────────────────────────────────────────────
 
+/** Download a single invoice as the uploaded 견적서 template, filled in. */
+async function downloadInvoiceExcel(invoice: FreelancerInvoice, items: InvoiceItem[]) {
+  const { default: ExcelJS } = await import('exceljs')
+  const res = await fetch('/freelancer-invoice-template.xlsx')
+  if (!res.ok) throw new Error('견적서 양식 파일을 불러올 수 없습니다.')
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await res.arrayBuffer())
+  const ws = wb.worksheets[0]
+  for (let i = wb.worksheets.length - 1; i >= 1; i--) wb.removeWorksheet(wb.worksheets[i].id)
+
+  const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
+  // Date + supplier (freelancer) info
+  set('C5', invoice.invoiceDate)
+  set('F6', invoice.freelancerName)
+  set('H6', invoice.residentNumber)
+  set('F7', invoice.phone)
+  set('F8', invoice.freelancerEmail)
+
+  // Find the 합계(total) row so item rows don't overwrite it.
+  let sumRow = 23
+  for (let r = 15; r <= 80; r++) {
+    const v = ws.getCell(r, 1).value
+    if (v != null && String(v).includes('합')) { sumRow = r; break }
+  }
+  const dataStart = 15
+  let capacity = sumRow - dataStart
+  if (items.length > capacity) {
+    const extra = items.length - capacity
+    ws.spliceRows(sumRow, 0, ...Array.from({ length: extra }, () => [] as unknown[]))
+    sumRow += extra; capacity += extra
+  }
+  for (let i = 0; i < capacity; i++) {
+    const r = dataStart + i
+    if (i < items.length) {
+      const it = items[i]
+      ws.getCell(r, 1).value = i + 1              // No.
+      ws.getCell(r, 2).value = it.itemName        // 품명
+      ws.getCell(r, 3).value = it.quantity        // 수량
+      ws.getCell(r, 4).value = it.unitPrice        // 단가
+      ws.getCell(r, 5).value = it.supplyAmount     // 공급가액
+      ws.getCell(r, 6).value = it.remark || null   // 비고
+    } else {
+      ws.getCell(r, 1).value = null
+      ws.getCell(r, 2).value = null
+      ws.getCell(r, 3).value = null
+    }
+  }
+  ws.getCell(sumRow, 5).value = invoice.totalAmount  // 합계
+
+  // 입금계좌 row (label contains 입금)
+  for (let r = sumRow; r <= sumRow + 4; r++) {
+    const v = ws.getCell(r, 1).value
+    if (v != null && String(v).includes('입금')) { ws.getCell(r, 1).value = `입금계좌 : ${invoice.bankAccount || ''}`; break }
+  }
+
+  const out = await wb.xlsx.writeBuffer()
+  const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `견적서_${invoice.freelancerName || 'invoice'}_${invoice.invoiceMonth}.xlsx`
+  document.body.appendChild(a); a.click(); a.remove()
+  URL.revokeObjectURL(url)
+}
+
 function InvoiceDetailDialog({
   open,
   onOpenChange,
@@ -403,6 +399,18 @@ function InvoiceDetailDialog({
   const deleteInvoice = useDeleteInvoice()
   const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
   const canDelete = isAccounting || (invoice.freelancerId === user?.id && invoice.status !== 'approved')
+  const [downloading, setDownloading] = useState(false)
+
+  const handleDownload = async () => {
+    setDownloading(true)
+    try {
+      await downloadInvoiceExcel(invoice, items)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -464,12 +472,15 @@ function InvoiceDetailDialog({
           )}
         </div>
 
-        {(isAccounting && invoice.status === 'submitted') || canDelete ? (
-          <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2">
+            <Button variant="outline" className="gap-1.5 mr-auto" disabled={downloading} onClick={handleDownload}>
+              {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              엑셀 다운로드
+            </Button>
             {canDelete && (
               <Button
                 variant="outline"
-                className="gap-1.5 text-red-600 hover:text-red-700 mr-auto"
+                className="gap-1.5 text-red-600 hover:text-red-700"
                 disabled={deleteInvoice.isPending}
                 onClick={async () => {
                   const isApproved = invoice.status === 'approved'
@@ -511,7 +522,6 @@ function InvoiceDetailDialog({
               </>
             )}
           </DialogFooter>
-        ) : null}
       </DialogContent>
     </Dialog>
   )
@@ -640,7 +650,6 @@ export function FreelancerInvoicesPage() {
   const [detailInvoice, setDetailInvoice] = useState<FreelancerInvoice | undefined>()
   const [exporting, setExporting] = useState(false)
   const [uploadedData, setUploadedData] = useState<ParsedInvoice | undefined>()
-  const [uploading, setUploading] = useState(false)
 
   const { data: editItems } = useInvoiceItems(editInvoice?.id)
 
@@ -677,23 +686,6 @@ export function FreelancerInvoicesPage() {
       await exportInvoicesToExcel(filtered, selectedMonth)
     } finally {
       setExporting(false)
-    }
-  }
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    setUploading(true)
-    try {
-      const parsed = await parseInvoiceExcel(file)
-      setUploadedData(parsed)
-      setEditInvoice(undefined)
-      setFormOpen(true)
-    } catch (err) {
-      alert(err instanceof Error ? err.message : t('fInvoice.cannotReadFile'))
-    } finally {
-      setUploading(false)
     }
   }
 
@@ -873,11 +865,6 @@ export function FreelancerInvoicesPage() {
         </div>
         <Button className="gap-1.5" onClick={openIssueInvoice}>
           <Plus className="size-4" />인보이스 발행
-        </Button>
-        <Button variant="outline" size="sm" className="gap-1.5 relative h-9" disabled={uploading}>
-          {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-          엑셀 업로드
-          <input type="file" accept=".xlsx,.xls" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUpload} />
         </Button>
       </div>
 
