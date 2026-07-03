@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { User, UserRole, Department, EmploymentType } from '@/types'
+import type { User, UserRole, Department, EmploymentType, WorkerType } from '@/types'
 
 function mapProfile(row: Record<string, unknown>): User {
   return {
@@ -15,6 +15,7 @@ function mapProfile(row: Record<string, unknown>): User {
     contractEndDate: (row.contract_end_date as string) || undefined,
     isExternal: (row.is_external as boolean) || false,
     isPartner: (row.is_partner as boolean) || false,
+    workerType: (row.worker_type as WorkerType) || undefined,
     avatarUrl: (row.avatar_url as string) || undefined,
     createdAt: row.created_at as string,
   }
@@ -45,6 +46,7 @@ export function useUpdateProfile() {
       department?: Department | null
       position?: string | null
       employmentType?: EmploymentType | null
+      workerType?: WorkerType | null
       contractStartDate?: string | null
       contractEndDate?: string | null
       name?: string
@@ -56,6 +58,7 @@ export function useUpdateProfile() {
       if (updates.department !== undefined) row.department = updates.department
       if (updates.position !== undefined) row.position = updates.position
       if (updates.employmentType !== undefined) row.employment_type = updates.employmentType
+      if (updates.workerType !== undefined) row.worker_type = updates.workerType
       if (updates.contractStartDate !== undefined) row.contract_start_date = updates.contractStartDate
       if (updates.contractEndDate !== undefined) row.contract_end_date = updates.contractEndDate
       if (updates.name !== undefined) row.name = updates.name

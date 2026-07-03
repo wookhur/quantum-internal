@@ -307,11 +307,11 @@ const koTranslations = {
   'nav.revenueProjection': '매출 전망',
   'nav.employeePerformance': '직원 성과',
   'nav.cashflow': '자금 현황',
-  'nav.hr': 'HR',
+  'nav.hr': '인사관리',
   'nav.attendance': '근태 관리',
   'nav.kpiTargets': 'KPI 목표 관리',
-  'nav.personalInfo': '직원 정보',
-  'nav.accessControl': '직원 관리',
+  'nav.personalInfo': '인사 정보',
+  'nav.accessControl': '인사 관리',
   'nav.breakTime': '쉬는 시간',
   'nav.trexRunner': '아케이드',
 
@@ -999,7 +999,7 @@ const koTranslations = {
   // ── Planning ──
   'planning.overview': '경영 현황',
   'planning.projection': '매출 전망',
-  'planning.access': '직원 관리',
+  'planning.access': '인사 관리',
 
   // ── Planning Overview ──
   'planOverview.subtitle': '월별 매출 목표 및 실적 현황을 확인합니다.',
@@ -1037,7 +1037,7 @@ const koTranslations = {
   'revProjection.unitTenThousand': '만',
 
   // ── Access Management ──
-  'access.subtitle': '직원 정보, 역할 및 기능 접근 권한을 관리합니다',
+  'access.subtitle': '인사 정보, 역할 및 기능 접근 권한을 관리합니다',
   'access.noPermission': '접근 권한이 없습니다.',
   'access.noRoutePermission': '접근 권한이 없습니다',
   'access.noRoutePermissionDesc': '이 페이지에 대한 접근 권한이 없습니다. 필요한 경우 관리자에게 권한을 요청해주세요.',
@@ -2019,6 +2019,12 @@ const koTranslations = {
   'access.empFreelancer': '프리랜서',
   'access.empCommissioned': '위촉직',
   'access.empExecutive': '등기임원',
+  'access.workerType': '인사 분류',
+  'access.workerTypeUnassigned': '미지정',
+  'access.workerEmployee': '근로자',
+  'access.workerFreelancer': '프리랜서',
+  'access.workerBusiness': '사업자',
+  'access.workerAll': '전체',
   'access.accountCreated': '계정이 생성되었습니다. 아래 임시 비밀번호를 본인에게 전달해주세요.',
   'access.tempLoginInfo': '임시 로그인 정보',
   'access.emailLabel': '이메일',
@@ -2651,8 +2657,8 @@ const enTranslations: Record<string, string> = {
   'nav.hr': 'HR',
   'nav.attendance': 'Attendance',
   'nav.kpiTargets': 'KPI Targets',
-  'nav.personalInfo': 'Employee Info',
-  'nav.accessControl': 'Employee Management',
+  'nav.personalInfo': 'HR Info',
+  'nav.accessControl': 'HR Management',
   'nav.breakTime': 'Break Time',
   'nav.trexRunner': 'Arcade',
 
@@ -3339,7 +3345,7 @@ const enTranslations: Record<string, string> = {
   // ── Planning ──
   'planning.overview': 'Business Overview',
   'planning.projection': 'Revenue Projection',
-  'planning.access': 'Employee Management',
+  'planning.access': 'HR Management',
 
   // ── Planning Overview ──
   'planOverview.subtitle': 'View monthly revenue targets and performance.',
@@ -3377,7 +3383,7 @@ const enTranslations: Record<string, string> = {
   'revProjection.unitTenThousand': '0K',
 
   // ── Access Management ──
-  'access.subtitle': 'Manage employee info, roles, and feature access',
+  'access.subtitle': 'Manage HR info, roles, and feature access',
   'access.noPermission': 'Access denied.',
   'access.noRoutePermission': 'Access Denied',
   'access.noRoutePermissionDesc': 'You do not have permission to access this page. Please contact your administrator to request access.',
@@ -4359,6 +4365,12 @@ const enTranslations: Record<string, string> = {
   'access.empFreelancer': 'Freelancer',
   'access.empCommissioned': 'Commissioned',
   'access.empExecutive': 'Executive',
+  'access.workerType': 'Worker Type',
+  'access.workerTypeUnassigned': 'Unassigned',
+  'access.workerEmployee': 'Employee',
+  'access.workerFreelancer': 'Freelancer',
+  'access.workerBusiness': 'Business',
+  'access.workerAll': 'All',
   'access.accountCreated': 'Account created. Please share the temporary password below with the user.',
   'access.tempLoginInfo': 'Temporary Login Info',
   'access.emailLabel': 'Email',

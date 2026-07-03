@@ -25,7 +25,7 @@ import {
   getEffectiveModules, getEffectiveRoutes, getRoutesForModule,
   type FeatureModule, type FeatureAccessRecord,
 } from '@/hooks/useProfiles'
-import type { User, UserRole, Department, EmploymentType } from '@/types'
+import type { User, UserRole, Department, EmploymentType, WorkerType } from '@/types'
 
 const ROLE_CONFIG: Record<UserRole, { label: string; className: string; icon: typeof Shield }> = {
   admin: { label: 'Admin', className: 'bg-red-50 text-red-700 border-red-200', icon: Shield },
@@ -76,6 +76,15 @@ function useEmploymentTypeOptions() {
   ]
 }
 
+function useWorkerTypeOptions() {
+  const t = useT()
+  return [
+    { value: 'employee' as WorkerType, label: t('access.workerEmployee') },
+    { value: 'freelancer' as WorkerType, label: t('access.workerFreelancer') },
+    { value: 'business' as WorkerType, label: t('access.workerBusiness') },
+  ]
+}
+
 // ─── User Edit Dialog with Package + Route toggles ─────────────────────────
 
 function UserEditDialog({
@@ -93,6 +102,7 @@ function UserEditDialog({
   const DEPT_OPTIONS = useDeptOptions()
   const ROLE_OPTIONS = useRoleOptions()
   const EMPLOYMENT_TYPE_OPTIONS = useEmploymentTypeOptions()
+  const WORKER_TYPE_OPTIONS = useWorkerTypeOptions()
   const updateProfile = useUpdateProfile()
   const updateFeatureAccess = useUpdateFeatureAccess()
   const { user: currentUser } = useAuth()
@@ -105,6 +115,7 @@ function UserEditDialog({
   const [department, setDepartment] = useState<string>(user.department || '')
   const [position, setPosition] = useState<string>(user.position || '')
   const [employmentType, setEmploymentType] = useState<string>(user.employmentType || '')
+  const [workerType, setWorkerType] = useState<string>(user.workerType || '')
   const [contractStartDate, setContractStartDate] = useState(user.contractStartDate || '')
   const [contractEndDate, setContractEndDate] = useState(user.contractEndDate || '')
   const [isExternal, setIsExternal] = useState(user.isExternal)
@@ -198,6 +209,7 @@ function UserEditDialog({
         department: department ? (department as Department) : null,
         position: position || null,
         employmentType: employmentType ? (employmentType as EmploymentType) : null,
+        workerType: workerType ? (workerType as WorkerType) : null,
         contractStartDate: contractStartDate || null,
         contractEndDate: contractEndDate || null,
         isExternal,
@@ -222,7 +234,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentType, contractStartDate, contractEndDate, isExternal, isPartner, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentType, workerType, contractStartDate, contractEndDate, isExternal, isPartner, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -316,19 +328,35 @@ function UserEditDialog({
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t('access.employmentType')}</Label>
-              <Select value={employmentType || '_none'} onValueChange={v => setEmploymentType(!v || v === '_none' ? '' : v)}>
-                <SelectTrigger className="h-9">
-                  <span>{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === employmentType)?.label || t('access.employmentUnassigned')}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">{t('access.employmentUnassigned')}</SelectItem>
-                  {EMPLOYMENT_TYPE_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">{t('access.workerType')}</Label>
+                <Select value={workerType || '_none'} onValueChange={v => setWorkerType(!v || v === '_none' ? '' : v)}>
+                  <SelectTrigger className="h-9">
+                    <span>{WORKER_TYPE_OPTIONS.find(o => o.value === workerType)?.label || t('access.workerTypeUnassigned')}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">{t('access.workerTypeUnassigned')}</SelectItem>
+                    {WORKER_TYPE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">{t('access.employmentType')}</Label>
+                <Select value={employmentType || '_none'} onValueChange={v => setEmploymentType(!v || v === '_none' ? '' : v)}>
+                  <SelectTrigger className="h-9">
+                    <span>{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === employmentType)?.label || t('access.employmentUnassigned')}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">{t('access.employmentUnassigned')}</SelectItem>
+                    {EMPLOYMENT_TYPE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -637,11 +665,13 @@ export function AccessManagementPage() {
   const DEPT_OPTIONS = useDeptOptions()
   const ROLE_OPTIONS = useRoleOptions()
   const EMPLOYMENT_TYPE_OPTIONS = useEmploymentTypeOptions()
+  const WORKER_TYPE_OPTIONS = useWorkerTypeOptions()
   const { user: currentUser } = useAuth()
   const { data: profiles = [], isLoading: profilesLoading } = useProfiles()
   const { data: featureAccess = [], isLoading: accessLoading } = useFeatureAccess()
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [workerTypeFilter, setWorkerTypeFilter] = useState<string>('all')
   const [editUser, setEditUser] = useState<User | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
 
@@ -650,6 +680,9 @@ export function AccessManagementPage() {
 
   const filteredProfiles = useMemo(() => {
     let list = profiles
+    if (workerTypeFilter !== 'all') {
+      list = list.filter(p => p.workerType === workerTypeFilter)
+    }
     if (roleFilter !== 'all') {
       list = list.filter(p => p.role === roleFilter)
     }
@@ -661,7 +694,7 @@ export function AccessManagementPage() {
       )
     }
     return list
-  }, [profiles, roleFilter, search])
+  }, [profiles, workerTypeFilter, roleFilter, search])
 
   const stats = useMemo(() => {
     const byRole: Record<string, number> = {}
@@ -797,6 +830,28 @@ export function AccessManagementPage() {
         </CardContent>
       </Card>
 
+      {/* Worker Type Tabs */}
+      <div className="flex gap-2">
+        {[
+          { value: 'all', label: t('access.workerAll') },
+          ...WORKER_TYPE_OPTIONS,
+        ].map(opt => (
+          <Button
+            key={opt.value}
+            variant={workerTypeFilter === opt.value ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setWorkerTypeFilter(opt.value)}
+          >
+            {opt.label}
+            {opt.value !== 'all' && (
+              <span className="ml-1.5 text-xs opacity-70">
+                {profiles.filter(p => p.workerType === opt.value).length}
+              </span>
+            )}
+          </Button>
+        ))}
+      </div>
+
       {/* Filters */}
       <Card>
         <CardContent className="py-3">
@@ -844,6 +899,7 @@ export function AccessManagementPage() {
                   <TableHead className="w-[100px]">{t('access.role')}</TableHead>
                   <TableHead className="w-[100px]">{t('access.department')}</TableHead>
                   <TableHead className="w-[90px]">{t('access.position')}</TableHead>
+                  <TableHead className="w-[80px]">{t('access.workerType')}</TableHead>
                   <TableHead className="w-[80px]">{t('access.employmentType')}</TableHead>
                   <TableHead>{t('access.accessibleFeatures')}</TableHead>
                   <TableHead className="w-[80px]"></TableHead>
@@ -894,6 +950,11 @@ export function AccessManagementPage() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {profile.position || <span className="text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {profile.workerType
+                          ? <Badge variant="outline" className="text-[10px] h-4">{WORKER_TYPE_OPTIONS.find(o => o.value === profile.workerType)?.label || profile.workerType}</Badge>
+                          : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell className="text-sm">
                         {profile.employmentType
