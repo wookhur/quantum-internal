@@ -302,7 +302,7 @@ function getActivityIcon(type: string): { icon: LucideIcon; color: string } {
 
 // ============ Main Component ============
 
-export function ColdCallPage() {
+export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void }) {
   const t = useT()
   const [search, setSearch] = useState('')
   const [gradeGroup, setGradeGroup] = useState('all')
@@ -401,11 +401,23 @@ export function ColdCallPage() {
         <div className="p-4 border-b space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-lg font-bold tracking-tight flex items-center gap-2">
-                <PhoneCall className="size-5 text-primary" />
-                {t('coldCall.title')}
-              </h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <div className="flex items-center gap-2.5 mb-1">
+                <h1 className="text-lg font-bold tracking-tight">{t('leads.title')}</h1>
+                <div className="inline-flex items-center bg-muted rounded-lg p-0.5">
+                  <button
+                    onClick={onSwitchToTable}
+                    className="px-2.5 py-1 text-[11px] font-medium rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t('leads.viewTable')}
+                  </button>
+                  <button
+                    className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-white text-foreground shadow-sm"
+                  >
+                    {t('leads.viewColdCall')}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
                 {isLoading ? t('common.loading') : t('coldCall.countSummary', { filtered: filteredCount, total: totalColdCallable })}
                 {highPriorityCount > 0 && (
                   <span className="text-red-500 font-medium"> ({t('coldCall.highPriorityCount', { n: highPriorityCount })})</span>

@@ -36,6 +36,7 @@ import {
   BarChart3,
 } from 'lucide-react'
 import { useLeads, useCreateLead, useLeadStats } from '@/hooks/useLeads'
+import { ColdCallView } from './ColdCallPage'
 import type { Lead, PipelineStage } from '@/types'
 import {
   PIPELINE_STAGES,
@@ -138,6 +139,16 @@ function AssignedAvatar({ user }: { user: Lead['assignedUser'] }) {
 // ============ Main component ============
 
 export function LeadsPage() {
+  const [viewMode, setViewMode] = useState<'table' | 'coldcall'>('table')
+
+  if (viewMode === 'coldcall') {
+    return <ColdCallView onSwitchToTable={() => setViewMode('table')} />
+  }
+
+  return <LeadsTableView onSwitchToColdCall={() => setViewMode('coldcall')} />
+}
+
+function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void }) {
   const t = useT()
   // -- Filter state
   const [search, setSearch] = useState('')
@@ -266,8 +277,21 @@ export function LeadsPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <h1 className="text-2xl font-bold tracking-tight">{t('leads.title')}</h1>
+              <div className="inline-flex items-center bg-muted rounded-lg p-0.5">
+                <button
+                  className="px-2.5 py-1 text-xs font-medium rounded-md bg-white text-foreground shadow-sm"
+                >
+                  {t('leads.viewTable')}
+                </button>
+                <button
+                  onClick={onSwitchToColdCall}
+                  className="px-2.5 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {t('leads.viewColdCall')}
+                </button>
+              </div>
               {!isLoading && (
                 <Badge variant="secondary" className="text-xs font-semibold">
                   {totalCount}

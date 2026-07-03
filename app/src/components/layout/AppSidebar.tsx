@@ -25,7 +25,6 @@ import {
   FileText,
   Gamepad2,
   Briefcase,
-  PhoneCall,
   LineChart,
   Wallet,
   Clock,
@@ -69,7 +68,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     titleKey: 'nav.sales',
     module: 'sales',
     items: [
-      { labelKey: 'nav.coldCall', to: '/sales/cold-call', icon: PhoneCall },
       { labelKey: 'nav.leadManagement', to: '/sales/leads', icon: Users },
       { labelKey: 'nav.meetingRecords', to: '/sales/meetings', icon: ClipboardList },
       { labelKey: 'nav.salesPerformance', to: '/sales/performance', icon: TrendingUp },

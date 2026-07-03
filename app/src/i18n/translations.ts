@@ -455,6 +455,9 @@ const koTranslations = {
   'leads.schoolPlaceholder': '학교를 입력하세요',
   'leads.sourceChannelPlaceholder': '유입 채널을 선택해 주세요',
 
+  'leads.viewTable': '전체 리드',
+  'leads.viewColdCall': '콜드콜',
+
   // ── Lead Detail ──
   'leadDetail.customerJourney': '고객 여정 요약',
   'leadDetail.coldCalls': '콜드콜',
@@ -2818,6 +2821,8 @@ const enTranslations: Record<string, string> = {
   'leads.sourceChannelPlaceholder': 'Select source channel',
 
   // ── Lead Detail ──
+  'leads.viewTable': 'All Leads',
+  'leads.viewColdCall': 'Cold Call',
   'leadDetail.customerJourney': 'Customer Journey Summary',
   'leadDetail.coldCalls': 'Cold Calls',
   'leadDetail.consultations': 'Consultations',
