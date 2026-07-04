@@ -182,6 +182,9 @@ function InvoiceFormDialog({
         })
       }
       onOpenChange(false)
+    } catch (e) {
+      const msg = (e as { message?: string })?.message || String(e)
+      alert(`제출에 실패했습니다.\n${msg}\n\n(kind 컬럼 오류라면 freelancer_invoices 마이그레이션을 실행해 주세요.)`)
     } finally {
       setSaving(false)
     }
