@@ -8,6 +8,7 @@ export interface PersonalTodo {
   done: boolean
   doneAt?: string
   sourceMessageId?: string
+  sourceRoomId?: string
   createdAt: string
   updatedAt: string
 }
@@ -20,6 +21,7 @@ function mapRow(row: Record<string, unknown>): PersonalTodo {
     done: !!row.done,
     doneAt: (row.done_at as string) || undefined,
     sourceMessageId: (row.source_message_id as string) || undefined,
+    sourceRoomId: (row.source_room_id as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -45,11 +47,12 @@ export function usePersonalTodos(ownerId?: string) {
 export function useCreatePersonalTodo() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (t: { ownerId: string; title: string; sourceMessageId?: string }) => {
+    mutationFn: async (t: { ownerId: string; title: string; sourceMessageId?: string; sourceRoomId?: string }) => {
       const { data, error } = await supabase.from('personal_todos').insert({
         owner_id: t.ownerId,
         title: t.title,
         source_message_id: t.sourceMessageId || null,
+        source_room_id: t.sourceRoomId || null,
       }).select().single()
       if (error) throw error
       return mapRow(data as Record<string, unknown>)
@@ -61,14 +64,38 @@ export function useCreatePersonalTodo() {
 export function useTogglePersonalTodo() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, done }: { id: string; ownerId: string; done: boolean }) => {
+    mutationFn: async (v: {
+      id: string
+      ownerId: string
+      done: boolean
+      // when a room-sourced todo is completed, post a "처리완료" reply to the room
+      sourceRoomId?: string
+      sourceMessageId?: string
+      title?: string
+      completerName?: string
+    }) => {
       const { error } = await supabase
         .from('personal_todos')
-        .update({ done, done_at: done ? new Date().toISOString() : null })
-        .eq('id', id)
+        .update({ done: v.done, done_at: v.done ? new Date().toISOString() : null })
+        .eq('id', v.id)
       if (error) throw error
+
+      if (v.done && v.sourceRoomId) {
+        const who = v.completerName || '담당자'
+        const what = v.title || '해당 업무'
+        await supabase.from('chat_room_messages').insert({
+          room_id: v.sourceRoomId,
+          sender_id: v.ownerId,
+          content: `✅ ${who}님이 "${what}" 업무를 처리완료하였습니다.`,
+          reply_to_message_id: v.sourceMessageId || null,
+          reply_to_content: v.title || null,
+        })
+      }
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['personal_todos', v.ownerId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['personal_todos', v.ownerId] })
+      if (v.sourceRoomId) qc.invalidateQueries({ queryKey: ['chat-room-messages', v.sourceRoomId] })
+    },
   })
 }
 

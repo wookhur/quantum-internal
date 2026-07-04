@@ -14,7 +14,12 @@ import {
 } from '@/hooks/useMessages'
 import { useT } from '@/i18n/LanguageContext'
 import { useCreatePersonalTodo } from '@/hooks/usePersonalTodos'
-import { Flag } from 'lucide-react'
+import { Flag, Plus, Users, Trash2, CornerDownRight } from 'lucide-react'
+import type { User } from '@/types'
+import {
+  useChatRooms, useCreateChatRoom, useDeleteChatRoom, useRoomMessages, useSendRoomMessage,
+} from '@/hooks/useChatRooms'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 export function MessagesPage() {
   const t = useT()
@@ -25,8 +30,10 @@ export function MessagesPage() {
   const markRead = useMarkRead()
   const createTodo = useCreatePersonalTodo()
 
+  const [tab, setTab] = useState<'direct' | 'rooms'>('direct')
+
   // Right-click "add to To-do" context menu
-  const [flagMenu, setFlagMenu] = useState<{ x: number; y: number; content: string; msgId: string } | null>(null)
+  const [flagMenu, setFlagMenu] = useState<{ x: number; y: number; content: string; msgId: string; roomId?: string } | null>(null)
   useEffect(() => {
     if (!flagMenu) return
     const close = () => setFlagMenu(null)
@@ -153,9 +160,30 @@ export function MessagesPage() {
           <h1 className="text-xl font-bold tracking-tight">{t('msg.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('msg.subtitle')}</p>
         </div>
+        <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+          <button
+            onClick={() => setTab('direct')}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${tab === 'direct' ? 'bg-white shadow-sm font-medium text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+          >1:1 대화</button>
+          <button
+            onClick={() => setTab('rooms')}
+            className={`px-3 py-1.5 text-sm rounded-md transition-colors ${tab === 'rooms' ? 'bg-white shadow-sm font-medium text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+          >단톡방</button>
+        </div>
       </div>
 
       <Card className="h-[calc(100%-3.5rem)] overflow-hidden">
+        {tab === 'rooms' ? (
+          <ChatRoomsView
+            me={user}
+            isAdmin={user?.role === 'admin'}
+            profiles={profiles}
+            onFlagMessage={(e, content, msgId, roomId) => {
+              e.preventDefault()
+              setFlagMenu({ x: e.clientX, y: e.clientY, content, msgId, roomId })
+            }}
+          />
+        ) : (
         <div className="flex h-full">
           {/* Left panel: Conversations */}
           <div
@@ -480,6 +508,7 @@ export function MessagesPage() {
             )}
           </div>
         </div>
+        )}
       </Card>
 
       {/* Right-click flag → add to personal To-do */}
@@ -494,7 +523,7 @@ export function MessagesPage() {
             className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-800 hover:bg-gray-50"
             onClick={() => {
               if (user?.id) {
-                createTodo.mutate({ ownerId: user.id, title: flagMenu.content, sourceMessageId: flagMenu.msgId })
+                createTodo.mutate({ ownerId: user.id, title: flagMenu.content, sourceMessageId: flagMenu.msgId, sourceRoomId: flagMenu.roomId })
               }
               setFlagMenu(null)
             }}
@@ -504,5 +533,221 @@ export function MessagesPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function formatRoomTime(iso: string) {
+  const d = new Date(iso)
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+}
+
+function ChatRoomsView({ me, isAdmin, profiles, onFlagMessage }: {
+  me: User | null
+  isAdmin: boolean
+  profiles: User[]
+  onFlagMessage: (e: React.MouseEvent, content: string, msgId: string, roomId: string) => void
+}) {
+  const { data: rooms = [], isLoading } = useChatRooms(me?.id, isAdmin)
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
+  const [text, setText] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+  const createRoom = useCreateChatRoom()
+  const deleteRoom = useDeleteChatRoom()
+  const sendRoom = useSendRoomMessage()
+  const { data: roomMsgs = [] } = useRoomMessages(selectedRoomId ?? undefined)
+  const endRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [roomMsgs])
+
+  const selectedRoom = rooms.find(r => r.id === selectedRoomId) || null
+  const nameOf = (id: string | null) => profiles.find(p => p.id === id)?.name || '(알 수 없음)'
+
+  const send = () => {
+    if (!text.trim() || !selectedRoomId || !me?.id) return
+    sendRoom.mutate({ roomId: selectedRoomId, senderId: me.id, content: text.trim() }, { onSuccess: () => setText('') })
+  }
+
+  return (
+    <div className="flex h-full">
+      {/* Room list */}
+      <div className={`w-full sm:w-72 border-r border-gray-100 flex-col ${selectedRoomId ? 'hidden sm:flex' : 'flex'}`}>
+        <div className="p-3 border-b border-gray-100 flex items-center justify-between">
+          <span className="text-sm font-semibold">단톡방</span>
+          {isAdmin && (
+            <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => setShowCreate(true)}>
+              <Plus className="size-4" />방 만들기
+            </Button>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20"><Loader2 className="size-5 animate-spin text-gray-400" /></div>
+          ) : rooms.length === 0 ? (
+            <div className="text-center py-20 text-sm text-gray-400 px-4">
+              {isAdmin ? '아직 단톡방이 없습니다. “방 만들기”로 팀/프로젝트 방을 생성하세요.' : '참여 중인 단톡방이 없습니다.'}
+            </div>
+          ) : rooms.map(room => (
+            <button
+              key={room.id}
+              onClick={() => setSelectedRoomId(room.id)}
+              className={`flex items-center gap-3 w-full rounded-lg px-3 py-2.5 transition-colors ${selectedRoomId === room.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+            >
+              <div className="size-9 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <Users className="size-4" />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-sm font-medium truncate">{room.name}</div>
+                <div className="text-xs text-gray-400 truncate">멤버 {room.memberIds.length}명</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Room chat */}
+      <div className={`flex-1 flex-col ${selectedRoomId ? 'flex' : 'hidden sm:flex'}`}>
+        {selectedRoom ? (
+          <>
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
+              <button onClick={() => setSelectedRoomId(null)} className="sm:hidden text-gray-500 hover:text-gray-700">
+                <ArrowLeft className="size-5" />
+              </button>
+              <div className="size-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <Users className="size-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold truncate">{selectedRoom.name}</div>
+                <div className="text-xs text-gray-400 truncate">
+                  {selectedRoom.memberIds.map(nameOf).join(', ')}
+                </div>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => {
+                    if (confirm(`“${selectedRoom.name}” 방을 삭제할까요? 대화 내용도 삭제됩니다.`)) {
+                      deleteRoom.mutate(selectedRoom.id, { onSuccess: () => setSelectedRoomId(null) })
+                    }
+                  }}
+                  className="text-gray-400 hover:text-red-500 shrink-0"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+              {roomMsgs.length === 0 ? (
+                <div className="text-center py-16 text-sm text-gray-400">첫 메시지를 남겨보세요.</div>
+              ) : roomMsgs.map(m => {
+                const mine = m.senderId === me?.id
+                return (
+                  <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                    <div className="max-w-[75%]">
+                      {!mine && <div className="text-[11px] text-gray-500 mb-0.5 ml-1">{nameOf(m.senderId)}</div>}
+                      <div
+                        onContextMenu={(e) => {
+                          const txt = (m.content || '').trim()
+                          if (txt) onFlagMessage(e, txt, m.id, selectedRoom.id)
+                        }}
+                        className={`rounded-2xl px-3.5 py-2 ${mine ? 'bg-blue-500 text-white rounded-br-md' : 'bg-white border border-gray-200 text-gray-900 rounded-bl-md'}`}
+                      >
+                        {m.replyToContent && (
+                          <div className={`flex items-start gap-1 text-[11px] mb-1 pb-1 border-b ${mine ? 'border-blue-400/50 text-blue-100' : 'border-gray-200 text-gray-400'}`}>
+                            <CornerDownRight className="size-3 mt-0.5 shrink-0" />
+                            <span className="truncate">{m.replyToContent}</span>
+                          </div>
+                        )}
+                        <div className="text-sm whitespace-pre-wrap break-words">{m.content}</div>
+                        <div className={`text-[10px] mt-1 ${mine ? 'text-blue-200 text-right' : 'text-gray-400'}`}>{formatRoomTime(m.createdAt)}</div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+              <div ref={endRef} />
+            </div>
+
+            <div className="p-3 border-t border-gray-100 flex gap-2">
+              <Input
+                value={text}
+                onChange={e => setText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                placeholder="메시지 입력…"
+                className="h-10"
+              />
+              <Button onClick={send} disabled={!text.trim() || sendRoom.isPending} className="h-10">
+                <Send className="size-4" />
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-gray-400">
+            <div className="text-center">
+              <Users className="size-12 mx-auto mb-3 text-gray-300" />
+              <div className="text-sm">단톡방을 선택하세요.</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {showCreate && me && (
+        <CreateRoomDialog
+          profiles={profiles.filter(p => p.id !== me.id)}
+          onClose={() => setShowCreate(false)}
+          onCreate={(name, memberIds) => {
+            createRoom.mutate({ name, createdBy: me.id, memberIds }, { onSuccess: () => setShowCreate(false) })
+          }}
+          pending={createRoom.isPending}
+        />
+      )}
+    </div>
+  )
+}
+
+function CreateRoomDialog({ profiles, onClose, onCreate, pending }: {
+  profiles: User[]
+  onClose: () => void
+  onCreate: (name: string, memberIds: string[]) => void
+  pending: boolean
+}) {
+  const [name, setName] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const toggle = (id: string) => setSelected(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>단톡방 만들기</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <label className="text-sm font-medium">방 이름</label>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="예: 서비스팀, ○○학생 프로젝트" className="mt-1" />
+          </div>
+          <div>
+            <label className="text-sm font-medium">멤버 선택 ({selected.size}명)</label>
+            <div className="mt-1 max-h-64 overflow-y-auto border rounded-md divide-y">
+              {profiles.map(p => (
+                <label key={p.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                  <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} className="size-4" />
+                  <span className="text-sm">{p.name}</span>
+                  <span className="text-xs text-gray-400">{p.position || p.role}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>취소</Button>
+          <Button
+            disabled={!name.trim() || selected.size === 0 || pending}
+            onClick={() => onCreate(name.trim(), Array.from(selected))}
+          >만들기</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

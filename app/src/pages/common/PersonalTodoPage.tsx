@@ -51,7 +51,13 @@ export function PersonalTodoPage() {
             <div key={td.id} className="flex items-center gap-3 px-4 py-3 group">
               <button
                 type="button"
-                onClick={() => ownerId && toggle.mutate({ id: td.id, ownerId, done: !td.done })}
+                onClick={() => ownerId && toggle.mutate({
+                  id: td.id, ownerId, done: !td.done,
+                  sourceRoomId: td.sourceRoomId,
+                  sourceMessageId: td.sourceMessageId,
+                  title: td.title,
+                  completerName: user?.name,
+                })}
                 className={`size-5 rounded border flex items-center justify-center shrink-0 transition-colors ${td.done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 hover:border-gray-400'}`}
               >
                 {td.done && <Check className="size-3.5" />}
