@@ -97,6 +97,30 @@ export function useMyInvoices(userId?: string, kind: string = 'freelancer') {
   })
 }
 
+/** Signatures ("itemName|unitPrice") of all items already on a worker's
+ *  (non-rejected) invoices of a kind — used to avoid re-billing an incentive. */
+export function useMyInvoiceItemSignatures(userId?: string, kind: string = 'freelancer') {
+  return useQuery({
+    queryKey: ['my-invoice-item-sigs', userId, kind],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('freelancer_invoice_items')
+        .select('item_name, unit_price, freelancer_invoices!inner(freelancer_id, kind, status)')
+        .eq('freelancer_invoices.freelancer_id', userId!)
+        .eq('freelancer_invoices.kind', kind)
+      const set = new Set<string>()
+      if (error) return set
+      ;(data || []).forEach((r: Record<string, unknown>) => {
+        const inv = r.freelancer_invoices as Record<string, unknown> | null
+        if (inv?.status === 'rejected') return
+        set.add(`${(r.item_name as string) || ''}|${Number(r.unit_price) || 0}`)
+      })
+      return set
+    },
+  })
+}
+
 export function useInvoiceItems(invoiceId?: string) {
   return useQuery({
     queryKey: ['invoice-items', invoiceId],
@@ -166,6 +190,7 @@ export function useCreateInvoice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
+      qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
     },
   })
 }
@@ -215,6 +240,7 @@ export function useUpdateInvoice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
+      qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
       qc.invalidateQueries({ queryKey: ['invoice-items'] })
     },
   })
@@ -233,6 +259,7 @@ export function useUpdateInvoiceStatus() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
+      qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
     },
   })
 }
@@ -247,6 +274,7 @@ export function useDeleteInvoice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
+      qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
     },
   })
 }

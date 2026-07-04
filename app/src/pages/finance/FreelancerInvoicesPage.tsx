@@ -24,6 +24,7 @@ import { useSendMessage } from '@/hooks/useMessages'
 import {
   useFreelancerInvoices,
   useMyInvoices,
+  useMyInvoiceItemSignatures,
   useInvoiceItems,
   useCreateInvoice,
   useUpdateInvoice,
@@ -655,24 +656,24 @@ function useConsultantBillable(month: string) {
   }, [students, meetings, consultantName])
 }
 
-export interface IncentiveLine { label: string; amount: number }
+export interface IncentiveLine { label: string; amount: number; month: string }
 
-/** Per person NAME → their sales-incentive lines settled in the given month. */
-function useIncentiveByPerson(month: string) {
+/** Per person NAME → ALL their sales-incentive lines (with settlement month). */
+function useIncentiveLinesByPerson() {
   const { data: entries = [] } = useIncentivesByInstallment()
   return useMemo(() => {
     const map = new Map<string, IncentiveLine[]>()
     entries.forEach(e => {
       const dateRef = e.isPaid ? e.paidDate : (e.dueDate || e.contractDate)
-      if (!dateRef || !dateRef.startsWith(month)) return
+      if (!dateRef || e.incentiveAmount <= 0) return
       const name = canonicalConsultantName(e.displayName)
-      if (!name || e.incentiveAmount <= 0) return
+      if (!name) return
       const arr = map.get(name) || []
-      arr.push({ label: e.studentName || e.contractorName || e.incentiveType, amount: e.incentiveAmount })
+      arr.push({ label: e.studentName || e.contractorName || e.incentiveType, amount: e.incentiveAmount, month: dateRef.slice(0, 7) })
       map.set(name, arr)
     })
     return map
-  }, [entries, month])
+  }, [entries])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
@@ -734,12 +735,30 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
   // the person's sales-incentive lines (incentive).
   const issueMonth = selectedMonth === 'all' ? getCurrentMonth() : selectedMonth
   const byConsultant = useConsultantBillable(issueMonth)
-  const incentiveByPerson = useIncentiveByPerson(issueMonth)
+  const linesByPerson = useIncentiveLinesByPerson()
   const myName = canonicalConsultantName(user?.name)
+  const { data: invoicedSigs = new Set<string>() } = useMyInvoiceItemSignatures(
+    !isAccounting && isIncentive ? user?.id : undefined, kind,
+  )
+  // Incentive lines available this month = earned on/before this month and not
+  // yet on an invoice; unselected lines simply reappear next month (이월).
+  const availableLines = useMemo(() => {
+    return (linesByPerson.get(myName) || [])
+      .filter(l => l.month <= issueMonth && !invoicedSigs.has(`${l.label}|${l.amount}`))
+      .map((l, i) => ({ ...l, key: `${l.label}|${l.amount}|${l.month}|${i}`, carriedOver: l.month < issueMonth }))
+  }, [linesByPerson, myName, issueMonth, invoicedSigs])
+
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const toggleLine = (k: string) => setSelectedKeys(prev => {
+    const next = new Set(prev)
+    if (next.has(k)) next.delete(k); else next.add(k)
+    return next
+  })
+
   const issueItems = useMemo<{ label: string; amount: number }[]>(() => {
-    if (isIncentive) return incentiveByPerson.get(myName) || []
+    if (isIncentive) return availableLines.filter(l => selectedKeys.has(l.key)).map(l => ({ label: l.label, amount: l.amount }))
     return (byConsultant.get(myName) || []).filter(r => r.billable).map(r => ({ label: r.label, amount: 0 }))
-  }, [isIncentive, incentiveByPerson, byConsultant, myName])
+  }, [isIncentive, availableLines, selectedKeys, byConsultant, myName])
 
   // "인보이스 발행" — open the form pre-filled with this month's source lines.
   const openIssueInvoice = () => {
@@ -897,6 +916,9 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
     </div>
   )
 
+  const selectedCount = issueItems.length
+  const allSelected = availableLines.length > 0 && availableLines.every(l => selectedKeys.has(l.key))
+
   const freelancerView = (
     <div className="space-y-4">
       <div className="flex items-end gap-3 flex-wrap">
@@ -907,27 +929,69 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
             <SelectContent>{monthOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-        <Button className="gap-1.5" onClick={openIssueInvoice}>
-          <Plus className="size-4" />인보이스 발행
+        <Button className="gap-1.5" onClick={openIssueInvoice} disabled={isIncentive && selectedCount === 0}>
+          <Plus className="size-4" />{isIncentive ? `선택 인보이스 발행${selectedCount ? ` (${selectedCount})` : ''}` : '인보이스 발행'}
         </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-4 space-y-2">
-          <div className="text-sm">
-            <b>{issueMonth}</b> {isIncentive ? '세일즈 인센티브 발생' : '청구 가능 학생'} <span className="font-bold text-emerald-600">{issueItems.length}</span>{isIncentive ? '건' : '명'}
-            {!isIncentive && <span className="text-muted-foreground"> · 미팅리포트 월 2회 업로드 완료 학생만 발행 가능</span>}
-          </div>
-          {issueItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{isIncentive ? '이 달에 정산할 세일즈 인센티브 내역이 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)'}</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {issueItems.map((r, i) => <Badge key={i} variant="outline">{r.label}{isIncentive ? ` · ${formatKRW(r.amount)}` : ''}</Badge>)}
+      {isIncentive ? (
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <b>{issueMonth}</b> 정산 가능 인센티브 <span className="font-bold text-emerald-600">{availableLines.length}</span>건
+                <span className="text-muted-foreground"> · 선택 {selectedCount}건</span>
+              </div>
+              {availableLines.length > 0 && (
+                <Button size="sm" variant="ghost" className="text-xs h-7"
+                  onClick={() => setSelectedKeys(allSelected ? new Set() : new Set(availableLines.map(l => l.key)))}>
+                  {allSelected ? '전체 해제' : '전체 선택'}
+                </Button>
+              )}
             </div>
-          )}
-          <p className="text-[11px] text-muted-foreground">"인보이스 발행"을 누르면 위 내역이 채워진 폼이 열립니다. {isIncentive ? '개인정보·입금계좌를 확인하고 제출하세요.' : '사업자정보·단가·입금계좌를 채우고 제출하세요.'} 여러 건 발행할 수 있습니다.</p>
-        </CardContent>
-      </Card>
+            {availableLines.length === 0 ? (
+              <p className="text-sm text-muted-foreground">이 달까지 정산할 세일즈 인센티브 내역이 없습니다.</p>
+            ) : (
+              <div className="divide-y rounded-md border">
+                {availableLines.map(l => {
+                  const on = selectedKeys.has(l.key)
+                  return (
+                    <button
+                      key={l.key} type="button" onClick={() => toggleLine(l.key)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-left text-sm ${on ? 'bg-primary/5' : 'hover:bg-muted/40'}`}
+                    >
+                      <span className={`size-4 rounded border flex items-center justify-center shrink-0 ${on ? 'bg-primary border-primary text-primary-foreground' : 'border-gray-300'}`}>
+                        {on && <CheckCircle2 className="size-3" />}
+                      </span>
+                      <span className="flex-1">
+                        {l.label}
+                        {l.carriedOver && <Badge variant="outline" className="ml-2 text-[10px] border-amber-300 text-amber-600">이월 {l.month}</Badge>}
+                      </span>
+                      <span className="font-medium">{formatKRW(l.amount)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">학생(항목)을 선택한 뒤 "선택 인보이스 발행"을 누르면 선택한 건수만큼 폼이 열립니다. 선택하지 않은 인센티브는 다음 달로 이월됩니다.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <div className="text-sm">
+              <b>{issueMonth}</b> 청구 가능 학생 <span className="font-bold text-emerald-600">{issueItems.length}</span>명
+              <span className="text-muted-foreground"> · 미팅리포트 월 2회 업로드 완료 학생만 발행 가능</span>
+            </div>
+            {issueItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground">이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">{issueItems.map((r, i) => <Badge key={i} variant="outline">{r.label}</Badge>)}</div>
+            )}
+            <p className="text-[11px] text-muted-foreground">"인보이스 발행"을 누르면 위 학생이 품명에 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.</p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="text-sm font-semibold text-gray-700">내 인보이스</div>
       {listView}
@@ -964,7 +1028,7 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
       {formOpen && user && (
         <InvoiceFormDialog
           open={formOpen}
-          onOpenChange={open => { setFormOpen(open); if (!open) setUploadedData(undefined) }}
+          onOpenChange={open => { setFormOpen(open); if (!open) { setUploadedData(undefined); setSelectedKeys(new Set()) } }}
           invoice={editInvoice}
           existingItems={editItems || undefined}
           userId={editInvoice?.freelancerId || user.id}
@@ -991,14 +1055,17 @@ function MissingInvoices({ month, kind = 'freelancer' }: { month: string; kind?:
   const { data: invoices = [] } = useFreelancerInvoices(month, kind)
   const { data: profiles = [] } = useProfiles()
   const byConsultant = useConsultantBillable(month)
-  const incentiveByPerson = useIncentiveByPerson(month)
+  const linesByPerson = useIncentiveLinesByPerson()
   const send = useSendMessage()
   const [sending, setSending] = useState<string | null>(null)
 
   const rows = useMemo(() => {
     const source = new Map<string, number>()
     if (isIncentive) {
-      incentiveByPerson.forEach((lines, name) => { if (lines.length) source.set(name, lines.length) })
+      linesByPerson.forEach((lines, name) => {
+        const c = lines.filter(l => l.month <= month).length
+        if (c) source.set(name, c)
+      })
     } else {
       byConsultant.forEach((students, name) => {
         const c = students.filter(s => s.billable).length
@@ -1013,7 +1080,7 @@ function MissingInvoices({ month, kind = 'freelancer' }: { month: string; kind?:
       out.push({ name, count, status })
     })
     return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [isIncentive, byConsultant, incentiveByPerson, invoices])
+  }, [isIncentive, byConsultant, linesByPerson, invoices, month])
 
   const request = async (name: string) => {
     const profile = profiles.find(p => canonicalConsultantName(p.name) === name)
