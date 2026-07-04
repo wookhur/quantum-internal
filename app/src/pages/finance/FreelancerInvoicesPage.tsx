@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useConsultantName, canonicalConsultantName } from '@/lib/consultants'
+import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
 import {
@@ -98,6 +99,7 @@ function InvoiceFormDialog({
   existingItems,
   userId,
   initialData,
+  kind,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -105,6 +107,7 @@ function InvoiceFormDialog({
   existingItems?: InvoiceItem[]
   userId: string
   initialData?: ParsedInvoice
+  kind?: string
 }) {
   const t = useT()
   const createInvoice = useCreateInvoice()
@@ -170,6 +173,7 @@ function InvoiceFormDialog({
           freelancerId: userId,
           invoiceDate,
           invoiceMonth,
+          kind,
           residentNumber,
           phone,
           bankAccount,
@@ -651,12 +655,33 @@ function useConsultantBillable(month: string) {
   }, [students, meetings, consultantName])
 }
 
+export interface IncentiveLine { label: string; amount: number }
+
+/** Per person NAME → their sales-incentive lines settled in the given month. */
+function useIncentiveByPerson(month: string) {
+  const { data: entries = [] } = useIncentivesByInstallment()
+  return useMemo(() => {
+    const map = new Map<string, IncentiveLine[]>()
+    entries.forEach(e => {
+      const dateRef = e.isPaid ? e.paidDate : (e.dueDate || e.contractDate)
+      if (!dateRef || !dateRef.startsWith(month)) return
+      const name = canonicalConsultantName(e.displayName)
+      if (!name || e.incentiveAmount <= 0) return
+      const arr = map.get(name) || []
+      arr.push({ label: e.studentName || e.contractorName || e.incentiveType, amount: e.incentiveAmount })
+      map.set(name, arr)
+    })
+    return map
+  }, [entries, month])
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────
 
-export function FreelancerInvoicesPage() {
+export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freelancer' | 'sales_incentive' } = {}) {
   const t = useT()
   const { user } = useAuth()
   const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
+  const isIncentive = kind === 'sales_incentive'
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth())
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -670,10 +695,10 @@ export function FreelancerInvoicesPage() {
   const { data: editItems } = useInvoiceItems(editInvoice?.id)
 
   const { data: allInvoices = [], isLoading: allLoading } = useFreelancerInvoices(
-    isAccounting ? (selectedMonth === 'all' ? undefined : selectedMonth) : undefined,
+    isAccounting ? (selectedMonth === 'all' ? undefined : selectedMonth) : undefined, kind,
   )
   const { data: myInvoices = [], isLoading: myLoading } = useMyInvoices(
-    !isAccounting ? user?.id : undefined,
+    !isAccounting ? user?.id : undefined, kind,
   )
   const deleteInvoice = useDeleteInvoice()
 
@@ -705,21 +730,24 @@ export function FreelancerInvoicesPage() {
     }
   }
 
-  // The freelancer's own billable students (>=2 report-uploaded meetings) this month.
+  // Pre-fill source for the issue form: billable students (freelancer) or
+  // the person's sales-incentive lines (incentive).
   const issueMonth = selectedMonth === 'all' ? getCurrentMonth() : selectedMonth
   const byConsultant = useConsultantBillable(issueMonth)
-  const myBillable = useMemo(() => {
-    const rows = byConsultant.get(canonicalConsultantName(user?.name)) || []
-    return rows.filter(r => r.billable)
-  }, [byConsultant, user?.name])
+  const incentiveByPerson = useIncentiveByPerson(issueMonth)
+  const myName = canonicalConsultantName(user?.name)
+  const issueItems = useMemo<{ label: string; amount: number }[]>(() => {
+    if (isIncentive) return incentiveByPerson.get(myName) || []
+    return (byConsultant.get(myName) || []).filter(r => r.billable).map(r => ({ label: r.label, amount: 0 }))
+  }, [isIncentive, incentiveByPerson, byConsultant, myName])
 
-  // "인보이스 발행" — open the form pre-filled with this month's billable students.
+  // "인보이스 발행" — open the form pre-filled with this month's source lines.
   const openIssueInvoice = () => {
     const initial: ParsedInvoice = {
       invoiceDate: new Date().toISOString().slice(0, 10),
       residentNumber: '', phone: '', email: user?.email || '', bankAccount: '',
-      items: myBillable.length
-        ? myBillable.map(r => ({ itemName: r.label, quantity: 1, unitPrice: 0, remark: '' }))
+      items: issueItems.length
+        ? issueItems.map(r => ({ itemName: r.label, quantity: 1, unitPrice: r.amount, remark: '' }))
         : [emptyItem()],
     }
     setEditInvoice(undefined)
@@ -887,17 +915,17 @@ export function FreelancerInvoicesPage() {
       <Card>
         <CardContent className="p-4 space-y-2">
           <div className="text-sm">
-            <b>{issueMonth}</b> 청구 가능 학생 <span className="font-bold text-emerald-600">{myBillable.length}</span>명
-            <span className="text-muted-foreground"> · 미팅리포트 월 2회 업로드 완료 학생만 발행 가능</span>
+            <b>{issueMonth}</b> {isIncentive ? '세일즈 인센티브 발생' : '청구 가능 학생'} <span className="font-bold text-emerald-600">{issueItems.length}</span>{isIncentive ? '건' : '명'}
+            {!isIncentive && <span className="text-muted-foreground"> · 미팅리포트 월 2회 업로드 완료 학생만 발행 가능</span>}
           </div>
-          {myBillable.length === 0 ? (
-            <p className="text-sm text-muted-foreground">이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)</p>
+          {issueItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{isIncentive ? '이 달에 정산할 세일즈 인센티브 내역이 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)'}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
-              {myBillable.map(r => <Badge key={r.id} variant="outline">{r.label}</Badge>)}
+              {issueItems.map((r, i) => <Badge key={i} variant="outline">{r.label}{isIncentive ? ` · ${formatKRW(r.amount)}` : ''}</Badge>)}
             </div>
           )}
-          <p className="text-[11px] text-muted-foreground">"인보이스 발행"을 누르면 위 학생이 품명에 채워진 견적서 폼이 열립니다. 사업자정보·단가·입금계좌를 채우고 제출하세요. 사업자정보가 다르면 여러 건 발행할 수 있습니다.</p>
+          <p className="text-[11px] text-muted-foreground">"인보이스 발행"을 누르면 위 내역이 채워진 폼이 열립니다. {isIncentive ? '개인정보·입금계좌를 확인하고 제출하세요.' : '사업자정보·단가·입금계좌를 채우고 제출하세요.'} 여러 건 발행할 수 있습니다.</p>
         </CardContent>
       </Card>
 
@@ -909,8 +937,16 @@ export function FreelancerInvoicesPage() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-bold">{isAccounting ? '프리랜서 인보이스 (재무)' : '인보이스 발행'}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{isAccounting ? '제출된 인보이스를 확인·승인하고 엑셀로 다운로드합니다.' : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.'}</p>
+        <h1 className="text-xl font-bold">
+          {isAccounting
+            ? (isIncentive ? '세일즈인센티브 인보이스 (재무)' : '프리랜서 인보이스 (재무)')
+            : (isIncentive ? '세일즈인센티브 인보이스 발행' : '인보이스 발행')}
+        </h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {isAccounting
+            ? '제출된 인보이스를 확인·승인하고 엑셀로 다운로드합니다.'
+            : (isIncentive ? '이 달 발생한 세일즈 인센티브로 정산 인보이스를 발행하세요.' : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
+        </p>
       </div>
 
       {isAccounting ? (
@@ -920,7 +956,7 @@ export function FreelancerInvoicesPage() {
             <TabsTrigger value="missing">미제출 현황</TabsTrigger>
           </TabsList>
           <TabsContent value="list">{listView}</TabsContent>
-          <TabsContent value="missing"><MissingInvoices month={issueMonth} /></TabsContent>
+          <TabsContent value="missing"><MissingInvoices month={issueMonth} kind={kind} /></TabsContent>
         </Tabs>
       ) : freelancerView}
 
@@ -933,6 +969,7 @@ export function FreelancerInvoicesPage() {
           existingItems={editItems || undefined}
           userId={editInvoice?.freelancerId || user.id}
           initialData={uploadedData}
+          kind={kind}
         />
       )}
 
@@ -949,32 +986,44 @@ export function FreelancerInvoicesPage() {
 
 // ─── Missing-invoice tracking (accounting) ─────────────────────────────────
 
-function MissingInvoices({ month }: { month: string }) {
-  const { data: invoices = [] } = useFreelancerInvoices(month)
+function MissingInvoices({ month, kind = 'freelancer' }: { month: string; kind?: string }) {
+  const isIncentive = kind === 'sales_incentive'
+  const { data: invoices = [] } = useFreelancerInvoices(month, kind)
   const { data: profiles = [] } = useProfiles()
   const byConsultant = useConsultantBillable(month)
+  const incentiveByPerson = useIncentiveByPerson(month)
   const send = useSendMessage()
   const [sending, setSending] = useState<string | null>(null)
 
   const rows = useMemo(() => {
-    const out: { name: string; billableCount: number; status: 'none' | 'submitted' | 'approved' }[] = []
-    byConsultant.forEach((students, name) => {
-      const billableCount = students.filter(s => s.billable).length
-      if (billableCount === 0) return
+    const source = new Map<string, number>()
+    if (isIncentive) {
+      incentiveByPerson.forEach((lines, name) => { if (lines.length) source.set(name, lines.length) })
+    } else {
+      byConsultant.forEach((students, name) => {
+        const c = students.filter(s => s.billable).length
+        if (c > 0) source.set(name, c)
+      })
+    }
+    const out: { name: string; count: number; status: 'none' | 'submitted' | 'approved' }[] = []
+    source.forEach((count, name) => {
       const theirs = invoices.filter(inv => canonicalConsultantName(inv.freelancerName) === name)
       const status = theirs.some(i => i.status === 'approved') ? 'approved'
         : theirs.some(i => i.status === 'submitted') ? 'submitted' : 'none'
-      out.push({ name, billableCount, status })
+      out.push({ name, count, status })
     })
     return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [byConsultant, invoices])
+  }, [isIncentive, byConsultant, incentiveByPerson, invoices])
 
   const request = async (name: string) => {
     const profile = profiles.find(p => canonicalConsultantName(p.name) === name)
     if (!profile) { alert(`'${name}' 직원 계정을 찾을 수 없습니다.`); return }
     setSending(name)
     try {
-      await send.mutateAsync({ receiverId: profile.id, content: `[인보이스 요청] ${month} 프리랜서 인보이스를 발행·제출해 주세요. (청구 가능 학생이 있습니다)` })
+      const msg = isIncentive
+        ? `[인보이스 요청] ${month} 세일즈인센티브 정산 인보이스를 발행·제출해 주세요. (인센티브 발생 내역이 있습니다)`
+        : `[인보이스 요청] ${month} 프리랜서 인보이스를 발행·제출해 주세요. (청구 가능 학생이 있습니다)`
+      await send.mutateAsync({ receiverId: profile.id, content: msg })
       alert(`${name}님에게 인보이스 요청 메시지를 보냈습니다.`)
     } catch (e) {
       alert(e instanceof Error ? e.message : '전송에 실패했습니다.')
@@ -987,25 +1036,25 @@ function MissingInvoices({ month }: { month: string }) {
     <Card>
       <CardContent className="p-0">
         <div className="p-4 text-sm text-muted-foreground">
-          {month} 청구 대상 컨설턴트별 인보이스 제출 현황입니다. '승인완료'가 아닌 대상에게 요청 메시지를 보낼 수 있습니다.
+          {month} {isIncentive ? '인센티브 발생자별' : '청구 대상 컨설턴트별'} 인보이스 제출 현황입니다. '승인완료'가 아닌 대상에게 요청 메시지를 보낼 수 있습니다.
         </div>
         <Table>
           <TableHeader>
             <TableRow className="text-xs">
-              <TableHead>컨설턴트</TableHead>
-              <TableHead className="text-center w-28">청구 가능</TableHead>
+              <TableHead>{isIncentive ? '발생자' : '컨설턴트'}</TableHead>
+              <TableHead className="text-center w-28">{isIncentive ? '발생 건' : '청구 가능'}</TableHead>
               <TableHead className="w-40">상태</TableHead>
               <TableHead className="w-28"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-sm text-muted-foreground">청구 대상이 없습니다.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="text-center py-8 text-sm text-muted-foreground">대상이 없습니다.</TableCell></TableRow>
             )}
             {rows.map(r => (
               <TableRow key={r.name}>
                 <TableCell className="font-medium">{r.name}</TableCell>
-                <TableCell className="text-center">{r.billableCount}명</TableCell>
+                <TableCell className="text-center">{r.count}{isIncentive ? '건' : '명'}</TableCell>
                 <TableCell>
                   {r.status === 'approved' ? <Badge className="bg-green-100 text-green-700">승인완료</Badge>
                     : r.status === 'submitted' ? <Badge className="bg-blue-100 text-blue-700">제출됨(미승인)</Badge>

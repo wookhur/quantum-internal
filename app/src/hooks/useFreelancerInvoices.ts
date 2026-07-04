@@ -63,13 +63,14 @@ function mapItem(r: Record<string, unknown>): InvoiceItem {
   }
 }
 
-export function useFreelancerInvoices(month?: string) {
+export function useFreelancerInvoices(month?: string, kind: string = 'freelancer') {
   return useQuery({
-    queryKey: ['freelancer-invoices', month],
+    queryKey: ['freelancer-invoices', month, kind],
     queryFn: async () => {
       let q = supabase
         .from('freelancer_invoices')
         .select('*, profiles!freelancer_invoices_freelancer_id_fkey(name, email)')
+        .eq('kind', kind)
         .order('invoice_date', { ascending: false })
       if (month) q = q.eq('invoice_month', month)
       const { data, error } = await q
@@ -79,15 +80,16 @@ export function useFreelancerInvoices(month?: string) {
   })
 }
 
-export function useMyInvoices(userId?: string) {
+export function useMyInvoices(userId?: string, kind: string = 'freelancer') {
   return useQuery({
-    queryKey: ['my-invoices', userId],
+    queryKey: ['my-invoices', userId, kind],
     enabled: !!userId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('freelancer_invoices')
         .select('*, profiles!freelancer_invoices_freelancer_id_fkey(name, email)')
         .eq('freelancer_id', userId!)
+        .eq('kind', kind)
         .order('invoice_date', { ascending: false })
       if (error) throw error
       return (data || []).map(r => mapInvoice(r as Record<string, unknown>))
@@ -118,6 +120,7 @@ export function useCreateInvoice() {
       freelancerId: string
       invoiceDate: string
       invoiceMonth: string
+      kind?: string
       residentNumber?: string
       phone?: string
       bankAccount?: string
@@ -131,6 +134,7 @@ export function useCreateInvoice() {
           freelancer_id: input.freelancerId,
           invoice_date: input.invoiceDate,
           invoice_month: input.invoiceMonth,
+          kind: input.kind || 'freelancer',
           status: 'submitted',
           resident_number: input.residentNumber || null,
           phone: input.phone || null,

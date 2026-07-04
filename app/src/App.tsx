@@ -110,6 +110,7 @@ export default function App() {
                 <Route path="/finance/incentives/by-contract" element={<IncentiveByContractPage />} />
                 <Route path="/finance/incentives/by-person" element={<IncentiveByPersonPage />} />
                 <Route path="/finance/freelancer-invoices" element={<FreelancerInvoicesPage />} />
+                <Route path="/finance/sales-incentive-invoices" element={<FreelancerInvoicesPage kind="sales_incentive" />} />
 
                 <Route path="/partner/contracts" element={<PartnerContractsPage />} />
                 <Route path="/partner/students" element={<PartnerStudentsPage />} />
