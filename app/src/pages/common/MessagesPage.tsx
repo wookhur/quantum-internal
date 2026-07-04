@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Loader2, Send, Search, MessageSquare, ArrowLeft, Check, CheckCheck, Paperclip, X, FileText } from 'lucide-react'
+import { Loader2, Send, Search, MessageSquare, ArrowLeft, Check, Paperclip, X, FileText } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import {
@@ -302,13 +302,9 @@ export function MessagesPage() {
                         <div
                           className={`text-xs truncate mt-0.5 ${conv.isUnread ? 'text-gray-700 font-medium' : 'text-gray-400'}`}
                         >
-                          {conv.senderId === user?.id && (
-                            <span className="text-gray-400 mr-0.5">
-                              {conv.read ? (
-                                <CheckCheck className="inline size-3 text-blue-400" />
-                              ) : (
-                                <Check className="inline size-3" />
-                              )}{' '}
+                          {conv.senderId === user?.id && conv.read && (
+                            <span className="text-blue-400 mr-0.5">
+                              <Check className="inline size-3" />{' '}
                             </span>
                           )}
                           {conv.content}
@@ -432,12 +428,7 @@ export function MessagesPage() {
                             >
                               {todo && <TodoBadges done={todo.done} />}
                               {formatTime(msg.createdAt)}
-                              {isMine &&
-                                (msg.read ? (
-                                  <CheckCheck className="size-3 text-blue-200" />
-                                ) : (
-                                  <Check className="size-3" />
-                                ))}
+                              {isMine && msg.read && <Check className="size-3 text-blue-200" />}
                             </div>
                           </div>
                         </div>
@@ -546,16 +537,15 @@ export function MessagesPage() {
   )
 }
 
-/** Red flag = added to To-do; +green check = completed. Flag alone means still
- *  pending. Bold check with a white outline stays legible on the blue bubble. */
+/** Red flag = added to To-do; +green circle = completed. Flag alone = pending. */
 function TodoBadges({ done }: { done: boolean }) {
   return (
     <span
-      className="inline-flex items-center gap-0.5 align-middle"
+      className="inline-flex items-center gap-1 align-middle"
       title={done ? '할일 완료' : '할일로 지정됨 (미완료)'}
     >
       <Flag className="size-3.5 text-red-500" fill="#ef4444" stroke="#ef4444" />
-      {done && <Check className="size-4" strokeWidth={4} stroke="#16a34a" />}
+      {done && <span className="inline-block size-2.5 rounded-full bg-green-500" />}
     </span>
   )
 }
