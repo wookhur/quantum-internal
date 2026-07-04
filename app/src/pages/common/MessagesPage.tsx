@@ -14,7 +14,7 @@ import {
 } from '@/hooks/useMessages'
 import { useT } from '@/i18n/LanguageContext'
 import { useCreatePersonalTodo, usePersonalTodos, type PersonalTodo } from '@/hooks/usePersonalTodos'
-import { Flag, Plus, Users, Trash2, CornerDownRight } from 'lucide-react'
+import { FlagTriangleRight, Plus, Users, Trash2, CornerDownRight } from 'lucide-react'
 import type { User } from '@/types'
 import {
   useChatRooms, useCreateChatRoom, useDeleteChatRoom, useRoomMessages, useSendRoomMessage,
@@ -529,7 +529,7 @@ export function MessagesPage() {
               setFlagMenu(null)
             }}
           >
-            <Flag className="size-4 text-amber-500" />할일에 추가
+            <FlagTriangleRight className="size-4 text-red-500" />할일에 추가
           </button>
         </div>
       )}
@@ -544,7 +544,7 @@ function TodoBadges({ done }: { done: boolean }) {
       className="inline-flex items-center gap-1 align-middle"
       title={done ? '할일 완료' : '할일로 지정됨 (미완료)'}
     >
-      <Flag className="size-3.5 text-red-500" fill="#ef4444" stroke="#ef4444" />
+      <FlagTriangleRight className="size-4 text-red-500" fill="#ef4444" stroke="#ef4444" />
       {done && <span className="inline-block size-2.5 rounded-full bg-green-500" />}
     </span>
   )
