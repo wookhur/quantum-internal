@@ -13,8 +13,8 @@ import {
   useMarkRead,
 } from '@/hooks/useMessages'
 import { useT } from '@/i18n/LanguageContext'
-import { useCreatePersonalTodo } from '@/hooks/usePersonalTodos'
-import { Flag, Plus, Users, Trash2, CornerDownRight } from 'lucide-react'
+import { useCreatePersonalTodo, usePersonalTodos, type PersonalTodo } from '@/hooks/usePersonalTodos'
+import { Flag, Plus, Users, Trash2, CornerDownRight, CheckCircle2 } from 'lucide-react'
 import type { User } from '@/types'
 import {
   useChatRooms, useCreateChatRoom, useDeleteChatRoom, useRoomMessages, useSendRoomMessage,
@@ -29,6 +29,13 @@ export function MessagesPage() {
   const sendMessage = useSendMessage()
   const markRead = useMarkRead()
   const createTodo = useCreatePersonalTodo()
+  const { data: myTodos = [] } = usePersonalTodos(user?.id)
+  // messageId → my to-do flagged from it (for flag/complete indicators on bubbles)
+  const todoByMsg = useMemo(() => {
+    const m = new Map<string, PersonalTodo>()
+    myTodos.forEach(td => { if (td.sourceMessageId) m.set(td.sourceMessageId, td) })
+    return m
+  }, [myTodos])
 
   const [tab, setTab] = useState<'direct' | 'rooms'>('direct')
 
@@ -178,6 +185,7 @@ export function MessagesPage() {
             me={user}
             isAdmin={user?.role === 'admin'}
             profiles={profiles}
+            todoByMsg={todoByMsg}
             onFlagMessage={(e, content, msgId, roomId) => {
               e.preventDefault()
               setFlagMenu({ x: e.clientX, y: e.clientY, content, msgId, roomId })
@@ -361,6 +369,7 @@ export function MessagesPage() {
                   ) : (
                     messages.map((msg) => {
                       const isMine = msg.senderId === user?.id
+                      const todo = todoByMsg.get(msg.id)
                       return (
                         <div
                           key={msg.id}
@@ -421,6 +430,7 @@ export function MessagesPage() {
                                 isMine ? 'text-blue-200 justify-end' : 'text-gray-400'
                               }`}
                             >
+                              {todo && <TodoBadges done={todo.done} onBubble={isMine} />}
                               {formatTime(msg.createdAt)}
                               {isMine &&
                                 (msg.read ? (
@@ -536,15 +546,26 @@ export function MessagesPage() {
   )
 }
 
+/** Flag = added to To-do; +check = completed. Flag alone means still pending. */
+function TodoBadges({ done, onBubble }: { done: boolean; onBubble: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-0.5" title={done ? '할일 완료' : '할일로 지정됨'}>
+      <Flag className={`size-3 ${onBubble ? 'text-amber-200' : 'text-amber-500'}`} fill="currentColor" />
+      {done && <CheckCircle2 className={`size-3 ${onBubble ? 'text-emerald-200' : 'text-emerald-500'}`} />}
+    </span>
+  )
+}
+
 function formatRoomTime(iso: string) {
   const d = new Date(iso)
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
 }
 
-function ChatRoomsView({ me, isAdmin, profiles, onFlagMessage }: {
+function ChatRoomsView({ me, isAdmin, profiles, todoByMsg, onFlagMessage }: {
   me: User | null
   isAdmin: boolean
   profiles: User[]
+  todoByMsg: Map<string, PersonalTodo>
   onFlagMessage: (e: React.MouseEvent, content: string, msgId: string, roomId: string) => void
 }) {
   const { data: rooms = [], isLoading } = useChatRooms(me?.id, isAdmin)
@@ -657,7 +678,10 @@ function ChatRoomsView({ me, isAdmin, profiles, onFlagMessage }: {
                           </div>
                         )}
                         <div className="text-sm whitespace-pre-wrap break-words">{m.content}</div>
-                        <div className={`text-[10px] mt-1 ${mine ? 'text-blue-200 text-right' : 'text-gray-400'}`}>{formatRoomTime(m.createdAt)}</div>
+                        <div className={`text-[10px] mt-1 flex items-center gap-1 ${mine ? 'text-blue-200 justify-end' : 'text-gray-400'}`}>
+                          {todoByMsg.get(m.id) && <TodoBadges done={!!todoByMsg.get(m.id)?.done} onBubble={mine} />}
+                          {formatRoomTime(m.createdAt)}
+                        </div>
                       </div>
                     </div>
                   </div>
