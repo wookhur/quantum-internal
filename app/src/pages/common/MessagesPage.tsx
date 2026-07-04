@@ -554,14 +554,8 @@ function TodoBadges({ done }: { done: boolean }) {
       className="inline-flex items-center gap-0.5 align-middle"
       title={done ? '할일 완료' : '할일로 지정됨 (미완료)'}
     >
-      <Flag className="size-3.5 text-red-500" fill="#ef4444" stroke="#ffffff" strokeWidth={1.75} />
-      {done && (
-        <Check
-          className="size-4 drop-shadow-[0_0_1.5px_rgba(255,255,255,0.95)]"
-          strokeWidth={4}
-          stroke="#16a34a"
-        />
-      )}
+      <Flag className="size-3.5 text-red-500" fill="#ef4444" stroke="#ef4444" />
+      {done && <Check className="size-4" strokeWidth={4} stroke="#16a34a" />}
     </span>
   )
 }
