@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
     }
 
     const apiBody = JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: [
@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
       ],
     })
 
-    console.log(`Calling Claude API with model claude-sonnet-4-20250514, payload size: ${apiBody.length}`)
+    console.log(`Calling Claude API with model claude-sonnet-4-6, payload size: ${apiBody.length}`)
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',

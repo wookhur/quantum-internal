@@ -13,6 +13,8 @@ import {
   useMarkRead,
 } from '@/hooks/useMessages'
 import { useT } from '@/i18n/LanguageContext'
+import { useCreatePersonalTodo } from '@/hooks/usePersonalTodos'
+import { Flag } from 'lucide-react'
 
 export function MessagesPage() {
   const t = useT()
@@ -21,6 +23,20 @@ export function MessagesPage() {
   const { data: conversations = [], isLoading: convLoading } = useConversations()
   const sendMessage = useSendMessage()
   const markRead = useMarkRead()
+  const createTodo = useCreatePersonalTodo()
+
+  // Right-click "add to To-do" context menu
+  const [flagMenu, setFlagMenu] = useState<{ x: number; y: number; content: string; msgId: string } | null>(null)
+  useEffect(() => {
+    if (!flagMenu) return
+    const close = () => setFlagMenu(null)
+    window.addEventListener('click', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      window.removeEventListener('click', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [flagMenu])
 
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null)
   const [messageText, setMessageText] = useState('')
@@ -323,6 +339,12 @@ export function MessagesPage() {
                           className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
                         >
                           <div
+                            onContextMenu={(e) => {
+                              const text = (msg.content || msg.attachmentName || '').trim()
+                              if (!text) return
+                              e.preventDefault()
+                              setFlagMenu({ x: e.clientX, y: e.clientY, content: text, msgId: msg.id })
+                            }}
                             className={`max-w-[75%] rounded-2xl px-3.5 py-2 ${
                               isMine
                                 ? 'bg-blue-500 text-white rounded-br-md'
@@ -459,6 +481,28 @@ export function MessagesPage() {
           </div>
         </div>
       </Card>
+
+      {/* Right-click flag → add to personal To-do */}
+      {flagMenu && (
+        <div
+          className="fixed z-50 min-w-[160px] rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          style={{ top: flagMenu.y, left: flagMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-800 hover:bg-gray-50"
+            onClick={() => {
+              if (user?.id) {
+                createTodo.mutate({ ownerId: user.id, title: flagMenu.content, sourceMessageId: flagMenu.msgId })
+              }
+              setFlagMenu(null)
+            }}
+          >
+            <Flag className="size-4 text-amber-500" />할일에 추가
+          </button>
+        </div>
+      )}
     </div>
   )
 }

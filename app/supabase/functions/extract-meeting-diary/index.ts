@@ -5,7 +5,7 @@
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 
 const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 미팅 요약 보고서 분석가입니다.
-주어진 미팅 요약 텍스트를 9개 항목으로 짧게 요약하여 JSON으로만 반환하세요.
+주어진 미팅 요약 텍스트를 10개 항목으로 짧게 요약하여 JSON으로만 반환하세요.
 
 필드(영어 키 그대로 사용):
 - agendaItems: 미팅 안건
@@ -17,6 +17,7 @@ const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 미팅 요약
 - followUpCommitments: 후속 약속/이행 사항
 - assignments: 학생/학부모에게 배정된 과제
 - criticalDates: 중요 일정·마감일
+- criticalIssue: 리스크·이슈·에스컬레이션 (즉시 관리가 필요한 중요 문제. 없으면 빈 문자열)
 
 규칙:
 1. 응답은 반드시 유효한 JSON만 포함. 코드펜스/설명 텍스트 금지.
@@ -121,7 +122,7 @@ Deno.serve(async (req) => {
       })
       userContent.push({
         type: 'text',
-        text: '위 PDF는 한 학생의 미팅 요약 보고서입니다. 9개 항목으로 요약해 JSON으로 반환해주세요.',
+        text: '위 PDF는 한 학생의 미팅 요약 보고서입니다. 10개 항목으로 요약해 JSON으로 반환해주세요.',
       })
     } else {
       const truncated = (text || '').slice(0, 30000)
@@ -129,7 +130,7 @@ Deno.serve(async (req) => {
     }
 
     const apiBody = JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
