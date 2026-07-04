@@ -14,7 +14,7 @@ import {
 } from '@/hooks/useMessages'
 import { useT } from '@/i18n/LanguageContext'
 import { useCreatePersonalTodo, usePersonalTodos, type PersonalTodo } from '@/hooks/usePersonalTodos'
-import { Flag, Plus, Users, Trash2, CornerDownRight, CheckCircle2 } from 'lucide-react'
+import { Flag, Plus, Users, Trash2, CornerDownRight, Star } from 'lucide-react'
 import type { User } from '@/types'
 import {
   useChatRooms, useCreateChatRoom, useDeleteChatRoom, useRoomMessages, useSendRoomMessage,
@@ -546,16 +546,17 @@ export function MessagesPage() {
   )
 }
 
-/** Flag = added to To-do; +check = completed. Flag alone means still pending.
- *  Icons sit on a white chip so they stay visible on the blue (mine) bubble. */
+/** Red flag = added to To-do; +yellow star = completed (a "praise sticker").
+ *  Flag alone means still pending. White outline keeps them legible on the
+ *  blue (mine) bubble without a background chip. */
 function TodoBadges({ done }: { done: boolean }) {
   return (
     <span
-      className="inline-flex items-center gap-0.5 rounded-full bg-white px-1.5 py-[1px] border border-gray-200 shadow-sm align-middle"
-      title={done ? '할일 완료' : '할일로 지정됨 (미완료)'}
+      className="inline-flex items-center gap-0.5 align-middle"
+      title={done ? '할일 완료 ⭐' : '할일로 지정됨 (미완료)'}
     >
-      <Flag className="size-3 text-red-500" fill="currentColor" />
-      {done && <CheckCircle2 className="size-3 text-emerald-500" fill="currentColor" stroke="white" />}
+      <Flag className="size-3.5 text-red-500" fill="#ef4444" stroke="#ffffff" strokeWidth={1.75} />
+      {done && <Star className="size-3.5 text-yellow-400" fill="#facc15" stroke="#ffffff" strokeWidth={1.75} />}
     </span>
   )
 }
