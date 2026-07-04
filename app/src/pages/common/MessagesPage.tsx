@@ -430,7 +430,7 @@ export function MessagesPage() {
                                 isMine ? 'text-blue-200 justify-end' : 'text-gray-400'
                               }`}
                             >
-                              {todo && <TodoBadges done={todo.done} onBubble={isMine} />}
+                              {todo && <TodoBadges done={todo.done} />}
                               {formatTime(msg.createdAt)}
                               {isMine &&
                                 (msg.read ? (
@@ -546,12 +546,16 @@ export function MessagesPage() {
   )
 }
 
-/** Flag = added to To-do; +check = completed. Flag alone means still pending. */
-function TodoBadges({ done, onBubble }: { done: boolean; onBubble: boolean }) {
+/** Flag = added to To-do; +check = completed. Flag alone means still pending.
+ *  Icons sit on a white chip so they stay visible on the blue (mine) bubble. */
+function TodoBadges({ done }: { done: boolean }) {
   return (
-    <span className="inline-flex items-center gap-0.5" title={done ? '할일 완료' : '할일로 지정됨'}>
-      <Flag className={`size-3 ${onBubble ? 'text-amber-200' : 'text-amber-500'}`} fill="currentColor" />
-      {done && <CheckCircle2 className={`size-3 ${onBubble ? 'text-emerald-200' : 'text-emerald-500'}`} />}
+    <span
+      className="inline-flex items-center gap-0.5 rounded-full bg-white px-1.5 py-[1px] border border-gray-200 shadow-sm align-middle"
+      title={done ? '할일 완료' : '할일로 지정됨 (미완료)'}
+    >
+      <Flag className="size-3 text-red-500" fill="currentColor" />
+      {done && <CheckCircle2 className="size-3 text-emerald-500" fill="currentColor" stroke="white" />}
     </span>
   )
 }
@@ -679,7 +683,7 @@ function ChatRoomsView({ me, isAdmin, profiles, todoByMsg, onFlagMessage }: {
                         )}
                         <div className="text-sm whitespace-pre-wrap break-words">{m.content}</div>
                         <div className={`text-[10px] mt-1 flex items-center gap-1 ${mine ? 'text-blue-200 justify-end' : 'text-gray-400'}`}>
-                          {todoByMsg.get(m.id) && <TodoBadges done={!!todoByMsg.get(m.id)?.done} onBubble={mine} />}
+                          {todoByMsg.get(m.id) && <TodoBadges done={!!todoByMsg.get(m.id)?.done} />}
                           {formatRoomTime(m.createdAt)}
                         </div>
                       </div>
