@@ -17,6 +17,7 @@ export interface User {
   contractEndDate?: string
   isExternal: boolean
   isPartner?: boolean
+  canApproveOrders?: boolean  // 쿠팡 주문 '주문승인' 권한
   avatarUrl?: string
   createdAt: string
 }

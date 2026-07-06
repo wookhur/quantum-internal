@@ -43,7 +43,8 @@ export function CoupangOrdersPage() {
     reason: '',
   })
 
-  const isManager = user?.role === 'admin' || user?.role === 'c_level'
+  // '주문승인' permission holders (or admin) can approve and progress orders
+  const isApprover = user?.role === 'admin' || !!user?.canApproveOrders
 
   const filtered = tab === 'mine'
     ? orders.filter((o) => o.requesterId === user?.id)
@@ -71,7 +72,13 @@ export function CoupangOrdersPage() {
   }
 
   async function handleStatusChange(order: CoupangOrder, status: OrderStatus) {
-    await updateOrder.mutateAsync({ id: order.id, status, orderedBy: user?.id })
+    await updateOrder.mutateAsync({
+      id: order.id,
+      status,
+      actorId: user?.id,
+      requesterId: order.requesterId,
+      productName: order.productName,
+    })
   }
 
   async function handleDelete(id: string) {
@@ -124,7 +131,7 @@ export function CoupangOrdersPage() {
             <OrderCard
               key={order.id}
               order={order}
-              isManager={isManager}
+              isApprover={isApprover}
               isOwner={order.requesterId === user?.id}
               onStatusChange={handleStatusChange}
               onDelete={handleDelete}
@@ -191,13 +198,13 @@ export function CoupangOrdersPage() {
 
 function OrderCard({
   order,
-  isManager,
+  isApprover,
   isOwner,
   onStatusChange,
   onDelete,
 }: {
   order: CoupangOrder
-  isManager: boolean
+  isApprover: boolean
   isOwner: boolean
   onStatusChange: (o: CoupangOrder, s: OrderStatus) => void
   onDelete: (id: string) => void
@@ -232,9 +239,29 @@ function OrderCard({
           {order.estimatedPrice && <span>{t('coupang.priceLabel')}: ₩{order.estimatedPrice.toLocaleString()}</span>}
           {order.reason && <span className="truncate">{t('coupang.reasonLabel')}: {order.reason}</span>}
         </div>
+        {/* Approval trail */}
+        {(order.approvedByName || order.orderedByName) && (
+          <p className="text-[11px] text-muted-foreground mt-1.5">
+            {order.approvedByName && <>{t('coupang.approvedBy')}: {order.approvedByName}</>}
+            {order.approvedByName && order.orderedByName && ' · '}
+            {order.orderedByName && <>{t('coupang.orderedBy')}: {order.orderedByName}</>}
+          </p>
+        )}
         {/* Actions */}
         <div className="flex items-center gap-2 mt-2">
-          {isManager && order.status === 'requested' && (
+          {/* Step 1: approve / reject a new request */}
+          {isApprover && order.status === 'requested' && (
+            <>
+              <Button size="sm" className="h-7 text-xs" onClick={() => onStatusChange(order, 'approved')}>
+                {t('coupang.approve')}
+              </Button>
+              <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={() => onStatusChange(order, 'rejected')}>
+                {t('coupang.reject')}
+              </Button>
+            </>
+          )}
+          {/* Step 2: only approved orders proceed to ordering */}
+          {isApprover && order.status === 'approved' && (
             <>
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onStatusChange(order, 'ordered')}>
                 {t('coupang.markOrdered')}
@@ -244,12 +271,13 @@ function OrderCard({
               </Button>
             </>
           )}
-          {isManager && order.status === 'ordered' && (
+          {/* Step 3: mark delivered */}
+          {isApprover && order.status === 'ordered' && (
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onStatusChange(order, 'delivered')}>
               {t('coupang.markDelivered')}
             </Button>
           )}
-          {(isManager || (isOwner && order.status === 'requested')) && (
+          {(isApprover || (isOwner && order.status === 'requested')) && (
             <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => onDelete(order.id)}>
               <Trash2 className="h-3 w-3" />
             </Button>

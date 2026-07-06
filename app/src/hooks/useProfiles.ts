@@ -15,6 +15,7 @@ function mapProfile(row: Record<string, unknown>): User {
     contractEndDate: (row.contract_end_date as string) || undefined,
     isExternal: (row.is_external as boolean) || false,
     isPartner: (row.is_partner as boolean) || false,
+    canApproveOrders: (row.can_approve_orders as boolean) || false,
     workerType: (row.worker_type as WorkerType) || undefined,
     avatarUrl: (row.avatar_url as string) || undefined,
     createdAt: row.created_at as string,
@@ -52,6 +53,7 @@ export function useUpdateProfile() {
       name?: string
       isExternal?: boolean
       isPartner?: boolean
+      canApproveOrders?: boolean
     }) => {
       const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (updates.role !== undefined) row.role = updates.role
@@ -64,6 +66,7 @@ export function useUpdateProfile() {
       if (updates.name !== undefined) row.name = updates.name
       if (updates.isExternal !== undefined) row.is_external = updates.isExternal
       if (updates.isPartner !== undefined) row.is_partner = updates.isPartner
+      if (updates.canApproveOrders !== undefined) row.can_approve_orders = updates.canApproveOrders
 
       const { data, error } = await supabase
         .from('profiles')

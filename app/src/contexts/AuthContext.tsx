@@ -23,6 +23,8 @@ function toUser(data: Record<string, unknown>, fallbackEmail: string): User {
     department: (data.department as User['department']) || undefined,
     position: data.position as string | undefined,
     isExternal: (data.is_external as boolean) || false,
+    isPartner: (data.is_partner as boolean) || false,
+    canApproveOrders: (data.can_approve_orders as boolean) || false,
     avatarUrl: data.avatar_url as string | undefined,
     createdAt: data.created_at as string,
   }

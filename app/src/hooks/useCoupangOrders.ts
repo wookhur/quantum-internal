@@ -4,8 +4,17 @@ import { createNotificationsForUsers } from './useUserNotifications'
 
 const KWAK_JISOO_ID = '1a80e844-703e-41d2-87e7-763a5ea06343'
 
-export type OrderStatus = 'requested' | 'ordered' | 'delivered' | 'rejected'
+export type OrderStatus = 'requested' | 'approved' | 'ordered' | 'delivered' | 'rejected'
 export type OrderCategory = 'office' | 'snack' | 'equipment' | 'living' | 'other'
+
+/** IDs of users who can approve orders (admin or the '주문승인' permission). */
+async function fetchApproverIds(): Promise<string[]> {
+  const { data } = await supabase
+    .from('profiles')
+    .select('id')
+    .or('role.eq.admin,can_approve_orders.eq.true')
+  return (data || []).map((r: Record<string, unknown>) => r.id as string)
+}
 
 export const ORDER_CATEGORIES: { key: OrderCategory; labelKey: string }[] = [
   { key: 'office', labelKey: 'coupang.categoryOffice' },
@@ -17,6 +26,7 @@ export const ORDER_CATEGORIES: { key: OrderCategory; labelKey: string }[] = [
 
 export const ORDER_STATUS_CONFIG: Record<OrderStatus, { labelKey: string; className: string }> = {
   requested: { labelKey: 'coupang.statusRequested', className: 'bg-amber-100 text-amber-700' },
+  approved: { labelKey: 'coupang.statusApproved', className: 'bg-violet-100 text-violet-700' },
   ordered: { labelKey: 'coupang.statusOrdered', className: 'bg-blue-100 text-blue-700' },
   delivered: { labelKey: 'coupang.statusDelivered', className: 'bg-emerald-100 text-emerald-700' },
   rejected: { labelKey: 'coupang.statusRejected', className: 'bg-red-100 text-red-700' },
@@ -36,6 +46,9 @@ export interface CoupangOrder {
   orderedBy?: string
   orderedByName?: string
   orderedAt?: string
+  approvedBy?: string
+  approvedByName?: string
+  approvedAt?: string
   createdAt: string
   updatedAt: string
 }
@@ -43,6 +56,7 @@ export interface CoupangOrder {
 function mapOrder(row: Record<string, unknown>): CoupangOrder {
   const requester = row.requester as Record<string, unknown> | null
   const orderer = row.orderer as Record<string, unknown> | null
+  const approver = row.approver as Record<string, unknown> | null
   return {
     id: row.id as string,
     requesterId: row.requester_id as string,
@@ -57,6 +71,9 @@ function mapOrder(row: Record<string, unknown>): CoupangOrder {
     orderedBy: (row.ordered_by as string) || undefined,
     orderedByName: orderer?.name as string | undefined,
     orderedAt: (row.ordered_at as string) || undefined,
+    approvedBy: (row.approved_by as string) || undefined,
+    approvedByName: approver?.name as string | undefined,
+    approvedAt: (row.approved_at as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -68,7 +85,7 @@ export function useCoupangOrders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('coupang_orders')
-        .select('*, requester:requester_id(name), orderer:ordered_by(name)')
+        .select('*, requester:requester_id(name), orderer:ordered_by(name), approver:approved_by(name)')
         .order('created_at', { ascending: false })
       if (error) throw error
       return (data || []).map((r) => mapOrder(r as Record<string, unknown>))
@@ -100,10 +117,13 @@ export function useCreateCoupangOrder() {
       })
       if (error) throw error
 
-      await createNotificationsForUsers([KWAK_JISOO_ID], {
+      // Notify everyone who can approve (falls back to the default orderer)
+      const approverIds = await fetchApproverIds()
+      const targets = approverIds.length > 0 ? approverIds : [KWAK_JISOO_ID]
+      await createNotificationsForUsers(targets, {
         type: 'coupang_order',
-        title: '쿠팡 주문 요청',
-        message: `${order.requesterName}님이 "${order.productName}" 주문을 요청했습니다.`,
+        title: '쿠팡 주문 승인 요청',
+        message: `${order.requesterName}님이 "${order.productName}" 주문 승인을 요청했습니다.`,
         link: '/common/coupang-orders',
       })
     },
@@ -117,19 +137,37 @@ export function useUpdateCoupangOrder() {
     mutationFn: async (payload: {
       id: string
       status?: OrderStatus
-      orderedBy?: string
+      actorId?: string
+      // for notifying the requester on approve/reject
+      requesterId?: string
+      productName?: string
     }) => {
       const { id, ...rest } = payload
       const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (rest.status !== undefined) {
         update.status = rest.status
+        if (rest.status === 'approved') {
+          update.approved_by = rest.actorId || null
+          update.approved_at = new Date().toISOString()
+        }
         if (rest.status === 'ordered') {
-          update.ordered_by = rest.orderedBy || null
+          update.ordered_by = rest.actorId || null
           update.ordered_at = new Date().toISOString()
         }
       }
       const { error } = await supabase.from('coupang_orders').update(update).eq('id', id)
       if (error) throw error
+
+      // Let the requester know the approval outcome
+      if ((rest.status === 'approved' || rest.status === 'rejected') && rest.requesterId) {
+        const approved = rest.status === 'approved'
+        await createNotificationsForUsers([rest.requesterId], {
+          type: 'coupang_order',
+          title: approved ? '쿠팡 주문 승인됨' : '쿠팡 주문 반려됨',
+          message: `"${rest.productName || '요청하신'}" 주문이 ${approved ? '승인되었습니다. 곧 주문이 진행됩니다.' : '반려되었습니다.'}`,
+          link: '/common/coupang-orders',
+        })
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['coupang-orders'] }),
   })

@@ -120,6 +120,7 @@ function UserEditDialog({
   const [contractEndDate, setContractEndDate] = useState(user.contractEndDate || '')
   const [isExternal, setIsExternal] = useState(user.isExternal)
   const [isPartner, setIsPartner] = useState(user.isPartner || false)
+  const [canApproveOrders, setCanApproveOrders] = useState(user.canApproveOrders || false)
   const [enabledModules, setEnabledModules] = useState<FeatureModule[]>(effectiveModules)
   const [enabledRoutes, setEnabledRoutes] = useState<string[]>(effectiveRoutes)
   const [useCustomAccess, setUseCustomAccess] = useState(
@@ -214,6 +215,7 @@ function UserEditDialog({
         contractEndDate: contractEndDate || null,
         isExternal,
         isPartner,
+        canApproveOrders,
       })
 
       if (useCustomAccess) {
@@ -239,7 +241,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentType, workerType, contractStartDate, contractEndDate, isExternal, isPartner, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentType, workerType, contractStartDate, contractEndDate, isExternal, isPartner, canApproveOrders, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -328,6 +330,15 @@ function UserEditDialog({
                   <Switch checked={isPartner} onCheckedChange={setIsPartner} />
                   <span className="text-xs text-muted-foreground">
                     {isPartner ? '파트너사 계정' : '아니오'}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">주문승인 권한</Label>
+                <div className="flex items-center gap-2 h-9">
+                  <Switch checked={canApproveOrders} onCheckedChange={setCanApproveOrders} />
+                  <span className="text-xs text-muted-foreground">
+                    {canApproveOrders ? '쿠팡 주문 승인 가능' : '없음'}
                   </span>
                 </div>
               </div>
