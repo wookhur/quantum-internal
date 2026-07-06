@@ -333,15 +333,6 @@ function UserEditDialog({
                   </span>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">주문승인 권한</Label>
-                <div className="flex items-center gap-2 h-9">
-                  <Switch checked={canApproveOrders} onCheckedChange={setCanApproveOrders} />
-                  <span className="text-xs text-muted-foreground">
-                    {canApproveOrders ? '쿠팡 주문 승인 가능' : '없음'}
-                  </span>
-                </div>
-              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -509,6 +500,25 @@ function UserEditDialog({
                   </div>
                 )
               })}
+            </div>
+
+            {/* Special permissions (not tied to a route/module) */}
+            <div className="pt-1">
+              <div className="text-[11px] font-semibold text-muted-foreground mb-1.5">특수 권한</div>
+              <div className="rounded-lg border overflow-hidden">
+                <div className="flex items-center justify-between p-2.5 bg-white">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${canApproveOrders ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">주문승인 권한</div>
+                      <div className="text-[11px] text-muted-foreground truncate">
+                        쿠팡 주문 요청을 승인·반려하고 주문을 진행할 수 있습니다
+                      </div>
+                    </div>
+                  </div>
+                  <Switch checked={canApproveOrders} onCheckedChange={setCanApproveOrders} />
+                </div>
+              </div>
             </div>
           </div>
 
