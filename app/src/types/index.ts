@@ -15,6 +15,7 @@ export interface User {
   workerType?: WorkerType
   contractStartDate?: string
   contractEndDate?: string
+  hireDate?: string  // 입사일 — 연차 계산 기준
   isExternal: boolean
   isPartner?: boolean
   canApproveOrders?: boolean  // 쿠팡 주문 '주문승인' 권한

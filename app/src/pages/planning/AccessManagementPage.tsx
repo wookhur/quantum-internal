@@ -118,6 +118,7 @@ function UserEditDialog({
   const [workerType, setWorkerType] = useState<string>(user.workerType || '')
   const [contractStartDate, setContractStartDate] = useState(user.contractStartDate || '')
   const [contractEndDate, setContractEndDate] = useState(user.contractEndDate || '')
+  const [hireDate, setHireDate] = useState(user.hireDate || '')
   const [isExternal, setIsExternal] = useState(user.isExternal)
   const [isPartner, setIsPartner] = useState(user.isPartner || false)
   const [canApproveOrders, setCanApproveOrders] = useState(user.canApproveOrders || false)
@@ -214,6 +215,7 @@ function UserEditDialog({
         workerType: workerType ? (workerType as WorkerType) : null,
         contractStartDate: contractStartDate || null,
         contractEndDate: contractEndDate || null,
+        hireDate: hireDate || null,
         isExternal,
         isPartner,
         canApproveOrders,
@@ -249,7 +251,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentType, workerType, contractStartDate, contractEndDate, isExternal, isPartner, canApproveOrders, canApproveLeave, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentType, workerType, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -343,7 +345,7 @@ function UserEditDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">{t('access.workerType')}</Label>
                 <Select value={workerType || '_none'} onValueChange={v => setWorkerType(!v || v === '_none' ? '' : v)}>
@@ -357,6 +359,15 @@ function UserEditDialog({
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">입사일 <span className="text-[10px] text-muted-foreground">(연차 기준)</span></Label>
+                <Input
+                  type="date"
+                  value={hireDate}
+                  onChange={e => setHireDate(e.target.value)}
+                  className="h-9"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">{t('access.employmentType')}</Label>

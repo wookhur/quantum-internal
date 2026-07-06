@@ -13,6 +13,7 @@ function mapProfile(row: Record<string, unknown>): User {
     employmentType: (row.employment_type as EmploymentType) || undefined,
     contractStartDate: (row.contract_start_date as string) || undefined,
     contractEndDate: (row.contract_end_date as string) || undefined,
+    hireDate: (row.hire_date as string) || undefined,
     isExternal: (row.is_external as boolean) || false,
     isPartner: (row.is_partner as boolean) || false,
     canApproveOrders: (row.can_approve_orders as boolean) || false,
@@ -51,6 +52,7 @@ export function useUpdateProfile() {
       workerType?: WorkerType | null
       contractStartDate?: string | null
       contractEndDate?: string | null
+      hireDate?: string | null
       name?: string
       isExternal?: boolean
       isPartner?: boolean
@@ -65,6 +67,7 @@ export function useUpdateProfile() {
       if (updates.workerType !== undefined) row.worker_type = updates.workerType
       if (updates.contractStartDate !== undefined) row.contract_start_date = updates.contractStartDate
       if (updates.contractEndDate !== undefined) row.contract_end_date = updates.contractEndDate
+      if (updates.hireDate !== undefined) row.hire_date = updates.hireDate
       if (updates.name !== undefined) row.name = updates.name
       if (updates.isExternal !== undefined) row.is_external = updates.isExternal
       if (updates.isPartner !== undefined) row.is_partner = updates.isPartner

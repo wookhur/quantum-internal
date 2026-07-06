@@ -42,8 +42,8 @@ export function LeaveManagementPage() {
 
   // My annual-leave balance
   const annual = useMemo(
-    () => computeAnnualEntitlement(user?.contractStartDate),
-    [user?.contractStartDate],
+    () => computeAnnualEntitlement(user?.hireDate || user?.contractStartDate),
+    [user?.hireDate, user?.contractStartDate],
   )
   const myAnnualUsed = useMemo(() =>
     requests
@@ -291,6 +291,7 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
               <SelectContent>
                 <SelectItem value="annual">연차</SelectItem>
                 <SelectItem value="paid_special">유급휴가 (연 {PAID_LEAVE_ANNUAL}일)</SelectItem>
+                <SelectItem value="sick">병가</SelectItem>
                 <SelectItem value="family_event">경조사</SelectItem>
                 <SelectItem value="other">기타</SelectItem>
               </SelectContent>
@@ -332,7 +333,7 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
               />
               <p className="text-[11px] text-muted-foreground mt-1">자동 계산: {autoDays}일 (수정 가능)</p>
             </div>
-            {leaveType === 'other' && (
+            {(leaveType === 'other' || leaveType === 'sick') && (
               <div>
                 <Label>유급 여부</Label>
                 <Select value={paid ? 'paid' : 'unpaid'} onValueChange={(v) => setPaid(v === 'paid')}>
@@ -359,7 +360,7 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
                 leaveType,
                 eventType: leaveType === 'family_event' ? eventType : undefined,
                 startDate, endDate, days,
-                paid: leaveType === 'other' ? paid : true,
+                paid: (leaveType === 'other' || leaveType === 'sick') ? paid : true,
                 reason: reason.trim() || undefined,
               })}
             >
@@ -386,13 +387,14 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
     return profiles
       .filter(p => !p.isPartner && !p.isExternal)
       .map(p => {
-        const ent = computeAnnualEntitlement(p.contractStartDate)
+        const hire = p.hireDate || p.contractStartDate
+        const ent = computeAnnualEntitlement(hire)
         const aUsed = usedAnnual.get(p.id) || 0
         const pUsed = usedPaid.get(p.id) || 0
         return {
           id: p.id,
           name: p.name,
-          hireDate: p.contractStartDate,
+          hireDate: hire,
           annualEnt: ent.entitlement,
           annualUsed: aUsed,
           annualLeft: Math.max(0, ent.entitlement - aUsed),
