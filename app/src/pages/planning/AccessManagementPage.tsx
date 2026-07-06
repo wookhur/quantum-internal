@@ -231,6 +231,11 @@ function UserEditDialog({
       onOpenChange(false)
     } catch (err) {
       console.error('Failed to save:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      alert(
+        `저장에 실패했습니다.\n${msg}\n\n` +
+        `('enabled_routes' 컬럼 오류라면 migration-feature-access-routes.sql 을 실행해 주세요.)`
+      )
     } finally {
       setSaving(false)
     }
