@@ -68,6 +68,7 @@ function useEmploymentTypeOptions() {
   return [
     { value: 'permanent' as EmploymentType, label: t('access.empPermanent') },
     { value: 'contract' as EmploymentType, label: t('access.empContract') },
+    { value: 'intern' as EmploymentType, label: t('access.empIntern') },
     { value: 'dispatch' as EmploymentType, label: t('access.empDispatch') },
     { value: 'daily' as EmploymentType, label: t('access.empDaily') },
     { value: 'freelancer' as EmploymentType, label: t('access.empFreelancer') },
@@ -102,7 +103,6 @@ function UserEditDialog({
   const DEPT_OPTIONS = useDeptOptions()
   const ROLE_OPTIONS = useRoleOptions()
   const EMPLOYMENT_TYPE_OPTIONS = useEmploymentTypeOptions()
-  const WORKER_TYPE_OPTIONS = useWorkerTypeOptions()
   const updateProfile = useUpdateProfile()
   const updateFeatureAccess = useUpdateFeatureAccess()
   const { user: currentUser } = useAuth()
@@ -115,7 +115,6 @@ function UserEditDialog({
   const [department, setDepartment] = useState<string>(user.department || '')
   const [position, setPosition] = useState<string>(user.position || '')
   const [employmentType, setEmploymentType] = useState<string>(user.employmentType || '')
-  const [workerType, setWorkerType] = useState<string>(user.workerType || '')
   const [contractStartDate, setContractStartDate] = useState(user.contractStartDate || '')
   const [contractEndDate, setContractEndDate] = useState(user.contractEndDate || '')
   const [hireDate, setHireDate] = useState(user.hireDate || '')
@@ -212,7 +211,6 @@ function UserEditDialog({
         department: department ? (department as Department) : null,
         position: position || null,
         employmentType: employmentType ? (employmentType as EmploymentType) : null,
-        workerType: workerType ? (workerType as WorkerType) : null,
         contractStartDate: contractStartDate || null,
         contractEndDate: contractEndDate || null,
         hireDate: hireDate || null,
@@ -251,7 +249,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentType, workerType, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentType, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -345,16 +343,16 @@ function UserEditDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">{t('access.workerType')}</Label>
-                <Select value={workerType || '_none'} onValueChange={v => setWorkerType(!v || v === '_none' ? '' : v)}>
+                <Label className="text-xs">고용형태 <span className="text-[10px] text-muted-foreground">(정규직/계약직/인턴/프리랜서 등)</span></Label>
+                <Select value={employmentType || '_none'} onValueChange={v => setEmploymentType(!v || v === '_none' ? '' : v)}>
                   <SelectTrigger className="h-9">
-                    <span>{WORKER_TYPE_OPTIONS.find(o => o.value === workerType)?.label || t('access.workerTypeUnassigned')}</span>
+                    <span>{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === employmentType)?.label || t('access.employmentUnassigned')}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="_none">{t('access.workerTypeUnassigned')}</SelectItem>
-                    {WORKER_TYPE_OPTIONS.map(opt => (
+                    <SelectItem value="_none">{t('access.employmentUnassigned')}</SelectItem>
+                    {EMPLOYMENT_TYPE_OPTIONS.map(opt => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -368,20 +366,6 @@ function UserEditDialog({
                   onChange={e => setHireDate(e.target.value)}
                   className="h-9"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t('access.employmentType')}</Label>
-                <Select value={employmentType || '_none'} onValueChange={v => setEmploymentType(!v || v === '_none' ? '' : v)}>
-                  <SelectTrigger className="h-9">
-                    <span>{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === employmentType)?.label || t('access.employmentUnassigned')}</span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">{t('access.employmentUnassigned')}</SelectItem>
-                    {EMPLOYMENT_TYPE_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 

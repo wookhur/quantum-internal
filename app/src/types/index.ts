@@ -1,7 +1,7 @@
 // ============ USER & AUTH ============
 export type UserRole = 'admin' | 'c_level' | 'sales_manager' | 'service_manager' | 'marketing_manager' | 'consultant' | 'freelancer' | 'external'
 export type Department = 'management' | 'sales' | 'marketing' | 'finance' | 'service'
-export type EmploymentType = 'permanent' | 'contract' | 'dispatch' | 'daily' | 'freelancer' | 'commissioned' | 'executive'
+export type EmploymentType = 'permanent' | 'contract' | 'intern' | 'dispatch' | 'daily' | 'freelancer' | 'commissioned' | 'executive'
 export type WorkerType = 'employee' | 'freelancer' | 'business'
 
 export interface User {
