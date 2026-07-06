@@ -233,10 +233,16 @@ function UserEditDialog({
       onOpenChange(false)
     } catch (err) {
       console.error('Failed to save:', err)
-      const msg = err instanceof Error ? err.message : String(err)
+      const e = err as Record<string, unknown> | null
+      const parts = [e?.message, e?.details, e?.hint, e?.code]
+        .filter(Boolean)
+        .map(String)
+      const msg = parts.length ? parts.join('\n') : JSON.stringify(err)
       alert(
-        `저장에 실패했습니다.\n${msg}\n\n` +
-        `('enabled_routes' 컬럼 오류라면 migration-feature-access-routes.sql 을 실행해 주세요.)`
+        `저장에 실패했습니다.\n\n${msg}\n\n` +
+        `(컬럼 관련 오류라면 아래 마이그레이션을 Supabase에서 실행해 주세요:\n` +
+        `· enabled_routes → migration-feature-access-routes.sql\n` +
+        `· can_approve_orders → migration-coupang-approval.sql)`
       )
     } finally {
       setSaving(false)
