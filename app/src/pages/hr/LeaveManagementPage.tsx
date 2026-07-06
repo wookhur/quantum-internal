@@ -15,8 +15,10 @@ import {
 } from '@/hooks/useLeaveRequests'
 import {
   computeAnnualEntitlement, dayCount, FAMILY_EVENTS, familyEventLabel,
-  LEAVE_TYPE_LABELS, type LeaveType,
+  LEAVE_TYPE_LABELS, PAID_LEAVE_ANNUAL, type LeaveType,
 } from '@/lib/leave'
+import { useProfiles } from '@/hooks/useProfiles'
+import type { User } from '@/types'
 
 const STATUS_CFG: Record<LeaveStatus, { label: string; className: string }> = {
   requested: { label: '승인대기', className: 'bg-amber-100 text-amber-700' },
@@ -24,11 +26,12 @@ const STATUS_CFG: Record<LeaveStatus, { label: string; className: string }> = {
   rejected: { label: '반려', className: 'bg-red-100 text-red-700' },
 }
 
-type Tab = 'mine' | 'all'
+type Tab = 'mine' | 'all' | 'summary'
 
 export function LeaveManagementPage() {
   const { user } = useAuth()
   const { data: requests = [], isLoading } = useLeaveRequests()
+  const { data: profiles = [] } = useProfiles()
   const createReq = useCreateLeaveRequest()
   const updateStatus = useUpdateLeaveStatus()
   const deleteReq = useDeleteLeaveRequest()
@@ -48,7 +51,14 @@ export function LeaveManagementPage() {
       .reduce((s, r) => s + r.days, 0),
     [requests, user?.id],
   )
+  const myPaidUsed = useMemo(() =>
+    requests
+      .filter(r => r.requesterId === user?.id && r.leaveType === 'paid_special' && r.status !== 'rejected')
+      .reduce((s, r) => s + r.days, 0),
+    [requests, user?.id],
+  )
   const remaining = Math.max(0, annual.entitlement - myAnnualUsed)
+  const paidRemaining = Math.max(0, PAID_LEAVE_ANNUAL - myPaidUsed)
 
   const mine = requests.filter(r => r.requesterId === user?.id)
   const pending = requests.filter(r => r.status === 'requested')
@@ -78,32 +88,52 @@ export function LeaveManagementPage() {
         </Button>
       </div>
 
-      {/* My annual balance */}
-      <Card>
-        <CardContent className="py-4">
-          <div className="flex items-center gap-6 flex-wrap">
-            <div>
-              <div className="text-xs text-muted-foreground">올해 연차</div>
-              <div className="text-2xl font-bold">{annual.entitlement}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+      {/* My balances */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Card>
+          <CardContent className="py-4">
+            <div className="text-xs font-semibold text-muted-foreground mb-2">연차</div>
+            <div className="flex items-center gap-6">
+              <div>
+                <div className="text-[11px] text-muted-foreground">부여</div>
+                <div className="text-2xl font-bold">{annual.entitlement}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">사용</div>
+                <div className="text-2xl font-bold text-blue-600">{myAnnualUsed}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">잔여</div>
+                <div className="text-2xl font-bold text-emerald-600">{remaining}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs text-muted-foreground">사용</div>
-              <div className="text-2xl font-bold text-blue-600">{myAnnualUsed}<span className="text-sm font-normal text-muted-foreground">일</span></div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">잔여</div>
-              <div className="text-2xl font-bold text-emerald-600">{remaining}<span className="text-sm font-normal text-muted-foreground">일</span></div>
-            </div>
-            <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground max-w-sm ml-auto">
+            <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground mt-2">
               <Info className="size-3.5 shrink-0 mt-0.5" />
-              <span>
-                {annual.note}
-                {annual.effectiveStart && ` · 연차 계산 시작일 ${annual.effectiveStart}`}
-              </span>
+              <span>{annual.note}{annual.effectiveStart && ` · 시작일 ${annual.effectiveStart}`}</span>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4">
+            <div className="text-xs font-semibold text-muted-foreground mb-2">유급휴가</div>
+            <div className="flex items-center gap-6">
+              <div>
+                <div className="text-[11px] text-muted-foreground">부여</div>
+                <div className="text-2xl font-bold">{PAID_LEAVE_ANNUAL}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">사용</div>
+                <div className="text-2xl font-bold text-blue-600">{myPaidUsed}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+              </div>
+              <div>
+                <div className="text-[11px] text-muted-foreground">잔여</div>
+                <div className="text-2xl font-bold text-emerald-600">{paidRemaining}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+              </div>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-2">연 {PAID_LEAVE_ANNUAL}일 · 경조사는 별도(잔여 차감 없음)</div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-2">
@@ -115,10 +145,18 @@ export function LeaveManagementPage() {
             전체 {pending.length > 0 && <span className="ml-1 text-amber-600">· 대기 {pending.length}</span>}
           </Button>
         )}
+        {isApprover && (
+          <Button variant={tab === 'summary' ? 'default' : 'outline'} size="sm" onClick={() => setTab('summary')}>
+            직원 현황
+          </Button>
+        )}
       </div>
 
-      {/* List */}
-      {list.length === 0 ? (
+      {/* Employee summary (approvers) */}
+      {tab === 'summary' ? (
+        <EmployeeLeaveSummary profiles={profiles} requests={requests} />
+      ) : /* List */
+      list.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">
           <CalendarDays className="h-10 w-10 mx-auto mb-2 opacity-40" />
           <p>휴가 신청 내역이 없습니다.</p>
@@ -252,6 +290,7 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="annual">연차</SelectItem>
+                <SelectItem value="paid_special">유급휴가 (연 {PAID_LEAVE_ANNUAL}일)</SelectItem>
                 <SelectItem value="family_event">경조사</SelectItem>
                 <SelectItem value="other">기타</SelectItem>
               </SelectContent>
@@ -330,5 +369,76 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; requests: LeaveRequest[] }) {
+  const rows = useMemo(() => {
+    // sum non-rejected days per requester per type
+    const usedAnnual = new Map<string, number>()
+    const usedPaid = new Map<string, number>()
+    requests.forEach(r => {
+      if (r.status === 'rejected') return
+      const m = r.leaveType === 'annual' ? usedAnnual : r.leaveType === 'paid_special' ? usedPaid : null
+      if (!m) return
+      m.set(r.requesterId, (m.get(r.requesterId) || 0) + r.days)
+    })
+    return profiles
+      .filter(p => !p.isPartner && !p.isExternal)
+      .map(p => {
+        const ent = computeAnnualEntitlement(p.contractStartDate)
+        const aUsed = usedAnnual.get(p.id) || 0
+        const pUsed = usedPaid.get(p.id) || 0
+        return {
+          id: p.id,
+          name: p.name,
+          hireDate: p.contractStartDate,
+          annualEnt: ent.entitlement,
+          annualUsed: aUsed,
+          annualLeft: Math.max(0, ent.entitlement - aUsed),
+          paidUsed: pUsed,
+          paidLeft: Math.max(0, PAID_LEAVE_ANNUAL - pUsed),
+          noHire: !p.contractStartDate,
+        }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }, [profiles, requests])
+
+  return (
+    <Card>
+      <CardContent className="p-0 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-gray-50/60 text-xs text-muted-foreground">
+              <th className="text-left font-medium px-3 py-2">이름</th>
+              <th className="text-left font-medium px-3 py-2 whitespace-nowrap">입사일</th>
+              <th className="text-right font-medium px-3 py-2">연차 부여</th>
+              <th className="text-right font-medium px-3 py-2">연차 사용</th>
+              <th className="text-right font-medium px-3 py-2">연차 잔여</th>
+              <th className="text-right font-medium px-3 py-2">유급 사용</th>
+              <th className="text-right font-medium px-3 py-2">유급 잔여</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} className="border-b last:border-0 hover:bg-gray-50/50">
+                <td className="px-3 py-2 font-medium">{r.name}</td>
+                <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                  {r.hireDate || <span className="text-amber-600">미설정</span>}
+                </td>
+                <td className="px-3 py-2 text-right">{r.annualEnt}</td>
+                <td className="px-3 py-2 text-right text-blue-600">{r.annualUsed}</td>
+                <td className="px-3 py-2 text-right font-semibold text-emerald-600">{r.annualLeft}</td>
+                <td className="px-3 py-2 text-right text-blue-600">{r.paidUsed}</td>
+                <td className="px-3 py-2 text-right font-semibold text-emerald-600">{r.paidLeft}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">표시할 직원이 없습니다.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   )
 }

@@ -9,10 +9,14 @@
 
 export const COMPANY_LEAVE_START = '2025-05-23'
 
-export type LeaveType = 'annual' | 'family_event' | 'other'
+// 별도 유급휴가 연간 부여 일수 (누적 사용, 리셋 없음)
+export const PAID_LEAVE_ANNUAL = 3
+
+export type LeaveType = 'annual' | 'paid_special' | 'family_event' | 'other'
 
 export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
   annual: '연차',
+  paid_special: '유급휴가',
   family_event: '경조사',
   other: '기타',
 }
