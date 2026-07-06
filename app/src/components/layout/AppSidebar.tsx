@@ -125,6 +125,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     module: 'hr',
     items: [
       { labelKey: 'nav.attendance', to: '/hr/attendance', icon: Clock },
+      { labelKey: 'nav.leaveManagement', to: '/hr/leave', icon: CalendarDays },
       { labelKey: 'nav.kpiTargets', to: '/hr/kpi-targets', icon: Target },
       { labelKey: 'nav.personalInfo', to: '/hr/personal-info', icon: ClipboardList },
       { labelKey: 'nav.accessControl', to: '/hr/employees', icon: Users },

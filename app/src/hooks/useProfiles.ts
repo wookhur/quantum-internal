@@ -16,6 +16,7 @@ function mapProfile(row: Record<string, unknown>): User {
     isExternal: (row.is_external as boolean) || false,
     isPartner: (row.is_partner as boolean) || false,
     canApproveOrders: (row.can_approve_orders as boolean) || false,
+    canApproveLeave: (row.can_approve_leave as boolean) || false,
     workerType: (row.worker_type as WorkerType) || undefined,
     avatarUrl: (row.avatar_url as string) || undefined,
     createdAt: row.created_at as string,
@@ -54,6 +55,7 @@ export function useUpdateProfile() {
       isExternal?: boolean
       isPartner?: boolean
       canApproveOrders?: boolean
+      canApproveLeave?: boolean
     }) => {
       const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (updates.role !== undefined) row.role = updates.role
@@ -67,6 +69,7 @@ export function useUpdateProfile() {
       if (updates.isExternal !== undefined) row.is_external = updates.isExternal
       if (updates.isPartner !== undefined) row.is_partner = updates.isPartner
       if (updates.canApproveOrders !== undefined) row.can_approve_orders = updates.canApproveOrders
+      if (updates.canApproveLeave !== undefined) row.can_approve_leave = updates.canApproveLeave
 
       const { data, error } = await supabase
         .from('profiles')
@@ -149,6 +152,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/planning/cashflow', labelKey: 'nav.cashflow', module: 'planning' },
   // ── HR ──
   { path: '/hr/attendance', labelKey: 'nav.attendance', module: 'hr' },
+  { path: '/hr/leave', labelKey: 'nav.leaveManagement', module: 'hr' },
   { path: '/hr/kpi-targets', labelKey: 'nav.kpiTargets', module: 'hr' },
   { path: '/hr/employees', labelKey: 'nav.accessControl', module: 'hr' },
   { path: '/hr/personal-info', labelKey: 'nav.personalInfo', module: 'hr' },

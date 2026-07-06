@@ -36,6 +36,7 @@ import { AccessManagementPage } from '@/pages/planning/AccessManagementPage'
 import { KpiTargetsPage } from '@/pages/planning/KpiTargetsPage'
 import { CashflowPage } from '@/pages/planning/CashflowPage'
 import { AttendancePage } from '@/pages/planning/AttendancePage'
+import { LeaveManagementPage } from '@/pages/hr/LeaveManagementPage'
 import { AttendanceKioskPage } from '@/pages/planning/AttendanceKioskPage'
 import { PersonalInfoPage } from '@/pages/hr/PersonalInfoPage'
 import { EmployeeFormPage } from '@/pages/hr/EmployeeFormPage'
@@ -131,6 +132,7 @@ export default function App() {
                 <Route path="/planning/cashflow" element={<CashflowPage />} />
 
                 <Route path="/hr/attendance" element={<AttendancePage />} />
+                <Route path="/hr/leave" element={<LeaveManagementPage />} />
                 <Route path="/hr/kpi-targets" element={<KpiTargetsPage />} />
                 <Route path="/hr/employees" element={<AccessManagementPage />} />
                 <Route path="/hr/personal-info" element={<PersonalInfoPage />} />

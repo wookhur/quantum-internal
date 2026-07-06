@@ -18,6 +18,7 @@ export interface User {
   isExternal: boolean
   isPartner?: boolean
   canApproveOrders?: boolean  // 쿠팡 주문 '주문승인' 권한
+  canApproveLeave?: boolean   // '연차·휴가 승인' 권한
   avatarUrl?: string
   createdAt: string
 }

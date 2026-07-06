@@ -121,6 +121,7 @@ function UserEditDialog({
   const [isExternal, setIsExternal] = useState(user.isExternal)
   const [isPartner, setIsPartner] = useState(user.isPartner || false)
   const [canApproveOrders, setCanApproveOrders] = useState(user.canApproveOrders || false)
+  const [canApproveLeave, setCanApproveLeave] = useState(user.canApproveLeave || false)
   const [enabledModules, setEnabledModules] = useState<FeatureModule[]>(effectiveModules)
   const [enabledRoutes, setEnabledRoutes] = useState<string[]>(effectiveRoutes)
   const [useCustomAccess, setUseCustomAccess] = useState(
@@ -216,6 +217,7 @@ function UserEditDialog({
         isExternal,
         isPartner,
         canApproveOrders,
+        canApproveLeave,
       })
 
       if (useCustomAccess) {
@@ -247,7 +249,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentType, workerType, contractStartDate, contractEndDate, isExternal, isPartner, canApproveOrders, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentType, workerType, contractStartDate, contractEndDate, isExternal, isPartner, canApproveOrders, canApproveLeave, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -511,18 +513,34 @@ function UserEditDialog({
             {/* Special permissions (not tied to a route/module) */}
             <div className="pt-1">
               <div className="text-[11px] font-semibold text-muted-foreground mb-1.5">특수 권한</div>
-              <div className="rounded-lg border overflow-hidden">
-                <div className="flex items-center justify-between p-2.5 bg-white">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${canApproveOrders ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium">주문승인 권한</div>
-                      <div className="text-[11px] text-muted-foreground truncate">
-                        쿠팡 주문 요청을 승인·반려하고 주문을 진행할 수 있습니다
+              <div className="space-y-1.5">
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="flex items-center justify-between p-2.5 bg-white">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${canApproveOrders ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">주문승인 권한</div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          쿠팡 주문 요청을 승인·반려하고 주문을 진행할 수 있습니다
+                        </div>
                       </div>
                     </div>
+                    <Switch checked={canApproveOrders} onCheckedChange={setCanApproveOrders} />
                   </div>
-                  <Switch checked={canApproveOrders} onCheckedChange={setCanApproveOrders} />
+                </div>
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="flex items-center justify-between p-2.5 bg-white">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${canApproveLeave ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">연차·휴가 승인 권한</div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          직원의 연차·경조사 휴가 신청을 승인·반려할 수 있습니다
+                        </div>
+                      </div>
+                    </div>
+                    <Switch checked={canApproveLeave} onCheckedChange={setCanApproveLeave} />
+                  </div>
                 </div>
               </div>
             </div>
