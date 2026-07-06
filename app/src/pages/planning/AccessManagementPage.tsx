@@ -244,7 +244,9 @@ function UserEditDialog({
         `저장에 실패했습니다.\n\n${msg}\n\n` +
         `(컬럼 관련 오류라면 아래 마이그레이션을 Supabase에서 실행해 주세요:\n` +
         `· enabled_routes → migration-feature-access-routes.sql\n` +
-        `· can_approve_orders → migration-coupang-approval.sql)`
+        `· can_approve_orders → migration-coupang-approval.sql\n` +
+        `· can_approve_leave / leave_requests → migration-leave-management.sql\n` +
+        `· hire_date → migration-hire-date.sql)`
       )
     } finally {
       setSaving(false)
@@ -944,8 +946,8 @@ export function AccessManagementPage() {
                   <TableHead className="w-[100px]">{t('access.role')}</TableHead>
                   <TableHead className="w-[100px]">{t('access.department')}</TableHead>
                   <TableHead className="w-[90px]">{t('access.position')}</TableHead>
-                  <TableHead className="w-[80px]">{t('access.workerType')}</TableHead>
                   <TableHead className="w-[80px]">{t('access.employmentType')}</TableHead>
+                  <TableHead className="w-[100px]">입사일</TableHead>
                   <TableHead>{t('access.accessibleFeatures')}</TableHead>
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
@@ -997,14 +999,12 @@ export function AccessManagementPage() {
                         {profile.position || <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {profile.workerType
-                          ? <Badge variant="outline" className="text-[10px] h-4">{WORKER_TYPE_OPTIONS.find(o => o.value === profile.workerType)?.label || profile.workerType}</Badge>
-                          : <span className="text-muted-foreground">-</span>}
-                      </TableCell>
-                      <TableCell className="text-sm">
                         {profile.employmentType
                           ? <Badge variant="outline" className="text-[10px] h-4">{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === profile.employmentType)?.label || profile.employmentType}</Badge>
                           : <span className="text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {profile.hireDate || <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
