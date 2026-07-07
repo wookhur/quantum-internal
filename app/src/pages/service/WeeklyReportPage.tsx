@@ -58,11 +58,19 @@ export function WeeklyReportPage() {
   const { data: diaries = [] } = useAllServiceDiaryInRange(start, end)
   const { data: contracts = [] } = useContracts()
 
-  // 계약관리에서 '서비스 진행중'인 계약 건수 (전사 합계 교차검증용)
-  const inServiceContractCount = useMemo(
-    () => contracts.filter(c => c.status === 'active' || c.status === 'expiring_soon').length,
-    [contracts],
-  )
+  // 계약관리 '서비스 진행중' 계약 + Student360 학생 교차검증 (전사 합계 리마인드용)
+  const contractCheck = useMemo(() => {
+    const norm = (s?: string) => (s || '').replace(/\s+/g, '')
+    const inServiceContracts = contracts.filter(c => c.status === 'active' || c.status === 'expiring_soon')
+    const contractNames = inServiceContracts.map(c => c.studentName).filter(Boolean) as string[]
+    const serviceNames = students.map(s => s.name).filter(Boolean)
+    const serviceSet = new Set(serviceNames.map(norm))
+    const contractSet = new Set(contractNames.map(norm))
+    const onlyInContract = contractNames.filter(n => !serviceSet.has(norm(n)))
+    const onlyInService = serviceNames.filter(n => !contractSet.has(norm(n)))
+    return { count: inServiceContracts.length, onlyInContract, onlyInService }
+  }, [contracts, students])
+  const inServiceContractCount = contractCheck.count
 
   const consultantPool = useConsultantPool()
   const consultantName = useConsultantName()
@@ -78,11 +86,18 @@ export function WeeklyReportPage() {
   )
 
   // Follow-up commitments due in the period, with completion status
-  const followupStatus = useMemo(
-    () => followups
-      .map(f => ({ consultant: consultantName(f.studentConsultant), student: f.studentName, text: f.text, done: f.done, dueDate: f.dueDate }))
-      .sort((a, b) => (a.done === b.done ? a.consultant.localeCompare(b.consultant) : a.done ? 1 : -1)),
-    [followups],
+  // 미팅(다이어리)에 기록된 후속조치(follow-up commitments)를 그대로 불러옴
+  const followupNotes = useMemo(
+    () => diaries
+      .filter(d => (d.followUpCommitments || '').trim().length > 0)
+      .map(d => ({
+        date: d.entryDate || '',
+        consultant: consultantName(d.studentConsultant),
+        student: d.studentName,
+        text: (d.followUpCommitments || '').trim(),
+      }))
+      .sort((a, b) => a.consultant.localeCompare(b.consultant) || a.date.localeCompare(b.date)),
+    [diaries],
   )
 
   const { rows, totals, cancelDist } = useMemo(() => {
@@ -92,7 +107,8 @@ export function WeeklyReportPage() {
     ]
 
     const rows: QcRow[] = buckets.map(b => {
-      const studentsC = students.filter(s => s.status === 'active' && bucketOf(s.assignedConsultant) === b.id)
+      // Student360과 동일하게: 상태 필터 없이 배정된 모든 학생 (대소문자 불일치 방지)
+      const studentsC = students.filter(s => bucketOf(s.assignedConsultant) === b.id)
       const expected = studentsC.reduce((sum, s) => sum + countScheduledMeetings(s.regularMeetingSchedule, start, end), 0)
       const meetingsC = meetings.filter(m => bucketOf(m.consultantId) === b.id)
       const held = meetingsC.filter(m => m.status === 'held').length
@@ -202,7 +218,7 @@ export function WeeklyReportPage() {
             <tbody className="text-right">
               {rows.map(r => (
                 <tr key={r.id} className="border-t">
-                  <td className="text-left p-2 pl-3">{r.name} <span className="text-gray-400">({r.students})</span></td>
+                  <td className="text-left p-2 pl-3">{r.name}</td>
                   <td className="p-2">{r.students}</td>
                   <td className="p-2">{r.expected}</td>
                   <td className="p-2">{r.held}</td>
@@ -219,15 +235,22 @@ export function WeeklyReportPage() {
               {rows.length > 0 && (
                 <tr className="border-t-2 bg-gray-50 font-medium">
                   <td className="text-left p-2 pl-3">{t('weeklyReport.companyTotal')}</td>
-                  <td
-                    className={`p-2 ${totals.students !== inServiceContractCount ? 'text-red-600 font-bold' : ''}`}
-                    title={totals.students !== inServiceContractCount
-                      ? `Student360 담당학생 합계 ${totals.students}명 ≠ 계약관리 서비스진행중 ${inServiceContractCount}건 — 확인 필요`
-                      : `계약관리 서비스진행중 ${inServiceContractCount}건과 일치`}
-                  >
-                    {totals.students}
-                    {totals.students !== inServiceContractCount && <span className="text-[10px] align-top"> ⚠{inServiceContractCount}</span>}
-                  </td>
+                  {(() => {
+                    const mismatch = totals.students !== inServiceContractCount
+                      || contractCheck.onlyInContract.length > 0 || contractCheck.onlyInService.length > 0
+                    const memo = [
+                      `Student360 담당학생 ${totals.students}명 · 계약관리 서비스진행중 ${inServiceContractCount}건`,
+                      contractCheck.onlyInContract.length ? `\n▸ 계약엔 있으나 Student360 없음 (${contractCheck.onlyInContract.length}): ${contractCheck.onlyInContract.join(', ')}` : '',
+                      contractCheck.onlyInService.length ? `\n▸ Student360엔 있으나 서비스중 계약 없음 (${contractCheck.onlyInService.length}): ${contractCheck.onlyInService.join(', ')}` : '',
+                      mismatch ? '\n→ 확인 필요' : '\n→ 일치',
+                    ].join('')
+                    return (
+                      <td className={`p-2 ${mismatch ? 'text-red-600 font-bold cursor-help' : ''}`} title={memo}>
+                        {totals.students}
+                        {mismatch && <span className="text-[10px] align-top"> ⚠{inServiceContractCount}</span>}
+                      </td>
+                    )
+                  })()}
                   <td className="p-2">{totals.expected}</td>
                   <td className="p-2">{totals.held}</td>
                   <td className="p-2">{totals.cancelled}</td>
@@ -274,23 +297,20 @@ export function WeeklyReportPage() {
           )}
         </div>
 
-        {/* Follow-up commitments — completion status */}
+        {/* 후속조치 — 이 기간 미팅에 기록된 후속조치 내역 그대로 */}
         <div className="border rounded-lg p-4 mt-4">
           <div className="text-sm font-medium text-gray-600 mb-2">
-            {t('weeklyReport.followUpStatus')}
-            {followupStatus.length > 0 && (
-              <span className="ml-1 text-gray-400">({followupStatus.filter(f => f.done).length}/{followupStatus.length} {t('weeklyReport.followUpCompleted')})</span>
-            )}
+            후속조치 내역
+            {followupNotes.length > 0 && <span className="ml-1 text-gray-400">({followupNotes.length}건)</span>}
           </div>
-          {followupStatus.length === 0 ? (
-            <div className="text-sm text-gray-400">{t('weeklyReport.noFollowUps')}</div>
+          {followupNotes.length === 0 ? (
+            <div className="text-sm text-gray-400">이 기간 미팅에 기록된 후속조치가 없습니다.</div>
           ) : (
-            <ul className="space-y-1">
-              {followupStatus.map((f, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm">
-                  <span className={`shrink-0 mt-0.5 ${f.done ? 'text-emerald-600' : 'text-amber-600'}`}>{f.done ? '✓' : '○'}</span>
-                  <span className="text-gray-400 shrink-0 w-20 truncate text-xs mt-0.5">{f.consultant} · {f.student}</span>
-                  <span className={`flex-1 ${f.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>{f.text}</span>
+            <ul className="space-y-2">
+              {followupNotes.map((f, i) => (
+                <li key={i} className="text-sm border-l-2 border-amber-300 pl-2.5">
+                  <div className="text-[11px] text-gray-400">{f.date} · {f.consultant} · {f.student}</div>
+                  <div className="text-gray-700 whitespace-pre-wrap">{f.text}</div>
                 </li>
               ))}
             </ul>
