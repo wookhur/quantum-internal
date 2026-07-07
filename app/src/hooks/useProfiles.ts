@@ -96,6 +96,7 @@ export type FeatureModule =
   | 'sales'
   | 'marketing'
   | 'finance'
+  | 'invoice'
   | 'service'
   | 'planning'
   | 'hr'
@@ -146,8 +147,12 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/finance/wire-invoice', labelKey: 'nav.wireInvoice', module: 'finance' },
   { path: '/finance/incentives/by-contract', labelKey: 'nav.incentives', module: 'finance' },
   { path: '/finance/incentives/by-person', labelKey: 'nav.incentives', module: 'finance' },
-  { path: '/finance/sales-incentive-invoices', labelKey: 'nav.incentives', module: 'finance' },
-  { path: '/finance/freelancer-invoices', labelKey: 'nav.freelancerInvoices', module: 'finance' },
+
+  { path: '/invoices/freelancer-individual', labelKey: 'nav.invoiceFreelancerIndividual', module: 'invoice' },
+  { path: '/invoices/freelancer-business', labelKey: 'nav.invoiceFreelancerBusiness', module: 'invoice' },
+  { path: '/invoices/sales-incentive', labelKey: 'nav.invoiceSalesIncentive', module: 'invoice' },
+  { path: '/invoices/partner-individual', labelKey: 'nav.invoicePartnerIndividual', module: 'invoice' },
+  { path: '/invoices/partner-business', labelKey: 'nav.invoicePartnerBusiness', module: 'invoice' },
   // ── Planning ──
   { path: '/planning/overview', labelKey: 'nav.overview', module: 'planning' },
   { path: '/planning/projection', labelKey: 'nav.revenueProjection', module: 'planning' },
@@ -175,6 +180,7 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
   { key: 'marketing', labelKey: 'access.pkg.marketing', descriptionKey: 'access.pkg.marketingDesc' },
   { key: 'service', labelKey: 'access.pkg.service', descriptionKey: 'access.pkg.serviceDesc' },
   { key: 'finance', labelKey: 'access.pkg.finance', descriptionKey: 'access.pkg.financeDesc' },
+  { key: 'invoice', labelKey: 'access.pkg.invoice', descriptionKey: 'access.pkg.invoiceDesc' },
   { key: 'planning', labelKey: 'access.pkg.planning', descriptionKey: 'access.pkg.planningDesc' },
   { key: 'hr', labelKey: 'access.pkg.hr', descriptionKey: 'access.pkg.hrDesc' },
   { key: 'partner', labelKey: 'access.pkg.partner', descriptionKey: 'access.pkg.partnerDesc' },
@@ -197,13 +203,13 @@ function expandModulesToRoutes(modules: FeatureModule[]): string[] {
 
 /** Default feature access per role (module-level) */
 export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
-  admin: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
-  c_level: ['dashboard', 'sales', 'marketing', 'finance', 'service', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
-  sales_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
+  admin: ['dashboard', 'sales', 'marketing', 'finance', 'invoice', 'service', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
+  c_level: ['dashboard', 'sales', 'marketing', 'finance', 'invoice', 'service', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
+  sales_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'invoice', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
   service_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'hr', 'game'],
   marketing_manager: ['dashboard', 'marketing', 'game'],
-  consultant: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'hr', 'game', 'my_incentive'],
-  freelancer: ['dashboard', 'service', 'finance', 'game', 'my_incentive'],
+  consultant: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'invoice', 'hr', 'game', 'my_incentive'],
+  freelancer: ['dashboard', 'service', 'finance', 'invoice', 'game', 'my_incentive'],
   external: ['dashboard', 'game'],
 }
 

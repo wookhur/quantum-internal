@@ -74,6 +74,7 @@ interface ParsedInvoice {
   phone: string
   email: string
   bankAccount: string
+  note?: string
   items: ItemRow[]
 }
 
@@ -100,6 +101,8 @@ function InvoiceFormDialog({
   userId,
   initialData,
   kind,
+  allowAddItems,
+  businessLabels,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -108,6 +111,8 @@ function InvoiceFormDialog({
   userId: string
   initialData?: ParsedInvoice
   kind?: string
+  allowAddItems?: boolean
+  businessLabels?: boolean
 }) {
   const t = useT()
   const createInvoice = useCreateInvoice()
@@ -118,7 +123,7 @@ function InvoiceFormDialog({
   const [residentNumber, setResidentNumber] = useState(initialData?.residentNumber || invoice?.residentNumber || '')
   const [phone, setPhone] = useState(initialData?.phone || invoice?.phone || '')
   const [bankAccount, setBankAccount] = useState(initialData?.bankAccount || invoice?.bankAccount || '')
-  const [note, setNote] = useState(invoice?.note || '')
+  const [note, setNote] = useState(initialData?.note || invoice?.note || '')
   const [items, setItems] = useState<ItemRow[]>(
     initialData?.items?.length
       ? initialData.items
@@ -216,8 +221,8 @@ function InvoiceFormDialog({
           {/* Personal Info */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">{t('fInvoice.residentNumber')}</Label>
-              <Input value={residentNumber} onChange={e => setResidentNumber(e.target.value)} placeholder="000000-0000000" className="h-9" />
+              <Label className="text-xs">{businessLabels ? '사업자등록번호' : t('fInvoice.residentNumber')}</Label>
+              <Input value={residentNumber} onChange={e => setResidentNumber(e.target.value)} placeholder={businessLabels ? '000-00-00000' : '000000-0000000'} className="h-9" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">{t('fInvoice.phone')}</Label>
@@ -309,6 +314,11 @@ function InvoiceFormDialog({
                 </TableBody>
               </Table>
             </div>
+            {allowAddItems && (
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setItems(prev => [...prev, emptyItem()])}>
+                <Plus className="size-3.5" />항목 추가
+              </Button>
+            )}
           </div>
 
           {/* Note */}
@@ -404,6 +414,89 @@ async function downloadInvoiceExcel(
   a.download = `견적서_${invoice.freelancerName || 'invoice'}_${invoice.invoiceMonth}.xlsx`
   document.body.appendChild(a); a.click(); a.remove()
   URL.revokeObjectURL(url)
+}
+
+// ─── Business invoice: template download + upload parsing (사업자) ──────────
+
+function saveBlob(buf: ArrayBuffer, name: string) {
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = name
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+}
+
+const BIZ_INFO_LABELS = ['상호(회사명)', '사업자등록번호', '대표자명', '연락처', '이메일', '입금계좌']
+const BIZ_ITEM_HEADER_ROW = 10
+
+async function downloadBusinessTemplate() {
+  const { default: ExcelJS } = await import('exceljs')
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('인보이스')
+  ws.columns = [{ width: 18 }, { width: 32 }, { width: 12 }, { width: 14 }, { width: 20 }]
+  ws.getCell('A1').value = '■ 발행자 정보 (B열에 값을 입력하세요)'
+  ws.getCell('A1').font = { bold: true }
+  BIZ_INFO_LABELS.forEach((label, i) => {
+    const c = ws.getCell(`A${i + 2}`)
+    c.value = label
+    c.font = { bold: true }
+  })
+  ws.getCell(`A${BIZ_ITEM_HEADER_ROW - 1}`).value = '■ 품목 (여러 줄 입력 가능, 예시 줄은 지우고 작성)'
+  ws.getCell(`A${BIZ_ITEM_HEADER_ROW - 1}`).font = { bold: true }
+  ;['품목', '수량', '단가', '비고'].forEach((h, i) => {
+    const c = ws.getCell(BIZ_ITEM_HEADER_ROW, i + 1)
+    c.value = h; c.font = { bold: true }
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } }
+  })
+  ws.getCell(BIZ_ITEM_HEADER_ROW + 1, 1).value = '예) 컨설팅 용역'
+  ws.getCell(BIZ_ITEM_HEADER_ROW + 1, 2).value = 1
+  ws.getCell(BIZ_ITEM_HEADER_ROW + 1, 3).value = 1000000
+  const out = await wb.xlsx.writeBuffer()
+  saveBlob(out as ArrayBuffer, '인보이스_양식.xlsx')
+}
+
+async function parseBusinessInvoice(file: File): Promise<ParsedInvoice> {
+  const { default: ExcelJS } = await import('exceljs')
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await file.arrayBuffer())
+  const ws = wb.worksheets[0]
+  if (!ws) throw new Error('엑셀에서 시트를 찾을 수 없습니다.')
+  const cell = (ref: string) => {
+    const v = ws.getCell(ref).value as unknown
+    if (v == null) return ''
+    if (typeof v === 'object' && v !== null && 'text' in (v as Record<string, unknown>)) {
+      return String((v as Record<string, unknown>).text).trim()
+    }
+    return String(v).trim()
+  }
+  // Info values are in column B, rows 2..7 (order = BIZ_INFO_LABELS)
+  const company = cell('B2')
+  const bizNo = cell('B3')
+  const ceo = cell('B4')
+  const phone = cell('B5')
+  const email = cell('B6')
+  const bankAccount = cell('B7')
+
+  const items: ItemRow[] = []
+  for (let r = BIZ_ITEM_HEADER_ROW + 1; r <= BIZ_ITEM_HEADER_ROW + 200; r++) {
+    const name = cell(`A${r}`)
+    if (!name) continue
+    if (name.startsWith('예)')) continue
+    const qty = Number(cell(`B${r}`)) || 1
+    const price = Number(cell(`C${r}`).replace(/[,₩\s]/g, '')) || 0
+    const remark = cell(`D${r}`)
+    items.push({ itemName: name, quantity: qty, unitPrice: price, remark })
+  }
+  if (items.length === 0) throw new Error('품목이 비어 있습니다. 양식의 품목 표를 채워주세요.')
+
+  return {
+    invoiceDate: new Date().toISOString().slice(0, 10),
+    residentNumber: bizNo,
+    phone,
+    email,
+    bankAccount,
+    note: [company && `상호: ${company}`, ceo && `대표자: ${ceo}`].filter(Boolean).join(' / '),
+    items,
+  }
 }
 
 function InvoiceDetailDialog({
@@ -680,11 +773,26 @@ function useIncentiveLinesByPerson() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────
 
-export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freelancer' | 'sales_incentive' } = {}) {
+export function FreelancerInvoicesPage(
+  { kind = 'freelancer', business = false }: { kind?: 'freelancer' | 'sales_incentive' | 'partner'; business?: boolean } = {},
+) {
   const t = useT()
   const { user } = useAuth()
   const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
   const isIncentive = kind === 'sales_incentive'
+  const isPartner = kind === 'partner'
+  // Distinct storage kind so each list is separate (e.g. 'freelancer_business')
+  const storageKind = business ? `${kind}_business` : kind
+  // Auto-issue from a data source only for freelancer/incentive individual flows
+  const isAuto = !business && (kind === 'freelancer' || kind === 'sales_incentive')
+  const [uploadError, setUploadError] = useState<string | undefined>()
+  const [uploading, setUploading] = useState(false)
+
+  const invoiceTitle = (
+    isIncentive ? '세일즈인센티브 인보이스'
+    : isPartner ? `파트너사 인보이스${business ? ' (사업자)' : ' (개인)'}`
+    : `프리랜서 인보이스${business ? ' (사업자)' : ' (개인)'}`
+  )
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth())
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -698,10 +806,10 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
   const { data: editItems } = useInvoiceItems(editInvoice?.id)
 
   const { data: allInvoices = [], isLoading: allLoading } = useFreelancerInvoices(
-    isAccounting ? (selectedMonth === 'all' ? undefined : selectedMonth) : undefined, kind,
+    isAccounting ? (selectedMonth === 'all' ? undefined : selectedMonth) : undefined, storageKind,
   )
   const { data: myInvoices = [], isLoading: myLoading } = useMyInvoices(
-    !isAccounting ? user?.id : undefined, kind,
+    !isAccounting ? user?.id : undefined, storageKind,
   )
   const deleteInvoice = useDeleteInvoice()
 
@@ -762,6 +870,33 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
     setEditInvoice(undefined)
     setUploadedData(initial)
     setFormOpen(true)
+  }
+
+  // Partner 개인: open a blank manual form (add items freely)
+  const openManualInvoice = () => {
+    setEditInvoice(undefined)
+    setUploadedData({
+      invoiceDate: new Date().toISOString().slice(0, 10),
+      residentNumber: '', phone: '', email: user?.email || '', bankAccount: '',
+      items: [emptyItem()],
+    })
+    setFormOpen(true)
+  }
+
+  // 사업자: parse uploaded Excel → open form pre-filled for review + submit
+  const handleBusinessUpload = async (file: File) => {
+    setUploadError(undefined)
+    setUploading(true)
+    try {
+      const parsed = await parseBusinessInvoice(file)
+      setEditInvoice(undefined)
+      setUploadedData(parsed)
+      setFormOpen(true)
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : '엑셀을 읽지 못했습니다.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const listActions = (
@@ -906,8 +1041,42 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
     </div>
   )
 
-  const freelancerView = (
-    <div className="space-y-4">
+  // Creation panel varies: auto issue / manual add / business Excel upload
+  const creationPanel = business ? (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="text-sm font-medium">사업자 인보이스 — 엑셀 양식으로 제출</div>
+        <p className="text-[12px] text-muted-foreground">
+          ① 아래에서 양식을 내려받아 발행자 정보와 품목을 작성한 뒤 ② 그 파일을 업로드하면 내용이 채워진 인보이스 폼이 열립니다. 확인 후 제출하세요.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" className="gap-1.5" onClick={() => downloadBusinessTemplate().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
+            <Download className="size-4" />샘플 양식 다운로드
+          </Button>
+          <label>
+            <input
+              type="file"
+              accept=".xlsx"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleBusinessUpload(f); e.target.value = '' }}
+            />
+            <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+              {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}엑셀 업로드
+            </span>
+          </label>
+        </div>
+        {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+      </CardContent>
+    </Card>
+  ) : isPartner ? (
+    <div className="flex items-center gap-3">
+      <Button className="gap-1.5" onClick={openManualInvoice}>
+        <Plus className="size-4" />인보이스 추가
+      </Button>
+      <p className="text-[12px] text-muted-foreground">품목을 직접 입력해 인보이스를 발행합니다.</p>
+    </div>
+  ) : (
+    <>
       <div className="flex items-end gap-3 flex-wrap">
         <div>
           <Label className="text-xs">정산월</Label>
@@ -937,7 +1106,12 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
           <p className="text-[11px] text-muted-foreground">"인보이스 발행"을 누르면 {isIncentive ? '이 달 정산 대상 인센티브가 품명·금액에' : '위 학생이 품명에'} 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.</p>
         </CardContent>
       </Card>
+    </>
+  )
 
+  const freelancerView = (
+    <div className="space-y-4">
+      {creationPanel}
       <div className="text-sm font-semibold text-gray-700">내 인보이스</div>
       {listView}
     </div>
@@ -946,27 +1120,29 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-xl font-bold">
-          {isAccounting
-            ? (isIncentive ? '세일즈인센티브 인보이스 (재무)' : '프리랜서 인보이스 (재무)')
-            : (isIncentive ? '세일즈인센티브 인보이스 발행' : '인보이스 발행')}
-        </h1>
+        <h1 className="text-xl font-bold">{invoiceTitle}{isAccounting ? ' (재무)' : ''}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           {isAccounting
             ? '제출된 인보이스를 확인·승인하고 엑셀로 다운로드합니다.'
-            : (isIncentive ? '이 달 발생한 세일즈 인센티브로 정산 인보이스를 발행하세요.' : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
+            : (business
+                ? '엑셀 양식을 내려받아 작성한 뒤 업로드하여 인보이스를 제출합니다.'
+                : isIncentive ? '이 달 발생한 세일즈 인센티브로 정산 인보이스를 발행하세요.'
+                : isPartner ? '품목을 직접 입력해 인보이스를 발행합니다.'
+                : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
         </p>
       </div>
 
       {isAccounting ? (
-        <Tabs defaultValue="list" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="list">인보이스 목록</TabsTrigger>
-            <TabsTrigger value="missing">미제출 현황</TabsTrigger>
-          </TabsList>
-          <TabsContent value="list">{listView}</TabsContent>
-          <TabsContent value="missing"><MissingInvoices month={issueMonth} kind={kind} /></TabsContent>
-        </Tabs>
+        isAuto ? (
+          <Tabs defaultValue="list" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="list">인보이스 목록</TabsTrigger>
+              <TabsTrigger value="missing">미제출 현황</TabsTrigger>
+            </TabsList>
+            <TabsContent value="list">{listView}</TabsContent>
+            <TabsContent value="missing"><MissingInvoices month={issueMonth} kind={kind} /></TabsContent>
+          </Tabs>
+        ) : listView
       ) : freelancerView}
 
       {/* Dialogs */}
@@ -978,7 +1154,9 @@ export function FreelancerInvoicesPage({ kind = 'freelancer' }: { kind?: 'freela
           existingItems={editItems || undefined}
           userId={editInvoice?.freelancerId || user.id}
           initialData={uploadedData}
-          kind={kind}
+          kind={storageKind}
+          allowAddItems={business || isPartner}
+          businessLabels={business}
         />
       )}
 

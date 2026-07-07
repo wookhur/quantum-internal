@@ -103,8 +103,17 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.receipts', to: '/finance/receipts', icon: Receipt },
       { labelKey: 'nav.wireInvoice', to: '/finance/wire-invoice', icon: FileText },
       { labelKey: 'nav.externalFees', to: '/service/external-fees', icon: HandCoins },
-      { labelKey: 'nav.incentives', to: '/finance/sales-incentive-invoices', icon: Percent },
-      { labelKey: 'nav.freelancerInvoices', to: '/finance/freelancer-invoices', icon: FileText },
+    ],
+  },
+  {
+    titleKey: 'nav.invoiceMgmt',
+    module: 'invoice',
+    items: [
+      { labelKey: 'nav.invoiceFreelancerIndividual', to: '/invoices/freelancer-individual', icon: FileText },
+      { labelKey: 'nav.invoiceFreelancerBusiness', to: '/invoices/freelancer-business', icon: FileText },
+      { labelKey: 'nav.invoiceSalesIncentive', to: '/invoices/sales-incentive', icon: Percent },
+      { labelKey: 'nav.invoicePartnerIndividual', to: '/invoices/partner-individual', icon: FileText },
+      { labelKey: 'nav.invoicePartnerBusiness', to: '/invoices/partner-business', icon: FileText },
     ],
   },
   {

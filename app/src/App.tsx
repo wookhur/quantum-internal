@@ -112,8 +112,15 @@ export default function App() {
                 <Route path="/finance/wire-invoice" element={<WireInvoicePage />} />
                 <Route path="/finance/incentives/by-contract" element={<IncentiveByContractPage />} />
                 <Route path="/finance/incentives/by-person" element={<IncentiveByPersonPage />} />
-                <Route path="/finance/freelancer-invoices" element={<FreelancerInvoicesPage />} />
-                <Route path="/finance/sales-incentive-invoices" element={<FreelancerInvoicesPage kind="sales_incentive" />} />
+                {/* Invoice management (consolidated) */}
+                <Route path="/invoices/freelancer-individual" element={<FreelancerInvoicesPage kind="freelancer" />} />
+                <Route path="/invoices/freelancer-business" element={<FreelancerInvoicesPage kind="freelancer" business />} />
+                <Route path="/invoices/sales-incentive" element={<FreelancerInvoicesPage kind="sales_incentive" />} />
+                <Route path="/invoices/partner-individual" element={<FreelancerInvoicesPage kind="partner" />} />
+                <Route path="/invoices/partner-business" element={<FreelancerInvoicesPage kind="partner" business />} />
+                {/* Legacy redirects */}
+                <Route path="/finance/freelancer-invoices" element={<Navigate to="/invoices/freelancer-individual" replace />} />
+                <Route path="/finance/sales-incentive-invoices" element={<Navigate to="/invoices/sales-incentive" replace />} />
 
                 <Route path="/partner/contracts" element={<PartnerContractsPage />} />
                 <Route path="/partner/students" element={<PartnerStudentsPage />} />
