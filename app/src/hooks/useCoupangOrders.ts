@@ -85,10 +85,18 @@ export function useCoupangOrders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('coupang_orders')
-        .select('*, requester:requester_id(name), orderer:ordered_by(name), approver:approved_by(name)')
+        .select('*, requester:requester_id(name), orderer:ordered_by(name)')
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data || []).map((r) => mapOrder(r as Record<string, unknown>))
+      const orders = (data || []).map((r) => mapOrder(r as Record<string, unknown>))
+      // approved_by has no FK relationship, so resolve names separately
+      const approverIds = [...new Set(orders.map(o => o.approvedBy).filter(Boolean))] as string[]
+      if (approverIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, name').in('id', approverIds)
+        const nameMap = new Map((profs || []).map((p: Record<string, unknown>) => [p.id as string, p.name as string]))
+        orders.forEach(o => { if (o.approvedBy) o.approvedByName = nameMap.get(o.approvedBy) })
+      }
+      return orders
     },
   })
 }

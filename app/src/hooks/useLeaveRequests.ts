@@ -59,10 +59,18 @@ export function useLeaveRequests() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leave_requests')
-        .select('*, requester:requester_id(name), approver:approved_by(name)')
+        .select('*, requester:requester_id(name)')
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data || []).map(r => mapRow(r as Record<string, unknown>))
+      const rows = (data || []).map(r => mapRow(r as Record<string, unknown>))
+      // approved_by has no FK relationship, so resolve names separately
+      const approverIds = [...new Set(rows.map(r => r.approvedBy).filter(Boolean))] as string[]
+      if (approverIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, name').in('id', approverIds)
+        const nameMap = new Map((profs || []).map((p: Record<string, unknown>) => [p.id as string, p.name as string]))
+        rows.forEach(r => { if (r.approvedBy) r.approvedByName = nameMap.get(r.approvedBy) })
+      }
+      return rows
     },
   })
 }
