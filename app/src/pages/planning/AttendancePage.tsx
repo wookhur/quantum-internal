@@ -293,7 +293,14 @@ export function AttendancePage() {
   const days = useMemo(() => getDaysInMonth(currentMonth), [currentMonth])
 
   const excludedSet = useMemo(() => new Set(kioskExcludedIds), [kioskExcludedIds])
-  const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal && !excludedSet.has(p.id)), [profiles, excludedSet])
+  // 근태관리는 '정규직' 고용형태인 인원만 대상으로 함
+  const activeProfiles = useMemo(
+    () => profiles.filter(p =>
+      (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') &&
+      !excludedSet.has(p.id),
+    ),
+    [profiles, excludedSet],
+  )
 
   // Build lookup: profileId+date -> attendance
   const attendanceMap = useMemo(() => {

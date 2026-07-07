@@ -11,6 +11,11 @@ function mapProfile(row: Record<string, unknown>): User {
     department: (row.department as Department) || undefined,
     position: (row.position as string) || undefined,
     employmentType: (row.employment_type as EmploymentType) || undefined,
+    employmentTypes: (() => {
+      const arr = row.employment_types as EmploymentType[] | null
+      if (arr && arr.length) return arr
+      return row.employment_type ? [row.employment_type as EmploymentType] : []
+    })(),
     contractStartDate: (row.contract_start_date as string) || undefined,
     contractEndDate: (row.contract_end_date as string) || undefined,
     hireDate: (row.hire_date as string) || undefined,
@@ -49,6 +54,7 @@ export function useUpdateProfile() {
       department?: Department | null
       position?: string | null
       employmentType?: EmploymentType | null
+      employmentTypes?: EmploymentType[] | null
       workerType?: WorkerType | null
       contractStartDate?: string | null
       contractEndDate?: string | null
@@ -64,6 +70,11 @@ export function useUpdateProfile() {
       if (updates.department !== undefined) row.department = updates.department
       if (updates.position !== undefined) row.position = updates.position
       if (updates.employmentType !== undefined) row.employment_type = updates.employmentType
+      if (updates.employmentTypes !== undefined) {
+        row.employment_types = updates.employmentTypes
+        // keep single column in sync (first value) for backward compat
+        row.employment_type = updates.employmentTypes?.[0] ?? null
+      }
       if (updates.workerType !== undefined) row.worker_type = updates.workerType
       if (updates.contractStartDate !== undefined) row.contract_start_date = updates.contractStartDate
       if (updates.contractEndDate !== undefined) row.contract_end_date = updates.contractEndDate

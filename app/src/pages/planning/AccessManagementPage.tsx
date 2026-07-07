@@ -114,7 +114,9 @@ function UserEditDialog({
   const [role, setRole] = useState<UserRole>(user.role)
   const [department, setDepartment] = useState<string>(user.department || '')
   const [position, setPosition] = useState<string>(user.position || '')
-  const [employmentType, setEmploymentType] = useState<string>(user.employmentType || '')
+  const [employmentTypes, setEmploymentTypes] = useState<string[]>(user.employmentTypes || (user.employmentType ? [user.employmentType] : []))
+  const toggleEmploymentType = (v: string) =>
+    setEmploymentTypes(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v])
   const [contractStartDate, setContractStartDate] = useState(user.contractStartDate || '')
   const [contractEndDate, setContractEndDate] = useState(user.contractEndDate || '')
   const [hireDate, setHireDate] = useState(user.hireDate || '')
@@ -210,7 +212,7 @@ function UserEditDialog({
         role,
         department: department ? (department as Department) : null,
         position: position || null,
-        employmentType: employmentType ? (employmentType as EmploymentType) : null,
+        employmentTypes: employmentTypes.length ? (employmentTypes as EmploymentType[]) : null,
         contractStartDate: contractStartDate || null,
         contractEndDate: contractEndDate || null,
         hireDate: hireDate || null,
@@ -251,7 +253,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentType, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentTypes, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -347,18 +349,22 @@ function UserEditDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">고용형태 <span className="text-[10px] text-muted-foreground">(정규직/계약직/인턴/프리랜서 등)</span></Label>
-                <Select value={employmentType || '_none'} onValueChange={v => setEmploymentType(!v || v === '_none' ? '' : v)}>
-                  <SelectTrigger className="h-9">
-                    <span>{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === employmentType)?.label || t('access.employmentUnassigned')}</span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">{t('access.employmentUnassigned')}</SelectItem>
-                    {EMPLOYMENT_TYPE_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">고용형태 <span className="text-[10px] text-muted-foreground">(복수 선택 가능)</span></Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {EMPLOYMENT_TYPE_OPTIONS.map(opt => {
+                    const on = employmentTypes.includes(opt.value)
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => toggleEmploymentType(opt.value)}
+                        className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${on ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'}`}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">입사일 <span className="text-[10px] text-muted-foreground">(연차 기준)</span></Label>
@@ -999,8 +1005,12 @@ export function AccessManagementPage() {
                         {profile.position || <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {profile.employmentType
-                          ? <Badge variant="outline" className="text-[10px] h-4">{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === profile.employmentType)?.label || profile.employmentType}</Badge>
+                        {profile.employmentTypes && profile.employmentTypes.length
+                          ? <div className="flex flex-wrap gap-0.5">
+                              {profile.employmentTypes.map(et => (
+                                <Badge key={et} variant="outline" className="text-[10px] h-4">{EMPLOYMENT_TYPE_OPTIONS.find(o => o.value === et)?.label || et}</Badge>
+                              ))}
+                            </div>
                           : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">

@@ -11,7 +11,8 @@ export interface User {
   role: UserRole
   department?: Department
   position?: string  // 대표이사, 부대표, 이사, 팀장, etc
-  employmentType?: EmploymentType
+  employmentType?: EmploymentType        // 첫 번째 값 (하위 호환)
+  employmentTypes?: EmploymentType[]      // 고용형태(복수 가능)
   workerType?: WorkerType
   contractStartDate?: string
   contractEndDate?: string

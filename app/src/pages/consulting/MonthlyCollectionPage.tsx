@@ -8,10 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Loader2, ChevronLeft, ChevronRight, Calendar,
   CheckCircle2, Clock, AlertTriangle, CircleDot,
-  Phone, MessageSquare, Mail, StickyNote, Send, Footprints,
+  Phone, MessageSquare, Mail, StickyNote, Send, Footprints, Bell,
 } from 'lucide-react'
 import { useInstallments } from '@/hooks/useInstallments'
 import { useCollectionActions, useCreateCollectionAction, type CollectionActionType } from '@/hooks/useCollectionActions'
+import { useAllIncentives } from '@/hooks/useIncentives'
+import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import { useProfiles } from '@/hooks/useProfiles'
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
@@ -315,6 +317,37 @@ export function MonthlyCollectionPage() {
     return profiles.find(p => p.id === id)?.name
   }, [profiles])
 
+  // Sales-incentive recipients by contract (the person who should chase collection)
+  const { data: allIncentives = [] } = useAllIncentives()
+  const recipientsByContract = useMemo(() => {
+    const m = new Map<string, { name: string; profileId: string | null }[]>()
+    for (const inc of allIncentives) {
+      if (!inc.contractId || !inc.displayName) continue
+      const arr = m.get(inc.contractId) || []
+      if (!arr.some(x => x.name === inc.displayName)) arr.push({ name: inc.displayName, profileId: inc.profileId })
+      m.set(inc.contractId, arr)
+    }
+    return m
+  }, [allIncentives])
+
+  const notifyRecipients = useCallback(async (inst: PaymentInstallment) => {
+    const recs = recipientsByContract.get(inst.contractId) || []
+    const ids = recs
+      .map(r => r.profileId || profiles.find(p => p.name === r.name)?.id)
+      .filter(Boolean) as string[]
+    if (ids.length === 0) {
+      alert('세일즈 인센티브 수령자(담당자) 정보가 없어 알림을 보낼 수 없습니다.')
+      return
+    }
+    await createNotificationsForUsers([...new Set(ids)], {
+      type: 'collection_reminder',
+      title: '수금 안내 요청',
+      message: `${inst.contract?.studentName || ''} 학생 ${inst.label} ${formatCurrency(inst.amount, inst.currency)} 수금 예정입니다. 학부모님께 납부 안내 부탁드립니다.`,
+      link: '/consulting/collections',
+    })
+    alert('담당자에게 수금 안내 알림을 보냈습니다.')
+  }, [recipientsByContract, profiles])
+
   // Navigate months
   const goMonth = (delta: number) => {
     const [y, m] = currentMonth.split('-').map(Number)
@@ -378,7 +411,7 @@ export function MonthlyCollectionPage() {
   // Check if current view is this month
   const isCurrentMonth = currentMonth === getMonthKey(new Date())
 
-  const COL_COUNT = 9
+  const COL_COUNT = 10
 
   if (isLoading) {
     return (
@@ -491,6 +524,7 @@ export function MonthlyCollectionPage() {
                   <TableHead className="w-[100px]">{t('collection.col.dueDate')}</TableHead>
                   <TableHead>{t('collection.col.contractor')}</TableHead>
                   <TableHead>{t('collection.col.student')}</TableHead>
+                  <TableHead>담당(세일즈)</TableHead>
                   <TableHead>{t('collection.col.school')}</TableHead>
                   <TableHead>{t('collection.col.item')}</TableHead>
                   <TableHead className="text-right">{t('collection.col.amount')}</TableHead>
@@ -549,6 +583,29 @@ export function MonthlyCollectionPage() {
                           </TableCell>
                           <TableCell className={`text-sm ${past ? 'text-red-600' : ''}`}>
                             {inst.contract?.studentName || '-'}
+                          </TableCell>
+                          <TableCell onClick={e => e.stopPropagation()}>
+                            {(() => {
+                              const recs = recipientsByContract.get(inst.contractId) || []
+                              if (recs.length === 0) return <span className="text-xs text-muted-foreground">-</span>
+                              return (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {recs.map(r => (
+                                    <Badge key={r.name} variant="outline" className="text-[10px] h-4 bg-indigo-50 text-indigo-700 border-indigo-200">{r.name}</Badge>
+                                  ))}
+                                  {inst.status !== 'paid' && (
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      className="h-6 w-6 p-0 text-amber-500 hover:text-amber-600"
+                                      title="담당자에게 수금 안내 알림 보내기"
+                                      onClick={() => notifyRecipients(inst)}
+                                    >
+                                      <Bell className="size-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
                             {inst.contract?.schoolName || '-'}
