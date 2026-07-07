@@ -66,7 +66,8 @@ export function PersonalInfoPage() {
   const [editDialog, setEditDialog] = useState<string | null>(null) // profileId
   const [editForm, setEditForm] = useState<Partial<EmployeeInfo>>({})
 
-  const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal), [profiles])
+  // 파트너사 계정만 제외하고, 내부 직원 + 외부 인력(프리랜서 등) 모두 표시
+  const activeProfiles = useMemo(() => profiles.filter(p => !p.isPartner), [profiles])
 
   const infoMap = useMemo(() => {
     const map = new Map<string, EmployeeInfo>()
