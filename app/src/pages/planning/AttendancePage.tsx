@@ -281,6 +281,7 @@ export function AttendancePage() {
   const [form, setForm] = useState<AttendanceForm>({ profileId: '', date: '', clockIn: '', clockOut: '', note: '' })
   const [kioskSettingsOpen, setKioskSettingsOpen] = useState(false)
   const [kioskExcludedDraft, setKioskExcludedDraft] = useState<Set<string>>(new Set())
+  const [dayDetail, setDayDetail] = useState<string | null>(null)
 
   // ── Import state ──
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -302,15 +303,6 @@ export function AttendancePage() {
     [profiles, excludedSet],
   )
 
-  // Build lookup: profileId+date -> attendance
-  const attendanceMap = useMemo(() => {
-    const map = new Map<string, typeof attendances[0]>()
-    for (const a of attendances) {
-      map.set(`${a.profileId}:${a.date}`, a)
-    }
-    return map
-  }, [attendances])
-
   // Filtered data based on selected profile
   const filteredAttendances = useMemo(() => {
     if (selectedProfile === 'all') return attendances
@@ -321,17 +313,6 @@ export function AttendancePage() {
   const profileName = useCallback((id: string) => {
     return profiles.find(p => p.id === id)?.name || '?'
   }, [profiles])
-
-  // Late counts per profile
-  const lateCountByProfile = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const a of attendances) {
-      if (isLate(a.clockIn, a.date)) {
-        map.set(a.profileId, (map.get(a.profileId) || 0) + 1)
-      }
-    }
-    return map
-  }, [attendances])
 
   // Summary stats
   const summaryStats = useMemo(() => {
@@ -504,7 +485,21 @@ export function AttendancePage() {
     return activeProfiles.filter(p => p.id === selectedProfile)
   }, [activeProfiles, selectedProfile])
 
-  const numDays = days.length
+  // Attendance records grouped by date (only the profiles shown in the calendar)
+  const attendancesByDate = useMemo(() => {
+    const ids = new Set(calendarProfiles.map(p => p.id))
+    const m = new Map<string, typeof attendances>()
+    for (const a of attendances) {
+      if (!ids.has(a.profileId)) continue
+      const arr = m.get(a.date) || []
+      arr.push(a)
+      m.set(a.date, arr)
+    }
+    return m
+  }, [attendances, calendarProfiles])
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const firstDow = days.length ? new Date(`${days[0]}T00:00:00`).getDay() : 0
 
   // Total worked hours per employee for the month
   const totalHoursByProfile = useMemo(() => {
@@ -729,103 +724,59 @@ export function AttendancePage() {
         </Card>
       )}
 
-      {/* Calendar grid — fixed to viewport width */}
+      {/* Monthly attendance calendar — per-day 출근/지각 인원 */}
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-3">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="w-full">
-              <table className="w-full border-collapse table-fixed">
-                <colgroup>
-                  <col style={{ width: '100px' }} />
-                  {days.map(day => (
-                    <col key={day} style={{ width: `${(100 - 8) / numDays}%` }} />
-                  ))}
-                  {/* Late count column */}
-                  <col style={{ width: '44px' }} />
-                </colgroup>
-                <thead>
-                  <tr className="border-b">
-                    <th className="sticky left-0 bg-background z-10 text-left text-xs font-medium text-muted-foreground p-1.5 pl-3">
-                      {t('attendance.employee')}
-                    </th>
-                    {days.map(day => {
-                      const d = parseInt(day.split('-')[2])
-                      const dow = t(getDayOfWeekKey(day))
-                      const weekend = isWeekend(day)
-                      return (
-                        <th
-                          key={day}
-                          className={`text-center p-0.5 ${weekend ? 'bg-red-50/50' : ''}`}
+            <div>
+              {/* Weekday header */}
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {['일', '월', '화', '수', '목', '금', '토'].map((w, i) => (
+                  <div key={w} className={`text-center text-[11px] font-semibold py-1 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{w}</div>
+                ))}
+              </div>
+              {/* Day cells */}
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: firstDow }).map((_, i) => <div key={`blank-${i}`} />)}
+                {days.map(day => {
+                  const recs = attendancesByDate.get(day) || []
+                  const present = recs.filter(r => r.clockIn).length
+                  const late = recs.filter(r => isLate(r.clockIn, r.date)).length
+                  const dnum = parseInt(day.split('-')[2])
+                  const weekend = isWeekend(day)
+                  const today = day === todayStr
+                  return (
+                    <div
+                      key={day}
+                      className={`min-h-[72px] rounded-md border p-1 flex flex-col gap-0.5 ${weekend ? 'bg-red-50/30' : 'bg-white'} ${today ? 'ring-2 ring-blue-400' : ''}`}
+                    >
+                      <div className={`text-[11px] font-medium ${weekend ? 'text-red-500' : 'text-gray-600'}`}>{dnum}</div>
+                      {present > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setDayDetail(day)}
+                          className="text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded px-1 py-0.5 text-left font-medium transition-colors"
+                          title="클릭하면 출퇴근 기록 보기"
                         >
-                          <div className="text-[11px] font-medium leading-tight">{d}</div>
-                          <div className={`text-[9px] leading-tight ${weekend ? 'text-red-500 font-semibold' : 'text-muted-foreground'}`}>{dow}</div>
-                        </th>
-                      )
-                    })}
-                    <th className="text-center p-0.5">
-                      <div className="text-[9px] text-red-500 font-medium leading-tight" title={t('attendance.lateCount')}>
-                        <AlertTriangle className="h-3 w-3 mx-auto" />
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {calendarProfiles.map(profile => {
-                    const lateCount = lateCountByProfile.get(profile.id) || 0
-                    return (
-                      <tr key={profile.id} className="border-b last:border-b-0 hover:bg-muted/30">
-                        <td className="sticky left-0 bg-background z-10 text-sm font-medium whitespace-nowrap p-1.5 pl-3 truncate">
-                          {profile.name}
-                        </td>
-                        {days.map(day => {
-                          const att = attendanceMap.get(`${profile.id}:${day}`)
-                          const weekend = isWeekend(day)
-                          const late = att ? isLate(att.clockIn, att.date) : false
-                          return (
-                            <td
-                              key={day}
-                              className={`text-center p-0 cursor-pointer hover:bg-blue-50/50 transition-colors ${weekend ? 'bg-red-50/20' : ''} ${late ? 'bg-red-50/60' : ''}`}
-                              onClick={() => {
-                                if (att) {
-                                  openEdit(att.id)
-                                } else {
-                                  setEditId(null)
-                                  setForm({ profileId: profile.id, date: day, clockIn: '10:00', clockOut: '19:00', note: '' })
-                                  setDialogOpen(true)
-                                }
-                              }}
-                            >
-                              {att ? (
-                                <div className="flex flex-col items-center leading-none py-1">
-                                  <span className={`text-[9px] font-mono ${late ? 'text-red-600 font-bold' : 'text-green-600'}`}>
-                                    {formatTime(att.clockIn)}
-                                  </span>
-                                  <span className="text-[9px] font-mono text-blue-600">
-                                    {formatTime(att.clockOut)}
-                                  </span>
-                                </div>
-                              ) : weekend ? null : (
-                                <span className="text-[9px] text-muted-foreground/20">-</span>
-                              )}
-                            </td>
-                          )
-                        })}
-                        <td className="text-center p-0.5">
-                          {lateCount > 0 ? (
-                            <span className="text-[11px] font-bold text-red-600">{lateCount}</span>
-                          ) : (
-                            <span className="text-[11px] text-muted-foreground/30">0</span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                          출근 {present}
+                        </button>
+                      )}
+                      {late > 0 && (
+                        <div className="text-[11px] text-red-600 bg-red-50 rounded px-1 py-0.5 font-medium">
+                          지각 {late}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                초록 “출근 N”을 누르면 그 날 출퇴근한 인원의 기록이 나옵니다 · 대상: 정규직 {calendarProfiles.length}명
+              </p>
             </div>
           )}
         </CardContent>
@@ -914,6 +865,47 @@ export function AttendancePage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Day detail — who clocked in that day */}
+      <Dialog open={!!dayDetail} onOpenChange={o => { if (!o) setDayDetail(null) }}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>{dayDetail} 출퇴근 기록</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const recs = (dayDetail ? attendancesByDate.get(dayDetail) || [] : [])
+              .filter(r => r.clockIn || r.clockOut)
+              .sort((a, b) => (a.clockIn || '').localeCompare(b.clockIn || ''))
+            if (recs.length === 0) {
+              return <p className="text-sm text-muted-foreground py-6 text-center">이 날 출퇴근 기록이 없습니다.</p>
+            }
+            return (
+              <div className="divide-y max-h-[60vh] overflow-y-auto">
+                {recs.map(r => {
+                  const late = isLate(r.clockIn, r.date)
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex items-center justify-between py-2 px-1 cursor-pointer hover:bg-muted/40 rounded"
+                      onClick={() => { setDayDetail(null); openEdit(r.id) }}
+                    >
+                      <span className="text-sm font-medium flex items-center gap-1.5">
+                        {profileName(r.profileId)}
+                        {late && <Badge variant="outline" className="text-[10px] h-4 bg-red-50 text-red-600 border-red-200">지각</Badge>}
+                      </span>
+                      <span className="text-sm font-mono">
+                        <span className={late ? 'text-red-600 font-bold' : 'text-green-600'}>{formatTime(r.clockIn)}</span>
+                        <span className="text-muted-foreground"> ~ </span>
+                        <span className="text-blue-600">{formatTime(r.clockOut)}</span>
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
