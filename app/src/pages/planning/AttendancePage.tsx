@@ -281,7 +281,8 @@ export function AttendancePage() {
   const [form, setForm] = useState<AttendanceForm>({ profileId: '', date: '', clockIn: '', clockOut: '', note: '' })
   const [kioskSettingsOpen, setKioskSettingsOpen] = useState(false)
   const [kioskExcludedDraft, setKioskExcludedDraft] = useState<Set<string>>(new Set())
-  const [dayDetail, setDayDetail] = useState<string | null>(null)
+  const [dayDetail, setDayDetail] = useState<{ date: string; mode: 'work' | 'late' } | null>(null)
+  const [lateMonthOpen, setLateMonthOpen] = useState(false)
 
   // ── Import state ──
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -654,11 +655,15 @@ export function AttendancePage() {
             <span className="text-lg font-bold font-mono text-green-600">{summaryStats.clockedIn}</span>
           </CardContent>
         </Card>
-        <Card className={summaryStats.lateCount > 0 ? 'border-red-200' : ''}>
+        <Card
+          className={`${summaryStats.lateCount > 0 ? 'border-red-200 cursor-pointer hover:bg-red-50/40' : ''}`}
+          onClick={() => { if (summaryStats.lateCount > 0) setLateMonthOpen(true) }}
+        >
           <CardContent className="py-2.5 flex items-center justify-between">
             <span className="text-sm text-muted-foreground flex items-center gap-1">
               <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
               {t('attendance.lateCount')}
+              {summaryStats.lateCount > 0 && <span className="text-[10px] text-muted-foreground/70">(클릭)</span>}
             </span>
             <span className={`text-lg font-bold font-mono ${summaryStats.lateCount > 0 ? 'text-red-600' : ''}`}>
               {summaryStats.lateCount}
@@ -758,7 +763,7 @@ export function AttendancePage() {
                       {present > 0 && (
                         <button
                           type="button"
-                          onClick={() => setDayDetail(day)}
+                          onClick={() => setDayDetail({ date: day, mode: 'work' })}
                           className="text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded px-1 py-0.5 text-left font-medium transition-colors"
                           title="클릭하면 출퇴근 기록 보기"
                         >
@@ -766,9 +771,14 @@ export function AttendancePage() {
                         </button>
                       )}
                       {late > 0 && (
-                        <div className="text-[11px] text-red-600 bg-red-50 rounded px-1 py-0.5 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => setDayDetail({ date: day, mode: 'late' })}
+                          className="text-[11px] text-red-600 bg-red-50 hover:bg-red-100 rounded px-1 py-0.5 text-left font-medium transition-colors"
+                          title="클릭하면 지각자 보기"
+                        >
                           지각 {late}
-                        </div>
+                        </button>
                       )}
                     </div>
                   )
@@ -866,18 +876,23 @@ export function AttendancePage() {
         </CardContent>
       </Card>
 
-      {/* Day detail — who clocked in that day */}
+      {/* Day detail — 근무(출퇴근 전체) or 지각(지각자만) */}
       <Dialog open={!!dayDetail} onOpenChange={o => { if (!o) setDayDetail(null) }}>
         <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
-            <DialogTitle>{dayDetail} 출퇴근 기록</DialogTitle>
+            <DialogTitle>
+              {dayDetail?.date} {dayDetail?.mode === 'late' ? '지각자' : '출퇴근 기록'}
+            </DialogTitle>
           </DialogHeader>
           {(() => {
-            const recs = (dayDetail ? attendancesByDate.get(dayDetail) || [] : [])
-              .filter(r => r.clockIn || r.clockOut)
+            const all = dayDetail ? attendancesByDate.get(dayDetail.date) || [] : []
+            const recs = all
+              .filter(r => dayDetail?.mode === 'late' ? isLate(r.clockIn, r.date) : (r.clockIn || r.clockOut))
               .sort((a, b) => (a.clockIn || '').localeCompare(b.clockIn || ''))
             if (recs.length === 0) {
-              return <p className="text-sm text-muted-foreground py-6 text-center">이 날 출퇴근 기록이 없습니다.</p>
+              return <p className="text-sm text-muted-foreground py-6 text-center">
+                {dayDetail?.mode === 'late' ? '이 날 지각자가 없습니다.' : '이 날 출퇴근 기록이 없습니다.'}
+              </p>
             }
             return (
               <div className="divide-y max-h-[60vh] overflow-y-auto">
@@ -891,7 +906,7 @@ export function AttendancePage() {
                     >
                       <span className="text-sm font-medium flex items-center gap-1.5">
                         {profileName(r.profileId)}
-                        {late && <Badge variant="outline" className="text-[10px] h-4 bg-red-50 text-red-600 border-red-200">지각</Badge>}
+                        {dayDetail?.mode === 'late' && <Badge variant="outline" className="text-[10px] h-4 bg-red-50 text-red-600 border-red-200">지각</Badge>}
                       </span>
                       <span className="text-sm font-mono">
                         <span className={late ? 'text-red-600 font-bold' : 'text-green-600'}>{formatTime(r.clockIn)}</span>
@@ -901,6 +916,41 @@ export function AttendancePage() {
                     </div>
                   )
                 })}
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Month late list — from the top 지각 summary card */}
+      <Dialog open={lateMonthOpen} onOpenChange={setLateMonthOpen}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>{year}{t('common.year')} {month}{t('common.month')} 지각 내역</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const target = selectedProfile === 'all' ? attendances : filteredAttendances
+            const lateRecs = target
+              .filter(a => isLate(a.clockIn, a.date))
+              .sort((a, b) => a.date.localeCompare(b.date) || (a.clockIn || '').localeCompare(b.clockIn || ''))
+            if (lateRecs.length === 0) {
+              return <p className="text-sm text-muted-foreground py-6 text-center">지각 내역이 없습니다.</p>
+            }
+            return (
+              <div className="divide-y max-h-[60vh] overflow-y-auto">
+                {lateRecs.map(r => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between py-2 px-1 cursor-pointer hover:bg-muted/40 rounded"
+                    onClick={() => { setLateMonthOpen(false); openEdit(r.id) }}
+                  >
+                    <span className="text-sm">
+                      <span className="font-mono text-muted-foreground mr-2">{r.date.slice(5)}</span>
+                      <span className="font-medium">{profileName(r.profileId)}</span>
+                    </span>
+                    <span className="text-sm font-mono text-red-600 font-bold">{formatTime(r.clockIn)}</span>
+                  </div>
+                ))}
               </div>
             )
           })()}
