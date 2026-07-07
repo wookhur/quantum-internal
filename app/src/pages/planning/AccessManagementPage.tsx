@@ -25,7 +25,7 @@ import {
   getEffectiveModules, getEffectiveRoutes, getRoutesForModule,
   type FeatureModule, type FeatureAccessRecord,
 } from '@/hooks/useProfiles'
-import type { User, UserRole, Department, EmploymentType, WorkerType } from '@/types'
+import type { User, UserRole, Department, EmploymentType } from '@/types'
 
 const ROLE_CONFIG: Record<UserRole, { label: string; className: string; icon: typeof Shield }> = {
   admin: { label: 'Admin', className: 'bg-red-50 text-red-700 border-red-200', icon: Shield },
@@ -74,15 +74,6 @@ function useEmploymentTypeOptions() {
     { value: 'freelancer' as EmploymentType, label: t('access.empFreelancer') },
     { value: 'commissioned' as EmploymentType, label: t('access.empCommissioned') },
     { value: 'executive' as EmploymentType, label: t('access.empExecutive') },
-  ]
-}
-
-function useWorkerTypeOptions() {
-  const t = useT()
-  return [
-    { value: 'employee' as WorkerType, label: t('access.workerEmployee') },
-    { value: 'freelancer' as WorkerType, label: t('access.workerFreelancer') },
-    { value: 'business' as WorkerType, label: t('access.workerBusiness') },
   ]
 }
 
@@ -718,13 +709,15 @@ export function AccessManagementPage() {
   const DEPT_OPTIONS = useDeptOptions()
   const ROLE_OPTIONS = useRoleOptions()
   const EMPLOYMENT_TYPE_OPTIONS = useEmploymentTypeOptions()
-  const WORKER_TYPE_OPTIONS = useWorkerTypeOptions()
   const { user: currentUser } = useAuth()
   const { data: profiles = [], isLoading: profilesLoading } = useProfiles()
   const { data: featureAccess = [], isLoading: accessLoading } = useFeatureAccess()
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
-  const [workerTypeFilter, setWorkerTypeFilter] = useState<string>('all')
+  const [employmentFilter, setEmploymentFilter] = useState<string>('all')
+
+  const hasEmploymentType = (p: User, v: string) =>
+    (p.employmentTypes?.includes(v as EmploymentType)) || p.employmentType === v
   const [editUser, setEditUser] = useState<User | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
 
@@ -733,8 +726,8 @@ export function AccessManagementPage() {
 
   const filteredProfiles = useMemo(() => {
     let list = profiles
-    if (workerTypeFilter !== 'all') {
-      list = list.filter(p => p.workerType === workerTypeFilter)
+    if (employmentFilter !== 'all') {
+      list = list.filter(p => hasEmploymentType(p, employmentFilter))
     }
     if (roleFilter !== 'all') {
       list = list.filter(p => p.role === roleFilter)
@@ -747,7 +740,7 @@ export function AccessManagementPage() {
       )
     }
     return list
-  }, [profiles, workerTypeFilter, roleFilter, search])
+  }, [profiles, employmentFilter, roleFilter, search])
 
   const stats = useMemo(() => {
     const byRole: Record<string, number> = {}
@@ -883,24 +876,22 @@ export function AccessManagementPage() {
         </CardContent>
       </Card>
 
-      {/* Worker Type Tabs */}
-      <div className="flex gap-2">
+      {/* 근로유형(고용형태) filter — only types that are actually assigned */}
+      <div className="flex gap-2 flex-wrap">
         {[
-          { value: 'all', label: t('access.workerAll') },
-          ...WORKER_TYPE_OPTIONS,
+          { value: 'all', label: t('access.workerAll'), count: profiles.length },
+          ...EMPLOYMENT_TYPE_OPTIONS
+            .map(opt => ({ value: opt.value as string, label: opt.label, count: profiles.filter(p => hasEmploymentType(p, opt.value)).length }))
+            .filter(opt => opt.count > 0),
         ].map(opt => (
           <Button
             key={opt.value}
-            variant={workerTypeFilter === opt.value ? 'default' : 'outline'}
+            variant={employmentFilter === opt.value ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setWorkerTypeFilter(opt.value)}
+            onClick={() => setEmploymentFilter(opt.value)}
           >
             {opt.label}
-            {opt.value !== 'all' && (
-              <span className="ml-1.5 text-xs opacity-70">
-                {profiles.filter(p => p.workerType === opt.value).length}
-              </span>
-            )}
+            <span className="ml-1.5 text-xs opacity-70">{opt.count}</span>
           </Button>
         ))}
       </div>
