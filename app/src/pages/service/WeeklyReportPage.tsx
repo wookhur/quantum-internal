@@ -4,10 +4,9 @@ import { Button } from '@/components/ui/button'
 import { Printer } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
-import { useAllServiceMeetings, useAllServiceFollowupsInRange, useAllServiceDiaryInRange } from '@/hooks/useServiceDashboard'
+import { useAllServiceMeetings, useAllServiceDiaryInRange } from '@/hooks/useServiceDashboard'
 import { useContracts } from '@/hooks/useContracts'
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
-import { countScheduledMeetings } from '@/lib/meetingSchedule'
 
 const OTHER_ID = '__other__'
 
@@ -25,25 +24,18 @@ interface QcRow {
   id: string
   name: string
   students: number
-  expected: number
+  studentNames: string[]
   held: number
   cancelled: number
   noShow: number
   reportSubmitted: number
-  fuTotal: number
-  fuDone: number
+  cancelDetails: { student: string; reason: string }[]
+  fuCount: number
 }
 
 function pct(num: number, den: number): string {
   if (den <= 0) return '—'
   return `${Math.round((num / den) * 100)}%`
-}
-
-const CANCEL_BY_LABEL_KEYS: Record<string, string> = {
-  client: 'weeklyReport.cancelByClient',
-  consultant: 'weeklyReport.cancelByConsultant',
-  other: 'weeklyReport.cancelByOther',
-  unknown: 'weeklyReport.cancelByUnknown',
 }
 
 export function WeeklyReportPage() {
@@ -54,7 +46,6 @@ export function WeeklyReportPage() {
 
   const { data: students = [] } = useServiceStudents()
   const { data: meetings = [] } = useAllServiceMeetings(start, end)
-  const { data: followups = [] } = useAllServiceFollowupsInRange(start, end)
   const { data: diaries = [] } = useAllServiceDiaryInRange(start, end)
   const { data: contracts = [] } = useContracts()
 
@@ -74,8 +65,17 @@ export function WeeklyReportPage() {
 
   const consultantPool = useConsultantPool()
   const consultantName = useConsultantName()
-  const knownIds = useMemo(() => new Set<string>(consultantPool.map(c => c.id)), [consultantPool])
-  const bucketOf = (id?: string) => (id && knownIds.has(id) ? id : OTHER_ID)
+  // Bucket by canonical consultant NAME (matches Student360). assigned_consultant
+  // may be stored as a name or a UUID; consultantName() canonicalizes both.
+  const nameToBucket = useMemo(() => {
+    const m = new Map<string, string>()
+    consultantPool.forEach(c => m.set(c.name, c.id))
+    return m
+  }, [consultantPool])
+  const bucketOf = (raw?: string) => {
+    const cn = consultantName(raw)
+    return cn && nameToBucket.has(cn) ? nameToBucket.get(cn)! : OTHER_ID
+  }
 
   // Critical issues (risks/escalations) from diaries in the period
   const criticalIssues = useMemo(
@@ -100,50 +100,48 @@ export function WeeklyReportPage() {
     [diaries],
   )
 
-  const { rows, totals, cancelDist } = useMemo(() => {
+  const cancelReasonText = (m: { cancelledBy?: string; cancellationReason?: string; status: string }) => {
+    const by = m.cancelledBy === 'client' ? '고객' : m.cancelledBy === 'consultant' ? '컨설턴트' : m.cancelledBy === 'other' ? '기타' : ''
+    const kind = m.status === 'no_show' ? '노쇼' : '취소'
+    return [kind, by && `(${by})`, m.cancellationReason].filter(Boolean).join(' ')
+  }
+
+  const { rows, totals } = useMemo(() => {
     const buckets: { id: string; name: string }[] = [
       ...consultantPool.map(c => ({ id: c.id, name: c.name })),
       { id: OTHER_ID, name: t('weeklyReport.otherUnassigned') },
     ]
 
     const rows: QcRow[] = buckets.map(b => {
-      // Student360과 동일하게: 상태 필터 없이 배정된 모든 학생 (대소문자 불일치 방지)
       const studentsC = students.filter(s => bucketOf(s.assignedConsultant) === b.id)
-      const expected = studentsC.reduce((sum, s) => sum + countScheduledMeetings(s.regularMeetingSchedule, start, end), 0)
       const meetingsC = meetings.filter(m => bucketOf(m.consultantId) === b.id)
       const held = meetingsC.filter(m => m.status === 'held').length
       const cancelled = meetingsC.filter(m => m.status === 'cancelled').length
       const noShow = meetingsC.filter(m => m.status === 'no_show').length
       const reportSubmitted = meetingsC.filter(m => m.status === 'held' && m.reportStatus === 'submitted').length
-      const fuC = followups.filter(f => bucketOf(f.studentConsultant) === b.id)
+      const cancelDetails = meetingsC
+        .filter(m => m.status === 'cancelled' || m.status === 'no_show')
+        .map(m => ({ student: m.studentName, reason: cancelReasonText(m) }))
+      const fuCount = diaries.filter(d => (d.followUpCommitments || '').trim() && bucketOf(d.studentConsultant) === b.id).length
       return {
         id: b.id, name: b.name,
         students: studentsC.length,
-        expected, held, cancelled, noShow, reportSubmitted,
-        fuTotal: fuC.length,
-        fuDone: fuC.filter(f => f.done).length,
+        studentNames: studentsC.map(s => s.name).sort((a, z) => a.localeCompare(z, 'ko')),
+        held, cancelled, noShow, reportSubmitted, cancelDetails, fuCount,
       }
-    }).filter(r => r.students > 0 || r.expected > 0 || r.held > 0 || r.cancelled > 0 || r.noShow > 0 || r.fuTotal > 0)
+    }).filter(r => r.students > 0 || r.held > 0 || r.cancelled > 0 || r.noShow > 0 || r.fuCount > 0)
 
     const totals = rows.reduce((t, r) => ({
       students: t.students + r.students,
-      expected: t.expected + r.expected,
       held: t.held + r.held,
       cancelled: t.cancelled + r.cancelled,
       noShow: t.noShow + r.noShow,
       reportSubmitted: t.reportSubmitted + r.reportSubmitted,
-      fuTotal: t.fuTotal + r.fuTotal,
-      fuDone: t.fuDone + r.fuDone,
-    }), { students: 0, expected: 0, held: 0, cancelled: 0, noShow: 0, reportSubmitted: 0, fuTotal: 0, fuDone: 0 })
+      fuCount: t.fuCount + r.fuCount,
+    }), { students: 0, held: 0, cancelled: 0, noShow: 0, reportSubmitted: 0, fuCount: 0 })
 
-    const cancelDist: Record<string, number> = { client: 0, consultant: 0, other: 0, unknown: 0 }
-    meetings.filter(m => m.status === 'cancelled' || m.status === 'no_show').forEach(m => {
-      const key = m.cancelledBy && cancelDist[m.cancelledBy] !== undefined ? m.cancelledBy : 'unknown'
-      cancelDist[key] += 1
-    })
-
-    return { rows, totals, cancelDist }
-  }, [students, meetings, followups, start, end, knownIds])
+    return { rows, totals }
+  }, [students, meetings, diaries, consultantPool, nameToBucket, consultantName, t])
 
   const cancelTotal = totals.cancelled + totals.noShow
 
@@ -180,8 +178,8 @@ export function WeeklyReportPage() {
         <div className="grid grid-cols-4 gap-3 mb-5">
           <div className="rounded-md bg-gray-50 p-3">
             <div className="text-xs text-gray-500">{t('weeklyReport.meetingCompliance')}</div>
-            <div className="text-2xl font-semibold text-emerald-600">{pct(totals.held, totals.expected)}</div>
-            <div className="text-[11px] text-gray-400">{t('weeklyReport.meetingComplianceDetail', { held: String(totals.held), expected: String(totals.expected) })}</div>
+            <div className="text-2xl font-semibold text-emerald-600">{pct(totals.held, totals.held + totals.cancelled + totals.noShow)}</div>
+            <div className="text-[11px] text-gray-400">진행 {totals.held} / 대상 {totals.held + totals.cancelled + totals.noShow} (진행+취소+노쇼)</div>
           </div>
           <div className="rounded-md bg-gray-50 p-3">
             <div className="text-xs text-gray-500">{t('weeklyReport.cancelNoShow')}</div>
@@ -194,9 +192,9 @@ export function WeeklyReportPage() {
             <div className="text-[11px] text-gray-400">{t('weeklyReport.reportSubmissionDetail', { submitted: String(totals.reportSubmitted), held: String(totals.held) })}</div>
           </div>
           <div className="rounded-md bg-gray-50 p-3">
-            <div className="text-xs text-gray-500">{t('weeklyReport.followUpRate')}</div>
-            <div className="text-2xl font-semibold text-amber-600">{pct(totals.fuDone, totals.fuTotal)}</div>
-            <div className="text-[11px] text-gray-400">{t('weeklyReport.followUpRateDetail', { done: String(totals.fuDone), total: String(totals.fuTotal) })}</div>
+            <div className="text-xs text-gray-500">후속조치 기록</div>
+            <div className="text-2xl font-semibold text-amber-600">{totals.fuCount}<span className="text-sm font-normal text-gray-400">건</span></div>
+            <div className="text-[11px] text-gray-400">이 기간 미팅에 기록된 후속조치</div>
           </div>
         </div>
 
@@ -205,79 +203,62 @@ export function WeeklyReportPage() {
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-right">
                 <th className="text-left font-medium p-2 pl-3">{t('weeklyReport.consultant')}</th>
-                <th className="font-medium p-2" title="Student 360에서 해당 컨설턴트가 담당하는 서비스중 학생 수">{t('weeklyReport.students')}</th>
-                <th className="font-medium p-2" title="학생별 정기 미팅 일정 기준, 이 기간에 예정된 미팅 수">{t('weeklyReport.scheduled')}</th>
+                <th className="font-medium p-2" title="Student 360에서 해당 컨설턴트가 담당하는 학생 수 (숫자에 마우스를 올리면 학생 이름)">{t('weeklyReport.students')}</th>
                 <th className="font-medium p-2">{t('weeklyReport.held')}</th>
                 <th className="font-medium p-2">{t('weeklyReport.cancelled')}</th>
                 <th className="font-medium p-2">{t('weeklyReport.noShowCol')}</th>
-                <th className="font-medium p-2">{t('weeklyReport.complianceRate')}</th>
+                <th className="font-medium p-2" title="진행 / (진행+취소+노쇼)">{t('weeklyReport.complianceRate')}</th>
                 <th className="font-medium p-2">{t('weeklyReport.reportCol')}</th>
                 <th className="font-medium p-2 pr-3">{t('weeklyReport.followUpCol')}</th>
               </tr>
             </thead>
             <tbody className="text-right">
-              {rows.map(r => (
-                <tr key={r.id} className="border-t">
-                  <td className="text-left p-2 pl-3">{r.name}</td>
-                  <td className="p-2">{r.students}</td>
-                  <td className="p-2">{r.expected}</td>
-                  <td className="p-2">{r.held}</td>
-                  <td className="p-2">{r.cancelled}</td>
-                  <td className="p-2">{r.noShow}</td>
-                  <td className="p-2">{pct(r.held, r.expected)}</td>
-                  <td className="p-2">{pct(r.reportSubmitted, r.held)}</td>
-                  <td className="p-2 pr-3">{pct(r.fuDone, r.fuTotal)}</td>
-                </tr>
-              ))}
+              {rows.map(r => {
+                const cancelMemo = r.cancelDetails.filter(c => !c.reason.startsWith('노쇼')).map(c => `${c.student} · ${c.reason}`).join('\n')
+                const noShowMemo = r.cancelDetails.filter(c => c.reason.startsWith('노쇼')).map(c => `${c.student} · ${c.reason}`).join('\n')
+                return (
+                  <tr key={r.id} className="border-t">
+                    <td className="text-left p-2 pl-3">{r.name}</td>
+                    <td className={`p-2 ${r.students > 0 ? 'cursor-help' : ''}`} title={r.studentNames.join(', ')}>{r.students}</td>
+                    <td className="p-2">{r.held}</td>
+                    <td className={`p-2 ${r.cancelled > 0 ? 'cursor-help text-red-600' : ''}`} title={cancelMemo}>{r.cancelled}</td>
+                    <td className={`p-2 ${r.noShow > 0 ? 'cursor-help text-red-600' : ''}`} title={noShowMemo}>{r.noShow}</td>
+                    <td className="p-2">{pct(r.held, r.held + r.cancelled + r.noShow)}</td>
+                    <td className="p-2">{pct(r.reportSubmitted, r.held)}</td>
+                    <td className="p-2 pr-3">{r.fuCount || '—'}</td>
+                  </tr>
+                )
+              })}
               {rows.length === 0 && (
-                <tr><td colSpan={9} className="p-4 text-center text-gray-400">{t('weeklyReport.noData')}</td></tr>
+                <tr><td colSpan={8} className="p-4 text-center text-gray-400">{t('weeklyReport.noData')}</td></tr>
               )}
               {rows.length > 0 && (
                 <tr className="border-t-2 bg-gray-50 font-medium">
                   <td className="text-left p-2 pl-3">{t('weeklyReport.companyTotal')}</td>
                   {(() => {
                     const mismatch = totals.students !== inServiceContractCount
-                      || contractCheck.onlyInContract.length > 0 || contractCheck.onlyInService.length > 0
                     const memo = [
-                      `Student360 담당학생 ${totals.students}명 · 계약관리 서비스진행중 ${inServiceContractCount}건`,
+                      `계약관리 서비스진행중 학생 수: ${inServiceContractCount}명`,
                       contractCheck.onlyInContract.length ? `\n▸ 계약엔 있으나 Student360 없음 (${contractCheck.onlyInContract.length}): ${contractCheck.onlyInContract.join(', ')}` : '',
                       contractCheck.onlyInService.length ? `\n▸ Student360엔 있으나 서비스중 계약 없음 (${contractCheck.onlyInService.length}): ${contractCheck.onlyInService.join(', ')}` : '',
-                      mismatch ? '\n→ 확인 필요' : '\n→ 일치',
                     ].join('')
                     return (
-                      <td className={`p-2 ${mismatch ? 'text-red-600 font-bold cursor-help' : ''}`} title={memo}>
+                      <td className="p-2">
                         {totals.students}
-                        {mismatch && <span className="text-[10px] align-top"> ⚠{inServiceContractCount}</span>}
+                        <span className={`ml-1 cursor-help ${mismatch ? 'text-red-600 font-bold' : 'text-gray-400'}`} title={memo}>({inServiceContractCount})</span>
                       </td>
                     )
                   })()}
-                  <td className="p-2">{totals.expected}</td>
                   <td className="p-2">{totals.held}</td>
                   <td className="p-2">{totals.cancelled}</td>
                   <td className="p-2">{totals.noShow}</td>
-                  <td className="p-2">{pct(totals.held, totals.expected)}</td>
+                  <td className="p-2">{pct(totals.held, totals.held + totals.cancelled + totals.noShow)}</td>
                   <td className="p-2">{pct(totals.reportSubmitted, totals.held)}</td>
-                  <td className="p-2 pr-3">{pct(totals.fuDone, totals.fuTotal)}</td>
+                  <td className="p-2 pr-3">{totals.fuCount || '—'}</td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
-
-        <div className="border rounded-lg p-4">
-          <div className="text-sm font-medium text-gray-600 mb-2">{t('weeklyReport.cancelDistTitle', { count: String(cancelTotal) })}</div>
-          {cancelTotal === 0 ? (
-            <div className="text-sm text-gray-400">{t('weeklyReport.noCancels')}</div>
-          ) : (
-            <ul className="text-sm text-gray-600 space-y-1">
-              {Object.entries(cancelDist).filter(([, n]) => n > 0).map(([k, n]) => (
-                <li key={k} className="flex justify-between max-w-xs">
-                  <span>{t(CANCEL_BY_LABEL_KEYS[k])}</span>
-                  <span>{t('weeklyReport.countUnit', { n: String(n), pct: pct(n, cancelTotal) })}</span>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
 
         {/* Risks, Issues & Escalations (from meeting diary critical issue) */}
