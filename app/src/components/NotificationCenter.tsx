@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Bell, X, AlertTriangle, AlertCircle, Info, ExternalLink, Check, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppNotifications } from '@/hooks/useNotifications'
-import { useUserNotifications, useMarkNotificationRead } from '@/hooks/useUserNotifications'
+import { useUserNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/hooks/useUserNotifications'
 import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/hooks/useNotificationPreferences'
 import { useNavigate } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -15,11 +15,11 @@ export function NotificationCenter() {
   const appNotifications = useAppNotifications()
   const { data: dbNotifications = [] } = useUserNotifications()
   const markRead = useMarkNotificationRead()
+  const markAllRead = useMarkAllNotificationsRead()
   const { data: prefs } = useNotificationPreferences()
   const updatePrefs = useUpdateNotificationPreferences()
   const [open, setOpen] = useState(false)
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const [viewedDetails, setViewedDetails] = useState<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
   const hasAutoOpenedRef = useRef(false)
 
@@ -69,28 +69,25 @@ export function NotificationCenter() {
   }
 
   const handleNavigate = useCallback((link: string, notifId?: string) => {
-    if (notifId) {
-      setViewedDetails((prev) => new Set(prev).add(notifId))
-    }
+    if (notifId) markRead.mutate(notifId) // viewing detail marks it read
     navigate(link)
     setOpen(false)
-  }, [navigate])
+  }, [navigate, markRead])
 
-  // Mark DB notification as read (only if user has viewed the detail link)
+  // Mark a single DB notification as read (removes it from the list & count)
   const handleMarkRead = useCallback((id: string) => {
-    if (!viewedDetails.has(id)) return // Must view detail first
     markRead.mutate(id)
-  }, [viewedDetails, markRead])
+  }, [markRead])
 
   const handleMarkAllRead = useCallback(() => {
-    // Only mark those that have been viewed
-    const viewedDbNotifs = dbNotifications.filter((n) => viewedDetails.has(n.id))
-    if (viewedDbNotifs.length > 0) {
-      for (const n of viewedDbNotifs) {
-        markRead.mutate(n.id)
-      }
-    }
-  }, [dbNotifications, viewedDetails, markRead])
+    markAllRead.mutate()
+  }, [markAllRead])
+
+  // Closing the panel acknowledges the notifications so they don't reappear
+  const closePanel = useCallback(() => {
+    if (dbNotifications.length > 0) markAllRead.mutate()
+    setOpen(false)
+  }, [dbNotifications.length, markAllRead])
 
   const severityIcon = {
     warning: <AlertTriangle className="size-4 text-amber-500 shrink-0" />,
@@ -143,7 +140,7 @@ export function NotificationCenter() {
               )}
             </h3>
             <div className="flex items-center gap-1">
-              {dbNotifications.length > 0 && viewedDetails.size > 0 && (
+              {dbNotifications.length > 0 && (
                 <button
                   onClick={handleMarkAllRead}
                   className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
@@ -152,7 +149,8 @@ export function NotificationCenter() {
                 </button>
               )}
               <button
-                onClick={() => setOpen(false)}
+                onClick={closePanel}
+                title="닫기 (읽음 처리)"
                 className="text-gray-400 hover:text-gray-600 rounded p-1 hover:bg-gray-100"
               >
                 <X className="size-4" />
@@ -170,7 +168,6 @@ export function NotificationCenter() {
               <div className="p-2 space-y-2">
                 {/* DB-backed notifications (persistent, require detail view) */}
                 {dbNotifications.map((notif) => {
-                  const isViewed = viewedDetails.has(notif.id)
                   const bgClass = typeBg[notif.type] || 'bg-blue-50 border-blue-200'
                   const icon = typeIcon[notif.type] || <Info className="size-4 text-blue-500 shrink-0" />
 
@@ -179,9 +176,18 @@ export function NotificationCenter() {
                       key={`db-${notif.id}`}
                       className={`relative rounded-lg border p-3 ${bgClass} transition-all`}
                     >
+                      {/* Per-item dismiss (mark read) */}
+                      <button
+                        onClick={() => handleMarkRead(notif.id)}
+                        disabled={markRead.isPending}
+                        title="읽음"
+                        className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 rounded p-0.5 hover:bg-black/5"
+                      >
+                        <X className="size-3.5" />
+                      </button>
                       <div className="flex items-start gap-2">
                         {icon}
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 pr-4">
                           <div className="text-sm font-medium text-gray-900">{notif.title}</div>
                           <div className="text-xs text-gray-600 mt-0.5">{notif.message}</div>
                           <div className="text-[10px] text-gray-400 mt-1">
@@ -196,19 +202,13 @@ export function NotificationCenter() {
                                 {t('notif.viewDetail')} <ExternalLink className="size-3" />
                               </button>
                             )}
-                            {isViewed ? (
-                              <button
-                                onClick={() => handleMarkRead(notif.id)}
-                                disabled={markRead.isPending}
-                                className="inline-flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800"
-                              >
-                                <Check className="size-3" /> {t('notif.confirmRead')}
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-gray-400 italic">
-                                {t('notif.viewFirstToConfirm')}
-                              </span>
-                            )}
+                            <button
+                              onClick={() => handleMarkRead(notif.id)}
+                              disabled={markRead.isPending}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800"
+                            >
+                              <Check className="size-3" /> {t('notif.confirmRead')}
+                            </button>
                           </div>
                         </div>
                       </div>

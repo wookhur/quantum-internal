@@ -33,6 +33,8 @@ function mapProfile(row: Record<string, unknown>): User {
 export function useProfiles() {
   return useQuery({
     queryKey: ['profiles'],
+    // Always refetch on mount so newly-added employees show up promptly
+    refetchOnMount: 'always',
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
