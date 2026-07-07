@@ -36,6 +36,7 @@ import * as XLSX from 'xlsx'
 import { useT } from '@/i18n/LanguageContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAllEmployeeInfo, useCreateFormToken, useUpsertEmployeeInfo, type EmployeeInfo } from '@/hooks/useEmployeeInfo'
+import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 
 const PAGE_PIN = '2256'
 
@@ -65,6 +66,7 @@ export function PersonalInfoPage() {
   const [copied, setCopied] = useState<string | false>(false)
   const [editDialog, setEditDialog] = useState<string | null>(null) // profileId
   const [editForm, setEditForm] = useState<Partial<EmployeeInfo>>({})
+  const [sendingBulk, setSendingBulk] = useState(false)
 
   // 인사관리(접근제어)에 등록된 모든 직원을 그대로 반영
   const activeProfiles = profiles
@@ -98,6 +100,37 @@ export function PersonalInfoPage() {
       setGeneratedLink(url)
     } catch (err) {
       console.error(err)
+    }
+  }
+
+  // 미제출자 전원에게 개인정보 작성 링크를 알림으로 발송
+  const handleSendToUnsubmitted = async () => {
+    const unsubmitted = activeProfiles.filter(p => !infoMap.has(p.id))
+    if (unsubmitted.length === 0) {
+      alert('미제출 인원이 없습니다.')
+      return
+    }
+    if (!confirm(`미제출 ${unsubmitted.length}명에게 개인정보 작성 링크를 알림으로 발송할까요?`)) return
+    setSendingBulk(true)
+    try {
+      let ok = 0
+      for (const p of unsubmitted) {
+        try {
+          const token = await createToken.mutateAsync(p.id)
+          await createNotificationsForUsers([p.id], {
+            type: 'employee_info',
+            title: '개인정보 작성 요청',
+            message: '개인정보(연락처·계좌·비상연락처 등) 작성을 완료해 주세요. 이 알림의 링크로 이동해 작성할 수 있습니다.',
+            link: `/employee-form/${token}`,
+          })
+          ok++
+        } catch (e) {
+          console.error('발송 실패:', p.name, e)
+        }
+      }
+      alert(`${ok}명에게 작성 링크를 발송했습니다.${ok < unsubmitted.length ? `\n(${unsubmitted.length - ok}명 실패)` : ''}`)
+    } finally {
+      setSendingBulk(false)
     }
   }
 
@@ -263,12 +296,19 @@ export function PersonalInfoPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={`${activeProfiles.length - filledCount > 0 ? 'cursor-pointer hover:bg-amber-50/50' : ''} ${sendingBulk ? 'opacity-60 pointer-events-none' : ''}`}
+          onClick={() => { if (activeProfiles.length - filledCount > 0) handleSendToUnsubmitted() }}
+          title={activeProfiles.length - filledCount > 0 ? '클릭하면 미제출자에게 작성 링크를 발송합니다' : ''}
+        >
           <CardContent className="py-3 flex items-center gap-3">
-            <FileText className="h-5 w-5 text-amber-500" />
+            {sendingBulk ? <Loader2 className="h-5 w-5 text-amber-500 animate-spin" /> : <FileText className="h-5 w-5 text-amber-500" />}
             <div>
               <div className="text-lg font-bold">{activeProfiles.length - filledCount}</div>
-              <div className="text-xs text-muted-foreground">{t('personalInfo.pending')}</div>
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                {t('personalInfo.pending')}
+                {activeProfiles.length - filledCount > 0 && <span className="text-[10px] text-amber-600">· 클릭해 링크 발송</span>}
+              </div>
             </div>
           </CardContent>
         </Card>
