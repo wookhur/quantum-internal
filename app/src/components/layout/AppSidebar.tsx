@@ -15,7 +15,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   LogOut,
   LayoutDashboard,
-  Calendar,
   Users,
   ClipboardList,
   CheckSquare,
@@ -60,7 +59,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     titleKey: 'nav.common',
     module: 'dashboard',
     items: [
-      { labelKey: 'nav.calendar', to: '/calendar', icon: Calendar },
       { labelKey: 'nav.taskBoard', to: '/tasks', icon: ClipboardList },
       { labelKey: 'nav.myTodo', to: '/my-todos', icon: CheckSquare },
       { labelKey: 'nav.messages', to: '/messages', icon: MessageSquare },
