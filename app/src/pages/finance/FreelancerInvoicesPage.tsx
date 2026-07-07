@@ -425,35 +425,19 @@ function saveBlob(buf: ArrayBuffer, name: string) {
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
 }
 
-const BIZ_INFO_LABELS = ['상호(회사명)', '사업자등록번호', '대표자명', '연락처', '이메일', '입금계좌']
-const BIZ_ITEM_HEADER_ROW = 10
-
+// Serve the real 견적서 template (public/business-invoice-template.xlsx)
 async function downloadBusinessTemplate() {
-  const { default: ExcelJS } = await import('exceljs')
-  const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet('인보이스')
-  ws.columns = [{ width: 18 }, { width: 32 }, { width: 12 }, { width: 14 }, { width: 20 }]
-  ws.getCell('A1').value = '■ 발행자 정보 (B열에 값을 입력하세요)'
-  ws.getCell('A1').font = { bold: true }
-  BIZ_INFO_LABELS.forEach((label, i) => {
-    const c = ws.getCell(`A${i + 2}`)
-    c.value = label
-    c.font = { bold: true }
-  })
-  ws.getCell(`A${BIZ_ITEM_HEADER_ROW - 1}`).value = '■ 품목 (여러 줄 입력 가능, 예시 줄은 지우고 작성)'
-  ws.getCell(`A${BIZ_ITEM_HEADER_ROW - 1}`).font = { bold: true }
-  ;['품목', '수량', '단가', '비고'].forEach((h, i) => {
-    const c = ws.getCell(BIZ_ITEM_HEADER_ROW, i + 1)
-    c.value = h; c.font = { bold: true }
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } }
-  })
-  ws.getCell(BIZ_ITEM_HEADER_ROW + 1, 1).value = '예) 컨설팅 용역'
-  ws.getCell(BIZ_ITEM_HEADER_ROW + 1, 2).value = 1
-  ws.getCell(BIZ_ITEM_HEADER_ROW + 1, 3).value = 1000000
-  const out = await wb.xlsx.writeBuffer()
-  saveBlob(out as ArrayBuffer, '인보이스_양식.xlsx')
+  const res = await fetch('/business-invoice-template.xlsx')
+  if (!res.ok) throw new Error('양식 파일을 불러올 수 없습니다.')
+  saveBlob(await res.arrayBuffer(), '프리랜서 인보이스 샘플.xlsx')
 }
 
+/**
+ * Parse a filled 견적서 template. Layout (matches the sample):
+ *  C5=날짜, F6=성명, H6=주민/사업자번호, F7=전화번호, F8=이메일,
+ *  품목표: 15행부터 (B=품명, C=수량, D=단가, E=공급가액, F=비고), '합 계' 행 전까지,
+ *  '입금계좌 : ...' 행에 입금계좌.
+ */
 async function parseBusinessInvoice(file: File): Promise<ParsedInvoice> {
   const { default: ExcelJS } = await import('exceljs')
   const wb = new ExcelJS.Workbook()
@@ -463,38 +447,62 @@ async function parseBusinessInvoice(file: File): Promise<ParsedInvoice> {
   const cell = (ref: string) => {
     const v = ws.getCell(ref).value as unknown
     if (v == null) return ''
-    if (typeof v === 'object' && v !== null && 'text' in (v as Record<string, unknown>)) {
-      return String((v as Record<string, unknown>).text).trim()
+    if (typeof v === 'object' && v !== null) {
+      const o = v as Record<string, unknown>
+      if ('text' in o) return String(o.text).trim()
+      if ('result' in o) return String(o.result).trim()
+      if ('richText' in o) return (o.richText as { text: string }[]).map(t => t.text).join('').trim()
     }
     return String(v).trim()
   }
-  // Info values are in column B, rows 2..7 (order = BIZ_INFO_LABELS)
-  const company = cell('B2')
-  const bizNo = cell('B3')
-  const ceo = cell('B4')
-  const phone = cell('B5')
-  const email = cell('B6')
-  const bankAccount = cell('B7')
+  const num = (s: string) => Number(String(s).replace(/[,₩\s]/g, '')) || 0
+
+  const name = cell('F6')
+  const bizNo = cell('H6')
+  const phone = cell('F7')
+  const email = cell('F8')
+  const rawDate = cell('C5')
+
+  // Find 합계 / 입금계좌 rows (column A)
+  let sumRow = 23
+  let bankAccount = ''
+  for (let r = 14; r <= 80; r++) {
+    const a = cell(`A${r}`)
+    if (a.includes('합')) { sumRow = r; break }
+  }
+  for (let r = 14; r <= 90; r++) {
+    const a = cell(`A${r}`)
+    if (a.includes('입금')) { bankAccount = a.replace(/^.*입금계좌\s*:?\s*/, '').trim(); break }
+  }
 
   const items: ItemRow[] = []
-  for (let r = BIZ_ITEM_HEADER_ROW + 1; r <= BIZ_ITEM_HEADER_ROW + 200; r++) {
-    const name = cell(`A${r}`)
-    if (!name) continue
-    if (name.startsWith('예)')) continue
-    const qty = Number(cell(`B${r}`)) || 1
-    const price = Number(cell(`C${r}`).replace(/[,₩\s]/g, '')) || 0
-    const remark = cell(`D${r}`)
-    items.push({ itemName: name, quantity: qty, unitPrice: price, remark })
+  for (let r = 15; r < sumRow; r++) {
+    const itemName = cell(`B${r}`)
+    const price = num(cell(`D${r}`))
+    if (!itemName && !price) continue
+    items.push({
+      itemName: itemName || '(품명 없음)',
+      quantity: num(cell(`C${r}`)) || 1,
+      unitPrice: price,
+      remark: cell(`F${r}`),
+    })
   }
-  if (items.length === 0) throw new Error('품목이 비어 있습니다. 양식의 품목 표를 채워주세요.')
+  if (items.length === 0) throw new Error('품목이 비어 있습니다. 양식의 품명·단가를 채워주세요.')
+
+  // Normalize date (accept YYYY-MM-DD or MM.DD.YYYY etc.); fallback to today
+  let invoiceDate = new Date().toISOString().slice(0, 10)
+  const iso = rawDate.match(/(\d{4})[-.](\d{1,2})[-.](\d{1,2})/)
+  const mdy = rawDate.match(/(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/)
+  if (iso) invoiceDate = `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`
+  else if (mdy) invoiceDate = `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`
 
   return {
-    invoiceDate: new Date().toISOString().slice(0, 10),
+    invoiceDate,
     residentNumber: bizNo,
     phone,
     email,
     bankAccount,
-    note: [company && `상호: ${company}`, ceo && `대표자: ${ceo}`].filter(Boolean).join(' / '),
+    note: name ? `성명/상호: ${name}` : '',
     items,
   }
 }
