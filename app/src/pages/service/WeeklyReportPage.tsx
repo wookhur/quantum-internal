@@ -25,7 +25,6 @@ interface QcRow {
   id: string
   name: string
   students: number
-  contractStudents: number
   expected: number
   held: number
   cancelled: number
@@ -59,14 +58,11 @@ export function WeeklyReportPage() {
   const { data: diaries = [] } = useAllServiceDiaryInRange(start, end)
   const { data: contracts = [] } = useContracts()
 
-  // 계약서 작성완료되어 서비스중인 학생 이름 집합 (공백 제거로 매칭)
-  const inServiceContractNames = useMemo(() => {
-    const s = new Set<string>()
-    contracts
-      .filter(c => c.status === 'active' || c.status === 'expiring_soon')
-      .forEach(c => { if (c.studentName) s.add(c.studentName.replace(/\s+/g, '')) })
-    return s
-  }, [contracts])
+  // 계약관리에서 '서비스 진행중'인 계약 건수 (전사 합계 교차검증용)
+  const inServiceContractCount = useMemo(
+    () => contracts.filter(c => c.status === 'active' || c.status === 'expiring_soon').length,
+    [contracts],
+  )
 
   const consultantPool = useConsultantPool()
   const consultantName = useConsultantName()
@@ -97,8 +93,6 @@ export function WeeklyReportPage() {
 
     const rows: QcRow[] = buckets.map(b => {
       const studentsC = students.filter(s => s.status === 'active' && bucketOf(s.assignedConsultant) === b.id)
-      // 이 컨설턴트의 서비스중 학생 중 '계약 완료 서비스중' 계약이 있는 학생 수
-      const contractStudents = studentsC.filter(s => inServiceContractNames.has((s.name || '').replace(/\s+/g, ''))).length
       const expected = studentsC.reduce((sum, s) => sum + countScheduledMeetings(s.regularMeetingSchedule, start, end), 0)
       const meetingsC = meetings.filter(m => bucketOf(m.consultantId) === b.id)
       const held = meetingsC.filter(m => m.status === 'held').length
@@ -109,7 +103,6 @@ export function WeeklyReportPage() {
       return {
         id: b.id, name: b.name,
         students: studentsC.length,
-        contractStudents,
         expected, held, cancelled, noShow, reportSubmitted,
         fuTotal: fuC.length,
         fuDone: fuC.filter(f => f.done).length,
@@ -118,7 +111,6 @@ export function WeeklyReportPage() {
 
     const totals = rows.reduce((t, r) => ({
       students: t.students + r.students,
-      contractStudents: t.contractStudents + r.contractStudents,
       expected: t.expected + r.expected,
       held: t.held + r.held,
       cancelled: t.cancelled + r.cancelled,
@@ -126,7 +118,7 @@ export function WeeklyReportPage() {
       reportSubmitted: t.reportSubmitted + r.reportSubmitted,
       fuTotal: t.fuTotal + r.fuTotal,
       fuDone: t.fuDone + r.fuDone,
-    }), { students: 0, contractStudents: 0, expected: 0, held: 0, cancelled: 0, noShow: 0, reportSubmitted: 0, fuTotal: 0, fuDone: 0 })
+    }), { students: 0, expected: 0, held: 0, cancelled: 0, noShow: 0, reportSubmitted: 0, fuTotal: 0, fuDone: 0 })
 
     const cancelDist: Record<string, number> = { client: 0, consultant: 0, other: 0, unknown: 0 }
     meetings.filter(m => m.status === 'cancelled' || m.status === 'no_show').forEach(m => {
@@ -135,7 +127,7 @@ export function WeeklyReportPage() {
     })
 
     return { rows, totals, cancelDist }
-  }, [students, meetings, followups, start, end, knownIds, inServiceContractNames])
+  }, [students, meetings, followups, start, end, knownIds])
 
   const cancelTotal = totals.cancelled + totals.noShow
 
@@ -197,8 +189,8 @@ export function WeeklyReportPage() {
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-right">
                 <th className="text-left font-medium p-2 pl-3">{t('weeklyReport.consultant')}</th>
-                <th className="font-medium p-2" title="student360 서비스중 인원 · 계약완료 서비스중과 다르면 빨간색">{t('weeklyReport.students')}</th>
-                <th className="font-medium p-2">{t('weeklyReport.scheduled')}</th>
+                <th className="font-medium p-2" title="Student 360에서 해당 컨설턴트가 담당하는 서비스중 학생 수">{t('weeklyReport.students')}</th>
+                <th className="font-medium p-2" title="학생별 정기 미팅 일정 기준, 이 기간에 예정된 미팅 수">{t('weeklyReport.scheduled')}</th>
                 <th className="font-medium p-2">{t('weeklyReport.held')}</th>
                 <th className="font-medium p-2">{t('weeklyReport.cancelled')}</th>
                 <th className="font-medium p-2">{t('weeklyReport.noShowCol')}</th>
@@ -210,14 +202,8 @@ export function WeeklyReportPage() {
             <tbody className="text-right">
               {rows.map(r => (
                 <tr key={r.id} className="border-t">
-                  <td className="text-left p-2 pl-3">{r.name}</td>
-                  <td
-                    className={`p-2 ${r.students !== r.contractStudents ? 'text-red-600 font-bold' : ''}`}
-                    title={r.students !== r.contractStudents ? `student360 서비스중 ${r.students}명 ≠ 계약완료 서비스중 ${r.contractStudents}명 — 확인 필요` : ''}
-                  >
-                    {r.students}
-                    {r.students !== r.contractStudents && <span className="text-[10px] align-top"> ⚠{r.contractStudents}</span>}
-                  </td>
+                  <td className="text-left p-2 pl-3">{r.name} <span className="text-gray-400">({r.students})</span></td>
+                  <td className="p-2">{r.students}</td>
                   <td className="p-2">{r.expected}</td>
                   <td className="p-2">{r.held}</td>
                   <td className="p-2">{r.cancelled}</td>
@@ -234,11 +220,13 @@ export function WeeklyReportPage() {
                 <tr className="border-t-2 bg-gray-50 font-medium">
                   <td className="text-left p-2 pl-3">{t('weeklyReport.companyTotal')}</td>
                   <td
-                    className={`p-2 ${totals.students !== totals.contractStudents ? 'text-red-600 font-bold' : ''}`}
-                    title={totals.students !== totals.contractStudents ? `student360 ${totals.students}명 ≠ 계약완료 ${totals.contractStudents}명` : ''}
+                    className={`p-2 ${totals.students !== inServiceContractCount ? 'text-red-600 font-bold' : ''}`}
+                    title={totals.students !== inServiceContractCount
+                      ? `Student360 담당학생 합계 ${totals.students}명 ≠ 계약관리 서비스진행중 ${inServiceContractCount}건 — 확인 필요`
+                      : `계약관리 서비스진행중 ${inServiceContractCount}건과 일치`}
                   >
                     {totals.students}
-                    {totals.students !== totals.contractStudents && <span className="text-[10px] align-top"> ⚠{totals.contractStudents}</span>}
+                    {totals.students !== inServiceContractCount && <span className="text-[10px] align-top"> ⚠{inServiceContractCount}</span>}
                   </td>
                   <td className="p-2">{totals.expected}</td>
                   <td className="p-2">{totals.held}</td>

@@ -930,25 +930,48 @@ export function AttendancePage() {
           </DialogHeader>
           {(() => {
             const target = selectedProfile === 'all' ? attendances : filteredAttendances
-            const lateRecs = target
-              .filter(a => isLate(a.clockIn, a.date))
-              .sort((a, b) => a.date.localeCompare(b.date) || (a.clockIn || '').localeCompare(b.clockIn || ''))
+            const lateRecs = target.filter(a => isLate(a.clockIn, a.date))
             if (lateRecs.length === 0) {
               return <p className="text-sm text-muted-foreground py-6 text-center">지각 내역이 없습니다.</p>
             }
+            // 직원별로 묶고, 지각이 많은 순으로 정렬 (누가 제일 많이 지각하는지 한눈에)
+            const byProfile = new Map<string, typeof lateRecs>()
+            lateRecs.forEach(r => {
+              const arr = byProfile.get(r.profileId) || []
+              arr.push(r)
+              byProfile.set(r.profileId, arr)
+            })
+            const groups = [...byProfile.entries()]
+              .map(([pid, recs]) => ({
+                pid,
+                name: profileName(pid),
+                count: recs.length,
+                recs: [...recs].sort((a, b) => a.date.localeCompare(b.date)),
+              }))
+              .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
             return (
-              <div className="divide-y max-h-[60vh] overflow-y-auto">
-                {lateRecs.map(r => (
-                  <div
-                    key={r.id}
-                    className="flex items-center justify-between py-2 px-1 cursor-pointer hover:bg-muted/40 rounded"
-                    onClick={() => { setLateMonthOpen(false); openEdit(r.id) }}
-                  >
-                    <span className="text-sm">
-                      <span className="font-mono text-muted-foreground mr-2">{r.date.slice(5)}</span>
-                      <span className="font-medium">{profileName(r.profileId)}</span>
-                    </span>
-                    <span className="text-sm font-mono text-red-600 font-bold">{formatTime(r.clockIn)}</span>
+              <div className="max-h-[60vh] overflow-y-auto space-y-3">
+                {groups.map((g, gi) => (
+                  <div key={g.pid} className="rounded-lg border overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-red-50/60">
+                      <span className="text-sm font-semibold flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">{gi + 1}</span>
+                        {g.name}
+                      </span>
+                      <span className="text-xs font-bold text-red-600">지각 {g.count}회</span>
+                    </div>
+                    <div className="divide-y">
+                      {g.recs.map(r => (
+                        <div
+                          key={r.id}
+                          className="flex items-center justify-between py-1.5 px-3 cursor-pointer hover:bg-muted/40"
+                          onClick={() => { setLateMonthOpen(false); openEdit(r.id) }}
+                        >
+                          <span className="text-sm font-mono text-muted-foreground">{r.date.slice(5)}</span>
+                          <span className="text-sm font-mono text-red-600 font-bold">{formatTime(r.clockIn)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>

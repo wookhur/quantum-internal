@@ -376,7 +376,9 @@ function TaskDetailDialog({
                   />
                 </div>
                 <Select value={subtaskAssignee || '_none'} onValueChange={v => setSubtaskAssignee(!v || v === '_none' ? '' : v)}>
-                  <SelectTrigger className="w-28 h-8 text-xs"><SelectValue placeholder={t('tasks.assignee')} /></SelectTrigger>
+                  <SelectTrigger className="w-28 h-8 text-xs">
+                    <span className="truncate">{subtaskAssignee ? (profiles.find(p => p.id === subtaskAssignee)?.name || t('tasks.assignee')) : t('tasks.assignee')}</span>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_none">{t('tasks.unassigned')}</SelectItem>
                     {profiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
