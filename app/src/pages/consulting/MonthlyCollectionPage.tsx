@@ -317,12 +317,16 @@ export function MonthlyCollectionPage() {
     return profiles.find(p => p.id === id)?.name
   }, [profiles])
 
-  // Sales-incentive recipients by contract (the person who should chase collection)
+  // Sales-incentive recipients by contract (the person who made the initial sale
+  // and should chase collection). Only front-line SALES incentive types —
+  // exclude service / total-revenue / external / partner-fee.
+  const SALES_INCENTIVE_TYPES = ['partner_sales', 'cold_call']
   const { data: allIncentives = [] } = useAllIncentives()
   const recipientsByContract = useMemo(() => {
     const m = new Map<string, { name: string; profileId: string | null }[]>()
     for (const inc of allIncentives) {
       if (!inc.contractId || !inc.displayName) continue
+      if (!SALES_INCENTIVE_TYPES.includes(inc.incentiveType)) continue
       const arr = m.get(inc.contractId) || []
       if (!arr.some(x => x.name === inc.displayName)) arr.push({ name: inc.displayName, profileId: inc.profileId })
       m.set(inc.contractId, arr)
