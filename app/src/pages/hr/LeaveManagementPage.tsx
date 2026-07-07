@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, CalendarDays, Loader2, Trash2, Check, X, Info } from 'lucide-react'
+import { Plus, CalendarDays, Loader2, Trash2, Check, X, Info, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useLeaveRequests, useCreateLeaveRequest, useUpdateLeaveStatus, useDeleteLeaveRequest,
@@ -26,7 +26,7 @@ const STATUS_CFG: Record<LeaveStatus, { label: string; className: string }> = {
   rejected: { label: '반려', className: 'bg-red-100 text-red-700' },
 }
 
-type Tab = 'mine' | 'all' | 'summary'
+type Tab = 'mine' | 'calendar' | 'approve' | 'summary'
 
 export function LeaveManagementPage() {
   const { user } = useAuth()
@@ -62,6 +62,8 @@ export function LeaveManagementPage() {
 
   const mine = requests.filter(r => r.requesterId === user?.id)
   const pending = requests.filter(r => r.status === 'requested')
+  // Approved leaves visible to everyone (for the calendar / 현황판)
+  const approvedLeaves = useMemo(() => requests.filter(r => r.status === 'approved'), [requests])
   const list = tab === 'mine' ? mine : requests
 
   async function handleStatus(r: LeaveRequest, status: LeaveStatus) {
@@ -136,13 +138,16 @@ export function LeaveManagementPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Button variant={tab === 'mine' ? 'default' : 'outline'} size="sm" onClick={() => setTab('mine')}>
           내 신청 ({mine.length})
         </Button>
+        <Button variant={tab === 'calendar' ? 'default' : 'outline'} size="sm" onClick={() => setTab('calendar')}>
+          현황판(캘린더)
+        </Button>
         {isApprover && (
-          <Button variant={tab === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setTab('all')}>
-            전체 {pending.length > 0 && <span className="ml-1 text-amber-600">· 대기 {pending.length}</span>}
+          <Button variant={tab === 'approve' ? 'default' : 'outline'} size="sm" onClick={() => setTab('approve')}>
+            승인 관리 {pending.length > 0 && <span className="ml-1 text-amber-600">· 대기 {pending.length}</span>}
           </Button>
         )}
         {isApprover && (
@@ -152,14 +157,14 @@ export function LeaveManagementPage() {
         )}
       </div>
 
-      {/* Employee summary (approvers) */}
-      {tab === 'summary' ? (
+      {tab === 'calendar' ? (
+        <LeaveCalendar approved={approvedLeaves} />
+      ) : tab === 'summary' ? (
         <EmployeeLeaveSummary profiles={profiles} requests={requests} />
-      ) : /* List */
-      list.length === 0 ? (
+      ) : list.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">
           <CalendarDays className="h-10 w-10 mx-auto mb-2 opacity-40" />
-          <p>휴가 신청 내역이 없습니다.</p>
+          <p>{tab === 'approve' ? '신청 내역이 없습니다.' : '휴가 신청 내역이 없습니다.'}</p>
         </CardContent></Card>
       ) : (
         <div className="space-y-2">
@@ -169,7 +174,7 @@ export function LeaveManagementPage() {
               req={r}
               isApprover={isApprover}
               isOwner={r.requesterId === user?.id}
-              showRequester={tab === 'all'}
+              showRequester={tab === 'approve'}
               onStatus={handleStatus}
               onDelete={(id) => deleteReq.mutate(id)}
             />
@@ -373,6 +378,93 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
   )
 }
 
+const TYPE_COLOR: Record<string, string> = {
+  annual: 'bg-blue-100 text-blue-700',
+  paid_special: 'bg-emerald-100 text-emerald-700',
+  sick: 'bg-orange-100 text-orange-700',
+  family_event: 'bg-purple-100 text-purple-700',
+  other: 'bg-gray-100 text-gray-700',
+}
+
+function ymd(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Monthly calendar of approved leaves (현황판) — everyone can see. */
+function LeaveCalendar({ approved }: { approved: LeaveRequest[] }) {
+  const [offset, setOffset] = useState(0)
+  const base = new Date()
+  base.setDate(1)
+  base.setMonth(base.getMonth() + offset)
+  const year = base.getFullYear()
+  const month = base.getMonth()
+  const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const firstDow = new Date(year, month, 1).getDay()
+  const todayStr = ymd(new Date())
+
+  const byDate = new Map<string, LeaveRequest[]>()
+  for (const r of approved) {
+    const start = new Date(`${r.startDate}T00:00:00`)
+    const end = new Date(`${r.endDate}T00:00:00`)
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const ds = ymd(d)
+      if (!ds.startsWith(monthStr)) continue
+      const arr = byDate.get(ds) || []
+      arr.push(r)
+      byDate.set(ds, arr)
+    }
+  }
+
+  const days = Array.from({ length: daysInMonth }, (_, i) => `${monthStr}-${String(i + 1).padStart(2, '0')}`)
+
+  return (
+    <Card>
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setOffset(o => o - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+            <span className="text-sm font-semibold min-w-[96px] text-center">{year}년 {month + 1}월</span>
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setOffset(o => o + 1)}><ChevronRight className="h-4 w-4" /></Button>
+            {offset !== 0 && <Button variant="ghost" size="sm" className="h-7" onClick={() => setOffset(0)}>이번달</Button>}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap text-[10px]">
+            {Object.entries({ annual: '연차', paid_special: '유급휴가', sick: '병가', family_event: '경조사', other: '기타' }).map(([k, label]) => (
+              <span key={k} className={`px-1.5 py-0.5 rounded ${TYPE_COLOR[k]}`}>{label}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {['일', '월', '화', '수', '목', '금', '토'].map((w, i) => (
+            <div key={w} className={`text-center text-[11px] font-semibold py-1 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{w}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: firstDow }).map((_, i) => <div key={`b-${i}`} />)}
+          {days.map(ds => {
+            const items = byDate.get(ds) || []
+            const dnum = Number(ds.slice(-2))
+            const dow = new Date(`${ds}T00:00:00`).getDay()
+            const weekend = dow === 0 || dow === 6
+            return (
+              <div key={ds} className={`min-h-[76px] rounded-md border p-1 flex flex-col gap-0.5 ${weekend ? 'bg-red-50/30' : 'bg-white'} ${ds === todayStr ? 'ring-2 ring-blue-400' : ''}`}>
+                <div className={`text-[11px] font-medium ${weekend ? 'text-red-500' : 'text-gray-600'}`}>{dnum}</div>
+                {items.map(r => (
+                  <div key={r.id} className={`text-[10px] rounded px-1 py-0.5 truncate ${TYPE_COLOR[r.leaveType] || TYPE_COLOR.other}`} title={`${r.requesterName || ''} · ${LEAVE_TYPE_LABELS[r.leaveType]}`}>
+                    {r.requesterName || '?'}
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+        {approved.length === 0 && <p className="text-[11px] text-muted-foreground mt-2 text-center">승인된 휴가가 없습니다.</p>}
+      </CardContent>
+    </Card>
+  )
+}
+
 function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; requests: LeaveRequest[] }) {
   const rows = useMemo(() => {
     // sum non-rejected days per requester per type
@@ -385,7 +477,8 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
       m.set(r.requesterId, (m.get(r.requesterId) || 0) + r.days)
     })
     return profiles
-      .filter(p => !p.isPartner && !p.isExternal)
+      // 정규직(풀타임)만 연차 발생 대상
+      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isPartner)
       .map(p => {
         const hire = p.hireDate || p.contractStartDate
         const ent = computeAnnualEntitlement(hire)
