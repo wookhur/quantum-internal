@@ -60,7 +60,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     titleKey: 'nav.common',
     module: 'dashboard',
     items: [
-      { labelKey: 'nav.dashboard', to: '/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.calendar', to: '/calendar', icon: Calendar },
       { labelKey: 'nav.taskBoard', to: '/tasks', icon: ClipboardList },
       { labelKey: 'nav.myTodo', to: '/my-todos', icon: CheckSquare },
@@ -100,7 +99,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     titleKey: 'nav.finance',
     module: 'finance',
     items: [
-      { labelKey: 'nav.financeDashboard', to: '/finance/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.contractManagement', to: '/consulting/clients', icon: FileText },
       { labelKey: 'nav.monthlyCollection', to: '/consulting/collections', icon: CalendarDays },
       { labelKey: 'nav.invoices', to: '/finance/invoices', icon: FileText },
@@ -138,7 +136,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.partnerStudents', to: '/partner/students', icon: UserSearch },
       { labelKey: 'nav.partnerCompanies', to: '/partner/companies', icon: Briefcase },
       { labelKey: 'nav.partnerContracts', to: '/partner/contracts', icon: FileText },
-      { labelKey: 'nav.calendar', to: '/partner/calendar', icon: Calendar },
     ],
   },
   {
