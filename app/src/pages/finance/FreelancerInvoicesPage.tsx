@@ -439,6 +439,51 @@ async function downloadFreelancerTemplate() {
   saveBlob(await res.arrayBuffer(), '프리랜서 인보이스 샘플.xlsx')
 }
 
+// English blank version of the freelancer-individual invoice form.
+// Cell layout matches parseFreelancerInvoice (F6 name, H6 ID, F7 phone, F8 email,
+// C5 date, items D/E/G from row 12, Total row, Bank Account row).
+async function downloadFreelancerTemplateEn() {
+  const { default: ExcelJS } = await import('exceljs')
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('Invoice')
+  ws.columns = [
+    { width: 6 }, { width: 10 }, { width: 12 }, { width: 44 }, { width: 12 }, { width: 12 }, { width: 16 }, { width: 18 },
+  ]
+  const thin = { style: 'thin' as const }
+  const box = { top: thin, left: thin, bottom: thin, right: thin }
+  const setB = (ref: string, v: string) => { const c = ws.getCell(ref); c.value = v; c.font = { bold: true } }
+
+  ws.mergeCells('A1:H1')
+  const title = ws.getCell('A1'); title.value = 'Invoice'; title.font = { bold: true, size: 16 }; title.alignment = { horizontal: 'center' }
+
+  setB('B5', 'Date')
+  setB('B6', 'To'); ws.getCell('C6').value = 'Quantum Admissions'
+  ws.getCell('B8').value = 'Invoice details as below.'
+  // Supplier / Freelancer box
+  setB('E5', 'Supplier / Freelancer'); ws.getCell('E5').alignment = { horizontal: 'center' }
+  setB('E6', 'Name'); setB('G6', 'ID No.')
+  setB('E7', 'Phone')
+  setB('E8', 'Email')
+  ;['E5', 'F5', 'G5', 'H5', 'E6', 'F6', 'G6', 'H6', 'E7', 'F7', 'G7', 'H7', 'E8', 'F8', 'G8', 'H8'].forEach(r => { ws.getCell(r).border = box })
+  ws.mergeCells('E5:H5')
+
+  // Item table header (row 11)
+  const headers: [string, string][] = [['B11', 'No.'], ['C11', 'Date'], ['D11', 'Video Title'], ['E11', 'Unit Price'], ['F11', 'Total'], ['G11', 'Remark']]
+  headers.forEach(([ref, label]) => {
+    const c = ws.getCell(ref); c.value = label; c.font = { bold: true }; c.alignment = { horizontal: 'center' }
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } }; c.border = box
+  })
+  // Blank item rows 12..27
+  for (let r = 12; r <= 27; r++) {
+    for (const col of ['B', 'C', 'D', 'E', 'F', 'G']) ws.getCell(`${col}${r}`).border = box
+  }
+  setB('B28', 'Total'); ['B28', 'C28', 'D28', 'E28', 'F28', 'G28'].forEach(r => { ws.getCell(r).border = box })
+  ws.getCell('B29').value = 'Bank Account : '
+
+  const out = await wb.xlsx.writeBuffer()
+  saveBlob(out as ArrayBuffer, 'Freelancer Invoice (Template).xlsx')
+}
+
 /**
  * Parse the freelancer-individual 견적서 template.
  *  F6=성명, H6=주민등록번호, F7=전화번호, F8=이메일, C5=날짜,
@@ -473,11 +518,15 @@ async function parseFreelancerInvoice(file: File): Promise<ParsedInvoice> {
   let sumRow = 28
   let bankAccount = ''
   for (let r = 11; r <= 120; r++) {
-    if (cell(`B${r}`).includes('합')) { sumRow = r; break }
+    const b = cell(`B${r}`)
+    if (b.includes('합') || /^total$/i.test(b)) { sumRow = r; break }
   }
   for (let r = 11; r <= 140; r++) {
     const b = cell(`B${r}`)
-    if (b.includes('입금')) { bankAccount = b.replace(/^.*입금계좌\s*:?\s*/, '').trim(); break }
+    if (b.includes('입금') || /bank|account/i.test(b)) {
+      bankAccount = b.replace(/^.*(입금계좌|bank account)\s*:?\s*/i, '').trim()
+      break
+    }
   }
 
   const items: ItemRow[] = []
@@ -1202,7 +1251,10 @@ export function FreelancerInvoicesPage(
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" className="gap-1.5" onClick={() => downloadFreelancerTemplate().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
-                <Download className="size-4" />샘플 양식 다운로드
+                <Download className="size-4" />양식 다운로드 (한글)
+              </Button>
+              <Button variant="outline" className="gap-1.5" onClick={() => downloadFreelancerTemplateEn().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
+                <Download className="size-4" />Template (English)
               </Button>
               <label>
                 <input
