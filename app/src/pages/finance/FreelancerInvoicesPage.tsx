@@ -432,6 +432,83 @@ async function downloadBusinessTemplate() {
   saveBlob(await res.arrayBuffer(), '프리랜서 인보이스 샘플.xlsx')
 }
 
+// 프리랜서(개인)용 양식 — 품목표: C=날짜, D=영상명, E=단가, G=비고 (헤더 11행)
+async function downloadFreelancerTemplate() {
+  const res = await fetch('/freelancer-individual-template.xlsx')
+  if (!res.ok) throw new Error('양식 파일을 불러올 수 없습니다.')
+  saveBlob(await res.arrayBuffer(), '프리랜서 인보이스 샘플.xlsx')
+}
+
+/**
+ * Parse the freelancer-individual 견적서 template.
+ *  F6=성명, H6=주민등록번호, F7=전화번호, F8=이메일, C5=날짜,
+ *  품목표: 12행부터 (D=영상명/품명, E=단가, G=비고), 'B열 합 계' 행 전까지,
+ *  'B열 입금계좌 : ...' 행에 입금계좌.
+ */
+async function parseFreelancerInvoice(file: File): Promise<ParsedInvoice> {
+  const { default: ExcelJS } = await import('exceljs')
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await file.arrayBuffer())
+  const ws = wb.worksheets[0]
+  if (!ws) throw new Error('엑셀에서 시트를 찾을 수 없습니다.')
+  const cell = (ref: string) => {
+    const v = ws.getCell(ref).value as unknown
+    if (v == null) return ''
+    if (typeof v === 'object' && v !== null) {
+      const o = v as Record<string, unknown>
+      if ('text' in o) return String(o.text).trim()
+      if ('result' in o) return String(o.result).trim()
+      if ('richText' in o) return (o.richText as { text: string }[]).map(t => t.text).join('').trim()
+    }
+    return String(v).trim()
+  }
+  const num = (s: string) => Number(String(s).replace(/[,₩\s]/g, '')) || 0
+
+  const name = cell('F6')
+  const bizNo = cell('H6')
+  const phone = cell('F7')
+  const email = cell('F8')
+  const rawDate = cell('C5')
+
+  let sumRow = 28
+  let bankAccount = ''
+  for (let r = 11; r <= 120; r++) {
+    if (cell(`B${r}`).includes('합')) { sumRow = r; break }
+  }
+  for (let r = 11; r <= 140; r++) {
+    const b = cell(`B${r}`)
+    if (b.includes('입금')) { bankAccount = b.replace(/^.*입금계좌\s*:?\s*/, '').trim(); break }
+  }
+
+  const items: ItemRow[] = []
+  for (let r = 12; r < sumRow; r++) {
+    const itemName = cell(`D${r}`)
+    const price = num(cell(`E${r}`))
+    if (!itemName && !price) continue
+    items.push({
+      itemName: itemName || '(품명 없음)',
+      quantity: 1,
+      unitPrice: price,
+      remark: cell(`G${r}`),
+    })
+  }
+  if (items.length === 0) throw new Error('품목이 비어 있습니다. 양식의 영상명·단가를 채워주세요.')
+
+  let invoiceDate = new Date().toISOString().slice(0, 10)
+  const iso = rawDate.match(/(\d{4})[-.](\d{1,2})[-.](\d{1,2})/)
+  if (iso) invoiceDate = `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`
+
+  return {
+    invoiceDate,
+    residentNumber: bizNo,
+    phone,
+    email,
+    bankAccount,
+    note: name ? `성명: ${name}` : '',
+    items,
+  }
+}
+
 /**
  * Parse a filled 견적서 template. Layout (matches the sample):
  *  C5=날짜, F6=성명, H6=주민/사업자번호, F7=전화번호, F8=이메일,
@@ -891,12 +968,12 @@ export function FreelancerInvoicesPage(
     setFormOpen(true)
   }
 
-  // 사업자: parse uploaded Excel → open form pre-filled for review + submit
-  const handleBusinessUpload = async (file: File) => {
+  // 엑셀 업로드 → 파싱 → 검토용 폼 열기 (사업자 / 프리랜서 개인 공용)
+  const handleExcelUpload = async (file: File, parser: (f: File) => Promise<ParsedInvoice>) => {
     setUploadError(undefined)
     setUploading(true)
     try {
-      const parsed = await parseBusinessInvoice(file)
+      const parsed = await parser(file)
       setEditInvoice(undefined)
       setUploadedData(parsed)
       setFormOpen(true)
@@ -1066,7 +1143,7 @@ export function FreelancerInvoicesPage(
               type="file"
               accept=".xlsx"
               className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleBusinessUpload(f); e.target.value = '' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseBusinessInvoice); e.target.value = '' }}
             />
             <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
               {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}엑셀 업로드
@@ -1114,6 +1191,35 @@ export function FreelancerInvoicesPage(
           <p className="text-[11px] text-muted-foreground">"인보이스 발행"을 누르면 {isIncentive ? '이 달 정산 대상 인센티브가 품명·금액에' : '위 학생이 품명에'} 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.</p>
         </CardContent>
       </Card>
+
+      {/* 프리랜서 개인: 자동 반영 대상이 아닌 프리랜서는 엑셀 양식으로 제출 */}
+      {kind === 'freelancer' && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <div className="text-sm font-medium">위 목록에 해당하지 않는 프리랜서 — 엑셀 양식으로 제출</div>
+            <p className="text-[12px] text-muted-foreground">
+              업무영역이 자동 반영 대상이 아닌 경우, ① 양식을 내려받아 작성한 뒤 ② 업로드하면 내용이 채워진 인보이스 폼이 열립니다. 확인 후 제출하세요.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" className="gap-1.5" onClick={() => downloadFreelancerTemplate().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
+                <Download className="size-4" />샘플 양식 다운로드
+              </Button>
+              <label>
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseFreelancerInvoice); e.target.value = '' }}
+                />
+                <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                  {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}엑셀 업로드
+                </span>
+              </label>
+            </div>
+            {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+          </CardContent>
+        </Card>
+      )}
     </>
   )
 
