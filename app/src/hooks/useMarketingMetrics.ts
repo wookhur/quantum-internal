@@ -99,6 +99,46 @@ export function useSyncMarketingMetrics() {
   })
 }
 
+export function useUpdateMarketingMetric() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, ...input }: { id: string } & Partial<CreateMarketingMetricInput>) => {
+      const row: Record<string, unknown> = {}
+      if (input.year !== undefined) row.year = input.year
+      if (input.month !== undefined) row.month = input.month
+      if (input.week !== undefined) row.week = input.week || null
+      if (input.channel !== undefined) row.channel = input.channel
+      if (input.metric !== undefined) row.metric = input.metric
+      if (input.annual_target !== undefined) row.annual_target = input.annual_target || null
+      if (input.value !== undefined) row.value = input.value
+      const { data, error } = await supabase
+        .from('marketing_metrics')
+        .update(row)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketing_metrics'] })
+    },
+  })
+}
+
+export function useDeleteMarketingMetric() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('marketing_metrics').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['marketing_metrics'] })
+    },
+  })
+}
+
 export function useMarketingMetricsByYear(year: number) {
   return useQuery({
     queryKey: ['marketing_metrics', 'year', year],

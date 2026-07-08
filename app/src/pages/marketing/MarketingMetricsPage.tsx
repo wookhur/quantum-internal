@@ -6,10 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
-  Loader2, TrendingUp, Target, Plus, ArrowUpRight, ArrowDownRight, Minus, RefreshCw,
+  Loader2, TrendingUp, Target, Plus, ArrowUpRight, ArrowDownRight, Minus, RefreshCw, Pencil, Trash2,
 } from 'lucide-react'
-import { useMarketingMetricsByYear, useCreateMarketingMetric, useSyncMarketingMetrics } from '@/hooks/useMarketingMetrics'
+import {
+  useMarketingMetricsByYear, useCreateMarketingMetric, useUpdateMarketingMetric, useDeleteMarketingMetric, useSyncMarketingMetrics,
+} from '@/hooks/useMarketingMetrics'
+import type { MarketingMetric } from '@/types'
 import { currentYearKST, currentMonthKST } from '@/lib/date'
 import { useT } from '@/i18n/LanguageContext'
 import {
@@ -49,27 +53,53 @@ export function MarketingMetricsPage() {
   const t = useT()
   const [year, setYear] = useState(currentYear)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingMetric, setEditingMetric] = useState<MarketingMetric | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<MarketingMetric | null>(null)
   const [form, setForm] = useState(INITIAL_METRIC_FORM)
   const createMetric = useCreateMarketingMetric()
+  const updateMetric = useUpdateMarketingMetric()
+  const deleteMetric = useDeleteMarketingMetric()
   const syncMetrics = useSyncMarketingMetrics()
 
-  const handleCreateMetric = () => {
-    createMetric.mutate(
-      {
-        year: form.year,
-        month: form.month,
-        channel: form.channel,
-        metric: form.metric,
-        value: form.value,
-        annual_target: form.annualTarget || undefined,
-      },
-      {
-        onSuccess: () => {
-          setDialogOpen(false)
-          setForm(INITIAL_METRIC_FORM)
-        },
-      }
-    )
+  const handleSubmitMetric = () => {
+    const payload = {
+      year: form.year,
+      month: form.month,
+      channel: form.channel,
+      metric: form.metric,
+      value: form.value,
+      annual_target: form.annualTarget || undefined,
+    }
+    const onSuccess = () => {
+      setDialogOpen(false)
+      setEditingMetric(null)
+      setForm(INITIAL_METRIC_FORM)
+    }
+    if (editingMetric) {
+      updateMetric.mutate({ id: editingMetric.id, ...payload }, { onSuccess })
+    } else {
+      createMetric.mutate(payload, { onSuccess })
+    }
+  }
+
+  const openEditDialog = (m: MarketingMetric) => {
+    setEditingMetric(m)
+    setForm({
+      year: m.year,
+      month: m.month,
+      channel: m.channel,
+      metric: m.metric,
+      value: m.value,
+      annualTarget: m.annualTarget || 0,
+    })
+    setDialogOpen(true)
+  }
+
+  const handleDelete = () => {
+    if (!deleteTarget) return
+    deleteMetric.mutate(deleteTarget.id, {
+      onSuccess: () => setDeleteTarget(null),
+    })
   }
 
   const { data: metrics = [], isLoading, error } = useMarketingMetricsByYear(year)
@@ -186,14 +216,14 @@ export function MarketingMetricsPage() {
             <RefreshCw className={`size-4 mr-1 ${syncMetrics.isPending ? 'animate-spin' : ''}`} />
             {syncMetrics.isPending ? t('mktMetrics.syncing') : t('mktMetrics.apiSync')}
           </Button>
-          <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}>
+          <Button size="sm" className="h-9" onClick={() => { setEditingMetric(null); setForm(INITIAL_METRIC_FORM); setDialogOpen(true) }}>
             <Plus className="size-4 mr-1" />
             {t('mktMetrics.addMetric')}
           </Button>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingMetric(null) }}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>{t('mktMetrics.addMetric')}</DialogTitle>
+                <DialogTitle>{editingMetric ? t('mktMetrics.editMetric') : t('mktMetrics.addMetric')}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -260,10 +290,10 @@ export function MarketingMetricsPage() {
                 </div>
                 <Button
                   className="w-full"
-                  onClick={handleCreateMetric}
-                  disabled={createMetric.isPending || !form.metric}
+                  onClick={handleSubmitMetric}
+                  disabled={createMetric.isPending || updateMetric.isPending || !form.metric}
                 >
-                  {createMetric.isPending ? t('common.saving') : t('common.add')}
+                  {(createMetric.isPending || updateMetric.isPending) ? t('common.saving') : editingMetric ? t('common.save') : t('common.add')}
                 </Button>
               </div>
             </DialogContent>
@@ -492,8 +522,84 @@ export function MarketingMetricsPage() {
               )
             })}
           </div>
+
+          {/* Raw Data Table */}
+          <Card>
+            <CardHeader className="pb-2">
+              <span className="text-sm font-medium">{t('mktMetrics.dataTable')}</span>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('mktMetrics.month')}</TableHead>
+                    <TableHead>{t('mktMetrics.channel')}</TableHead>
+                    <TableHead>{t('mktMetrics.metricName')}</TableHead>
+                    <TableHead className="text-right">{t('mktMetrics.value')}</TableHead>
+                    <TableHead className="text-right">{t('mktMetrics.annualTarget')}</TableHead>
+                    <TableHead className="w-[70px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-gray-400">{t('common.noData')}</TableCell>
+                    </TableRow>
+                  ) : (
+                    metrics.map(m => {
+                      const ch = CHANNELS.find(c => c.key === m.channel)
+                      return (
+                        <TableRow key={m.id}>
+                          <TableCell className="text-sm">{m.month}{t('mktMetrics.monthSuffix')}</TableCell>
+                          <TableCell>
+                            {ch ? (
+                              <Badge style={{ backgroundColor: ch.color, color: ch.textColor }} className="text-xs">
+                                {t(ch.labelKey)}
+                              </Badge>
+                            ) : m.channel}
+                          </TableCell>
+                          <TableCell className="text-sm">{m.metric}</TableCell>
+                          <TableCell className="text-right text-sm tabular-nums font-medium">{m.value.toLocaleString()}</TableCell>
+                          <TableCell className="text-right text-sm tabular-nums text-muted-foreground">{m.annualTarget ? m.annualTarget.toLocaleString() : '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-1 justify-end">
+                              <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(m)}>
+                                <Pencil className="size-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(m)}>
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('mktMetrics.deleteConfirmTitle')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            <strong>{deleteTarget?.channel}</strong> {deleteTarget?.month}{t('mktMetrics.monthSuffix')} — {deleteTarget?.metric} ({deleteTarget?.value.toLocaleString()}) {t('mktMetrics.deleteConfirmMsg')}
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>{t('common.cancel')}</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteMetric.isPending}>
+              {deleteMetric.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              {t('common.delete')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -728,6 +728,11 @@ const koTranslations = {
   'mktMetrics.blog': '블로그',
   'mktMetrics.news': '뉴스/기사',
   'mktMetrics.month': '월',
+  'mktMetrics.monthSuffix': '월',
+  'mktMetrics.editMetric': '지표 수정',
+  'mktMetrics.dataTable': '데이터 목록',
+  'mktMetrics.deleteConfirmTitle': '지표 삭제',
+  'mktMetrics.deleteConfirmMsg': '을(를) 삭제하시겠습니까?',
 
   // ── Ad Campaigns ──
   'ads.title': '광고 성과',
@@ -3104,6 +3109,11 @@ const enTranslations: Record<string, string> = {
   'mktMetrics.blog': 'Blog',
   'mktMetrics.news': 'News/Articles',
   'mktMetrics.month': 'Month',
+  'mktMetrics.monthSuffix': '',
+  'mktMetrics.editMetric': 'Edit Metric',
+  'mktMetrics.dataTable': 'Data List',
+  'mktMetrics.deleteConfirmTitle': 'Delete Metric',
+  'mktMetrics.deleteConfirmMsg': 'will be deleted. Are you sure?',
 
   // ── Ad Campaigns ──
   'ads.title': 'Ad Performance',
