@@ -207,13 +207,13 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
                   <TableCell>{r.school || '-'}</TableCell>
                   <TableCell className="max-w-[200px] truncate">{r.interest || '-'}</TableCell>
                   <TableCell className="max-w-[200px] truncate">{r.memo || '-'}</TableCell>
-                  <TableCell className="max-w-[200px]">
+                  <TableCell className="min-w-[120px] max-w-[260px]">
                     {r.sessionLabels.length === 0 ? (
                       <span className="text-muted-foreground">-</span>
                     ) : (
-                      <div className="space-y-0.5">
+                      <div className="flex flex-wrap gap-1">
                         {r.sessionLabels.map((l, i) => (
-                          <Badge key={i} variant="outline" className="text-[10px]">{l}</Badge>
+                          <Badge key={i} variant="outline" className="text-[10px] max-w-[240px] truncate">{l}</Badge>
                         ))}
                       </div>
                     )}
