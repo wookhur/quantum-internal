@@ -672,6 +672,9 @@ const koTranslations = {
   'salesPerf.col.totalMeetings': '총 미팅',
   'salesPerf.col.contracts': '계약',
   'salesPerf.col.contractRate': '계약률',
+  'salesPerf.editRecordTitle': '실적 수정',
+  'salesPerf.deleteConfirmTitle': '실적 삭제',
+  'salesPerf.deleteConfirmMsg': '을(를) 삭제하시겠습니까?',
 
   // ── Sales Funnel ──
   'funnel.title': '영업 퍼널',
@@ -1031,6 +1034,15 @@ const koTranslations = {
   'planOverview.totalActual': '합계 실적',
   'planOverview.avgAchievementRate': '평균 달성률',
   'planOverview.totalNewContracts': '총 신규 계약',
+  'planOverview.addTarget': '목표 설정',
+  'planOverview.addTargetTitle': '새 월 목표 설정',
+  'planOverview.editTargetTitle': '목표 수정',
+  'planOverview.deleteConfirmTitle': '목표 삭제',
+  'planOverview.deleteConfirmMsg': '목표 데이터를 삭제하시겠습니까?',
+  'planOverview.currency': '통화',
+  'planOverview.autoSyncNotice': '실적(수금액)과 신규 계약 수는 계약/수금 데이터에서 자동 집계됩니다. 목표만 직접 설정하세요.',
+  'planOverview.autoCalcNote': '실적과 신규 계약은 계약/수금 데이터에서 자동으로 계산됩니다.',
+  'planOverview.noTarget': '목표 미설정',
 
   // ── Revenue Projection ──
   'revProjection.subtitle': '계약 기반 월별 수금 예측 (계약금 · 중도금 · 잔금)',
@@ -3036,6 +3048,9 @@ const enTranslations: Record<string, string> = {
   'salesPerf.col.totalMeetings': 'Total Meetings',
   'salesPerf.col.contracts': 'Contracts',
   'salesPerf.col.contractRate': 'Contract Rate',
+  'salesPerf.editRecordTitle': 'Edit Record',
+  'salesPerf.deleteConfirmTitle': 'Delete Record',
+  'salesPerf.deleteConfirmMsg': 'will be deleted. Are you sure?',
 
   // ── Sales Funnel ──
   'funnel.title': 'Sales Funnel',
@@ -3395,6 +3410,15 @@ const enTranslations: Record<string, string> = {
   'planOverview.totalActual': 'Total Actual',
   'planOverview.avgAchievementRate': 'Avg Achievement Rate',
   'planOverview.totalNewContracts': 'Total New Contracts',
+  'planOverview.addTarget': 'Set Target',
+  'planOverview.addTargetTitle': 'Set Monthly Target',
+  'planOverview.editTargetTitle': 'Edit Target',
+  'planOverview.deleteConfirmTitle': 'Delete Target',
+  'planOverview.deleteConfirmMsg': 'target will be deleted. Are you sure?',
+  'planOverview.currency': 'Currency',
+  'planOverview.autoSyncNotice': 'Actual revenue and new contracts are auto-calculated from contract/payment data. Only set targets manually.',
+  'planOverview.autoCalcNote': 'Actual revenue and new contracts are auto-calculated from contract/payment data.',
+  'planOverview.noTarget': 'No target',
 
   // ── Revenue Projection ──
   'revProjection.subtitle': 'Monthly collection forecast based on contracts (deposit, interim, balance)',

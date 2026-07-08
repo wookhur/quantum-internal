@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Users, Handshake, CalendarCheck, TrendingUp, Plus, Loader2 } from 'lucide-react'
-import { useSalesEvents, useCreateSalesEvent } from '@/hooks/useSalesEvents'
+import { Users, Handshake, CalendarCheck, TrendingUp, Plus, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { useSalesEvents, useCreateSalesEvent, useUpdateSalesEvent, useDeleteSalesEvent } from '@/hooks/useSalesEvents'
+import type { SalesEvent } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 
 const INITIAL_EVENT_FORM = {
@@ -26,29 +27,57 @@ export function SalesPerformancePage() {
   const t = useT()
   const [monthFilter, setMonthFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<SalesEvent | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<SalesEvent | null>(null)
   const [form, setForm] = useState(INITIAL_EVENT_FORM)
 
   const createEvent = useCreateSalesEvent()
+  const updateEvent = useUpdateSalesEvent()
+  const deleteEvent = useDeleteSalesEvent()
 
-  const handleCreateEvent = () => {
-    createEvent.mutate(
-      {
-        month: form.month,
-        eventName: form.eventName,
-        applicants: form.applicants,
-        attendees: form.attendees,
-        phoneConsultations: form.phoneConsultations,
-        zoomBookings: form.zoomBookings,
-        inPersonBookings: form.inPersonBookings,
-        contracts: form.contracts,
-      },
-      {
-        onSuccess: () => {
-          setDialogOpen(false)
-          setForm(INITIAL_EVENT_FORM)
-        },
-      },
-    )
+  const handleSubmitEvent = () => {
+    const payload = {
+      month: form.month,
+      eventName: form.eventName,
+      applicants: form.applicants,
+      attendees: form.attendees,
+      phoneConsultations: form.phoneConsultations,
+      zoomBookings: form.zoomBookings,
+      inPersonBookings: form.inPersonBookings,
+      contracts: form.contracts,
+    }
+    const onSuccess = () => {
+      setDialogOpen(false)
+      setEditingEvent(null)
+      setForm(INITIAL_EVENT_FORM)
+    }
+    if (editingEvent) {
+      updateEvent.mutate({ id: editingEvent.id, ...payload }, { onSuccess })
+    } else {
+      createEvent.mutate(payload, { onSuccess })
+    }
+  }
+
+  const openEditDialog = (event: SalesEvent) => {
+    setEditingEvent(event)
+    setForm({
+      month: event.month,
+      eventName: event.eventName,
+      applicants: event.applicants,
+      attendees: event.attendees,
+      phoneConsultations: event.phoneConsultations,
+      zoomBookings: event.zoomBookings,
+      inPersonBookings: event.inPersonBookings,
+      contracts: event.contracts,
+    })
+    setDialogOpen(true)
+  }
+
+  const handleDelete = () => {
+    if (!deleteTarget) return
+    deleteEvent.mutate(deleteTarget.id, {
+      onSuccess: () => setDeleteTarget(null),
+    })
   }
 
   const { data: events = [], isLoading, error } = useSalesEvents({
@@ -90,7 +119,7 @@ export function SalesPerformancePage() {
             {isLoading ? t('common.loading') : t('salesPerf.totalEvents').replace('{n}', String(events.length))}
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setDialogOpen(true)}>
+        <Button className="gap-2" onClick={() => { setEditingEvent(null); setForm(INITIAL_EVENT_FORM); setDialogOpen(true) }}>
           <Plus className="size-4" /> {t('salesPerf.addRecord')}
         </Button>
       </div>
@@ -183,6 +212,7 @@ export function SalesPerformancePage() {
                   <TableHead className="text-right w-[70px]">{t('salesPerf.col.totalMeetings')}</TableHead>
                   <TableHead className="text-right w-[70px]">{t('salesPerf.col.contracts')}</TableHead>
                   <TableHead className="text-right w-[80px]">{t('salesPerf.col.contractRate')}</TableHead>
+                  <TableHead className="w-[70px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -219,6 +249,16 @@ export function SalesPerformancePage() {
                           {event.contractRate.toFixed(1)}%
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(event)}>
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(event)}>
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))
                 ))}
@@ -242,6 +282,7 @@ export function SalesPerformancePage() {
                     <TableCell className="text-right text-sm tabular-nums">{totalMeetings}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums text-success">{totalContracts}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">{avgContractRate.toFixed(1)}%</TableCell>
+                    <TableCell />
                   </TableRow>
                 )}
               </TableBody>
@@ -250,11 +291,11 @@ export function SalesPerformancePage() {
         </CardContent>
       </Card>
 
-      {/* Create Sales Event Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Create / Edit Sales Event Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingEvent(null) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('salesPerf.addRecordTitle')}</DialogTitle>
+            <DialogTitle>{editingEvent ? t('salesPerf.editRecordTitle') : t('salesPerf.addRecordTitle')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -297,11 +338,30 @@ export function SalesPerformancePage() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-              <Button onClick={handleCreateEvent} disabled={!form.month || !form.eventName || createEvent.isPending}>
-                {createEvent.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
-                {t('common.add')}
+              <Button onClick={handleSubmitEvent} disabled={!form.month || !form.eventName || createEvent.isPending || updateEvent.isPending}>
+                {(createEvent.isPending || updateEvent.isPending) ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+                {editingEvent ? t('common.save') : t('common.add')}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('salesPerf.deleteConfirmTitle')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            <strong>{deleteTarget?.eventName}</strong> ({deleteTarget?.month}) {t('salesPerf.deleteConfirmMsg')}
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>{t('common.cancel')}</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteEvent.isPending}>
+              {deleteEvent.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              {t('common.delete')}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

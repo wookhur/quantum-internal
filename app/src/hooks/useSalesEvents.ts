@@ -61,3 +61,47 @@ export function useCreateSalesEvent() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sales_events'] }),
   })
 }
+
+export function useUpdateSalesEvent() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, ...event }: { id: string } & Partial<SalesEvent>) => {
+      const row: Record<string, unknown> = {}
+      if (event.month !== undefined) row.month = event.month
+      if (event.eventName !== undefined) row.event_name = event.eventName
+      if (event.applicants !== undefined) row.applicants = event.applicants
+      if (event.attendees !== undefined) row.attendees = event.attendees
+      if (event.phoneConsultations !== undefined) row.phone_consultations = event.phoneConsultations
+      if (event.zoomBookings !== undefined) row.zoom_bookings = event.zoomBookings
+      if (event.inPersonBookings !== undefined) row.in_person_bookings = event.inPersonBookings
+      if (event.contracts !== undefined) row.contracts = event.contracts
+
+      const phone = event.phoneConsultations ?? 0
+      const zoom = event.zoomBookings ?? 0
+      const inPerson = event.inPersonBookings ?? 0
+      row.total_meetings = phone + zoom + inPerson
+      row.contract_rate = event.attendees ? ((event.contracts || 0) / event.attendees * 100) : 0
+
+      const { data, error } = await supabase
+        .from('sales_events')
+        .update(row)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sales_events'] }),
+  })
+}
+
+export function useDeleteSalesEvent() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('sales_events').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sales_events'] }),
+  })
+}
