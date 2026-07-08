@@ -52,6 +52,9 @@ export function MessagesPage() {
     }
   }, [flagMenu])
 
+  // 답장 대상 (1:1 · 단톡방 공용)
+  const [replyTarget, setReplyTarget] = useState<{ content: string; msgId: string; roomId?: string } | null>(null)
+
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null)
   const [messageText, setMessageText] = useState('')
   const [search, setSearch] = useState('')
@@ -103,10 +106,18 @@ export function MessagesPage() {
     const text = messageText.trim()
     if ((!text && !attachedFile) || !selectedPartnerId || sendMessage.isPending) return
     const file = attachedFile || undefined
+    const reply = replyTarget && !replyTarget.roomId ? replyTarget : null
     setMessageText('')
     setAttachedFile(null)
     setAttachPreview(null)
-    sendMessage.mutate({ receiverId: selectedPartnerId, content: text || (file ? `📎 ${file.name}` : ''), file })
+    setReplyTarget(null)
+    sendMessage.mutate({
+      receiverId: selectedPartnerId,
+      content: text || (file ? `📎 ${file.name}` : ''),
+      file,
+      replyToId: reply?.msgId,
+      replyToContent: reply?.content,
+    })
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -186,6 +197,8 @@ export function MessagesPage() {
             isAdmin={user?.role === 'admin'}
             profiles={profiles}
             todoByMsg={todoByMsg}
+            replyTarget={replyTarget && replyTarget.roomId ? replyTarget : null}
+            onClearReply={() => setReplyTarget(null)}
             onFlagMessage={(e, content, msgId, roomId) => {
               e.preventDefault()
               setFlagMenu({ x: e.clientX, y: e.clientY, content, msgId, roomId })
@@ -415,6 +428,13 @@ export function MessagesPage() {
                                 </div>
                               </a>
                             )}
+                            {/* Reply quote */}
+                            {msg.replyToContent && (
+                              <div className={`flex items-start gap-1 text-[11px] mb-1 pb-1 border-b ${isMine ? 'border-blue-400/50 text-blue-100' : 'border-gray-200 text-gray-400'}`}>
+                                <CornerDownRight className="size-3 mt-0.5 shrink-0" />
+                                <span className="truncate">{msg.replyToContent}</span>
+                              </div>
+                            )}
                             {/* Text content (hide if it's just the auto-generated file placeholder) */}
                             {msg.content && !(msg.attachmentUrl && msg.content.startsWith('📎 ')) && (
                               <div className="text-sm whitespace-pre-wrap break-words">
@@ -440,6 +460,19 @@ export function MessagesPage() {
 
                 {/* Input area */}
                 <div className="p-3 border-t border-gray-100 bg-white space-y-2">
+                  {/* Reply preview */}
+                  {replyTarget && !replyTarget.roomId && (
+                    <div className="flex items-start gap-2 bg-blue-50/60 border-l-2 border-blue-300 rounded px-2 py-1.5">
+                      <CornerDownRight className="size-3.5 text-blue-400 mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] text-blue-500 font-medium">답장</div>
+                        <div className="text-xs text-gray-600 truncate">{replyTarget.content}</div>
+                      </div>
+                      <button onClick={() => setReplyTarget(null)} className="text-gray-400 hover:text-gray-600 shrink-0">
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  )}
                   {/* Attachment preview */}
                   {attachedFile && (
                     <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-2">
@@ -523,6 +556,16 @@ export function MessagesPage() {
             type="button"
             className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-800 hover:bg-gray-50"
             onClick={() => {
+              setReplyTarget({ content: flagMenu.content, msgId: flagMenu.msgId, roomId: flagMenu.roomId })
+              setFlagMenu(null)
+            }}
+          >
+            <CornerDownRight className="size-4 text-blue-500" />답장하기
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-800 hover:bg-gray-50"
+            onClick={() => {
               if (user?.id) {
                 createTodo.mutate({ ownerId: user.id, title: flagMenu.content, sourceMessageId: flagMenu.msgId, sourceRoomId: flagMenu.roomId })
               }
@@ -555,11 +598,13 @@ function formatRoomTime(iso: string) {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
 }
 
-function ChatRoomsView({ me, isAdmin, profiles, todoByMsg, onFlagMessage }: {
+function ChatRoomsView({ me, isAdmin, profiles, todoByMsg, replyTarget, onClearReply, onFlagMessage }: {
   me: User | null
   isAdmin: boolean
   profiles: User[]
   todoByMsg: Map<string, PersonalTodo>
+  replyTarget: { content: string; msgId: string; roomId?: string } | null
+  onClearReply: () => void
   onFlagMessage: (e: React.MouseEvent, content: string, msgId: string, roomId: string) => void
 }) {
   const { data: rooms = [], isLoading } = useChatRooms(me?.id, isAdmin)
@@ -578,7 +623,13 @@ function ChatRoomsView({ me, isAdmin, profiles, todoByMsg, onFlagMessage }: {
 
   const send = () => {
     if (!text.trim() || !selectedRoomId || !me?.id) return
-    sendRoom.mutate({ roomId: selectedRoomId, senderId: me.id, content: text.trim() }, { onSuccess: () => setText('') })
+    sendRoom.mutate({
+      roomId: selectedRoomId,
+      senderId: me.id,
+      content: text.trim(),
+      replyToMessageId: replyTarget?.msgId,
+      replyToContent: replyTarget?.content,
+    }, { onSuccess: () => { setText(''); onClearReply() } })
   }
 
   return (
@@ -684,17 +735,31 @@ function ChatRoomsView({ me, isAdmin, profiles, todoByMsg, onFlagMessage }: {
               <div ref={endRef} />
             </div>
 
-            <div className="p-3 border-t border-gray-100 flex gap-2">
-              <Input
-                value={text}
-                onChange={e => setText(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder="메시지 입력…"
-                className="h-10"
-              />
-              <Button onClick={send} disabled={!text.trim() || sendRoom.isPending} className="h-10">
-                <Send className="size-4" />
-              </Button>
+            <div className="p-3 border-t border-gray-100 space-y-2">
+              {replyTarget && (
+                <div className="flex items-start gap-2 bg-blue-50/60 border-l-2 border-blue-300 rounded px-2 py-1.5">
+                  <CornerDownRight className="size-3.5 text-blue-400 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-blue-500 font-medium">답장</div>
+                    <div className="text-xs text-gray-600 truncate">{replyTarget.content}</div>
+                  </div>
+                  <button onClick={onClearReply} className="text-gray-400 hover:text-gray-600 shrink-0">
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  value={text}
+                  onChange={e => setText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                  placeholder="메시지 입력…"
+                  className="h-10"
+                />
+                <Button onClick={send} disabled={!text.trim() || sendRoom.isPending} className="h-10">
+                  <Send className="size-4" />
+                </Button>
+              </div>
             </div>
           </>
         ) : (

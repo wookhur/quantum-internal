@@ -18,6 +18,7 @@ export interface Message {
   attachmentName?: string
   attachmentType?: string
   attachmentSize?: number
+  replyToContent?: string
 }
 
 function mapMessage(row: Record<string, unknown>): Message {
@@ -38,6 +39,7 @@ function mapMessage(row: Record<string, unknown>): Message {
     attachmentName: row.attachment_name as string | undefined,
     attachmentType: row.attachment_type as string | undefined,
     attachmentSize: row.attachment_size as number | undefined,
+    replyToContent: (row.reply_to_content as string) || undefined,
   }
 }
 
@@ -97,10 +99,14 @@ export function useSendMessage() {
       receiverId,
       content,
       file,
+      replyToId,
+      replyToContent,
     }: {
       receiverId: string
       content: string
       file?: File
+      replyToId?: string
+      replyToContent?: string
     }) => {
       let attachmentUrl: string | undefined
       let attachmentName: string | undefined
@@ -133,6 +139,8 @@ export function useSendMessage() {
         sender_id: user!.id,
         receiver_id: receiverId,
         content,
+        ...(replyToId && { reply_to_id: replyToId }),
+        ...(replyToContent && { reply_to_content: replyToContent }),
         ...(attachmentUrl && {
           attachment_url: attachmentUrl,
           attachment_name: attachmentName,
