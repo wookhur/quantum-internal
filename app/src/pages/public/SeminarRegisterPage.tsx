@@ -223,12 +223,13 @@ export function SeminarRegisterPage() {
                   />
                 </div>
                 <div>
-                  <Label>이메일</Label>
+                  <Label>이메일 *</Label>
                   <Input
                     value={form.email}
                     onChange={e => setForm({ ...form, email: e.target.value })}
                     placeholder="email@example.com"
                     type="email"
+                    required
                   />
                 </div>
               </div>
