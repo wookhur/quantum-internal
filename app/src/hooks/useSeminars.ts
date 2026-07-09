@@ -187,7 +187,7 @@ export function useSeminarRegistrations(seminarId: string | undefined) {
         .from('seminar_registrations')
         .select('*')
         .eq('seminar_id', seminarId!)
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: true })
       if (error) throw error
       return (data || []).map(r => mapRegistration(r as Record<string, unknown>))
     },
