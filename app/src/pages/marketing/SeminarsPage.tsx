@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -138,10 +138,27 @@ function CopyLinkButton({ seminarId }: { seminarId: string }) {
 function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
   const { data: regs = [], isLoading } = useSeminarRegistrations(seminar.id)
   const deleteMut = useDeleteRegistration()
+  const [sessionFilter, setSessionFilter] = useState<string>('all')
+
+  const hasSessions = seminar.sessions.length > 1
+
+  const filteredRegs = useMemo(() => {
+    if (!hasSessions || sessionFilter === 'all') return regs
+    return regs.filter(r => r.sessionLabels.includes(sessionFilter))
+  }, [regs, sessionFilter, hasSessions])
+
+  const sessionCounts = useMemo(() => {
+    if (!hasSessions) return new Map<string, number>()
+    const map = new Map<string, number>()
+    for (const s of seminar.sessions) {
+      map.set(s.label, regs.filter(r => r.sessionLabels.includes(s.label)).length)
+    }
+    return map
+  }, [regs, seminar.sessions, hasSessions])
 
   const exportCsv = () => {
     const headers = ['신청일', '학부모', '연락처', '이메일', '학생', '학년', '학교', '관심사항', '메모', '신청 세션']
-    const rows = regs.map(r => [
+    const rows = filteredRegs.map(r => [
       new Date(r.createdAt).toLocaleDateString('ko-KR'),
       r.parentName,
       r.phone,
@@ -158,7 +175,8 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `${seminar.title}_registrations.csv`
+    const suffix = sessionFilter !== 'all' ? `_${sessionFilter}` : ''
+    a.download = `${seminar.title}${suffix}_registrations.csv`
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -168,15 +186,38 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">신청자 목록 ({regs.length}명)</p>
+        <p className="text-sm font-medium">신청자 목록 ({filteredRegs.length}명{hasSessions && sessionFilter !== 'all' ? ` / 전체 ${regs.length}명` : ''})</p>
         {regs.length > 0 && (
           <Button variant="outline" size="sm" onClick={exportCsv}>
             <Download className="size-4 mr-1" /> CSV 다운로드
           </Button>
         )}
       </div>
-      {regs.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-4">아직 신청자가 없습니다.</p>
+      {hasSessions && (
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
+            variant={sessionFilter === 'all' ? 'default' : 'outline'}
+            className="h-7 text-xs"
+            onClick={() => setSessionFilter('all')}
+          >
+            전체 ({regs.length})
+          </Button>
+          {seminar.sessions.map(s => (
+            <Button
+              key={s.label}
+              size="sm"
+              variant={sessionFilter === s.label ? 'default' : 'outline'}
+              className="h-7 text-xs"
+              onClick={() => setSessionFilter(s.label)}
+            >
+              {s.label} ({sessionCounts.get(s.label) || 0})
+            </Button>
+          ))}
+        </div>
+      )}
+      {filteredRegs.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-4">{regs.length === 0 ? '아직 신청자가 없습니다.' : '해당 세션에 신청자가 없습니다.'}</p>
       ) : (
         <div className="overflow-x-auto">
           <Table>
@@ -196,7 +237,7 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {regs.map(r => (
+              {filteredRegs.map(r => (
                 <TableRow key={r.id}>
                   <TableCell className="whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString('ko-KR')}</TableCell>
                   <TableCell>{r.parentName}</TableCell>
