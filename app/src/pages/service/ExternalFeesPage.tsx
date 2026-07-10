@@ -208,6 +208,8 @@ function ProgramFeeDialog({
 
   const [billed, setBilled] = useState(fee.billedAmount ? String(fee.billedAmount) : '')
   const [status, setStatus] = useState<'pending' | 'paid'>(fee.collectionStatus)
+  const [name1, setName1] = useState(fee.contributor1 || '')
+  const [name2, setName2] = useState(fee.contributor2 || '')
   const [pct1, setPct1] = useState(fee.contributor1Percentage ? String(fee.contributor1Percentage) : '')
   const [pct2, setPct2] = useState(fee.contributor2Percentage ? String(fee.contributor2Percentage) : '')
 
@@ -224,6 +226,8 @@ function ProgramFeeDialog({
       collectionStatus: status,
       // stamp a collection date when paid; clear it ('' → null) when pending
       paidDate: status === 'paid' ? (fee.paidDate || todayKST()) : '',
+      salesContributor1: name1.trim() || undefined,
+      salesContributor2: name2.trim() || undefined,
       contributor1Percentage: pct1 ? Number(pct1) : undefined,
       contributor2Percentage: pct2 ? Number(pct2) : undefined,
     }
@@ -247,49 +251,36 @@ function ProgramFeeDialog({
 
         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
           <LinkIcon className="size-3" />
-          기여자는 Student 360에서 입력됩니다.
+          기여자·인센티브율을 여기서 직접 입력할 수 있습니다.
           <Link to={`/service/student-360?student=${fee.studentId}`} className="text-blue-600 hover:underline" onClick={onClose}>
             Student 360에서 보기
           </Link>
         </div>
 
-        {/* Contributors (from Student 360, read-only) */}
+        {/* Contributors + incentive rate (editable) */}
         <div className="space-y-2">
-          <div className="text-xs font-medium text-muted-foreground">수수료 대상 (Student 360 입력)</div>
-          {contributorsOf(fee).length === 0 ? (
-            <p className="text-sm text-muted-foreground">Student 360에 기여자가 입력되지 않았습니다.</p>
-          ) : (
-            <div className="space-y-2">
-              {fee.contributor1 && (
-                <div className="flex items-center justify-between gap-3 p-2 rounded-md border bg-gray-50">
-                  <span className="text-sm font-medium">{fee.contributor1}</span>
-                  <div className="flex items-center gap-2">
-                    {isAdmin ? (
-                      <div className="flex items-center gap-1">
-                        <Input type="number" min={0} max={100} step={0.5} value={pct1} onChange={e => setPct1(e.target.value)} placeholder="%" className="h-7 w-20 text-sm" />
-                        <span className="text-xs text-muted-foreground">%</span>
-                      </div>
-                    ) : <span className="text-sm text-muted-foreground">{pct1 ? `${pct1}%` : '-'}</span>}
-                    <span className="text-sm font-mono w-28 text-right">{inc1 ? formatCurrency(inc1, fee.currency as 'KRW' | 'USD') : '-'}</span>
-                  </div>
-                </div>
-              )}
-              {fee.contributor2 && (
-                <div className="flex items-center justify-between gap-3 p-2 rounded-md border bg-gray-50">
-                  <span className="text-sm font-medium">{fee.contributor2}</span>
-                  <div className="flex items-center gap-2">
-                    {isAdmin ? (
-                      <div className="flex items-center gap-1">
-                        <Input type="number" min={0} max={100} step={0.5} value={pct2} onChange={e => setPct2(e.target.value)} placeholder="%" className="h-7 w-20 text-sm" />
-                        <span className="text-xs text-muted-foreground">%</span>
-                      </div>
-                    ) : <span className="text-sm text-muted-foreground">{pct2 ? `${pct2}%` : '-'}</span>}
-                    <span className="text-sm font-mono w-28 text-right">{inc2 ? formatCurrency(inc2, fee.currency as 'KRW' | 'USD') : '-'}</span>
-                  </div>
-                </div>
-              )}
+          <div className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-[11px] text-muted-foreground px-1">
+            <span>기여자 (세일즈 담당)</span><span className="w-24 text-center">인센티브율</span><span className="w-28 text-right">인센티브</span>
+          </div>
+          {([
+            { name: name1, setName: setName1, pct: pct1, setPct: setPct1, inc: inc1 },
+            { name: name2, setName: setName2, pct: pct2, setPct: setPct2, inc: inc2 },
+          ]).map((c, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+              <Input
+                value={c.name}
+                onChange={e => c.setName(e.target.value)}
+                placeholder={i === 0 ? '기여자 이름' : '기여자 2 (선택)'}
+                className="h-8 text-sm"
+                disabled={!isAdmin}
+              />
+              <div className="flex items-center gap-1 w-24">
+                <Input type="number" min={0} max={100} step={0.5} value={c.pct} onChange={e => c.setPct(e.target.value)} placeholder="%" className="h-8 w-16 text-sm" disabled={!isAdmin || !c.name.trim()} />
+                <span className="text-xs text-muted-foreground">%</span>
+              </div>
+              <span className="text-sm font-mono w-28 text-right">{c.inc ? formatCurrency(c.inc, fee.currency as 'KRW' | 'USD') : '-'}</span>
             </div>
-          )}
+          ))}
         </div>
 
         {/* Billing (admin editable) */}
