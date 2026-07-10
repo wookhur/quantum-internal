@@ -573,6 +573,10 @@ function ECServicesSection({ studentId, createdBy }: { studentId: string; create
                 <p className="text-xs text-muted-foreground">Program</p>
                 <p className="whitespace-pre-wrap">{a.program || '—'}</p>
               </div>
+              <div>
+                <p className="text-xs text-muted-foreground">금액</p>
+                <p className="text-sm font-medium">{a.billedAmount != null ? `₩${a.billedAmount.toLocaleString()}` : '—'}</p>
+              </div>
             </div>
             {(a.salesContributor1 || a.salesContributor2) && (
               <div className="text-sm">
@@ -796,6 +800,10 @@ function AcademicSupportSection({ studentId, createdBy }: { studentId: string; c
               <div>
                 <p className="text-xs text-muted-foreground">{t('student360.specialNotes')}</p>
                 <p className="whitespace-pre-wrap">{item.notes || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">금액</p>
+                <p className="font-medium">{item.billedAmount != null ? `₩${item.billedAmount.toLocaleString()}` : '—'}</p>
               </div>
             </div>
             {(item.salesContributor1 || item.salesContributor2) && (
