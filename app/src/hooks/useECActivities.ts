@@ -70,6 +70,7 @@ export function useCreateECActivity() {
         period_start: a.periodStart || null,
         period_end: a.periodEnd || null,
         program: a.program || null,
+        billed_amount: a.billedAmount ?? null,
         sales_contributor_1: a.salesContributor1 || null,
         sales_contributor_2: a.salesContributor2 || null,
         created_by: a.createdBy || null,

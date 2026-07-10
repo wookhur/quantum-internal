@@ -603,6 +603,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
     periodStart: activity?.periodStart || '',
     periodEnd: activity?.periodEnd || '',
     program: activity?.program || '',
+    billed: activity?.billedAmount != null ? String(activity.billedAmount) : '',
     sc1Select: ecSalesSelectVal(activity?.salesContributor1),
     sc1Custom: ecSalesCustomVal(activity?.salesContributor1),
     sc2Select: ecSalesSelectVal(activity?.salesContributor2),
@@ -619,6 +620,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
       periodStart: form.periodStart || undefined,
       periodEnd: form.periodEnd || undefined,
       program: form.program || undefined,
+      billedAmount: form.billed ? Number(form.billed) : undefined,
       salesContributor1: ecSalesFinal(form.sc1Select, form.sc1Custom),
       salesContributor2: ecSalesFinal(form.sc2Select, form.sc2Custom),
       createdBy,
@@ -672,6 +674,19 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
               onChange={e => set('program', e.target.value)}
               rows={3}
             />
+          </div>
+          {/* 금액 (세일즈 금액) */}
+          <div>
+            <Label className="text-xs">금액 (원)</Label>
+            <Input
+              className="mt-1"
+              type="number"
+              min={0}
+              placeholder="예: 500000"
+              value={form.billed}
+              onChange={e => set('billed', e.target.value)}
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">세일즈한 서비스 금액. 재무 · 서비스관리에서 수금 처리됩니다.</p>
           </div>
           {/* Sales Contributor 1 */}
           <div>
@@ -818,6 +833,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
     periodStart: item?.periodStart || '',
     periodEnd: item?.periodEnd || '',
     notes: item?.notes || '',
+    billed: item?.billedAmount != null ? String(item.billedAmount) : '',
     salesContributor1: item?.salesContributor1 || '',
     salesContributor2: item?.salesContributor2 || '',
   })
@@ -837,6 +853,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
       periodStart: form.periodStart || undefined,
       periodEnd: form.periodEnd || undefined,
       notes: form.notes || undefined,
+      billedAmount: form.billed ? Number(form.billed) : undefined,
       salesContributor1: form.salesContributor1 || undefined,
       salesContributor2: form.salesContributor2 || undefined,
       createdBy,
@@ -883,6 +900,18 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
               value={form.subject}
               onChange={e => set('subject', e.target.value)}
             />
+          </div>
+          {/* 금액 */}
+          <div>
+            <Label className="text-xs">금액 (원)</Label>
+            <Input
+              type="number"
+              min={0}
+              placeholder="예: 500000"
+              value={form.billed}
+              onChange={e => set('billed', e.target.value)}
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">세일즈한 서비스 금액. 재무 · 서비스관리에서 수금 처리됩니다.</p>
           </div>
           {/* 시기 + 기간 */}
           <div>

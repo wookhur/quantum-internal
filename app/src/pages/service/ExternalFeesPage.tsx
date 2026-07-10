@@ -65,9 +65,9 @@ export function ExternalFeesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">외부서비스 수수료 관리</h1>
+        <h1 className="text-2xl font-bold">서비스관리</h1>
         <p className="text-sm text-muted-foreground">
-          Student 360의 EC·Academic 프로그램을 기준으로, 청구금액·수금상태·기여자 수수료를 관리합니다.
+          기존 고객에게 세일즈한 EC·Academic 서비스(Student 360 기준)의 금액·수금상태·기여자를 관리합니다. 수금 완료 시 해당 월 세일즈 인센티브 인보이스에 자동 반영됩니다.
         </p>
       </div>
 

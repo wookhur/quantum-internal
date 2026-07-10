@@ -109,7 +109,7 @@ const koTranslations = {
   'nav.student360': 'Student 360',
   'nav.weeklyReport': '주간 보고서',
   'nav.kpi': 'KPI',
-  'nav.externalFees': '외부서비스 수수료',
+  'nav.externalFees': '서비스관리',
   'nav.consultantAssignment': '컨설턴트 배치',
 
   // ── External Fees ──
@@ -2524,7 +2524,7 @@ const enTranslations: Record<string, string> = {
   'nav.student360': 'Student 360',
   'nav.weeklyReport': 'Weekly Report',
   'nav.kpi': 'KPI',
-  'nav.externalFees': 'External Fees',
+  'nav.externalFees': 'Service Sales',
   'nav.consultantAssignment': 'Consultant Assignment',
 
   // ── External Fees ──
