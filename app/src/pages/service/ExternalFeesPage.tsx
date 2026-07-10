@@ -42,7 +42,10 @@ export function ExternalFeesPage() {
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
+  // 재무담당자(회계 계정)·경영진도 금액·수금·인센티브율을 편집할 수 있게 허용
   const isAdmin = user?.role === 'admin'
+    || user?.role === 'c_level'
+    || (user?.email || '').toLowerCase() === 'accounting@quantumadmissions.com'
 
   const filtered = useMemo(() => {
     if (!search.trim()) return fees
@@ -228,7 +231,6 @@ function ProgramFeeDialog({
     mut.mutate(payload, { onSuccess: onClose })
   }
 
-  const pctOptions = Array.from({ length: 10 }, (_, i) => String(i + 1))
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
@@ -263,10 +265,10 @@ function ProgramFeeDialog({
                   <span className="text-sm font-medium">{fee.contributor1}</span>
                   <div className="flex items-center gap-2">
                     {isAdmin ? (
-                      <Select value={pct1} onValueChange={v => setPct1(v ?? '')}>
-                        <SelectTrigger className="h-7 w-20 text-sm"><SelectValue placeholder="%" /></SelectTrigger>
-                        <SelectContent>{pctOptions.map(p => <SelectItem key={p} value={p}>{p}%</SelectItem>)}</SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-1">
+                        <Input type="number" min={0} max={100} step={0.5} value={pct1} onChange={e => setPct1(e.target.value)} placeholder="%" className="h-7 w-20 text-sm" />
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
                     ) : <span className="text-sm text-muted-foreground">{pct1 ? `${pct1}%` : '-'}</span>}
                     <span className="text-sm font-mono w-28 text-right">{inc1 ? formatCurrency(inc1, fee.currency as 'KRW' | 'USD') : '-'}</span>
                   </div>
@@ -277,10 +279,10 @@ function ProgramFeeDialog({
                   <span className="text-sm font-medium">{fee.contributor2}</span>
                   <div className="flex items-center gap-2">
                     {isAdmin ? (
-                      <Select value={pct2} onValueChange={v => setPct2(v ?? '')}>
-                        <SelectTrigger className="h-7 w-20 text-sm"><SelectValue placeholder="%" /></SelectTrigger>
-                        <SelectContent>{pctOptions.map(p => <SelectItem key={p} value={p}>{p}%</SelectItem>)}</SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-1">
+                        <Input type="number" min={0} max={100} step={0.5} value={pct2} onChange={e => setPct2(e.target.value)} placeholder="%" className="h-7 w-20 text-sm" />
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
                     ) : <span className="text-sm text-muted-foreground">{pct2 ? `${pct2}%` : '-'}</span>}
                     <span className="text-sm font-mono w-28 text-right">{inc2 ? formatCurrency(inc2, fee.currency as 'KRW' | 'USD') : '-'}</span>
                   </div>
@@ -313,7 +315,8 @@ function ProgramFeeDialog({
         </div>
 
         <p className="text-[11px] text-muted-foreground">
-          수금 완료 시 각 기여자의 인센티브가 세일즈 인센티브(인원별)에 자동 반영됩니다.
+          인센티브율은 파트너사마다 다를 수 있으니 여기서 직접 입력하세요 (예: 15%, 20%). 인센티브 = 청구금액 × 율.
+          수금 완료로 처리하면 그 달 세일즈 인센티브(인원별·인보이스)에 자동 반영됩니다.
         </p>
 
         <DialogFooter>
