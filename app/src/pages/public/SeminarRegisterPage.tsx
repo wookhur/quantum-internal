@@ -71,6 +71,11 @@ export function SeminarRegisterPage() {
       memo: form.memo.trim() || null,
       sessionLabels: Array.from(pickedSessions),
     })
+    if (typeof window !== 'undefined' && window.fbq) {
+      window.fbq('track', 'CompleteRegistration', {
+        content_name: seminar?.title ?? '세미나 신청',
+      })
+    }
     setSubmitted(true)
   }
 
