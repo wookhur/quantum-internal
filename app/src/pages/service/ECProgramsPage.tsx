@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Trash2, GraduationCap, MessageSquare, CalendarClock, Check, Loader2, Search } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAllServiceProgramFees, type ServiceProgramFee } from '@/hooks/useServiceProgramFees'
@@ -16,6 +17,7 @@ import {
 } from '@/hooks/usePlannedPrograms'
 
 const norm = (s?: string) => (s || '').replace(/\s+/g, '')
+const programKey = (p: ServiceProgramFee) => `${p.label}${p.detail ? ` · ${p.detail}` : ''}`
 
 export function ECProgramsPage() {
   const { user } = useAuth()
@@ -24,8 +26,22 @@ export function ECProgramsPage() {
   const { data: profiles = [] } = useProfiles()
   const [tab, setTab] = useState<'active' | 'planned'>('active')
   const [search, setSearch] = useState('')
+  const [programFilter, setProgramFilter] = useState('all')
 
   const partnerName = (id?: string) => profiles.find(p => p.id === id)?.name
+
+  // 프로그램 드롭다운 옵션 (label · detail 기준, 학생 수 포함)
+  const programOptions = useMemo(() => {
+    const counts = new Map<string, Set<string>>()
+    for (const p of programs) {
+      const k = programKey(p)
+      if (!counts.has(k)) counts.set(k, new Set())
+      counts.get(k)!.add(norm(p.studentName))
+    }
+    return [...counts.entries()]
+      .map(([key, students]) => ({ key, count: students.size }))
+      .sort((a, b) => a.key.localeCompare(b.key, 'ko'))
+  }, [programs])
 
   // 학생별로 프로그램 + 파트너 미팅 코멘트 묶기
   const byStudent = useMemo(() => {
@@ -47,9 +63,16 @@ export function ECProgramsPage() {
 
   const filteredStudents = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return byStudent
-    return byStudent.filter(s => s.name.toLowerCase().includes(q))
-  }, [byStudent, search])
+    let list = byStudent
+    if (programFilter !== 'all') {
+      list = list
+        .filter(s => s.programs.some(p => programKey(p) === programFilter))
+        // 선택한 프로그램만 남겨서 표시
+        .map(s => ({ ...s, programs: s.programs.filter(p => programKey(p) === programFilter) }))
+    }
+    if (q) list = list.filter(s => s.name.toLowerCase().includes(q))
+    return list
+  }, [byStudent, search, programFilter])
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -73,10 +96,24 @@ export function ECProgramsPage() {
 
       {tab === 'active' ? (
         <>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-            <Input placeholder="학생 이름 검색…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 max-w-xs" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={programFilter} onValueChange={v => v && setProgramFilter(v)}>
+              <SelectTrigger className="h-9 w-72"><SelectValue placeholder="프로그램 선택" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 프로그램</SelectItem>
+                {programOptions.map(o => (
+                  <SelectItem key={o.key} value={o.key}>{o.key} ({o.count}명)</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input placeholder="학생 이름 검색…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 w-56" />
+            </div>
           </div>
+          {programFilter !== 'all' && (
+            <p className="text-xs text-muted-foreground">“{programFilter}” 신청 학생 {filteredStudents.length}명</p>
+          )}
           {filteredStudents.length === 0 ? (
             <Card><CardContent className="py-12 text-center text-muted-foreground">
               <GraduationCap className="h-10 w-10 mx-auto mb-2 opacity-40" />
