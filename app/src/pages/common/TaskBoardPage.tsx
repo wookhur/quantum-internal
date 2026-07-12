@@ -1203,7 +1203,9 @@ export function TaskBoardPage() {
             </SelectContent>
           </Select>
           <Select value={filters.assigneeId || 'all'} onValueChange={v => setFilters(f => ({ ...f, assigneeId: v === 'all' || !v ? undefined : v }))}>
-            <SelectTrigger className="w-32 h-9"><SelectValue placeholder={t('tasks.assignee')} /></SelectTrigger>
+            <SelectTrigger className="w-32 h-9">
+              <span className="truncate">{filters.assigneeId ? (filters.assigneeId === user?.id ? t('tasks.myTasks') : profiles.find(p => p.id === filters.assigneeId)?.name || t('tasks.allMembers')) : t('tasks.allMembers')}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('tasks.allMembers')}</SelectItem>
               {user && <SelectItem value={user.id}>{t('tasks.myTasks')}</SelectItem>}
@@ -1316,7 +1318,9 @@ export function TaskBoardPage() {
               <div className="space-y-2">
                 <Label>{t('tasks.assignee')}</Label>
                 <Select value={newTask.assigneeId} onValueChange={v => setNewTask(f => ({ ...f, assigneeId: v || '' }))}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder={t('tasks.selectAssignee')} /></SelectTrigger>
+                  <SelectTrigger className="h-9">
+                    <span className="truncate">{newTask.assigneeId ? (profiles.find(p => p.id === newTask.assigneeId)?.name || t('tasks.selectAssignee')) : t('tasks.selectAssignee')}</span>
+                  </SelectTrigger>
                   <SelectContent>
                     {profiles.map(p => (
                       <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
