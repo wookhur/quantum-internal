@@ -97,10 +97,11 @@ const EC_PARTNERS = [
   'Next Bound',
   'Stanley Prep-internship',
   'Stanley Prep-UNAT',
+  "Wook's App",
 ] as const
 
 const EC_SALES_PRESETS = [
-  'Cindy', 'Eva', 'Evelyn', 'Jisoo', 'Julie', 'Liz', 'Maryam', 'Sam', 'Wook',
+  'Cindy', 'Eva', 'Evelyn', 'Jisoo', '김지현', 'Liz', 'Maryam', 'Sam', 'Wook',
 ] as const
 
 const ACADEMY_PRESETS = [

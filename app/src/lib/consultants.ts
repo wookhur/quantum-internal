@@ -29,6 +29,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** Same person listed under different display names → one canonical name. */
 const CONSULTANT_NAME_ALIASES: Record<string, string> = {
   'julie kim': '김지현',
+  'julie': '김지현',
 }
 
 /** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현). */

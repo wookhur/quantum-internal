@@ -26,6 +26,7 @@ export function ECProgramsPage() {
   const [tab, setTab] = useState<'active' | 'planned'>('active')
   const [search, setSearch] = useState('')
   const [programFilter, setProgramFilter] = useState('all')
+  const [selected, setSelected] = useState<string | null>(null)
 
   const partnerName = (id?: string) => profiles.find(p => p.id === id)?.name
 
@@ -40,39 +41,38 @@ export function ECProgramsPage() {
     return m
   }, [meetings])
 
-  // 파트너사(EC/학원) 기준으로 묶고, 그 아래 학생별 카드
-  const byPartner = useMemo(() => {
-    const map = new Map<string, Map<string, { name: string; programs: ServiceProgramFee[] }>>()
+  // 학생 목록 (EC/Academic 프로그램이 있는 학생)
+  const allStudents = useMemo(() => {
+    const map = new Map<string, { name: string; programs: ServiceProgramFee[] }>()
     for (const p of programs) {
-      const partner = p.label || '(파트너 미지정)'
-      if (!map.has(partner)) map.set(partner, new Map())
-      const students = map.get(partner)!
       const k = norm(p.studentName)
-      if (!students.has(k)) students.set(k, { name: p.studentName, programs: [] })
-      students.get(k)!.programs.push(p)
+      if (!map.has(k)) map.set(k, { name: p.studentName, programs: [] })
+      map.get(k)!.programs.push(p)
     }
-    return [...map.entries()]
-      .map(([partner, students]) => ({
-        partner,
-        source: [...students.values()][0]?.programs[0]?.source,
-        students: [...students.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko')),
-      }))
-      .sort((a, b) => a.partner.localeCompare(b.partner, 'ko'))
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   }, [programs])
 
-  const partnerOptions = byPartner.map(g => ({ key: g.partner, count: g.students.length }))
-
-  const filteredGroups = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    let groups = byPartner
-    if (programFilter !== 'all') groups = groups.filter(g => g.partner === programFilter)
-    if (q) {
-      groups = groups
-        .map(g => ({ ...g, students: g.students.filter(s => s.name.toLowerCase().includes(q)) }))
-        .filter(g => g.students.length > 0)
+  // 프로그램(파트너사) 드롭다운
+  const partnerOptions = useMemo(() => {
+    const counts = new Map<string, Set<string>>()
+    for (const p of programs) {
+      const partner = p.label || '(파트너 미지정)'
+      if (!counts.has(partner)) counts.set(partner, new Set())
+      counts.get(partner)!.add(norm(p.studentName))
     }
-    return groups
-  }, [byPartner, search, programFilter])
+    return [...counts.entries()].map(([key, s]) => ({ key, count: s.size })).sort((a, b) => a.key.localeCompare(b.key, 'ko'))
+  }, [programs])
+
+  const filteredStudents = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return allStudents.filter(s => {
+      if (programFilter !== 'all' && !s.programs.some(p => (p.label || '(파트너 미지정)') === programFilter)) return false
+      if (q && !s.name.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [allStudents, programFilter, search])
+
+  const selectedStudent = filteredStudents.find(s => s.name === selected) || filteredStudents[0] || null
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -87,7 +87,7 @@ export function ECProgramsPage() {
 
       <div className="flex gap-2">
         <Button variant={tab === 'active' ? 'default' : 'outline'} size="sm" onClick={() => setTab('active')}>
-          진행 프로그램 ({byPartner.length})
+          진행 프로그램 ({allStudents.length})
         </Button>
         <Button variant={tab === 'planned' ? 'default' : 'outline'} size="sm" onClick={() => setTab('planned')}>
           예정 · 준비 리스트
@@ -97,10 +97,10 @@ export function ECProgramsPage() {
       {tab === 'active' ? (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={programFilter} onValueChange={v => v && setProgramFilter(v)}>
-              <SelectTrigger className="h-9 w-72"><SelectValue placeholder="파트너사 선택" /></SelectTrigger>
+            <Select value={programFilter} onValueChange={v => { if (v) { setProgramFilter(v); setSelected(null) } }}>
+              <SelectTrigger className="h-9 w-72"><SelectValue placeholder="프로그램(파트너사) 선택" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체 파트너사</SelectItem>
+                <SelectItem value="all">전체 프로그램</SelectItem>
                 {partnerOptions.map(o => (
                   <SelectItem key={o.key} value={o.key}>{o.key} ({o.count}명)</SelectItem>
                 ))}
@@ -110,72 +110,94 @@ export function ECProgramsPage() {
               <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
               <Input placeholder="학생 이름 검색…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 w-56" />
             </div>
+            {programFilter !== 'all' && (
+              <span className="text-xs text-muted-foreground">“{programFilter}” 신청 {filteredStudents.length}명</span>
+            )}
           </div>
-          {filteredGroups.length === 0 ? (
+
+          {filteredStudents.length === 0 ? (
             <Card><CardContent className="py-12 text-center text-muted-foreground">
               <GraduationCap className="h-10 w-10 mx-auto mb-2 opacity-40" />
-              <p>EC·Academic 프로그램 수강생이 없습니다. (Student 360에서 추가)</p>
+              <p>{programFilter === 'all' ? 'EC·Academic 프로그램 수강생이 없습니다. (Student 360에서 추가)' : '해당 프로그램 신청 학생이 없습니다.'}</p>
             </CardContent></Card>
           ) : (
-            <div className="space-y-6">
-              {filteredGroups.map(group => (
-                <div key={group.partner} className="space-y-2">
-                  {/* 파트너사(EC) 헤더 */}
-                  <div className="flex items-center gap-2 pb-1 border-b">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${group.source === 'academic' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                      {group.source === 'academic' ? 'Academic' : 'EC'}
-                    </span>
-                    <h2 className="text-base font-bold">{group.partner}</h2>
-                    <Badge variant="outline" className="text-[10px]">{group.students.length}명</Badge>
-                  </div>
-                  {/* 학생별 카드 (한 칸씩) */}
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {group.students.map(s => {
-                      const comments = meetingsByStudent.get(norm(s.name)) || []
+            <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+              {/* 학생 목록 */}
+              <Card className="h-fit max-h-[72vh] overflow-y-auto">
+                <CardContent className="p-2 space-y-1">
+                  {filteredStudents.map(s => {
+                    const partners = [...new Set(s.programs.map(p => p.label).filter(Boolean))].join(', ')
+                    const active = selectedStudent?.name === s.name
+                    return (
+                      <button
+                        key={s.name}
+                        onClick={() => setSelected(s.name)}
+                        className={`w-full text-left rounded-lg border p-2.5 transition-colors ${active ? 'border-indigo-500 bg-indigo-50' : 'hover:bg-muted/50'}`}
+                      >
+                        <div className="font-medium text-sm">{s.name}</div>
+                        {partners && <div className="text-[11px] text-indigo-600/80 mt-0.5 truncate">🤝 {partners}</div>}
+                      </button>
+                    )
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* 선택 학생 상세 */}
+              <Card className="h-fit">
+                {selectedStudent ? (
+                  <CardContent className="p-4 space-y-3">
+                    {(() => {
+                      const comments = meetingsByStudent.get(norm(selectedStudent.name)) || []
                       return (
-                        <Card key={s.name} className="h-full">
-                          <CardContent className="p-3 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <GraduationCap className="size-4 text-indigo-500 shrink-0" />
-                              <span className="font-semibold text-sm">{s.name}</span>
-                            </div>
-                            {/* 이 파트너의 프로그램 */}
-                            <div className="flex flex-wrap gap-1">
-                              {s.programs.map(p => (
-                                <Badge key={p.id} variant="outline" className="text-[10px] font-normal">
-                                  {p.detail || '프로그램'}
-                                  {p.periodStart ? ` · ${p.periodStart}${p.periodEnd ? `~${p.periodEnd}` : ''}` : ''}
-                                </Badge>
-                              ))}
-                            </div>
-                            {/* 파트너 미팅 코멘트 (자동) */}
-                            <div className="pt-1 border-t">
-                              <div className="text-[10px] font-medium text-muted-foreground flex items-center gap-1 mb-1">
-                                <MessageSquare className="size-3" />미팅 코멘트{comments.length > 0 && ` (${comments.length})`}
+                        <>
+                          <div className="flex items-center gap-2 pb-2 border-b">
+                            <GraduationCap className="size-5 text-indigo-500" />
+                            <span className="font-bold text-base">{selectedStudent.name}</span>
+                            <Badge variant="outline" className="text-[10px]">프로그램 {selectedStudent.programs.length}</Badge>
+                          </div>
+                          {/* 프로그램 목록 */}
+                          <div className="space-y-1.5">
+                            {selectedStudent.programs.map(p => (
+                              <div key={p.id} className="flex items-center gap-2 text-sm">
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${p.source === 'academic' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                                  {p.source === 'academic' ? 'Academic' : 'EC'}
+                                </span>
+                                <span className="font-medium">{p.label}</span>
+                                {p.detail && <span className="text-gray-600">· {p.detail}</span>}
+                                {p.periodStart && <span className="text-[11px] text-muted-foreground">({p.periodStart}{p.periodEnd ? `~${p.periodEnd}` : ''})</span>}
                               </div>
-                              {comments.length === 0 ? (
-                                <p className="text-[11px] text-muted-foreground">기록 없음</p>
-                              ) : (
-                                <div className="space-y-1 max-h-40 overflow-y-auto">
-                                  {comments.map(m => (
-                                    <div key={m.id} className="text-xs border-l-2 border-indigo-200 pl-2">
-                                      <div className="text-[10px] text-muted-foreground">
-                                        {m.meetingDate || '날짜 미정'}
-                                        {partnerName(m.partnerId) && ` · ${partnerName(m.partnerId)}`}
-                                      </div>
-                                      <div className="text-gray-700 whitespace-pre-wrap">{m.content || '—'}</div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                            ))}
+                          </div>
+                          {/* 파트너사 미팅 코멘트 (자동) */}
+                          <div className="pt-2 border-t">
+                            <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-2">
+                              <MessageSquare className="size-3.5" />파트너사 미팅 코멘트{comments.length > 0 && ` (${comments.length})`}
                             </div>
-                          </CardContent>
-                        </Card>
+                            {comments.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">아직 파트너사 미팅 기록이 없습니다.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {comments.map(m => (
+                                  <div key={m.id} className="text-sm border-l-2 border-indigo-200 pl-2.5">
+                                    <div className="text-[11px] text-muted-foreground">
+                                      {m.meetingDate || '날짜 미정'}
+                                      {partnerName(m.partnerId) && ` · ${partnerName(m.partnerId)}`}
+                                      {m.program && ` · ${m.program}`}
+                                    </div>
+                                    <div className="text-gray-700 whitespace-pre-wrap">{m.content || '—'}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </>
                       )
-                    })}
-                  </div>
-                </div>
-              ))}
+                    })()}
+                  </CardContent>
+                ) : (
+                  <CardContent className="py-16 text-center text-sm text-muted-foreground">학생을 선택하세요.</CardContent>
+                )}
+              </Card>
             </div>
           )}
         </>
