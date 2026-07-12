@@ -161,7 +161,15 @@ export function ECProgramsPage() {
                 {selectedStudent ? (
                   <CardContent className="p-4 space-y-3">
                     {(() => {
-                      const comments = meetingsByStudent.get(norm(selectedStudent.name)) || []
+                      const allComments = meetingsByStudent.get(norm(selectedStudent.name)) || []
+                      // 파트너 필터가 걸려 있으면, 그 파트너가 올린 코멘트만 표시
+                      const comments = programFilter === 'all'
+                        ? allComments
+                        : allComments.filter(m => {
+                            const pn = norm(partnerName(m.partnerId) || '')
+                            const fb = norm(programFilter)
+                            return !!pn && (pn.includes(fb) || fb.includes(pn))
+                          })
                       return (
                         <>
                           <div className="flex items-center gap-2 pb-2 border-b">
@@ -185,10 +193,12 @@ export function ECProgramsPage() {
                           {/* 파트너사 미팅 코멘트 (자동) */}
                           <div className="pt-2 border-t">
                             <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-2">
-                              <MessageSquare className="size-3.5" />파트너사 미팅 코멘트{comments.length > 0 && ` (${comments.length})`}
+                              <MessageSquare className="size-3.5" />
+                              {programFilter === 'all' ? '파트너사 미팅 코멘트' : `“${programFilter}” 미팅 코멘트`}
+                              {comments.length > 0 && ` (${comments.length})`}
                             </div>
                             {comments.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">아직 파트너사 미팅 기록이 없습니다.</p>
+                              <p className="text-sm text-muted-foreground">{programFilter === 'all' ? '아직 파트너사 미팅 기록이 없습니다.' : '이 파트너사가 올린 미팅 코멘트가 없습니다.'}</p>
                             ) : (
                               <div className="space-y-2">
                                 {comments.map(m => (

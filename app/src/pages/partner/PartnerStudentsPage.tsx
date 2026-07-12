@@ -5,11 +5,13 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, NotebookPen, GraduationCap } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
+import { useProfiles } from '@/hooks/useProfiles'
 import {
   usePartnerStudentMeetings, useAllPartnerStudentMeetings, useCreatePartnerStudentMeeting,
   useUpdatePartnerStudentMeeting, useDeletePartnerStudentMeeting,
@@ -25,9 +27,19 @@ export function PartnerStudentsPage() {
 
   const { data: allStudents = [], isLoading } = useServiceStudents()
   const { data: programFees = [] } = useAllServiceProgramFees()
+  const { data: profiles = [] } = useProfiles()
   const { data: myMeetings = [] } = usePartnerStudentMeetings(isAdmin ? undefined : partnerId)
   const { data: allMeetings = [] } = useAllPartnerStudentMeetings(isAdmin)
   const meetings = isAdmin ? allMeetings : myMeetings
+  const partnerName = (id?: string) => profiles.find(p => p.id === id)?.name
+
+  const [partnerFilter, setPartnerFilter] = useState('all')
+  const partnerOptions = useMemo(() => {
+    const s = new Set<string>()
+    programFees.forEach(f => { if (f.label) s.add(f.label) })
+    return [...s].sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [programFees])
+  const nrm = (v?: string) => (v || '').replace(/\s+/g, '').toLowerCase()
   const create = useCreatePartnerStudentMeeting()
   const update = useUpdatePartnerStudentMeeting()
   const del = useDeletePartnerStudentMeeting()
@@ -52,14 +64,17 @@ export function PartnerStudentsPage() {
       .filter(s => {
         const entry = studentPartners.get(s.id)
         if (!entry) return false
-        return isAdmin || (!!partnerKey && Array.from(entry.names).some(n => n.includes(partnerKey)))
+        if (!isAdmin && !(!!partnerKey && Array.from(entry.names).some(n => n.includes(partnerKey)))) return false
+        // 파트너 필터: 그 파트너가 지정된 학생만
+        if (partnerFilter !== 'all' && !Array.from(entry.display).some(d => nrm(d) === nrm(partnerFilter))) return false
+        return true
       })
       .map(s => ({
         name: s.name, koreanName: s.koreanName, school: s.school,
         partners: Array.from(studentPartners.get(s.id)?.display || []).join(', '),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [allStudents, studentPartners, partnerKey, isAdmin])
+  }, [allStudents, studentPartners, partnerKey, isAdmin, partnerFilter])
 
   const [selected, setSelected] = useState('')
   useEffect(() => {
@@ -68,8 +83,15 @@ export function PartnerStudentsPage() {
 
   const selectedSchool = students.find(s => s.name === selected)?.school
   const studentMeetings = useMemo(
-    () => meetings.filter(m => m.studentName === selected),
-    [meetings, selected],
+    () => meetings.filter(m => {
+      if (m.studentName !== selected) return false
+      if (partnerFilter === 'all') return true
+      // 해당 파트너사가 올린(계정 이름이 매칭되는) 코멘트만
+      const pn = nrm(partnerName(m.partnerId))
+      const fb = nrm(partnerFilter)
+      return !!pn && (pn.includes(fb) || fb.includes(pn))
+    }),
+    [meetings, selected, partnerFilter, profiles], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -101,6 +123,19 @@ export function PartnerStudentsPage() {
         <h1 className="text-xl font-bold">{t('nav.partnerStudents')}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">담당 학생을 선택해 미팅 일정과 내용을 기록하세요.</p>
       </div>
+
+      {partnerOptions.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Select value={partnerFilter} onValueChange={v => { if (v) { setPartnerFilter(v); setSelected('') } }}>
+            <SelectTrigger className="h-9 w-72"><SelectValue placeholder="프로그램(파트너사) 선택" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 파트너사</SelectItem>
+              {partnerOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {partnerFilter !== 'all' && <span className="text-xs text-muted-foreground">“{partnerFilter}” 학생 {students.length}명 · 코멘트도 이 파트너사 것만 표시</span>}
+        </div>
+      )}
 
       {students.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
