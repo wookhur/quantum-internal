@@ -97,7 +97,7 @@ const EC_PARTNERS = [
   'Next Bound',
   'Stanley Prep-internship',
   'Stanley Prep-UNAT',
-  "Wook's App",
+  '앱개발',
 ] as const
 
 const EC_SALES_PRESETS = [
