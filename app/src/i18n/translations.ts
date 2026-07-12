@@ -101,7 +101,7 @@ const koTranslations = {
   'nav.incentiveByPerson': '인센티브 (인원별)',
   'nav.incentives': '세일즈인센티브 인보이스',
   'nav.partner': '파트너',
-  'nav.partnerContracts': '계약금 관리',
+  'nav.partnerContracts': '수수료 관리',
   'nav.partnerStudents': '학생 관리',
   'nav.partnerCompanies': '업체 관리',
   'nav.service': '서비스',
@@ -110,7 +110,7 @@ const koTranslations = {
   'nav.ecPrograms': 'EC 프로그램',
   'nav.weeklyReport': '주간 보고서',
   'nav.kpi': 'KPI',
-  'nav.externalFees': '서비스관리',
+  'nav.externalFees': '서비스입금관리',
   'nav.consultantAssignment': '컨설턴트 배치',
 
   // ── External Fees ──
@@ -2517,7 +2517,7 @@ const enTranslations: Record<string, string> = {
   'nav.incentiveByPerson': 'Incentives (by Person)',
   'nav.incentives': 'Sales Incentive Invoices',
   'nav.partner': 'Partner',
-  'nav.partnerContracts': 'Contract Payments',
+  'nav.partnerContracts': 'Commission Rates',
   'nav.partnerStudents': 'Student Management',
   'nav.partnerCompanies': 'Company Management',
   'nav.service': 'Service',
@@ -2526,7 +2526,7 @@ const enTranslations: Record<string, string> = {
   'nav.ecPrograms': 'EC Programs',
   'nav.weeklyReport': 'Weekly Report',
   'nav.kpi': 'KPI',
-  'nav.externalFees': 'Service Sales',
+  'nav.externalFees': 'Service Payments',
   'nav.consultantAssignment': 'Consultant Assignment',
 
   // ── External Fees ──

@@ -49,7 +49,7 @@ import { TaskBoardPage } from '@/pages/common/TaskBoardPage'
 import { PersonalTodoPage } from '@/pages/common/PersonalTodoPage'
 import { PersonProfilePage } from '@/pages/common/PersonProfilePage'
 import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
-import { PartnerContractsPage } from '@/pages/partner/PartnerContractsPage'
+import { CommissionRatesPage } from '@/pages/partner/CommissionRatesPage'
 import { PartnerStudentsPage } from '@/pages/partner/PartnerStudentsPage'
 import { PartnerCompaniesPage } from '@/pages/partner/PartnerCompaniesPage'
 import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
@@ -122,7 +122,7 @@ export default function App() {
                 <Route path="/finance/freelancer-invoices" element={<Navigate to="/invoices/freelancer-individual" replace />} />
                 <Route path="/finance/sales-incentive-invoices" element={<Navigate to="/invoices/sales-incentive" replace />} />
 
-                <Route path="/partner/contracts" element={<PartnerContractsPage />} />
+                <Route path="/partner/contracts" element={<CommissionRatesPage />} />
                 <Route path="/partner/students" element={<PartnerStudentsPage />} />
                 <Route path="/partner/companies" element={<PartnerCompaniesPage />} />
                 <Route path="/partner/calendar" element={<CalendarPage />} />
