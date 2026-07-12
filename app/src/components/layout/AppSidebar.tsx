@@ -29,7 +29,6 @@ import {
   Wallet,
   Clock,
   UserSearch,
-  GraduationCap,
   MessageSquare,
   Settings,
   Receipt,
@@ -89,8 +88,16 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     items: [
       { labelKey: 'nav.serviceDashboard', to: '/service/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.student360', to: '/service/student-360', icon: UserSearch },
-      { labelKey: 'nav.ecPrograms', to: '/service/ec-programs', icon: GraduationCap },
       { labelKey: 'nav.weeklyReport', to: '/service/weekly-report', icon: FileText },
+    ],
+  },
+  {
+    titleKey: 'nav.partner',
+    module: 'partner',
+    items: [
+      { labelKey: 'nav.partnerStudents', to: '/partner/students', icon: UserSearch },
+      { labelKey: 'nav.partnerCompanies', to: '/partner/companies', icon: Briefcase },
+      { labelKey: 'nav.partnerContracts', to: '/partner/contracts', icon: FileText },
     ],
   },
   {
@@ -134,15 +141,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.kpiTargets', to: '/hr/kpi-targets', icon: Target },
       { labelKey: 'nav.personalInfo', to: '/hr/personal-info', icon: ClipboardList },
       { labelKey: 'nav.accessControl', to: '/hr/employees', icon: Users },
-    ],
-  },
-  {
-    titleKey: 'nav.partner',
-    module: 'partner',
-    items: [
-      { labelKey: 'nav.partnerStudents', to: '/partner/students', icon: UserSearch },
-      { labelKey: 'nav.partnerCompanies', to: '/partner/companies', icon: Briefcase },
-      { labelKey: 'nav.partnerContracts', to: '/partner/contracts', icon: FileText },
     ],
   },
   {

@@ -40,6 +40,18 @@ export function PartnerStudentsPage() {
     return [...s].sort((a, b) => a.localeCompare(b, 'ko'))
   }, [programFees])
   const nrm = (v?: string) => (v || '').replace(/\s+/g, '').toLowerCase()
+
+  // 학생별 프로그램(파트너사) 라벨 — 미팅 추가 시 프로그램 선택 & 필터 매칭용
+  const labelsByStudentName = useMemo(() => {
+    const m = new Map<string, Set<string>>()
+    programFees.forEach(f => {
+      if (!f.label) return
+      const arr = m.get(f.studentName) || new Set<string>()
+      arr.add(f.label)
+      m.set(f.studentName, arr)
+    })
+    return m
+  }, [programFees])
   const create = useCreatePartnerStudentMeeting()
   const update = useUpdatePartnerStudentMeeting()
   const del = useDeletePartnerStudentMeeting()
@@ -82,13 +94,16 @@ export function PartnerStudentsPage() {
   }, [students]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedSchool = students.find(s => s.name === selected)?.school
+  const selectedLabels = useMemo(() => [...(labelsByStudentName.get(selected) || [])].sort(), [labelsByStudentName, selected])
+
   const studentMeetings = useMemo(
     () => meetings.filter(m => {
       if (m.studentName !== selected) return false
       if (partnerFilter === 'all') return true
-      // 해당 파트너사가 올린(계정 이름이 매칭되는) 코멘트만
-      const pn = nrm(partnerName(m.partnerId))
       const fb = nrm(partnerFilter)
+      // 1) 코멘트에 지정된 프로그램이 그 파트너사와 일치, 또는 2) 작성 계정 이름이 매칭
+      if (nrm(m.program) === fb) return true
+      const pn = nrm(partnerName(m.partnerId))
       return !!pn && (pn.includes(fb) || fb.includes(pn))
     }),
     [meetings, selected, partnerFilter, profiles], // eslint-disable-line react-hooks/exhaustive-deps
@@ -205,8 +220,18 @@ export function PartnerStudentsPage() {
                     <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} className="h-9 w-44" />
                   </div>
                   <div className="space-y-1 flex-1 min-w-[160px]">
-                    <Label className="text-xs">프로그램 (선택)</Label>
-                    <Input value={form.program} onChange={e => setForm(f => ({ ...f, program: e.target.value }))} placeholder="예: USACO 대회, 리서치 …" className="h-9" />
+                    <Label className="text-xs">프로그램 (파트너사)</Label>
+                    {selectedLabels.length > 0 ? (
+                      <Select value={form.program || '_none'} onValueChange={v => setForm(f => ({ ...f, program: !v || v === '_none' ? '' : v }))}>
+                        <SelectTrigger className="h-9"><span className="truncate">{form.program || '프로그램 선택'}</span></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">—</SelectItem>
+                          {selectedLabels.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input value={form.program} onChange={e => setForm(f => ({ ...f, program: e.target.value }))} placeholder="예: USACO 대회, 리서치 …" className="h-9" />
+                    )}
                   </div>
                 </div>
                 <div className="space-y-1">
