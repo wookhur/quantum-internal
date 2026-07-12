@@ -571,7 +571,7 @@ function ECServicesSection({ studentId, createdBy }: { studentId: string; create
                 <p className="text-xs">{[a.periodStart, a.periodEnd].filter(Boolean).join(' ~ ') || '—'}</p>
               </div>
               <div className="col-span-2">
-                <p className="text-xs text-muted-foreground">Program</p>
+                <p className="text-xs text-muted-foreground">특이사항</p>
                 <p className="whitespace-pre-wrap">{a.program || '—'}</p>
               </div>
               <div>
@@ -669,9 +669,9 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
               </div>
             </div>
           </div>
-          {/* Program */}
+          {/* 특이사항 */}
           <div>
-            <Label className="text-xs">Program</Label>
+            <Label className="text-xs">특이사항</Label>
             <Textarea
               className="mt-1"
               placeholder={t('student360.programPlaceholder')}

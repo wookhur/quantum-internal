@@ -11,6 +11,7 @@ import { Plus, Trash2, GraduationCap, MessageSquare, CalendarClock, Check, Loade
 import { useAuth } from '@/contexts/AuthContext'
 import { useAllServiceProgramFees, type ServiceProgramFee } from '@/hooks/useServiceProgramFees'
 import { useAllPartnerStudentMeetings } from '@/hooks/usePartnerStudentMeetings'
+import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useProfiles } from '@/hooks/useProfiles'
 import {
   usePlannedPrograms, useCreatePlannedProgram, useUpdatePlannedProgram, useDeletePlannedProgram,
@@ -22,7 +23,14 @@ export function ECProgramsPage() {
   const { user } = useAuth()
   const { data: programs = [], isLoading } = useAllServiceProgramFees()
   const { data: meetings = [] } = useAllPartnerStudentMeetings()
+  const { data: serviceStudents = [] } = useServiceStudents()
   const { data: profiles = [] } = useProfiles()
+
+  const studentInfo = useMemo(() => {
+    const m = new Map<string, { koreanName?: string; school?: string }>()
+    for (const s of serviceStudents) m.set(norm(s.name), { koreanName: s.koreanName, school: s.school })
+    return m
+  }, [serviceStudents])
   const [tab, setTab] = useState<'active' | 'planned'>('active')
   const [search, setSearch] = useState('')
   const [programFilter, setProgramFilter] = useState('all')
@@ -127,6 +135,7 @@ export function ECProgramsPage() {
                 <CardContent className="p-2 space-y-1">
                   {filteredStudents.map(s => {
                     const partners = [...new Set(s.programs.map(p => p.label).filter(Boolean))].join(', ')
+                    const info = studentInfo.get(norm(s.name))
                     const active = selectedStudent?.name === s.name
                     return (
                       <button
@@ -134,7 +143,12 @@ export function ECProgramsPage() {
                         onClick={() => setSelected(s.name)}
                         className={`w-full text-left rounded-lg border p-2.5 transition-colors ${active ? 'border-indigo-500 bg-indigo-50' : 'hover:bg-muted/50'}`}
                       >
-                        <div className="font-medium text-sm">{s.name}</div>
+                        <div className="font-medium text-sm">{s.name}{info?.koreanName ? ` · ${info.koreanName}` : ''}</div>
+                        {info?.school && (
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <GraduationCap className="size-3" />{info.school}
+                          </div>
+                        )}
                         {partners && <div className="text-[11px] text-indigo-600/80 mt-0.5 truncate">🤝 {partners}</div>}
                       </button>
                     )
