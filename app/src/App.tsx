@@ -43,6 +43,7 @@ import { EmployeeFormPage } from '@/pages/hr/EmployeeFormPage'
 import { ServiceDashboardPage } from '@/pages/service/ServiceDashboardPage'
 import { Student360Page } from '@/pages/service/Student360Page'
 import { WeeklyReportPage } from '@/pages/service/WeeklyReportPage'
+import { ECProgramsPage } from '@/pages/service/ECProgramsPage'
 import { ExternalFeesPage } from '@/pages/service/ExternalFeesPage'
 import { MessagesPage } from '@/pages/common/MessagesPage'
 import { TaskBoardPage } from '@/pages/common/TaskBoardPage'
@@ -130,6 +131,7 @@ export default function App() {
                 <Route path="/service/dashboard" element={<ServiceDashboardPage />} />
                 <Route path="/service/student-360" element={<Student360Page />} />
                 <Route path="/service/weekly-report" element={<WeeklyReportPage />} />
+                <Route path="/service/ec-programs" element={<ECProgramsPage />} />
                 <Route path="/service/kpi" element={<Navigate to="/hr/kpi-targets" replace />} />
                 <Route path="/service/external-fees" element={<ExternalFeesPage />} />
 
