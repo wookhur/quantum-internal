@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -55,7 +54,6 @@ export function CommissionRatesPage() {
   // ── Per-partner overrides ──
   const [partner, setPartner] = useState('')
   const [pRate, setPRate] = useState('5')
-  const [notes, setNotes] = useState('')
 
   const partnerOptions = useMemo(() => {
     const set = new Set<string>()
@@ -68,18 +66,17 @@ export function CommissionRatesPage() {
   // editing an existing partner = the selected partner already has a saved rate
   const editing = partnerRates.some(r => r.partner === partner.trim())
 
-  const resetForm = () => { setPartner(''); setPRate('5'); setNotes('') }
+  const resetForm = () => { setPartner(''); setPRate('5') }
 
-  const startEdit = (partnerName: string, rate: number, note?: string) => {
+  const startEdit = (partnerName: string, rate: number) => {
     setPartner(partnerName)
     setPRate(String(rate))
-    setNotes(note || '')
   }
 
   const handleAddPartner = () => {
     if (!partner.trim()) return
     upsert.mutate(
-      { partner: partner.trim(), rate: Number(pRate), notes: notes.trim() || undefined },
+      { partner: partner.trim(), rate: Number(pRate) },
       { onSuccess: resetForm, onError: showError },
     )
   }
@@ -156,7 +153,7 @@ export function CommissionRatesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_110px_1.5fr_auto] gap-3 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-3 items-end">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">파트너사</label>
               <Select value={partner} onValueChange={v => setPartner(v || '')}>
@@ -177,10 +174,6 @@ export function CommissionRatesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">특이사항 (메모)</label>
-              <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="예: 계약 조건, 정산 주기 등" className="h-9" />
-            </div>
             <div className="flex items-center gap-2">
               <Button onClick={handleAddPartner} disabled={!partner.trim() || upsert.isPending} className="h-9">
                 {upsert.isPending ? <Loader2 className="size-4 mr-1 animate-spin" /> : editing ? <Pencil className="size-4 mr-1" /> : <Plus className="size-4 mr-1" />}
@@ -195,7 +188,7 @@ export function CommissionRatesPage() {
           </div>
           <p className="text-[11px] text-muted-foreground">
             {editing
-              ? `'${partner}'을(를) 수정 중입니다. 수수료율/특이사항을 바꾸고 수정을 누르세요.`
+              ? `'${partner}'을(를) 수정 중입니다. 수수료율을 바꾸고 수정을 누르세요.`
               : '이미 등록한 파트너사를 다시 선택하면 수정할 수 있습니다. 별도 지정이 없는 파트너사는 위 팀별 수수료율이 적용됩니다.'}
           </p>
 
@@ -210,9 +203,8 @@ export function CommissionRatesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>파트너사</TableHead>
-                  <TableHead className="w-24 text-center">수수료율</TableHead>
-                  <TableHead>특이사항</TableHead>
-                  <TableHead className="w-24"></TableHead>
+                  <TableHead className="w-28 text-center">수수료율</TableHead>
+                  <TableHead className="w-24 text-right">관리</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -222,7 +214,6 @@ export function CommissionRatesPage() {
                     <TableCell className="text-center">
                       <Badge className="bg-purple-100 text-purple-700 border-purple-200">{r.rate}%</Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{r.notes || '-'}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-0.5">
                         <Button
@@ -230,7 +221,7 @@ export function CommissionRatesPage() {
                           size="icon"
                           className="size-8 text-muted-foreground hover:text-purple-600"
                           title="수정"
-                          onClick={() => startEdit(r.partner, r.rate, r.notes)}
+                          onClick={() => startEdit(r.partner, r.rate)}
                         >
                           <Pencil className="size-4" />
                         </Button>
