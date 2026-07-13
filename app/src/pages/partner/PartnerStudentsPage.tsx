@@ -57,11 +57,12 @@ export function PartnerStudentsPage() {
   const del = useDeletePartnerStudentMeeting()
 
   // A partner services a student when one of that student's Extra Curricular /
-  // Academic programs names the partner (as the program partner or a contributor).
+  // Academic programs names the partner. Only the partner/academy label counts —
+  // sales contributors (담당자 이름) must NOT appear as partner chips.
   const studentPartners = useMemo(() => {
     const map = new Map<string, { names: Set<string>; display: Set<string> }>()
     programFees.forEach(f => {
-      const raw = [f.label, f.contributor1, f.contributor2].filter(Boolean) as string[]
+      const raw = [f.label].filter(Boolean) as string[]
       if (!raw.length) return
       const entry = map.get(f.studentId) || { names: new Set<string>(), display: new Set<string>() }
       raw.forEach(n => { entry.names.add(n.toLowerCase()); entry.display.add(n) })
