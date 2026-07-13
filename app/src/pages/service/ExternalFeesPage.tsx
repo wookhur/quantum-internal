@@ -21,7 +21,7 @@ import { useUpdateECActivity } from '@/hooks/useECActivities'
 import { useUpdateAcademicSupport } from '@/hooks/useAcademicSupport'
 import { useDefaultRates, usePartnerRateMap, normalizePartner, rateForTeam, type ContributorTeam } from '@/hooks/usePartnerCommissionRates'
 import { useProfiles } from '@/hooks/useProfiles'
-import { canonicalConsultantName } from '@/lib/consultants'
+import { consultantNameKey } from '@/lib/consultants'
 import { useAuth } from '@/contexts/AuthContext'
 import { todayKST } from '@/lib/date'
 import { formatCurrency } from '@/types'
@@ -87,10 +87,10 @@ export function ExternalFeesPage() {
     const byName = new Map<string, ContributorTeam>()
     for (const p of profiles) {
       if (p.department === 'sales' || p.department === 'service') {
-        byName.set(canonicalConsultantName(p.name), p.department)
+        byName.set(consultantNameKey(p.name), p.department)
       }
     }
-    return (name?: string) => (name ? byName.get(canonicalConsultantName(name)) : undefined)
+    return (name?: string) => (name ? byName.get(consultantNameKey(name)) : undefined)
   }, [profiles])
 
   // 재무담당자(회계 계정)·경영진도 금액·수금상태를 편집할 수 있게 허용

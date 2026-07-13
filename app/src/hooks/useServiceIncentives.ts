@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useAllServiceProgramFees } from './useServiceProgramFees'
 import { usePartnerRateMap, useDefaultRates, normalizePartner, rateForTeam, type ContributorTeam } from './usePartnerCommissionRates'
 import { useProfiles } from './useProfiles'
-import { canonicalConsultantName } from '@/lib/consultants'
+import { canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
 
 /** A sales-incentive line generated from a collected EC/Academic service. */
 export interface ServiceIncentiveLine {
@@ -28,10 +28,10 @@ export function useServiceIncentiveLines(): ServiceIncentiveLine[] {
     const teamByName = new Map<string, ContributorTeam>()
     for (const p of profiles) {
       if (p.department === 'sales' || p.department === 'service') {
-        teamByName.set(canonicalConsultantName(p.name), p.department)
+        teamByName.set(consultantNameKey(p.name), p.department)
       }
     }
-    const autoTeam = (name?: string) => (name ? teamByName.get(canonicalConsultantName(name)) : undefined)
+    const autoTeam = (name?: string) => (name ? teamByName.get(consultantNameKey(name)) : undefined)
 
     const lines: ServiceIncentiveLine[] = []
     for (const f of fees) {

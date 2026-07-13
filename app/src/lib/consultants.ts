@@ -38,6 +38,12 @@ export function canonicalConsultantName(name?: string): string {
   return CONSULTANT_NAME_ALIASES[n.toLowerCase()] || n
 }
 
+/** Normalized key for name matching: canonical form, lowercased, spaces collapsed.
+ *  Use on BOTH sides so case/spacing differences don't break a match. */
+export function consultantNameKey(name?: string): string {
+  return canonicalConsultantName(name).toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
 export function useConsultantPool(): { id: string; name: string }[] {
   const { data: profiles = [] } = useProfiles()
   return useMemo(() => {
