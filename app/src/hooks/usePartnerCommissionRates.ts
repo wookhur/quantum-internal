@@ -5,9 +5,20 @@ import { supabase } from '@/lib/supabase'
 export interface PartnerCommissionRate {
   id: string
   partner: string
-  rate: number          // percentage (5–20, step 5)
+  rate: number          // percentage (1–10, step 1)
   notes?: string
 }
+
+// ─── Global team commission rates ────────────────────────────────────
+// Stored as two sentinel rows in the same table so no extra migration is
+// needed. 세일즈맨 / 서비스맨 each earn (청구금액 × their team rate).
+export const TEAM_SALES_KEY = '__team_sales__'
+export const TEAM_SERVICE_KEY = '__team_service__'
+export const DEFAULT_SALES_RATE = 4
+export const DEFAULT_SERVICE_RATE = 3
+const SENTINEL_KEYS = new Set<string>([TEAM_SALES_KEY, TEAM_SERVICE_KEY])
+
+export type ContributorTeam = 'sales' | 'service'
 
 /** Normalize a partner label for matching (lowercase, strip spaces). */
 export function normalizePartner(s: string | undefined | null): string {
@@ -33,28 +44,32 @@ export function usePartnerCommissionRates() {
   })
 }
 
-/** Map of normalized partner label → rate, for quick lookup. */
+/** Per-partner rows only (excludes the team sentinel rows). */
+export function usePartnerRateList() {
+  const q = usePartnerCommissionRates()
+  const list = (q.data || []).filter(r => !SENTINEL_KEYS.has(r.partner))
+  return { list, ...q }
+}
+
+/** Map of normalized partner label → rate (per-partner overrides only). */
 export function useCommissionRateMap() {
   const q = usePartnerCommissionRates()
   const map = new Map<string, number>()
-  for (const r of q.data || []) map.set(normalizePartner(r.partner), r.rate)
+  for (const r of q.data || []) {
+    if (SENTINEL_KEYS.has(r.partner)) continue
+    map.set(normalizePartner(r.partner), r.rate)
+  }
   return { map, ...q }
 }
 
-// ─── Global team commission rates ────────────────────────────────────
-// Stored as two sentinel rows in the same table so no extra migration is
-// needed. 세일즈맨 / 서비스맨 each earn (청구금액 × their team rate).
-export const TEAM_SALES_KEY = '__team_sales__'
-export const TEAM_SERVICE_KEY = '__team_service__'
-
-export type ContributorTeam = 'sales' | 'service'
-
-/** The two global team rates (세일즈맨 / 서비스맨). */
+/** The two global team rates (세일즈맨 / 서비스맨), defaulting to 4% / 3%. */
 export function useTeamCommissionRates() {
   const q = usePartnerCommissionRates()
   const rows = q.data || []
-  const salesRate = rows.find(r => r.partner === TEAM_SALES_KEY)?.rate ?? 0
-  const serviceRate = rows.find(r => r.partner === TEAM_SERVICE_KEY)?.rate ?? 0
+  const salesRow = rows.find(r => r.partner === TEAM_SALES_KEY)
+  const serviceRow = rows.find(r => r.partner === TEAM_SERVICE_KEY)
+  const salesRate = salesRow ? salesRow.rate : DEFAULT_SALES_RATE
+  const serviceRate = serviceRow ? serviceRow.rate : DEFAULT_SERVICE_RATE
   return { salesRate, serviceRate, ...q }
 }
 

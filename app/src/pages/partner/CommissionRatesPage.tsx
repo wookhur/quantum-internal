@@ -1,13 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Percent, Briefcase, Handshake, CheckCircle2 } from 'lucide-react'
+import { Loader2, Percent, Briefcase, Handshake, CheckCircle2, Plus, Trash2 } from 'lucide-react'
+import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
+import { EC_PARTNERS } from '@/lib/ecPartners'
 import {
   useTeamCommissionRates,
+  usePartnerRateList,
   useUpsertCommissionRate,
+  useDeleteCommissionRate,
   TEAM_SALES_KEY,
   TEAM_SERVICE_KEY,
 } from '@/hooks/usePartnerCommissionRates'
@@ -15,53 +24,78 @@ import {
 const RATE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export function CommissionRatesPage() {
-  const { salesRate, serviceRate, isLoading } = useTeamCommissionRates()
+  const { salesRate, serviceRate, isLoading: teamLoading } = useTeamCommissionRates()
+  const { list: partnerRates, isLoading: listLoading } = usePartnerRateList()
+  const { data: fees = [] } = useAllServiceProgramFees()
   const upsert = useUpsertCommissionRate()
+  const del = useDeleteCommissionRate()
 
-  const [sales, setSales] = useState('5')
+  // ── Team rates ──
+  const [sales, setSales] = useState('4')
   const [service, setService] = useState('3')
-  const [saved, setSaved] = useState(false)
+  const [savedTeam, setSavedTeam] = useState(false)
 
-  // hydrate the dropdowns once the stored rates load
   useEffect(() => {
-    if (!isLoading) {
-      setSales(String(salesRate || 5))
-      setService(String(serviceRate || 3))
+    if (!teamLoading) {
+      setSales(String(salesRate))
+      setService(String(serviceRate))
     }
-  }, [isLoading, salesRate, serviceRate])
+  }, [teamLoading, salesRate, serviceRate])
 
-  const handleSave = () => {
-    setSaved(false)
+  const handleSaveTeam = () => {
+    setSavedTeam(false)
     Promise.all([
       upsert.mutateAsync({ partner: TEAM_SALES_KEY, rate: Number(sales) }),
       upsert.mutateAsync({ partner: TEAM_SERVICE_KEY, rate: Number(service) }),
     ])
-      .then(() => { setSaved(true); setTimeout(() => setSaved(false), 2500) })
-      .catch((e: unknown) => {
-        const err = e as { message?: string; details?: string; hint?: string; code?: string }
-        alert(`저장에 실패했습니다.\n${err?.message || ''}${err?.details ? `\n${err.details}` : ''}${err?.hint ? `\n${err.hint}` : ''}${err?.code ? `\n(${err.code})` : ''}`)
-      })
+      .then(() => { setSavedTeam(true); setTimeout(() => setSavedTeam(false), 2500) })
+      .catch(showError)
+  }
+
+  // ── Per-partner overrides ──
+  const [partner, setPartner] = useState('')
+  const [pRate, setPRate] = useState('5')
+  const [notes, setNotes] = useState('')
+
+  const partnerOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of EC_PARTNERS) set.add(p)
+    for (const f of fees) if (f.label?.trim()) set.add(f.label.trim())
+    for (const r of partnerRates) if (r.partner?.trim()) set.add(r.partner.trim())
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [fees, partnerRates])
+
+  const handleAddPartner = () => {
+    if (!partner.trim()) return
+    upsert.mutate(
+      { partner: partner.trim(), rate: Number(pRate), notes: notes.trim() || undefined },
+      {
+        onSuccess: () => { setPartner(''); setPRate('5'); setNotes('') },
+        onError: showError,
+      },
+    )
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold">수수료 관리</h1>
         <p className="text-sm text-muted-foreground">
-          세일즈맨과 서비스맨의 수수료율(인센티브율)을 설정합니다. 서비스입금관리에서 각 기여자의 <b>인사관리 소속팀</b>을 기준으로
-          해당 팀 수수료율(청구금액 × 율)이 자동 적용되며, 소속팀을 확인할 수 없으면 항목에서 직접 팀을 지정할 수 있습니다.
+          기본은 <b>팀별 수수료율</b>(세일즈맨/서비스맨)이 인사관리 소속팀 기준으로 적용됩니다. 특정 파트너사에 별도 조건이 있으면
+          아래 <b>파트너사별 수수료</b>에서 지정하며, 지정된 파트너사는 그 율이 팀 수수료율보다 <b>우선 적용</b>됩니다.
         </p>
       </div>
 
+      {/* ── Team rates ── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Percent className="size-4 text-purple-500" /> 팀별 수수료율
+            <Percent className="size-4 text-purple-500" /> 팀별 수수료율 (기본)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          {isLoading ? (
-            <div className="py-10 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+          {teamLoading ? (
+            <div className="py-8 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -69,9 +103,9 @@ export function CommissionRatesPage() {
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <Handshake className="size-4 text-blue-500" /> 세일즈맨 수수료율
                   </div>
-                  <p className="text-xs text-muted-foreground">인사관리 소속팀이 <b>세일즈팀</b>인 기여자에게 적용</p>
-                  <Select value={sales} onValueChange={v => setSales(v || '5')}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <p className="text-xs text-muted-foreground">소속팀이 <b>세일즈팀</b>인 기여자에게 적용 (기본 4%)</p>
+                  <Select value={sales} onValueChange={v => setSales(v || '4')}>
+                    <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {RATE_OPTIONS.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
                     </SelectContent>
@@ -82,21 +116,20 @@ export function CommissionRatesPage() {
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <Briefcase className="size-4 text-emerald-500" /> 서비스맨 수수료율
                   </div>
-                  <p className="text-xs text-muted-foreground">인사관리 소속팀이 <b>서비스팀</b>인 기여자에게 적용</p>
+                  <p className="text-xs text-muted-foreground">소속팀이 <b>서비스팀</b>인 기여자에게 적용 (기본 3%)</p>
                   <Select value={service} onValueChange={v => setService(v || '3')}>
-                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {RATE_OPTIONS.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-
               <div className="flex items-center gap-3">
-                <Button onClick={handleSave} disabled={upsert.isPending} className="h-9">
+                <Button onClick={handleSaveTeam} disabled={upsert.isPending} className="h-9">
                   {upsert.isPending ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}저장
                 </Button>
-                {saved && (
+                {savedTeam && (
                   <span className="flex items-center gap-1 text-sm text-emerald-600">
                     <CheckCircle2 className="size-4" /> 저장되었습니다
                   </span>
@@ -107,10 +140,93 @@ export function CommissionRatesPage() {
         </CardContent>
       </Card>
 
-      <p className="text-xs text-muted-foreground">
-        예) 세일즈 5% / 서비스 3% 설정 → 청구금액 1,000,000원 서비스에서 세일즈 담당은 50,000원,
-        서비스 담당은 30,000원이 인센티브로 계산됩니다. 소속팀은 <b>인사관리</b>에서 지정합니다.
-      </p>
+      {/* ── Per-partner overrides ── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Handshake className="size-4 text-purple-500" /> 파트너사별 수수료 (개별 조건)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_110px_1.5fr_auto] gap-3 items-end">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">파트너사</label>
+              <Select value={partner} onValueChange={v => setPartner(v || '')}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="파트너사 선택" /></SelectTrigger>
+                <SelectContent>
+                  {partnerOptions.length === 0 ? (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">등록된 파트너사가 없습니다</div>
+                  ) : partnerOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">수수료율</label>
+              <Select value={pRate} onValueChange={v => setPRate(v || '5')}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {RATE_OPTIONS.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">특이사항 (메모)</label>
+              <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="예: 계약 조건, 정산 주기 등" className="h-9" />
+            </div>
+            <Button onClick={handleAddPartner} disabled={!partner.trim() || upsert.isPending} className="h-9">
+              {upsert.isPending ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Plus className="size-4 mr-1" />}추가
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            이미 등록한 파트너사를 다시 추가하면 기존 수수료율이 덮어써집니다. 별도 지정이 없는 파트너사는 위 팀별 수수료율이 적용됩니다.
+          </p>
+
+          {listLoading ? (
+            <div className="py-8 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+          ) : partnerRates.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              개별 지정된 파트너사가 없습니다. (모든 파트너사에 팀별 수수료율이 적용됩니다.)
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>파트너사</TableHead>
+                  <TableHead className="w-24 text-center">수수료율</TableHead>
+                  <TableHead>특이사항</TableHead>
+                  <TableHead className="w-16"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {partnerRates.map(r => (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-medium text-sm">{r.partner}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge className="bg-purple-100 text-purple-700 border-purple-200">{r.rate}%</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{r.notes || '-'}</TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:text-red-600"
+                        onClick={() => { if (confirm(`'${r.partner}' 개별 수수료율을 삭제할까요? (팀별 수수료율로 되돌아갑니다)`)) del.mutate(r.id) }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
+}
+
+function showError(e: unknown) {
+  const err = e as { message?: string; details?: string; hint?: string; code?: string }
+  alert(`저장에 실패했습니다.\n${err?.message || ''}${err?.details ? `\n${err.details}` : ''}${err?.hint ? `\n${err.hint}` : ''}${err?.code ? `\n(${err.code})` : ''}`)
 }
