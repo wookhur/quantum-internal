@@ -9,7 +9,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Percent, Briefcase, Handshake, CheckCircle2, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Percent, Briefcase, Handshake, CheckCircle2, Plus, Trash2, Pencil, X } from 'lucide-react'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { EC_PARTNERS } from '@/lib/ecPartners'
 import {
@@ -65,14 +65,22 @@ export function CommissionRatesPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
   }, [fees, partnerRates])
 
+  // editing an existing partner = the selected partner already has a saved rate
+  const editing = partnerRates.some(r => r.partner === partner.trim())
+
+  const resetForm = () => { setPartner(''); setPRate('5'); setNotes('') }
+
+  const startEdit = (partnerName: string, rate: number, note?: string) => {
+    setPartner(partnerName)
+    setPRate(String(rate))
+    setNotes(note || '')
+  }
+
   const handleAddPartner = () => {
     if (!partner.trim()) return
     upsert.mutate(
       { partner: partner.trim(), rate: Number(pRate), notes: notes.trim() || undefined },
-      {
-        onSuccess: () => { setPartner(''); setPRate('5'); setNotes('') },
-        onError: showError,
-      },
+      { onSuccess: resetForm, onError: showError },
     )
   }
 
@@ -173,12 +181,22 @@ export function CommissionRatesPage() {
               <label className="text-xs font-medium text-muted-foreground">특이사항 (메모)</label>
               <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="예: 계약 조건, 정산 주기 등" className="h-9" />
             </div>
-            <Button onClick={handleAddPartner} disabled={!partner.trim() || upsert.isPending} className="h-9">
-              {upsert.isPending ? <Loader2 className="size-4 mr-1 animate-spin" /> : <Plus className="size-4 mr-1" />}추가
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button onClick={handleAddPartner} disabled={!partner.trim() || upsert.isPending} className="h-9">
+                {upsert.isPending ? <Loader2 className="size-4 mr-1 animate-spin" /> : editing ? <Pencil className="size-4 mr-1" /> : <Plus className="size-4 mr-1" />}
+                {editing ? '수정' : '추가'}
+              </Button>
+              {partner.trim() && (
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={resetForm} title="입력 취소">
+                  <X className="size-4" />
+                </Button>
+              )}
+            </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            이미 등록한 파트너사를 다시 추가하면 기존 수수료율이 덮어써집니다. 별도 지정이 없는 파트너사는 위 팀별 수수료율이 적용됩니다.
+            {editing
+              ? `'${partner}'을(를) 수정 중입니다. 수수료율/특이사항을 바꾸고 수정을 누르세요.`
+              : '이미 등록한 파트너사를 다시 선택하면 수정할 수 있습니다. 별도 지정이 없는 파트너사는 위 팀별 수수료율이 적용됩니다.'}
           </p>
 
           {listLoading ? (
@@ -194,26 +212,38 @@ export function CommissionRatesPage() {
                   <TableHead>파트너사</TableHead>
                   <TableHead className="w-24 text-center">수수료율</TableHead>
                   <TableHead>특이사항</TableHead>
-                  <TableHead className="w-16"></TableHead>
+                  <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {partnerRates.map(r => (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className={editing && partner.trim() === r.partner ? 'bg-purple-50/60' : undefined}>
                     <TableCell className="font-medium text-sm">{r.partner}</TableCell>
                     <TableCell className="text-center">
                       <Badge className="bg-purple-100 text-purple-700 border-purple-200">{r.rate}%</Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">{r.notes || '-'}</TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 text-muted-foreground hover:text-red-600"
-                        onClick={() => { if (confirm(`'${r.partner}' 개별 수수료율을 삭제할까요? (팀별 수수료율로 되돌아갑니다)`)) del.mutate(r.id) }}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-purple-600"
+                          title="수정"
+                          onClick={() => startEdit(r.partner, r.rate, r.notes)}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-red-600"
+                          title="삭제"
+                          onClick={() => { if (confirm(`'${r.partner}' 개별 수수료율을 삭제할까요? (팀별 수수료율로 되돌아갑니다)`)) del.mutate(r.id) }}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
