@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { canonicalPartnerName } from '@/lib/partners'
 
 /** A Student-360 program (EC activity or academic support) surfaced as an
  *  external service fee item. Contributors come from Student 360; billing and
@@ -55,7 +56,7 @@ export function useAllServiceProgramFees() {
           source: 'ec',
           studentId: r.student_id as string,
           studentName: (s?.name as string) || '',
-          label: (r.partner as string) || 'EC',
+          label: canonicalPartnerName(r.partner as string) || 'EC',
           detail: (r.program as string) || undefined,
           periodStart: (r.period_start as string) || undefined,
           periodEnd: (r.period_end as string) || undefined,
@@ -78,7 +79,7 @@ export function useAllServiceProgramFees() {
           source: 'academic',
           studentId: r.student_id as string,
           studentName: (s?.name as string) || '',
-          label: (r.academy_name as string) || 'Academic',
+          label: canonicalPartnerName(r.academy_name as string) || 'Academic',
           detail: (r.subject as string) || undefined,
           periodStart: (r.period_start as string) || undefined,
           periodEnd: (r.period_end as string) || undefined,

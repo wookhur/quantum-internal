@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { canonicalPartnerName } from '@/lib/partners'
 
 export interface ECActivity {
   id: string
@@ -28,7 +29,7 @@ function mapRow(row: Record<string, unknown>): ECActivity {
   return {
     id: row.id as string,
     studentId: row.student_id as string,
-    partner: (row.partner as string) || undefined,
+    partner: canonicalPartnerName(row.partner as string) || undefined,
     periodStart: (row.period_start as string) || undefined,
     periodEnd: (row.period_end as string) || undefined,
     program: (row.program as string) || undefined,

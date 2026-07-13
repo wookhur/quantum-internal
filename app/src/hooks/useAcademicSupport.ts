@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { canonicalPartnerName } from '@/lib/partners'
 
 export interface AcademicSupportItem {
   id: string
@@ -30,7 +31,7 @@ function mapRow(row: Record<string, unknown>): AcademicSupportItem {
   return {
     id: row.id as string,
     studentId: row.student_id as string,
-    academyName: (row.academy_name as string) || undefined,
+    academyName: canonicalPartnerName(row.academy_name as string) || undefined,
     subject: (row.subject as string) || undefined,
     season: (row.season as string) || undefined,
     periodStart: (row.period_start as string) || undefined,
