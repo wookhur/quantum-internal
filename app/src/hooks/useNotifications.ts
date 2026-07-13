@@ -4,6 +4,7 @@ import { useNotificationPreferences } from './useNotificationPreferences'
 import { useFeatureAccess, getEffectiveRoutes } from './useProfiles'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { daysFromTodayKST } from '@/lib/date'
 
 export interface AppNotification {
   id: string
@@ -103,6 +104,24 @@ export function useAppNotifications() {
         .limit(20)
       if (error) return []
       return data || []
+    },
+  })
+
+  // --- My assigned tasks with a due date, still open (마감 임박/초과 알림용) ---
+  const { data: myOpenTasks = [] } = useQuery({
+    queryKey: ['notifications-my-due-tasks', user?.id],
+    enabled: !!user?.id,
+    refetchInterval: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id, title, due_date, status')
+        .eq('assignee_id', user!.id)
+        .in('status', ['requested', 'in_progress'])
+        .not('due_date', 'is', null)
+        .limit(50)
+      if (error) return []
+      return (data || []) as { id: string; title: string; due_date: string; status: string }[]
     },
   })
 
@@ -218,6 +237,36 @@ export function useAppNotifications() {
       })
     }
 
+    // My tasks overdue (기한 지났는데 아직 진행/완료 안 됨) — 담당자에게 반복 알림
+    const overdueTasks = myOpenTasks.filter(t => t.due_date && daysFromTodayKST(t.due_date) < 0)
+    if (!disabledTypes.includes('task_overdue') && overdueTasks.length > 0) {
+      const names = overdueTasks.slice(0, 5).map(t => t.title).join(', ')
+      items.push({
+        id: 'task-overdue',
+        type: 'task_overdue',
+        title: '기한 초과 업무',
+        message: `기한이 지난 미완료 업무 ${overdueTasks.length}건: ${names}${overdueTasks.length > 5 ? ' 외' : ''}`,
+        severity: 'error',
+        link: '/tasks',
+        createdAt: now,
+      })
+    }
+
+    // My tasks due tomorrow (마감 하루 전) — 담당자에게 사전 알림
+    const dueSoonTasks = myOpenTasks.filter(t => t.due_date && daysFromTodayKST(t.due_date) === 1)
+    if (!disabledTypes.includes('task_due_soon') && dueSoonTasks.length > 0) {
+      const names = dueSoonTasks.slice(0, 5).map(t => t.title).join(', ')
+      items.push({
+        id: 'task-due-soon',
+        type: 'task_due_soon',
+        title: '업무 마감 하루 전',
+        message: `내일 마감 예정 업무 ${dueSoonTasks.length}건: ${names}${dueSoonTasks.length > 5 ? ' 외' : ''}`,
+        severity: 'warning',
+        link: '/tasks',
+        createdAt: now,
+      })
+    }
+
     // Upcoming employee birthdays (only for users who can view 직원정보)
     if (canSeeBirthdayAlerts && !disabledTypes.includes('employee_birthday')) {
       upcomingBirthdays.forEach((b) => {
@@ -235,7 +284,7 @@ export function useAppNotifications() {
     }
 
     return items
-  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, upcomingBirthdays, canSeeBirthdayAlerts, disabledTypes])
+  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, myOpenTasks, upcomingBirthdays, canSeeBirthdayAlerts, disabledTypes])
 
   return notifications
 }
@@ -251,5 +300,7 @@ export const NOTIFICATION_TYPES = [
   { key: 'consultant_assigned', label: '고객 배정 알림', labelEn: 'Client Assignment Alert' },
   { key: 'task_assigned', label: '업무 배정 알림', labelEn: 'Task Assignment Alert' },
   { key: 'task_status_changed', label: '업무 상태 변경 알림', labelEn: 'Task Status Changed Alert' },
+  { key: 'task_overdue', label: '업무 기한 초과 알림', labelEn: 'Task Overdue Alert' },
+  { key: 'task_due_soon', label: '업무 마감 임박 알림', labelEn: 'Task Due Soon Alert' },
   { key: 'employee_birthday', label: '직원 생일 알림', labelEn: 'Employee Birthday Alert' },
 ] as const
