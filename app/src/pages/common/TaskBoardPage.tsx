@@ -106,7 +106,7 @@ function PersonChip({ userId, profiles }: { userId: string; profiles: User[] }) 
 
 // ─── Task Card ──────────────────────────────────────────────────────────
 
-function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
+function TaskCard({ task, onClick, highlighted = false, dimmed = false, highlightRing }: { task: Task; onClick: () => void; highlighted?: boolean; dimmed?: boolean; highlightRing?: string }) {
   const t = useT()
   const priorityCfg = usePriorityConfig()
   const statusCfg = useStatusConfig()
@@ -123,7 +123,7 @@ function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
         task.status === 'completed' ? 'border-l-emerald-400 opacity-75' :
         task.status === 'in_progress' ? 'border-l-blue-400' :
         'border-l-amber-400'
-      }`}
+      } ${highlighted ? `ring-2 ring-offset-1 ${highlightRing || 'ring-blue-400'} shadow-md !opacity-100` : ''} ${dimmed ? 'opacity-40' : ''}`}
       onClick={onClick}
     >
       <CardContent className="py-3 px-4">
@@ -1061,6 +1061,9 @@ export function TaskBoardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  // 요약 카드 클릭 시 해당 업무 하이라이트
+  const [highlight, setHighlight] = useState<null | 'assigned' | 'requested' | 'overdue' | 'completed'>(null)
+  const toggleHighlight = (k: 'assigned' | 'requested' | 'overdue' | 'completed') => setHighlight(h => (h === k ? null : k))
   const [newTask, setNewTask] = useState({
     title: '', description: '', priority: 'normal' as TaskPriority,
     assigneeId: '', department: '', dueDate: '',
@@ -1087,6 +1090,19 @@ export function TaskBoardPage() {
     }
     return cols
   }, [tasks])
+
+  // 하이라이트 매칭 (요약 카드의 카운트 의미와 일치)
+  const isHighlighted = useCallback((task: Task) => {
+    switch (highlight) {
+      case 'assigned': return task.assigneeId === user?.id && task.status !== 'completed' && task.status !== 'cancelled'
+      case 'requested': return task.requesterId === user?.id && task.status !== 'completed' && task.status !== 'cancelled'
+      case 'overdue': return isOverdue(task)
+      case 'completed': return task.status === 'completed' && (task.assigneeId === user?.id || task.requesterId === user?.id)
+      default: return false
+    }
+  }, [highlight, user?.id])
+  const HIGHLIGHT_RING: Record<string, string> = { assigned: 'ring-amber-400', requested: 'ring-blue-500', overdue: 'ring-red-500', completed: 'ring-emerald-500' }
+  const highlightRing = highlight ? HIGHLIGHT_RING[highlight] : undefined
 
   const handleCreate = useCallback(() => {
     if (!user || !newTask.title.trim()) return
@@ -1133,8 +1149,10 @@ export function TaskBoardPage() {
 
         {/* Stats Cards */}
         {stats && (
+          <>
           <div className="grid grid-cols-4 gap-3">
-            <Card className="border-l-[3px] border-l-amber-400">
+            <Card onClick={() => toggleHighlight('assigned')}
+              className={`border-l-[3px] border-l-amber-400 cursor-pointer transition-all hover:shadow-md ${highlight === 'assigned' ? 'ring-2 ring-amber-400' : ''}`}>
               <CardContent className="py-3 px-4">
                 <div className="text-xs text-muted-foreground">{t('tasks.myAssigned')}</div>
                 <div className="flex items-baseline gap-2 mt-1">
@@ -1143,7 +1161,8 @@ export function TaskBoardPage() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-l-[3px] border-l-blue-400">
+            <Card onClick={() => toggleHighlight('requested')}
+              className={`border-l-[3px] border-l-blue-400 cursor-pointer transition-all hover:shadow-md ${highlight === 'requested' ? 'ring-2 ring-blue-500' : ''}`}>
               <CardContent className="py-3 px-4">
                 <div className="text-xs text-muted-foreground">{t('tasks.myRequested')}</div>
                 <div className="flex items-baseline gap-2 mt-1">
@@ -1152,7 +1171,8 @@ export function TaskBoardPage() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-l-[3px] border-l-red-400">
+            <Card onClick={() => toggleHighlight('overdue')}
+              className={`border-l-[3px] border-l-red-400 cursor-pointer transition-all hover:shadow-md ${highlight === 'overdue' ? 'ring-2 ring-red-500' : ''}`}>
               <CardContent className="py-3 px-4">
                 <div className="text-xs text-muted-foreground">{t('tasks.overdueLabel')}</div>
                 <div className="flex items-baseline gap-2 mt-1">
@@ -1161,7 +1181,8 @@ export function TaskBoardPage() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="border-l-[3px] border-l-emerald-400">
+            <Card onClick={() => toggleHighlight('completed')}
+              className={`border-l-[3px] border-l-emerald-400 cursor-pointer transition-all hover:shadow-md ${highlight === 'completed' ? 'ring-2 ring-emerald-500' : ''}`}>
               <CardContent className="py-3 px-4">
                 <div className="text-xs text-muted-foreground">{t('tasks.completedLabel')}</div>
                 <div className="flex items-baseline gap-2 mt-1">
@@ -1171,6 +1192,12 @@ export function TaskBoardPage() {
               </CardContent>
             </Card>
           </div>
+          {highlight && (
+            <p className="text-xs text-muted-foreground -mt-1">
+              {highlight === 'assigned' ? t('tasks.myAssigned') : highlight === 'requested' ? t('tasks.myRequested') : highlight === 'overdue' ? t('tasks.overdueLabel') : t('tasks.completedLabel')} 업무를 강조 표시 중입니다. 카드를 다시 누르면 해제됩니다.
+            </p>
+          )}
+          </>
         )}
 
         {/* Filters & Search */}
@@ -1249,7 +1276,8 @@ export function TaskBoardPage() {
                   </div>
                   <div className="space-y-2 min-h-[200px]">
                     {col.map(task => (
-                      <TaskCard key={task.id} task={task} onClick={() => setSelectedTaskId(task.id)} />
+                      <TaskCard key={task.id} task={task} onClick={() => setSelectedTaskId(task.id)}
+                        highlighted={isHighlighted(task)} dimmed={!!highlight && !isHighlighted(task)} highlightRing={highlightRing} />
                     ))}
                     {col.length === 0 && (
                       <div className="text-xs text-muted-foreground text-center py-8">
@@ -1272,7 +1300,8 @@ export function TaskBoardPage() {
               </Card>
             ) : (
               tasks.map(task => (
-                <TaskCard key={task.id} task={task} onClick={() => setSelectedTaskId(task.id)} />
+                <TaskCard key={task.id} task={task} onClick={() => setSelectedTaskId(task.id)}
+                  highlighted={isHighlighted(task)} dimmed={!!highlight && !isHighlighted(task)} highlightRing={highlightRing} />
               ))
             )}
           </div>
