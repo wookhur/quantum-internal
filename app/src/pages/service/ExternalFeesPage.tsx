@@ -134,7 +134,7 @@ export function ExternalFeesPage() {
       <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
         <Lock className="size-8 text-muted-foreground" />
         <h1 className="text-xl font-bold">접근 권한이 없습니다</h1>
-        <p className="text-sm text-muted-foreground">서비스입금관리는 대표·부대표·재무이사만 열람할 수 있습니다.</p>
+        <p className="text-sm text-muted-foreground">서비스입금관리는 관리자만 열람할 수 있습니다.</p>
       </div>
     )
   }

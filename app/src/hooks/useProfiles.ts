@@ -203,15 +203,13 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
 /** Routes that require admin role — non-admins are always blocked */
 export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info']
 
-/** 서비스입금관리: 대표(admin)·부대표/재무이사(c_level)·회계 계정만 열람/편집 */
+/** 서비스입금관리: 관리자(admin)만 열람/편집 */
 export const SERVICE_FINANCE_ROUTES: string[] = ['/service/external-fees']
-const FINANCE_MANAGER_EMAILS = ['accounting@quantumadmissions.com']
 
-/** True for 대표(admin)·부대표/재무이사(c_level)·회계 계정 — 서비스입금관리 열람 및 수수료 수정 권한자. */
+/** True for 관리자(admin)만 — 서비스입금관리 열람 및 수수료 수정 권한자. */
 export function canManageServiceFinance(user: { role?: string; email?: string } | null | undefined): boolean {
   if (!user) return false
-  const email = (user.email || '').toLowerCase()
-  return user.role === 'admin' || user.role === 'c_level' || FINANCE_MANAGER_EMAILS.includes(email)
+  return user.role === 'admin'
 }
 
 /** 파트너 게시판 3종 — 서비스팀(department='service') 소속에게 열람 허용 */

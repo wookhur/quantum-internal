@@ -81,7 +81,7 @@ export function CommissionRatesPage() {
         <CardContent className="space-y-5">
           {!canEdit && (
             <p className="text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2">
-              열람 전용입니다. 수수료율 수정은 대표·부대표·재무이사만 가능합니다.
+              열람 전용입니다. 수수료율 수정은 관리자만 가능합니다.
             </p>
           )}
           {/* Add / edit a partner rate */}
