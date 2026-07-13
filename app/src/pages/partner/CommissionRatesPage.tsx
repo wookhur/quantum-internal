@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select'
 import { Loader2, Percent, Trash2, Plus } from 'lucide-react'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
+import { EC_PARTNERS } from '@/lib/ecPartners'
 import {
   usePartnerCommissionRates,
   useUpsertCommissionRate,
@@ -30,10 +31,11 @@ export function CommissionRatesPage() {
   const [rate, setRate] = useState('10')
   const [notes, setNotes] = useState('')
 
-  // Service partner options = distinct labels used in Student 360 EC/Academic,
-  // plus any partner already configured here.
+  // Service partner options = master EC partner list + distinct labels used in
+  // Student 360 EC/Academic + any partner already configured here.
   const partnerOptions = useMemo(() => {
     const set = new Set<string>()
+    for (const p of EC_PARTNERS) set.add(p)
     for (const f of fees) if (f.label?.trim()) set.add(f.label.trim())
     for (const r of rates) if (r.partner?.trim()) set.add(r.partner.trim())
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))

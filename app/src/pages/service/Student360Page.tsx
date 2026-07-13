@@ -85,20 +85,7 @@ function formatRegularSchedule(schedule?: string): string | undefined {
 }
 
 // ── EC Service constants ──
-const EC_PARTNERS = [
-  // Korean names first
-  '넥스튼융합',
-  '허브커넥서스-리더십코칭',
-  '허브커넥서스-리서치',
-  // English names alphabetically
-  'ASDA Korea',
-  'IRIS Edu',
-  'KYN',
-  'Next Bound',
-  'Stanley Prep-internship',
-  'Stanley Prep-UNAT',
-  '앱개발',
-] as const
+import { EC_PARTNERS } from '@/lib/ecPartners'
 
 const EC_SALES_PRESETS = [
   'Cindy', 'Eva', 'Evelyn', 'Jisoo', '김지현', 'Liz', 'Maryam', 'Sam', 'Wook',
