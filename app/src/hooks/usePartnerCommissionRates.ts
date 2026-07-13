@@ -41,6 +41,30 @@ export function useCommissionRateMap() {
   return { map, ...q }
 }
 
+// ─── Global team commission rates ────────────────────────────────────
+// Stored as two sentinel rows in the same table so no extra migration is
+// needed. 세일즈맨 / 서비스맨 each earn (청구금액 × their team rate).
+export const TEAM_SALES_KEY = '__team_sales__'
+export const TEAM_SERVICE_KEY = '__team_service__'
+
+export type ContributorTeam = 'sales' | 'service'
+
+/** The two global team rates (세일즈맨 / 서비스맨). */
+export function useTeamCommissionRates() {
+  const q = usePartnerCommissionRates()
+  const rows = q.data || []
+  const salesRate = rows.find(r => r.partner === TEAM_SALES_KEY)?.rate ?? 0
+  const serviceRate = rows.find(r => r.partner === TEAM_SERVICE_KEY)?.rate ?? 0
+  return { salesRate, serviceRate, ...q }
+}
+
+/** Rate for a resolved team, given the two global rates. */
+export function rateForTeam(team: ContributorTeam | undefined, salesRate: number, serviceRate: number): number {
+  if (team === 'sales') return salesRate
+  if (team === 'service') return serviceRate
+  return 0
+}
+
 export function useUpsertCommissionRate() {
   const qc = useQueryClient()
   return useMutation({

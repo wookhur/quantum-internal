@@ -19,33 +19,73 @@ import { Link } from 'react-router-dom'
 import { useAllServiceProgramFees, type ServiceProgramFee } from '@/hooks/useServiceProgramFees'
 import { useUpdateECActivity } from '@/hooks/useECActivities'
 import { useUpdateAcademicSupport } from '@/hooks/useAcademicSupport'
-import { useCommissionRateMap, normalizePartner } from '@/hooks/usePartnerCommissionRates'
+import { useTeamCommissionRates, rateForTeam, type ContributorTeam } from '@/hooks/usePartnerCommissionRates'
+import { useProfiles } from '@/hooks/useProfiles'
+import { canonicalConsultantName } from '@/lib/consultants'
 import { useAuth } from '@/contexts/AuthContext'
 import { todayKST } from '@/lib/date'
 import { formatCurrency } from '@/types'
 
-/** Sales contributor names for an item (from Student 360). */
-function contributorsOf(f: ServiceProgramFee): string[] {
-  const out: string[] = []
-  if (f.contributor1) out.push(f.contributor1)
-  if (f.contributor2) out.push(f.contributor2)
+/** Resolve a contributor name → team from 인사관리 department. */
+type TeamResolver = (name: string | undefined) => ContributorTeam | undefined
+
+interface ContribRow {
+  name: string
+  team?: ContributorTeam       // effective team (override first, else auto)
+  source: 'manual' | 'auto' | 'none'
+  rate: number                 // % applied
+  inc: number                  // 청구금액 × rate
+}
+
+/** One row per contributor with effective team, rate, and incentive. */
+function contributorRows(
+  f: ServiceProgramFee,
+  autoTeam: TeamResolver,
+  salesRate: number,
+  serviceRate: number,
+): ContribRow[] {
+  const billed = f.billedAmount || 0
+  const slots: { name?: string; override?: ContributorTeam }[] = [
+    { name: f.contributor1, override: f.contributor1Team },
+    { name: f.contributor2, override: f.contributor2Team },
+  ]
+  const out: ContribRow[] = []
+  for (const s of slots) {
+    if (!s.name?.trim()) continue
+    const auto = autoTeam(s.name)
+    const team = s.override ?? auto
+    const source: ContribRow['source'] = s.override ? 'manual' : auto ? 'auto' : 'none'
+    const rate = rateForTeam(team, salesRate, serviceRate)
+    out.push({ name: s.name, team, source, rate, inc: rate ? Math.round((billed * rate) / 100) : 0 })
+  }
   return out
 }
 
-/** Incentive for an item = 청구금액 × 파트너사 수수료율 (수수료관리에서 설정). */
-function incentiveOf(f: ServiceProgramFee, rate: number): number {
-  const b = f.billedAmount || 0
-  return rate ? Math.round((b * rate) / 100) : 0
+/** Total incentive for an item across all contributors. */
+function incentiveOf(f: ServiceProgramFee, autoTeam: TeamResolver, salesRate: number, serviceRate: number): number {
+  return contributorRows(f, autoTeam, salesRate, serviceRate).reduce((s, c) => s + c.inc, 0)
 }
+
+const TEAM_LABEL: Record<ContributorTeam, string> = { sales: '세일즈', service: '서비스' }
 
 export function ExternalFeesPage() {
   const { user } = useAuth()
   const { data: fees = [], isLoading } = useAllServiceProgramFees()
-  const { map: rateMap } = useCommissionRateMap()
+  const { salesRate, serviceRate } = useTeamCommissionRates()
+  const { data: profiles = [] } = useProfiles()
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const rateFor = (label: string) => rateMap.get(normalizePartner(label)) || 0
+  // name (canonical) → team, from 인사관리 소속팀 (sales/service only)
+  const autoTeam = useMemo<TeamResolver>(() => {
+    const byName = new Map<string, ContributorTeam>()
+    for (const p of profiles) {
+      if (p.department === 'sales' || p.department === 'service') {
+        byName.set(canonicalConsultantName(p.name), p.department)
+      }
+    }
+    return (name?: string) => (name ? byName.get(canonicalConsultantName(name)) : undefined)
+  }, [profiles])
 
   // 재무담당자(회계 계정)·경영진도 금액·수금상태를 편집할 수 있게 허용
   const isAdmin = user?.role === 'admin'
@@ -65,10 +105,10 @@ export function ExternalFeesPage() {
 
   const totalBilled = fees.reduce((s, f) => s + (f.billedAmount || 0), 0)
   const collected = fees.filter(f => f.collectionStatus === 'paid').reduce((s, f) => s + (f.billedAmount || 0), 0)
-  // 총 인센티브 = 수금 완료된 항목의 (청구금액 × 파트너 수수료율) 합계
+  // 총 인센티브 = 수금 완료된 항목의 (기여자별 팀 수수료율 합계)
   const totalIncentive = fees
     .filter(f => f.collectionStatus === 'paid')
-    .reduce((s, f) => s + incentiveOf(f, rateFor(f.label)), 0)
+    .reduce((s, f) => s + incentiveOf(f, autoTeam, salesRate, serviceRate), 0)
 
   const selected = selectedId ? fees.find(f => f.id === selectedId) ?? null : null
 
@@ -77,7 +117,7 @@ export function ExternalFeesPage() {
       <div>
         <h1 className="text-2xl font-bold">서비스입금관리</h1>
         <p className="text-sm text-muted-foreground">
-          기존 고객에게 세일즈한 EC·Academic 서비스(Student 360 기준)의 금액·수금상태·기여자를 관리합니다. 인센티브는 <b>수수료관리</b>에서 설정한 파트너사 수수료율(청구금액 × 율)로 계산되며, 수금 완료 시 확정됩니다.
+          기존 고객에게 세일즈한 EC·Academic 서비스(Student 360 기준)의 금액·수금상태·기여자를 관리합니다. 인센티브는 기여자의 <b>소속팀(세일즈/서비스)</b>에 따라 <b>수수료관리</b>에서 정한 팀별 수수료율(청구금액 × 율)로 계산되며, 수금 완료 시 확정됩니다.
         </p>
       </div>
 
@@ -140,9 +180,9 @@ export function ExternalFeesPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map(f => {
-                  const rate = rateFor(f.label)
-                  const inc = incentiveOf(f, rate)
-                  const conts = contributorsOf(f)
+                  const rows = contributorRows(f, autoTeam, salesRate, serviceRate)
+                  const inc = rows.reduce((s, c) => s + c.inc, 0)
+                  const needsTeam = rows.some(c => !c.team)
                   const isPaid = f.collectionStatus === 'paid'
                   return (
                     <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(f.id)}>
@@ -159,10 +199,19 @@ export function ExternalFeesPage() {
                       </TableCell>
                       <TableCell className="text-sm">{f.studentName}</TableCell>
                       <TableCell>
-                        {conts.length > 0 ? (
+                        {rows.length > 0 ? (
                           <div className="space-y-0.5">
-                            {conts.map((name, i) => (
-                              <div key={i} className="text-sm">{name}</div>
+                            {rows.map((c, i) => (
+                              <div key={i} className="text-sm flex items-center gap-1.5">
+                                {c.name}
+                                {c.team ? (
+                                  <Badge variant="outline" className={c.team === 'sales' ? 'text-blue-600 border-blue-200 px-1 py-0 text-[10px]' : 'text-emerald-600 border-emerald-200 px-1 py-0 text-[10px]'}>
+                                    {TEAM_LABEL[c.team]}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="text-amber-600 border-amber-200 px-1 py-0 text-[10px]">팀 미확인</Badge>
+                                )}
+                              </div>
                             ))}
                           </div>
                         ) : <span className="text-xs text-muted-foreground">미입력</span>}
@@ -178,20 +227,12 @@ export function ExternalFeesPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
-                        {rate === 0 ? (
-                          <span className="text-xs text-muted-foreground">수수료율 미설정</span>
-                        ) : inc <= 0 ? (
-                          <span className="text-xs text-muted-foreground">-</span>
+                        {inc <= 0 ? (
+                          <span className="text-xs text-muted-foreground">{needsTeam ? '팀 지정 필요' : '-'}</span>
                         ) : isPaid ? (
-                          <span className="text-emerald-600">
-                            {formatCurrency(inc, f.currency as 'KRW' | 'USD')}
-                            <span className="text-[10px] text-muted-foreground ml-1">({rate}%)</span>
-                          </span>
+                          <span className="text-emerald-600">{formatCurrency(inc, f.currency as 'KRW' | 'USD')}</span>
                         ) : (
-                          <span className="text-muted-foreground">
-                            예정 {formatCurrency(inc, f.currency as 'KRW' | 'USD')}
-                            <span className="text-[10px] ml-1">({rate}%)</span>
-                          </span>
+                          <span className="text-muted-foreground">예정 {formatCurrency(inc, f.currency as 'KRW' | 'USD')}</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -206,7 +247,9 @@ export function ExternalFeesPage() {
       {selected && (
         <ProgramFeeDialog
           fee={selected}
-          rate={rateFor(selected.label)}
+          autoTeam={autoTeam}
+          salesRate={salesRate}
+          serviceRate={serviceRate}
           isAdmin={isAdmin}
           onClose={() => setSelectedId(null)}
         />
@@ -216,14 +259,20 @@ export function ExternalFeesPage() {
 }
 
 // ─── Detail / edit dialog ─────────────────────────────────────────────
+type TeamChoice = 'auto' | 'sales' | 'service'
+
 function ProgramFeeDialog({
   fee,
-  rate,
+  autoTeam,
+  salesRate,
+  serviceRate,
   isAdmin,
   onClose,
 }: {
   fee: ServiceProgramFee
-  rate: number
+  autoTeam: TeamResolver
+  salesRate: number
+  serviceRate: number
   isAdmin: boolean
   onClose: () => void
 }) {
@@ -234,10 +283,24 @@ function ProgramFeeDialog({
   const [status, setStatus] = useState<'pending' | 'paid'>(fee.collectionStatus)
   const [name1, setName1] = useState(fee.contributor1 || '')
   const [name2, setName2] = useState(fee.contributor2 || '')
+  const [team1, setTeam1] = useState<TeamChoice>(fee.contributor1Team || 'auto')
+  const [team2, setTeam2] = useState<TeamChoice>(fee.contributor2Team || 'auto')
 
   const saving = updateEC.isPending || updateAC.isPending
   const billedNum = Number(billed) || 0
-  const inc = rate ? Math.round((billedNum * rate) / 100) : 0
+
+  const slots = [
+    { name: name1, setName: setName1, team: team1, setTeam: setTeam1 },
+    { name: name2, setName: setName2, team: team2, setTeam: setTeam2 },
+  ]
+  // effective team + rate + incentive per contributor (from current form state)
+  const resolve = (name: string, choice: TeamChoice): { team?: ContributorTeam; rate: number; inc: number; auto?: ContributorTeam } => {
+    const auto = autoTeam(name)
+    const team = choice === 'auto' ? auto : choice
+    const rate = rateForTeam(team, salesRate, serviceRate)
+    return { team, rate, inc: rate ? Math.round((billedNum * rate) / 100) : 0, auto }
+  }
+  const totalInc = slots.reduce((s, c) => s + (c.name.trim() ? resolve(c.name, c.team).inc : 0), 0)
 
   const handleSave = () => {
     const payload = {
@@ -249,11 +312,12 @@ function ProgramFeeDialog({
       paidDate: status === 'paid' ? (fee.paidDate || todayKST()) : '',
       salesContributor1: name1.trim() || undefined,
       salesContributor2: name2.trim() || undefined,
+      contributor1Team: team1 === 'auto' ? null : team1,
+      contributor2Team: team2 === 'auto' ? null : team2,
     }
     const mut = fee.source === 'ec' ? updateEC : updateAC
     mut.mutate(payload, { onSuccess: onClose })
   }
-
 
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
@@ -276,26 +340,8 @@ function ProgramFeeDialog({
           </Link>
         </div>
 
-        {/* Contributors (name only) */}
-        <div className="space-y-2">
-          <div className="text-[11px] text-muted-foreground px-1">기여자 (세일즈 담당)</div>
-          {([
-            { name: name1, setName: setName1 },
-            { name: name2, setName: setName2 },
-          ]).map((c, i) => (
-            <Input
-              key={i}
-              value={c.name}
-              onChange={e => c.setName(e.target.value)}
-              placeholder={i === 0 ? '기여자 이름' : '기여자 2 (선택)'}
-              className="h-8 text-sm"
-              disabled={!isAdmin}
-            />
-          ))}
-        </div>
-
         {/* Billing (admin editable) */}
-        <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">청구금액</label>
             {isAdmin ? (
@@ -316,29 +362,46 @@ function ProgramFeeDialog({
           </div>
         </div>
 
-        {/* Commission rate (read-only — set in 수수료관리) + computed incentive */}
-        <div className="rounded-md border bg-muted/30 p-3 space-y-1.5">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">파트너사 수수료율</span>
-            {rate > 0 ? (
-              <Badge className="bg-purple-100 text-purple-700 border-purple-200">{rate}%</Badge>
-            ) : (
-              <Link to="/partner/contracts" className="text-blue-600 hover:underline text-xs" onClick={onClose}>
-                수수료관리에서 설정하기
-              </Link>
-            )}
+        {/* Contributors + team + incentive */}
+        <div className="space-y-2 pt-2 border-t">
+          <div className="grid grid-cols-[1fr_130px_auto] items-center gap-2 text-[11px] text-muted-foreground px-1">
+            <span>기여자 (세일즈 담당)</span><span className="text-center">소속팀</span><span className="w-24 text-right">인센티브</span>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">인센티브 (청구금액 × 율)</span>
-            <span className="font-mono font-medium">
-              {inc > 0 ? formatCurrency(inc, fee.currency as 'KRW' | 'USD') : '-'}
-            </span>
+          {slots.map((c, i) => {
+            const r = resolve(c.name, c.team)
+            const detected = r.auto ? `자동 (${TEAM_LABEL[r.auto]})` : '자동 (미확인)'
+            return (
+              <div key={i} className="grid grid-cols-[1fr_130px_auto] items-center gap-2">
+                <Input
+                  value={c.name}
+                  onChange={e => c.setName(e.target.value)}
+                  placeholder={i === 0 ? '기여자 이름' : '기여자 2 (선택)'}
+                  className="h-8 text-sm"
+                  disabled={!isAdmin}
+                />
+                <Select value={c.team} onValueChange={v => c.setTeam((v as TeamChoice) || 'auto')} disabled={!isAdmin || !c.name.trim()}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">{detected}</SelectItem>
+                    <SelectItem value="sales">세일즈 ({salesRate}%)</SelectItem>
+                    <SelectItem value="service">서비스 ({serviceRate}%)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm font-mono w-24 text-right">
+                  {c.name.trim() && r.inc > 0 ? formatCurrency(r.inc, fee.currency as 'KRW' | 'USD') : '-'}
+                </span>
+              </div>
+            )
+          })}
+          <div className="flex items-center justify-between text-sm pt-1 border-t">
+            <span className="text-muted-foreground">총 인센티브</span>
+            <span className="font-mono font-medium">{totalInc > 0 ? formatCurrency(totalInc, fee.currency as 'KRW' | 'USD') : '-'}</span>
           </div>
         </div>
 
         <p className="text-[11px] text-muted-foreground">
-          인센티브율은 <b>수수료관리</b>(파트너 &gt; 수수료관리)에서 파트너사별로 설정합니다. 인센티브 = 청구금액 × 수수료율.
-          수금 완료로 처리하면 해당 인센티브가 확정됩니다.
+          팀별 수수료율은 <b>수수료관리</b>(파트너 &gt; 수수료관리)에서 설정합니다. 소속팀은 <b>인사관리</b> 기준으로 자동 판별되며,
+          "자동 (미확인)"으로 나오면 여기서 세일즈/서비스를 직접 지정하세요. 인센티브 = 청구금액 × 팀 수수료율.
         </p>
 
         <DialogFooter>

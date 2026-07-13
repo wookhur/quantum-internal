@@ -19,6 +19,8 @@ export interface AcademicSupportItem {
   paidDate?: string
   contributor1Percentage?: number
   contributor2Percentage?: number
+  contributor1Team?: 'sales' | 'service' | null
+  contributor2Team?: 'sales' | 'service' | null
   createdBy?: string
   createdAt: string
   updatedAt: string
@@ -42,6 +44,8 @@ function mapRow(row: Record<string, unknown>): AcademicSupportItem {
     paidDate: (row.paid_date as string) || undefined,
     contributor1Percentage: row.contributor_1_percentage != null ? Number(row.contributor_1_percentage) : undefined,
     contributor2Percentage: row.contributor_2_percentage != null ? Number(row.contributor_2_percentage) : undefined,
+    contributor1Team: (row.contributor_1_team as 'sales' | 'service') || undefined,
+    contributor2Team: (row.contributor_2_team as 'sales' | 'service') || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -109,6 +113,8 @@ export function useUpdateAcademicSupport() {
       if (a.paidDate !== undefined) row.paid_date = a.paidDate || null
       if (a.contributor1Percentage !== undefined) row.contributor_1_percentage = a.contributor1Percentage ?? null
       if (a.contributor2Percentage !== undefined) row.contributor_2_percentage = a.contributor2Percentage ?? null
+      if (a.contributor1Team !== undefined) row.contributor_1_team = a.contributor1Team || null
+      if (a.contributor2Team !== undefined) row.contributor_2_team = a.contributor2Team || null
       const { error } = await supabase.from('service_academic_support').update(row).eq('id', a.id)
       if (error) throw error
     },

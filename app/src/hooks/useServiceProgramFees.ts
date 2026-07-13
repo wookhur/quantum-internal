@@ -21,6 +21,8 @@ export interface ServiceProgramFee {
   paidDate?: string
   contributor1Percentage?: number
   contributor2Percentage?: number
+  contributor1Team?: 'sales' | 'service'
+  contributor2Team?: 'sales' | 'service'
 }
 
 function num(v: unknown): number | undefined {
@@ -65,6 +67,8 @@ export function useAllServiceProgramFees() {
           paidDate: (r.paid_date as string) || undefined,
           contributor1Percentage: num(r.contributor_1_percentage),
           contributor2Percentage: num(r.contributor_2_percentage),
+          contributor1Team: (r.contributor_1_team as 'sales' | 'service') || undefined,
+          contributor2Team: (r.contributor_2_team as 'sales' | 'service') || undefined,
         })
       }
       for (const r of acRes.data || []) {
@@ -86,6 +90,8 @@ export function useAllServiceProgramFees() {
           paidDate: (r.paid_date as string) || undefined,
           contributor1Percentage: num(r.contributor_1_percentage),
           contributor2Percentage: num(r.contributor_2_percentage),
+          contributor1Team: (r.contributor_1_team as 'sales' | 'service') || undefined,
+          contributor2Team: (r.contributor_2_team as 'sales' | 'service') || undefined,
         })
       }
       return out
