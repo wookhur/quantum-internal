@@ -203,6 +203,20 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
 /** Routes that require admin role — non-admins are always blocked */
 export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info']
 
+/** 서비스입금관리: 대표(admin)·부대표/재무이사(c_level)·회계 계정만 열람/편집 */
+export const SERVICE_FINANCE_ROUTES: string[] = ['/service/external-fees']
+const FINANCE_MANAGER_EMAILS = ['accounting@quantumadmissions.com']
+
+/** True for 대표(admin)·부대표/재무이사(c_level)·회계 계정 — 서비스입금관리 열람 및 수수료 수정 권한자. */
+export function canManageServiceFinance(user: { role?: string; email?: string } | null | undefined): boolean {
+  if (!user) return false
+  const email = (user.email || '').toLowerCase()
+  return user.role === 'admin' || user.role === 'c_level' || FINANCE_MANAGER_EMAILS.includes(email)
+}
+
+/** 파트너 게시판 3종 — 서비스팀(department='service') 소속에게 열람 허용 */
+export const PARTNER_BOARD_ROUTES: string[] = ['/partner/students', '/partner/companies', '/partner/contracts']
+
 /** Get all route paths for a module */
 export function getRoutesForModule(mod: FeatureModule): string[] {
   return NAV_ROUTE_DEFS.filter(r => r.module === mod).map(r => r.path)
@@ -315,7 +329,18 @@ export function getEffectiveRoutes(
     routes = expandModulesToRoutes(defaultModules)
   }
   // Non-admin users are always blocked from admin-only routes
-  return routes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
+  let result = routes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
+  // 서비스입금관리는 재무 권한자(대표·부대표·재무이사)만 열람
+  if (!canManageServiceFinance(user)) {
+    result = result.filter(r => !SERVICE_FINANCE_ROUTES.includes(r))
+  }
+  // 서비스팀(department='service') 소속은 파트너 게시판 3종을 열람
+  if (user.department === 'service') {
+    const set = new Set(result)
+    for (const r of PARTNER_BOARD_ROUTES) set.add(r)
+    result = [...set]
+  }
+  return result
 }
 
 /**

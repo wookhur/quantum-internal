@@ -11,6 +11,8 @@ import {
 import { Loader2, Percent, Plus, Trash2, Pencil, X, Handshake, Briefcase } from 'lucide-react'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { EC_PARTNERS } from '@/lib/ecPartners'
+import { useAuth } from '@/contexts/AuthContext'
+import { canManageServiceFinance } from '@/hooks/useProfiles'
 import {
   usePartnerRateList,
   useUpsertCommissionRate,
@@ -20,6 +22,8 @@ import {
 const RATE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export function CommissionRatesPage() {
+  const { user } = useAuth()
+  const canEdit = canManageServiceFinance(user)
   const { list: partnerRates, isLoading } = usePartnerRateList()
   const { data: fees = [] } = useAllServiceProgramFees()
   const upsert = useUpsertCommissionRate()
@@ -75,7 +79,13 @@ export function CommissionRatesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          {!canEdit && (
+            <p className="text-xs text-muted-foreground bg-muted/40 rounded-md px-3 py-2">
+              열람 전용입니다. 수수료율 수정은 대표·부대표·재무이사만 가능합니다.
+            </p>
+          )}
           {/* Add / edit a partner rate */}
+          {canEdit && (
           <div className="grid grid-cols-1 md:grid-cols-[1fr_110px_110px_auto] gap-3 items-end">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">파트너사</label>
@@ -106,18 +116,21 @@ export function CommissionRatesPage() {
               )}
             </div>
           </div>
+          )}
+          {canEdit && (
           <p className="text-[11px] text-muted-foreground -mt-2">
             {editing
               ? `'${partner}'을(를) 수정 중입니다. 세일즈/서비스 율을 바꾸고 수정을 누르세요.`
               : '이미 등록한 파트너사를 다시 선택하면 수정할 수 있습니다.'}
           </p>
+          )}
 
           {/* Partner rate table */}
           {isLoading ? (
             <div className="py-8 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : partnerRates.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              등록된 파트너사 수수료율이 없습니다. 위에서 파트너사를 선택해 추가하세요.
+              등록된 파트너사 수수료율이 없습니다.{canEdit ? ' 위에서 파트너사를 선택해 추가하세요.' : ''}
             </div>
           ) : (
             <Table>
@@ -126,7 +139,7 @@ export function CommissionRatesPage() {
                   <TableHead>파트너사</TableHead>
                   <TableHead className="w-28 text-center">세일즈</TableHead>
                   <TableHead className="w-28 text-center">서비스</TableHead>
-                  <TableHead className="w-24 text-right">관리</TableHead>
+                  {canEdit && <TableHead className="w-24 text-right">관리</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -139,6 +152,7 @@ export function CommissionRatesPage() {
                     <TableCell className="text-center">
                       <Badge variant="outline" className="text-emerald-600 border-emerald-200">{r.serviceRate}%</Badge>
                     </TableCell>
+                    {canEdit && (
                     <TableCell>
                       <div className="flex items-center justify-end gap-0.5">
                         <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-purple-600" title="수정" onClick={() => startEdit(r.partner, r.salesRate, r.serviceRate)}>
@@ -150,6 +164,7 @@ export function CommissionRatesPage() {
                         </Button>
                       </div>
                     </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

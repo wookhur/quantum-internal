@@ -20,7 +20,7 @@ import { useAllServiceProgramFees, type ServiceProgramFee } from '@/hooks/useSer
 import { useUpdateECActivity } from '@/hooks/useECActivities'
 import { useUpdateAcademicSupport } from '@/hooks/useAcademicSupport'
 import { useDefaultRates, usePartnerRateMap, normalizePartner, rateForTeam, type ContributorTeam } from '@/hooks/usePartnerCommissionRates'
-import { useProfiles } from '@/hooks/useProfiles'
+import { useProfiles, canManageServiceFinance } from '@/hooks/useProfiles'
 import { consultantNameKey } from '@/lib/consultants'
 import { useAuth } from '@/contexts/AuthContext'
 import { todayKST } from '@/lib/date'
@@ -105,10 +105,8 @@ export function ExternalFeesPage() {
     return (name?: string) => (name ? byName.get(consultantNameKey(name)) : undefined)
   }, [profiles])
 
-  // 재무담당자(회계 계정)·경영진도 금액·수금상태를 편집할 수 있게 허용
-  const isAdmin = user?.role === 'admin'
-    || user?.role === 'c_level'
-    || (user?.email || '').toLowerCase() === 'accounting@quantumadmissions.com'
+  // 서비스입금관리는 대표·부대표·재무이사만 열람/편집 (열람 가능 = 편집 가능)
+  const isAdmin = canManageServiceFinance(user)
 
   const filtered = useMemo(() => {
     if (!search.trim()) return fees
@@ -129,6 +127,17 @@ export function ExternalFeesPage() {
     .reduce((s, f) => { const r = ratesFor(f.label); return s + incentiveOf(f, autoTeam, r.salesRate, r.serviceRate) }, 0)
 
   const selected = selectedId ? fees.find(f => f.id === selectedId) ?? null : null
+
+  // 열람 권한: 대표·부대표·재무이사만
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
+        <Lock className="size-8 text-muted-foreground" />
+        <h1 className="text-xl font-bold">접근 권한이 없습니다</h1>
+        <p className="text-sm text-muted-foreground">서비스입금관리는 대표·부대표·재무이사만 열람할 수 있습니다.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
