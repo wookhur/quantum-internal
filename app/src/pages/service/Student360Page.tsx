@@ -88,7 +88,7 @@ function formatRegularSchedule(schedule?: string): string | undefined {
 import { EC_PARTNERS } from '@/lib/ecPartners'
 
 const EC_SALES_PRESETS = [
-  'Cindy', 'Eva', 'Evelyn', 'Jisoo', '김지현', 'Liz', 'Maryam', 'Sam', 'Wook',
+  'Cindy', 'Eva', 'Jisoo', 'Liz', 'Maryam', 'Sam', 'Wook', '김지현', '남연서',
 ] as const
 
 const ACADEMY_PRESETS = [

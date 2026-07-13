@@ -30,6 +30,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const CONSULTANT_NAME_ALIASES: Record<string, string> = {
   'julie kim': '김지현',
   'julie': '김지현',
+  'evelyn': '남연서',
 }
 
 /** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현). */
