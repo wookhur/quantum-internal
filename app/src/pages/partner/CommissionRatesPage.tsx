@@ -8,52 +8,50 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Percent, Briefcase, Handshake, CheckCircle2, Plus, Trash2, Pencil, X } from 'lucide-react'
+import { Loader2, Percent, CheckCircle2, Plus, Trash2, Pencil, X, Handshake, Briefcase } from 'lucide-react'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { EC_PARTNERS } from '@/lib/ecPartners'
 import {
-  useTeamCommissionRates,
+  useDefaultRates,
   usePartnerRateList,
   useUpsertCommissionRate,
   useDeleteCommissionRate,
-  TEAM_SALES_KEY,
-  TEAM_SERVICE_KEY,
+  DEFAULT_KEY,
 } from '@/hooks/usePartnerCommissionRates'
 
 const RATE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export function CommissionRatesPage() {
-  const { salesRate, serviceRate, isLoading: teamLoading } = useTeamCommissionRates()
+  const { salesRate: defSales, serviceRate: defService, isLoading: defLoading } = useDefaultRates()
   const { list: partnerRates, isLoading: listLoading } = usePartnerRateList()
   const { data: fees = [] } = useAllServiceProgramFees()
   const upsert = useUpsertCommissionRate()
   const del = useDeleteCommissionRate()
 
-  // ── Team rates ──
-  const [sales, setSales] = useState('4')
-  const [service, setService] = useState('3')
-  const [savedTeam, setSavedTeam] = useState(false)
+  // ── Default (전체 공통) rates ──
+  const [dSales, setDSales] = useState('4')
+  const [dService, setDService] = useState('3')
+  const [savedDefault, setSavedDefault] = useState(false)
 
   useEffect(() => {
-    if (!teamLoading) {
-      setSales(String(salesRate))
-      setService(String(serviceRate))
-    }
-  }, [teamLoading, salesRate, serviceRate])
+    if (!defLoading) { setDSales(String(defSales)); setDService(String(defService)) }
+  }, [defLoading, defSales, defService])
 
-  const handleSaveTeam = () => {
-    setSavedTeam(false)
-    Promise.all([
-      upsert.mutateAsync({ partner: TEAM_SALES_KEY, rate: Number(sales) }),
-      upsert.mutateAsync({ partner: TEAM_SERVICE_KEY, rate: Number(service) }),
-    ])
-      .then(() => { setSavedTeam(true); setTimeout(() => setSavedTeam(false), 2500) })
-      .catch(showError)
+  const handleSaveDefault = () => {
+    setSavedDefault(false)
+    upsert.mutate(
+      { partner: DEFAULT_KEY, salesRate: Number(dSales), serviceRate: Number(dService) },
+      {
+        onSuccess: () => { setSavedDefault(true); setTimeout(() => setSavedDefault(false), 2500) },
+        onError: showError,
+      },
+    )
   }
 
-  // ── Per-partner overrides ──
+  // ── Per-partner rows ──
   const [partner, setPartner] = useState('')
-  const [pRate, setPRate] = useState('5')
+  const [pSales, setPSales] = useState('4')
+  const [pService, setPService] = useState('3')
 
   const partnerOptions = useMemo(() => {
     const set = new Set<string>()
@@ -63,97 +61,69 @@ export function CommissionRatesPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
   }, [fees, partnerRates])
 
-  // editing an existing partner = the selected partner already has a saved rate
   const editing = partnerRates.some(r => r.partner === partner.trim())
-
-  const resetForm = () => { setPartner(''); setPRate('5') }
-
-  const startEdit = (partnerName: string, rate: number) => {
-    setPartner(partnerName)
-    setPRate(String(rate))
-  }
+  const resetForm = () => { setPartner(''); setPSales('4'); setPService('3') }
+  const startEdit = (name: string, s: number, sv: number) => { setPartner(name); setPSales(String(s)); setPService(String(sv)) }
 
   const handleAddPartner = () => {
     if (!partner.trim()) return
     upsert.mutate(
-      { partner: partner.trim(), rate: Number(pRate) },
+      { partner: partner.trim(), salesRate: Number(pSales), serviceRate: Number(pService) },
       { onSuccess: resetForm, onError: showError },
     )
   }
+
+  const rateSelect = (value: string, onChange: (v: string) => void, w = 'w-full') => (
+    <Select value={value} onValueChange={v => onChange(v || '1')}>
+      <SelectTrigger className={`h-9 ${w}`}><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {RATE_OPTIONS.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
+      </SelectContent>
+    </Select>
+  )
 
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-bold">수수료 관리</h1>
         <p className="text-sm text-muted-foreground">
-          기본은 <b>팀별 수수료율</b>(세일즈맨/서비스맨)이 인사관리 소속팀 기준으로 적용됩니다. 특정 파트너사에 별도 조건이 있으면
-          아래 <b>파트너사별 수수료</b>에서 지정하며, 지정된 파트너사는 그 율이 팀 수수료율보다 <b>우선 적용</b>됩니다.
+          기여자의 <b>소속팀(세일즈/서비스)</b>에 따라 다른 수수료율을 적용합니다. 파트너사별로 세일즈팀·서비스팀 율을 각각 지정하며,
+          별도 지정이 없는 파트너사는 맨 위 <b>기본 수수료율</b>이 적용됩니다. 소속팀은 <b>인사관리</b> 기준으로 자동 판별됩니다.
         </p>
       </div>
 
-      {/* ── Team rates ── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Percent className="size-4 text-purple-500" /> 팀별 수수료율 (기본)
+            <Percent className="size-4 text-purple-500" /> 파트너사별 수수료율 (세일즈 / 서비스)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          {teamLoading ? (
-            <div className="py-8 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="rounded-lg border p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <Handshake className="size-4 text-blue-500" /> 세일즈맨 수수료율
-                  </div>
-                  <p className="text-xs text-muted-foreground">소속팀이 <b>세일즈팀</b>인 기여자에게 적용 (기본 4%)</p>
-                  <Select value={sales} onValueChange={v => setSales(v || '4')}>
-                    <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {RATE_OPTIONS.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+          {/* Default rates */}
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <div className="text-sm font-medium">기본 수수료율 <span className="text-xs text-muted-foreground font-normal">(개별 지정 없는 파트너사 공통)</span></div>
+            {defLoading ? (
+              <div className="py-2 flex justify-center"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>
+            ) : (
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Handshake className="size-3.5 text-blue-500" /> 세일즈맨</label>
+                  {rateSelect(dSales, setDSales, 'w-24')}
                 </div>
-
-                <div className="rounded-lg border p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <Briefcase className="size-4 text-emerald-500" /> 서비스맨 수수료율
-                  </div>
-                  <p className="text-xs text-muted-foreground">소속팀이 <b>서비스팀</b>인 기여자에게 적용 (기본 3%)</p>
-                  <Select value={service} onValueChange={v => setService(v || '3')}>
-                    <SelectTrigger className="h-9 w-28"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {RATE_OPTIONS.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="size-3.5 text-emerald-500" /> 서비스맨</label>
+                  {rateSelect(dService, setDService, 'w-24')}
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button onClick={handleSaveTeam} disabled={upsert.isPending} className="h-9">
-                  {upsert.isPending ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}저장
+                <Button onClick={handleSaveDefault} disabled={upsert.isPending} className="h-9">
+                  {upsert.isPending ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}기본값 저장
                 </Button>
-                {savedTeam && (
-                  <span className="flex items-center gap-1 text-sm text-emerald-600">
-                    <CheckCircle2 className="size-4" /> 저장되었습니다
-                  </span>
-                )}
+                {savedDefault && <span className="flex items-center gap-1 text-sm text-emerald-600"><CheckCircle2 className="size-4" /> 저장됨</span>}
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </div>
 
-      {/* ── Per-partner overrides ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Handshake className="size-4 text-purple-500" /> 파트너사별 수수료 (개별 조건)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_140px_auto] gap-3 items-end">
+          {/* Add / edit a partner-specific rate */}
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_110px_110px_auto] gap-3 items-end">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">파트너사</label>
               <Select value={partner} onValueChange={v => setPartner(v || '')}>
@@ -166,13 +136,12 @@ export function CommissionRatesPage() {
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">수수료율</label>
-              <Select value={pRate} onValueChange={v => setPRate(v || '5')}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {RATE_OPTIONS.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Handshake className="size-3 text-blue-500" /> 세일즈</label>
+              {rateSelect(pSales, setPSales)}
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Briefcase className="size-3 text-emerald-500" /> 서비스</label>
+              {rateSelect(pService, setPService)}
             </div>
             <div className="flex items-center gap-2">
               <Button onClick={handleAddPartner} disabled={!partner.trim() || upsert.isPending} className="h-9">
@@ -180,30 +149,30 @@ export function CommissionRatesPage() {
                 {editing ? '수정' : '추가'}
               </Button>
               {partner.trim() && (
-                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={resetForm} title="입력 취소">
-                  <X className="size-4" />
-                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={resetForm} title="입력 취소"><X className="size-4" /></Button>
               )}
             </div>
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground -mt-2">
             {editing
-              ? `'${partner}'을(를) 수정 중입니다. 수수료율을 바꾸고 수정을 누르세요.`
-              : '이미 등록한 파트너사를 다시 선택하면 수정할 수 있습니다. 별도 지정이 없는 파트너사는 위 팀별 수수료율이 적용됩니다.'}
+              ? `'${partner}'을(를) 수정 중입니다. 세일즈/서비스 율을 바꾸고 수정을 누르세요.`
+              : '이미 등록한 파트너사를 다시 선택하면 수정할 수 있습니다.'}
           </p>
 
+          {/* Partner rate table */}
           {listLoading ? (
             <div className="py-8 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : partnerRates.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              개별 지정된 파트너사가 없습니다. (모든 파트너사에 팀별 수수료율이 적용됩니다.)
+              개별 지정된 파트너사가 없습니다. (모든 파트너사에 기본 수수료율이 적용됩니다.)
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>파트너사</TableHead>
-                  <TableHead className="w-28 text-center">수수료율</TableHead>
+                  <TableHead className="w-28 text-center">세일즈</TableHead>
+                  <TableHead className="w-28 text-center">서비스</TableHead>
                   <TableHead className="w-24 text-right">관리</TableHead>
                 </TableRow>
               </TableHeader>
@@ -212,26 +181,18 @@ export function CommissionRatesPage() {
                   <TableRow key={r.id} className={editing && partner.trim() === r.partner ? 'bg-purple-50/60' : undefined}>
                     <TableCell className="font-medium text-sm">{r.partner}</TableCell>
                     <TableCell className="text-center">
-                      <Badge className="bg-purple-100 text-purple-700 border-purple-200">{r.rate}%</Badge>
+                      <Badge variant="outline" className="text-blue-600 border-blue-200">{r.salesRate}%</Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className="text-emerald-600 border-emerald-200">{r.serviceRate}%</Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-0.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground hover:text-purple-600"
-                          title="수정"
-                          onClick={() => startEdit(r.partner, r.rate)}
-                        >
+                        <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-purple-600" title="수정" onClick={() => startEdit(r.partner, r.salesRate, r.serviceRate)}>
                           <Pencil className="size-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-muted-foreground hover:text-red-600"
-                          title="삭제"
-                          onClick={() => { if (confirm(`'${r.partner}' 개별 수수료율을 삭제할까요? (팀별 수수료율로 되돌아갑니다)`)) del.mutate(r.id) }}
-                        >
+                        <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" title="삭제"
+                          onClick={() => { if (confirm(`'${r.partner}' 개별 수수료율을 삭제할까요? (기본 수수료율로 되돌아갑니다)`)) del.mutate(r.id) }}>
                           <Trash2 className="size-4" />
                         </Button>
                       </div>

@@ -19,7 +19,7 @@ import { Link } from 'react-router-dom'
 import { useAllServiceProgramFees, type ServiceProgramFee } from '@/hooks/useServiceProgramFees'
 import { useUpdateECActivity } from '@/hooks/useECActivities'
 import { useUpdateAcademicSupport } from '@/hooks/useAcademicSupport'
-import { useTeamCommissionRates, useCommissionRateMap, normalizePartner, rateForTeam, type ContributorTeam } from '@/hooks/usePartnerCommissionRates'
+import { useDefaultRates, usePartnerRateMap, normalizePartner, rateForTeam, type ContributorTeam } from '@/hooks/usePartnerCommissionRates'
 import { useProfiles } from '@/hooks/useProfiles'
 import { canonicalConsultantName } from '@/lib/consultants'
 import { useAuth } from '@/contexts/AuthContext'
@@ -33,19 +33,18 @@ interface ContribRow {
   name: string
   team?: ContributorTeam       // effective team (override first, else auto)
   source: 'manual' | 'auto' | 'none'
-  rate: number                 // % applied
+  rate: number                 // % applied (from this partner's team rate)
   inc: number                  // 청구금액 × rate
-  viaPartner: boolean          // rate came from a per-partner override
 }
 
 /** One row per contributor with effective team, rate, and incentive.
- *  A per-partner override (partnerRate > 0) takes precedence over the team rate. */
+ *  salesRate/serviceRate are the effective rates for this item's partner
+ *  (partner-specific if configured, else the company default). */
 function contributorRows(
   f: ServiceProgramFee,
   autoTeam: TeamResolver,
   salesRate: number,
   serviceRate: number,
-  partnerRate: number,
 ): ContribRow[] {
   const billed = f.billedAmount || 0
   const slots: { name?: string; override?: ContributorTeam | null }[] = [
@@ -58,16 +57,15 @@ function contributorRows(
     const auto = autoTeam(s.name)
     const team = s.override ?? auto
     const source: ContribRow['source'] = s.override ? 'manual' : auto ? 'auto' : 'none'
-    const viaPartner = partnerRate > 0
-    const rate = viaPartner ? partnerRate : rateForTeam(team, salesRate, serviceRate)
-    out.push({ name: s.name, team, source, rate, inc: rate ? Math.round((billed * rate) / 100) : 0, viaPartner })
+    const rate = rateForTeam(team, salesRate, serviceRate)
+    out.push({ name: s.name, team, source, rate, inc: rate ? Math.round((billed * rate) / 100) : 0 })
   }
   return out
 }
 
 /** Total incentive for an item across all contributors. */
-function incentiveOf(f: ServiceProgramFee, autoTeam: TeamResolver, salesRate: number, serviceRate: number, partnerRate: number): number {
-  return contributorRows(f, autoTeam, salesRate, serviceRate, partnerRate).reduce((s, c) => s + c.inc, 0)
+function incentiveOf(f: ServiceProgramFee, autoTeam: TeamResolver, salesRate: number, serviceRate: number): number {
+  return contributorRows(f, autoTeam, salesRate, serviceRate).reduce((s, c) => s + c.inc, 0)
 }
 
 const TEAM_LABEL: Record<ContributorTeam, string> = { sales: '세일즈', service: '서비스' }
@@ -75,13 +73,14 @@ const TEAM_LABEL: Record<ContributorTeam, string> = { sales: '세일즈', servic
 export function ExternalFeesPage() {
   const { user } = useAuth()
   const { data: fees = [], isLoading } = useAllServiceProgramFees()
-  const { salesRate, serviceRate } = useTeamCommissionRates()
-  const { map: partnerRateMap } = useCommissionRateMap()
+  const { salesRate: defSales, serviceRate: defService } = useDefaultRates()
+  const { map: partnerRateMap } = usePartnerRateMap()
   const { data: profiles = [] } = useProfiles()
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const partnerRateFor = (label: string) => partnerRateMap.get(normalizePartner(label)) || 0
+  // effective {salesRate, serviceRate} for an item's partner (specific → else default)
+  const ratesFor = (label: string) => partnerRateMap.get(normalizePartner(label)) || { salesRate: defSales, serviceRate: defService }
 
   // name (canonical) → team, from 인사관리 소속팀 (sales/service only)
   const autoTeam = useMemo<TeamResolver>(() => {
@@ -115,7 +114,7 @@ export function ExternalFeesPage() {
   // 총 인센티브 = 수금 완료된 항목의 (기여자별 적용 수수료율 합계)
   const totalIncentive = fees
     .filter(f => f.collectionStatus === 'paid')
-    .reduce((s, f) => s + incentiveOf(f, autoTeam, salesRate, serviceRate, partnerRateFor(f.label)), 0)
+    .reduce((s, f) => { const r = ratesFor(f.label); return s + incentiveOf(f, autoTeam, r.salesRate, r.serviceRate) }, 0)
 
   const selected = selectedId ? fees.find(f => f.id === selectedId) ?? null : null
 
@@ -187,10 +186,10 @@ export function ExternalFeesPage() {
               </TableHeader>
               <TableBody>
                 {filtered.map(f => {
-                  const partnerRate = partnerRateFor(f.label)
-                  const rows = contributorRows(f, autoTeam, salesRate, serviceRate, partnerRate)
+                  const er = ratesFor(f.label)
+                  const rows = contributorRows(f, autoTeam, er.salesRate, er.serviceRate)
                   const inc = rows.reduce((s, c) => s + c.inc, 0)
-                  const needsTeam = rows.some(c => !c.team && !c.viaPartner)
+                  const needsTeam = rows.some(c => !c.team)
                   const isPaid = f.collectionStatus === 'paid'
                   return (
                     <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(f.id)}>
@@ -212,9 +211,7 @@ export function ExternalFeesPage() {
                             {rows.map((c, i) => (
                               <div key={i} className="text-sm flex items-center gap-1.5">
                                 {c.name}
-                                {c.viaPartner ? (
-                                  <Badge variant="outline" className="text-purple-600 border-purple-200 px-1 py-0 text-[10px]">파트너 {c.rate}%</Badge>
-                                ) : c.team ? (
+                                {c.team ? (
                                   <Badge variant="outline" className={c.team === 'sales' ? 'text-blue-600 border-blue-200 px-1 py-0 text-[10px]' : 'text-emerald-600 border-emerald-200 px-1 py-0 text-[10px]'}>
                                     {TEAM_LABEL[c.team]} {c.rate}%
                                   </Badge>
@@ -258,9 +255,9 @@ export function ExternalFeesPage() {
         <ProgramFeeDialog
           fee={selected}
           autoTeam={autoTeam}
-          salesRate={salesRate}
-          serviceRate={serviceRate}
-          partnerRate={partnerRateFor(selected.label)}
+          salesRate={ratesFor(selected.label).salesRate}
+          serviceRate={ratesFor(selected.label).serviceRate}
+          hasPartnerRate={partnerRateMap.has(normalizePartner(selected.label))}
           isAdmin={isAdmin}
           onClose={() => setSelectedId(null)}
         />
@@ -277,7 +274,7 @@ function ProgramFeeDialog({
   autoTeam,
   salesRate,
   serviceRate,
-  partnerRate,
+  hasPartnerRate,
   isAdmin,
   onClose,
 }: {
@@ -285,7 +282,7 @@ function ProgramFeeDialog({
   autoTeam: TeamResolver
   salesRate: number
   serviceRate: number
-  partnerRate: number
+  hasPartnerRate: boolean
   isAdmin: boolean
   onClose: () => void
 }) {
@@ -307,12 +304,11 @@ function ProgramFeeDialog({
     { name: name2, setName: setName2, team: team2, setTeam: setTeam2 },
   ]
   // effective team + rate + incentive per contributor (from current form state)
-  const resolve = (name: string, choice: TeamChoice): { team?: ContributorTeam; rate: number; inc: number; auto?: ContributorTeam; viaPartner: boolean } => {
+  const resolve = (name: string, choice: TeamChoice): { team?: ContributorTeam; rate: number; inc: number; auto?: ContributorTeam } => {
     const auto = autoTeam(name)
     const team = choice === 'auto' ? auto : choice
-    const viaPartner = partnerRate > 0
-    const rate = viaPartner ? partnerRate : rateForTeam(team, salesRate, serviceRate)
-    return { team, rate, inc: rate ? Math.round((billedNum * rate) / 100) : 0, auto, viaPartner }
+    const rate = rateForTeam(team, salesRate, serviceRate)
+    return { team, rate, inc: rate ? Math.round((billedNum * rate) / 100) : 0, auto }
   }
   const totalInc = slots.reduce((s, c) => s + (c.name.trim() ? resolve(c.name, c.team).inc : 0), 0)
 
@@ -376,11 +372,11 @@ function ProgramFeeDialog({
           </div>
         </div>
 
-        {partnerRate > 0 && (
-          <div className="rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-700">
-            이 파트너사({fee.label})는 개별 수수료율 <b>{partnerRate}%</b>가 지정되어 있어, 팀별 수수료율 대신 이 율이 모든 기여자에게 적용됩니다.
-          </div>
-        )}
+        <div className="rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-700">
+          {hasPartnerRate
+            ? <>이 파트너사({fee.label})는 개별 수수료율(세일즈 <b>{salesRate}%</b> / 서비스 <b>{serviceRate}%</b>)이 적용됩니다.</>
+            : <>기본 수수료율(세일즈 <b>{salesRate}%</b> / 서비스 <b>{serviceRate}%</b>)이 적용됩니다.</>}
+        </div>
 
         {/* Contributors + team + incentive */}
         <div className="space-y-2 pt-2 border-t">

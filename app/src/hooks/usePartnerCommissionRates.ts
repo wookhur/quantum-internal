@@ -1,28 +1,31 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
-/** A per-partner commission rate used to auto-compute service incentives. */
+/** A commission rate row: per-partner sales-team & service-team rates.
+ *  The '__default__' partner holds the company-wide defaults. */
 export interface PartnerCommissionRate {
   id: string
   partner: string
-  rate: number          // percentage (1–10, step 1)
-  notes?: string
+  salesRate: number     // % for 세일즈팀 contributors
+  serviceRate: number   // % for 서비스팀 contributors
 }
 
-// ─── Global team commission rates ────────────────────────────────────
-// Stored as two sentinel rows in the same table so no extra migration is
-// needed. 세일즈맨 / 서비스맨 each earn (청구금액 × their team rate).
-export const TEAM_SALES_KEY = '__team_sales__'
-export const TEAM_SERVICE_KEY = '__team_service__'
+export type ContributorTeam = 'sales' | 'service'
+
+export const DEFAULT_KEY = '__default__'
 export const DEFAULT_SALES_RATE = 4
 export const DEFAULT_SERVICE_RATE = 3
-const SENTINEL_KEYS = new Set<string>([TEAM_SALES_KEY, TEAM_SERVICE_KEY])
-
-export type ContributorTeam = 'sales' | 'service'
 
 /** Normalize a partner label for matching (lowercase, strip spaces). */
 export function normalizePartner(s: string | undefined | null): string {
   return (s || '').toLowerCase().replace(/\s+/g, '').trim()
+}
+
+/** Pick the rate for a resolved team from a {salesRate, serviceRate} pair. */
+export function rateForTeam(team: ContributorTeam | undefined, salesRate: number, serviceRate: number): number {
+  if (team === 'sales') return salesRate
+  if (team === 'service') return serviceRate
+  return 0
 }
 
 export function usePartnerCommissionRates() {
@@ -37,59 +40,52 @@ export function usePartnerCommissionRates() {
       return (data || []).map(r => ({
         id: r.id as string,
         partner: (r.partner as string) || '',
-        rate: Number(r.rate) || 0,
-        notes: (r.notes as string) || undefined,
+        // fall back to the legacy single `rate` column if the team columns are unset
+        salesRate: Number(r.sales_rate ?? r.rate ?? 0),
+        serviceRate: Number(r.service_rate ?? r.rate ?? 0),
       }))
     },
   })
 }
 
-/** Per-partner rows only (excludes the team sentinel rows). */
+/** Per-partner rows only (excludes the default sentinel row). */
 export function usePartnerRateList() {
   const q = usePartnerCommissionRates()
-  const list = (q.data || []).filter(r => !SENTINEL_KEYS.has(r.partner))
+  const list = (q.data || []).filter(r => r.partner !== DEFAULT_KEY)
   return { list, ...q }
 }
 
-/** Map of normalized partner label → rate (per-partner overrides only). */
-export function useCommissionRateMap() {
+/** Company-wide default team rates (from the '__default__' row), 4% / 3% fallback. */
+export function useDefaultRates() {
   const q = usePartnerCommissionRates()
-  const map = new Map<string, number>()
-  for (const r of q.data || []) {
-    if (SENTINEL_KEYS.has(r.partner)) continue
-    map.set(normalizePartner(r.partner), r.rate)
-  }
-  return { map, ...q }
-}
-
-/** The two global team rates (세일즈맨 / 서비스맨), defaulting to 4% / 3%. */
-export function useTeamCommissionRates() {
-  const q = usePartnerCommissionRates()
-  const rows = q.data || []
-  const salesRow = rows.find(r => r.partner === TEAM_SALES_KEY)
-  const serviceRow = rows.find(r => r.partner === TEAM_SERVICE_KEY)
-  const salesRate = salesRow ? salesRow.rate : DEFAULT_SALES_RATE
-  const serviceRate = serviceRow ? serviceRow.rate : DEFAULT_SERVICE_RATE
+  const row = (q.data || []).find(r => r.partner === DEFAULT_KEY)
+  const salesRate = row ? row.salesRate : DEFAULT_SALES_RATE
+  const serviceRate = row ? row.serviceRate : DEFAULT_SERVICE_RATE
   return { salesRate, serviceRate, ...q }
 }
 
-/** Rate for a resolved team, given the two global rates. */
-export function rateForTeam(team: ContributorTeam | undefined, salesRate: number, serviceRate: number): number {
-  if (team === 'sales') return salesRate
-  if (team === 'service') return serviceRate
-  return 0
+/** Map of normalized partner label → {salesRate, serviceRate} (excludes default). */
+export function usePartnerRateMap() {
+  const q = usePartnerCommissionRates()
+  const map = new Map<string, { salesRate: number; serviceRate: number }>()
+  for (const r of q.data || []) {
+    if (r.partner === DEFAULT_KEY) continue
+    map.set(normalizePartner(r.partner), { salesRate: r.salesRate, serviceRate: r.serviceRate })
+  }
+  return { map, ...q }
 }
 
 export function useUpsertCommissionRate() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { id?: string; partner: string; rate: number; notes?: string }) => {
+    mutationFn: async (input: { partner: string; salesRate: number; serviceRate: number }) => {
       const row = {
         partner: input.partner.trim(),
-        rate: input.rate,
-        notes: input.notes?.trim() || null,
+        // keep legacy NOT NULL `rate` populated for backward compatibility
+        rate: input.salesRate,
+        sales_rate: input.salesRate,
+        service_rate: input.serviceRate,
       }
-      // upsert by unique partner key so re-selecting an existing partner overwrites
       const { error } = await supabase
         .from('partner_commission_rates')
         .upsert(row, { onConflict: 'partner' })
