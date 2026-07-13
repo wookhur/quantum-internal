@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,47 +8,23 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, Percent, CheckCircle2, Plus, Trash2, Pencil, X, Handshake, Briefcase } from 'lucide-react'
+import { Loader2, Percent, Plus, Trash2, Pencil, X, Handshake, Briefcase } from 'lucide-react'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { EC_PARTNERS } from '@/lib/ecPartners'
 import {
-  useDefaultRates,
   usePartnerRateList,
   useUpsertCommissionRate,
   useDeleteCommissionRate,
-  DEFAULT_KEY,
 } from '@/hooks/usePartnerCommissionRates'
 
 const RATE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export function CommissionRatesPage() {
-  const { salesRate: defSales, serviceRate: defService, isLoading: defLoading } = useDefaultRates()
-  const { list: partnerRates, isLoading: listLoading } = usePartnerRateList()
+  const { list: partnerRates, isLoading } = usePartnerRateList()
   const { data: fees = [] } = useAllServiceProgramFees()
   const upsert = useUpsertCommissionRate()
   const del = useDeleteCommissionRate()
 
-  // ── Default (전체 공통) rates ──
-  const [dSales, setDSales] = useState('4')
-  const [dService, setDService] = useState('3')
-  const [savedDefault, setSavedDefault] = useState(false)
-
-  useEffect(() => {
-    if (!defLoading) { setDSales(String(defSales)); setDService(String(defService)) }
-  }, [defLoading, defSales, defService])
-
-  const handleSaveDefault = () => {
-    setSavedDefault(false)
-    upsert.mutate(
-      { partner: DEFAULT_KEY, salesRate: Number(dSales), serviceRate: Number(dService) },
-      {
-        onSuccess: () => { setSavedDefault(true); setTimeout(() => setSavedDefault(false), 2500) },
-        onError: showError,
-      },
-    )
-  }
-
-  // ── Per-partner rows ──
   const [partner, setPartner] = useState('')
   const [pSales, setPSales] = useState('4')
   const [pService, setPService] = useState('3')
@@ -73,9 +49,9 @@ export function CommissionRatesPage() {
     )
   }
 
-  const rateSelect = (value: string, onChange: (v: string) => void, w = 'w-full') => (
+  const rateSelect = (value: string, onChange: (v: string) => void) => (
     <Select value={value} onValueChange={v => onChange(v || '1')}>
-      <SelectTrigger className={`h-9 ${w}`}><SelectValue /></SelectTrigger>
+      <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
       <SelectContent>
         {RATE_OPTIONS.map(r => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
       </SelectContent>
@@ -87,8 +63,8 @@ export function CommissionRatesPage() {
       <div>
         <h1 className="text-2xl font-bold">수수료 관리</h1>
         <p className="text-sm text-muted-foreground">
-          기여자의 <b>소속팀(세일즈/서비스)</b>에 따라 다른 수수료율을 적용합니다. 파트너사별로 세일즈팀·서비스팀 율을 각각 지정하며,
-          별도 지정이 없는 파트너사는 맨 위 <b>기본 수수료율</b>이 적용됩니다. 소속팀은 <b>인사관리</b> 기준으로 자동 판별됩니다.
+          파트너사별로 <b>세일즈팀 · 서비스팀</b> 수수료율을 각각 지정합니다. 서비스입금관리와 세일즈인센티브(인보이스)에서,
+          그 파트너사의 프로그램을 세일즈한 사람의 <b>소속팀(인사관리 기준)</b>에 맞춰 수수료가 자동 계산·반영됩니다.
         </p>
       </div>
 
@@ -99,30 +75,7 @@ export function CommissionRatesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Default rates */}
-          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-            <div className="text-sm font-medium">기본 수수료율 <span className="text-xs text-muted-foreground font-normal">(개별 지정 없는 파트너사 공통)</span></div>
-            {defLoading ? (
-              <div className="py-2 flex justify-center"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>
-            ) : (
-              <div className="flex flex-wrap items-end gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Handshake className="size-3.5 text-blue-500" /> 세일즈맨</label>
-                  {rateSelect(dSales, setDSales, 'w-24')}
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground flex items-center gap-1"><Briefcase className="size-3.5 text-emerald-500" /> 서비스맨</label>
-                  {rateSelect(dService, setDService, 'w-24')}
-                </div>
-                <Button onClick={handleSaveDefault} disabled={upsert.isPending} className="h-9">
-                  {upsert.isPending ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}기본값 저장
-                </Button>
-                {savedDefault && <span className="flex items-center gap-1 text-sm text-emerald-600"><CheckCircle2 className="size-4" /> 저장됨</span>}
-              </div>
-            )}
-          </div>
-
-          {/* Add / edit a partner-specific rate */}
+          {/* Add / edit a partner rate */}
           <div className="grid grid-cols-1 md:grid-cols-[1fr_110px_110px_auto] gap-3 items-end">
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">파트너사</label>
@@ -160,11 +113,11 @@ export function CommissionRatesPage() {
           </p>
 
           {/* Partner rate table */}
-          {listLoading ? (
+          {isLoading ? (
             <div className="py-8 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : partnerRates.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              개별 지정된 파트너사가 없습니다. (모든 파트너사에 기본 수수료율이 적용됩니다.)
+              등록된 파트너사 수수료율이 없습니다. 위에서 파트너사를 선택해 추가하세요.
             </div>
           ) : (
             <Table>
@@ -192,7 +145,7 @@ export function CommissionRatesPage() {
                           <Pencil className="size-4" />
                         </Button>
                         <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" title="삭제"
-                          onClick={() => { if (confirm(`'${r.partner}' 개별 수수료율을 삭제할까요? (기본 수수료율로 되돌아갑니다)`)) del.mutate(r.id) }}>
+                          onClick={() => { if (confirm(`'${r.partner}' 수수료율을 삭제할까요?`)) del.mutate(r.id) }}>
                           <Trash2 className="size-4" />
                         </Button>
                       </div>

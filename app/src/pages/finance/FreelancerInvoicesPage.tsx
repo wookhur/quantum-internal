@@ -19,6 +19,7 @@ import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useConsultantName, canonicalConsultantName } from '@/lib/consultants'
 import { useIncentivesByInstallment } from '@/hooks/useIncentives'
+import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
 import {
@@ -843,9 +844,12 @@ function useConsultantBillable(month: string) {
 
 export interface IncentiveLine { label: string; amount: number; month: string }
 
-/** Per person NAME → ALL their sales-incentive lines (with settlement month). */
+/** Per person NAME → ALL their sales-incentive lines (with settlement month).
+ *  Combines contract-based incentives with service (EC/Academic) incentives
+ *  from 서비스입금관리 (청구금액 × 파트너사 소속팀 수수료율, 수금 완료분). */
 function useIncentiveLinesByPerson() {
   const { data: entries = [] } = useIncentivesByInstallment()
+  const serviceLines = useServiceIncentiveLines()
   return useMemo(() => {
     const map = new Map<string, IncentiveLine[]>()
     entries.forEach(e => {
@@ -857,8 +861,14 @@ function useIncentiveLinesByPerson() {
       arr.push({ label: e.studentName || e.contractorName || e.incentiveType, amount: e.incentiveAmount, month: dateRef.slice(0, 7) })
       map.set(name, arr)
     })
+    serviceLines.forEach(sl => {
+      if (!sl.name) return
+      const arr = map.get(sl.name) || []
+      arr.push({ label: sl.label, amount: sl.amount, month: sl.month })
+      map.set(sl.name, arr)
+    })
     return map
-  }, [entries])
+  }, [entries, serviceLines])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
