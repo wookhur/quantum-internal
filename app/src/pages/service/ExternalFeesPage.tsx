@@ -31,6 +31,8 @@ type TeamResolver = (name: string | undefined) => ContributorTeam | undefined
 
 interface ContribRow {
   name: string
+  slot: 0 | 1                  // which contributor slot (for saving the override)
+  override?: ContributorTeam | null  // manually-set team (null/undefined = auto)
   team?: ContributorTeam       // effective team (override first, else auto)
   source: 'manual' | 'auto' | 'none'
   rate: number                 // % applied (from this partner's team rate)
@@ -47,9 +49,9 @@ function contributorRows(
   serviceRate: number,
 ): ContribRow[] {
   const billed = f.billedAmount || 0
-  const slots: { name?: string; override?: ContributorTeam | null }[] = [
-    { name: f.contributor1, override: f.contributor1Team },
-    { name: f.contributor2, override: f.contributor2Team },
+  const slots: { slot: 0 | 1; name?: string; override?: ContributorTeam | null }[] = [
+    { slot: 0, name: f.contributor1, override: f.contributor1Team },
+    { slot: 1, name: f.contributor2, override: f.contributor2Team },
   ]
   const out: ContribRow[] = []
   for (const s of slots) {
@@ -58,7 +60,7 @@ function contributorRows(
     const team = s.override ?? auto
     const source: ContribRow['source'] = s.override ? 'manual' : auto ? 'auto' : 'none'
     const rate = rateForTeam(team, salesRate, serviceRate)
-    out.push({ name: s.name, team, source, rate, inc: rate ? Math.round((billed * rate) / 100) : 0 })
+    out.push({ name: s.name, slot: s.slot, override: s.override, team, source, rate, inc: rate ? Math.round((billed * rate) / 100) : 0 })
   }
   return out
 }
@@ -76,8 +78,18 @@ export function ExternalFeesPage() {
   const { salesRate: defSales, serviceRate: defService } = useDefaultRates()
   const { map: partnerRateMap } = usePartnerRateMap()
   const { data: profiles = [] } = useProfiles()
+  const updateEC = useUpdateECActivity()
+  const updateAC = useUpdateAcademicSupport()
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // set a contributor's team inline from the list (auto = clear override → null)
+  const setTeam = (f: ServiceProgramFee, slot: 0 | 1, choice: 'auto' | ContributorTeam) => {
+    const val = choice === 'auto' ? null : choice
+    const base = { id: f.id, studentId: f.studentId }
+    const payload = slot === 0 ? { ...base, contributor1Team: val } : { ...base, contributor2Team: val }
+    ;(f.source === 'ec' ? updateEC : updateAC).mutate(payload)
+  }
 
   // effective {salesRate, serviceRate} for an item's partner (specific → else default)
   const ratesFor = (label: string) => partnerRateMap.get(normalizePartner(label)) || { salesRate: defSales, serviceRate: defService }
@@ -207,11 +219,23 @@ export function ExternalFeesPage() {
                       <TableCell className="text-sm">{f.studentName}</TableCell>
                       <TableCell>
                         {rows.length > 0 ? (
-                          <div className="space-y-0.5">
+                          <div className="space-y-1" onClick={e => e.stopPropagation()}>
                             {rows.map((c, i) => (
                               <div key={i} className="text-sm flex items-center gap-1.5">
-                                {c.name}
-                                {c.team ? (
+                                <span className="min-w-[64px]">{c.name}</span>
+                                {isAdmin ? (
+                                  <>
+                                    <Select value={c.override || 'auto'} onValueChange={v => setTeam(f, c.slot, (v as 'auto' | ContributorTeam) || 'auto')}>
+                                      <SelectTrigger className={`h-6 w-[86px] text-xs px-2 ${!c.team ? 'text-amber-600 border-amber-300' : ''}`}><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="auto">{c.source === 'auto' && c.team ? `자동(${TEAM_LABEL[c.team]})` : '자동'}</SelectItem>
+                                        <SelectItem value="sales">세일즈</SelectItem>
+                                        <SelectItem value="service">서비스</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <span className="text-[10px] text-muted-foreground w-8">{c.team ? `${c.rate}%` : ''}</span>
+                                  </>
+                                ) : c.team ? (
                                   <Badge variant="outline" className={c.team === 'sales' ? 'text-blue-600 border-blue-200 px-1 py-0 text-[10px]' : 'text-emerald-600 border-emerald-200 px-1 py-0 text-[10px]'}>
                                     {TEAM_LABEL[c.team]} {c.rate}%
                                   </Badge>
