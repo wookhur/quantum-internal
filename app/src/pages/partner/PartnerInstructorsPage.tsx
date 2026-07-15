@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -18,35 +19,42 @@ import { Loader2, Plus, Pencil, Trash2, GraduationCap, Lock } from 'lucide-react
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import {
-  useProfiles, useUpdateProfile,
-  useFeatureAccess, useUpdateFeatureAccess,
-  getEffectiveModules,
   FEATURE_MODULES, NAV_ROUTE_DEFS, ADMIN_ONLY_ROUTES,
-  type FeatureModule,
 } from '@/hooks/useProfiles'
-import type { User } from '@/types'
+import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
+import { EC_PARTNERS } from '@/lib/ecPartners'
+import {
+  usePartnerInstructors, useUpsertPartnerInstructor, useDeletePartnerInstructor,
+  type PartnerInstructor,
+} from '@/hooks/usePartnerInstructors'
 
-/** Routes for a set of modules (used to persist enabled_routes consistently). */
-function routesForModules(modules: FeatureModule[]): string[] {
-  return NAV_ROUTE_DEFS
-    .filter(r => modules.includes(r.module) && !ADMIN_ONLY_ROUTES.includes(r.path))
-    .map(r => r.path)
-}
+/** Selectable internal boards, grouped by section — excludes admin-only routes. */
+const SELECTABLE_SECTIONS = FEATURE_MODULES
+  .map(m => ({
+    key: m.key,
+    labelKey: m.labelKey,
+    routes: NAV_ROUTE_DEFS.filter(r => r.module === m.key && !ADMIN_ONLY_ROUTES.includes(r.path)),
+  }))
+  .filter(s => s.routes.length > 0)
 
 export function PartnerInstructorsPage() {
   const t = useT()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
 
-  const { data: profiles = [], isLoading } = useProfiles()
-  const { data: featureAccess = [] } = useFeatureAccess()
+  const { data: instructors = [], isLoading } = usePartnerInstructors()
+  const { data: fees = [] } = useAllServiceProgramFees()
+  const del = useDeletePartnerInstructor()
 
-  const [dialogUserId, setDialogUserId] = useState<string | null>(null)
+  const [editing, setEditing] = useState<PartnerInstructor | null>(null)
   const [addOpen, setAddOpen] = useState(false)
 
-  const instructors = useMemo(() => profiles.filter(p => p.isPartner), [profiles])
-  const nonInstructors = useMemo(() => profiles.filter(p => !p.isPartner), [profiles])
-  const editing = dialogUserId ? profiles.find(p => p.id === dialogUserId) || null : null
+  const academyOptions = useMemo(() => {
+    const s = new Set<string>()
+    for (const p of EC_PARTNERS) s.add(p)
+    for (const f of fees) if (f.label?.trim()) s.add(f.label.trim())
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [fees])
 
   if (!isAdmin) {
     return (
@@ -59,12 +67,12 @@ export function PartnerInstructorsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-5xl">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold">파트너 강사관리</h1>
           <p className="text-sm text-muted-foreground">
-            파트너 강사 계정의 <b>소속학원명</b>과 <b>접근가능기능</b>을 수동으로 설정합니다.
+            외부 파트너사 강사 계정을 이메일로 등록하고 <b>소속학원 · 담당과목 · 특이사항 · 접근가능권한</b>을 설정합니다.
           </p>
         </div>
         <Button onClick={() => setAddOpen(true)}><Plus className="size-4 mr-1" /> 강사 추가</Button>
@@ -80,40 +88,47 @@ export function PartnerInstructorsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>강사(사용자)</TableHead>
-                  <TableHead className="w-48">소속학원명</TableHead>
-                  <TableHead>접근가능기능</TableHead>
+                  <TableHead>이메일주소</TableHead>
+                  <TableHead className="w-40">소속학원</TableHead>
+                  <TableHead className="w-32">담당과목</TableHead>
+                  <TableHead>특이사항</TableHead>
+                  <TableHead className="w-40">접근가능권한</TableHead>
                   <TableHead className="w-24 text-right">관리</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {instructors.map(p => {
-                  const mods = getEffectiveModules(p, featureAccess)
+                {instructors.map(ins => {
+                  const routeLabels = ins.enabledRoutes
+                    .map(rp => NAV_ROUTE_DEFS.find(d => d.path === rp)?.labelKey)
+                    .filter(Boolean) as string[]
                   return (
-                    <TableRow key={p.id}>
+                    <TableRow key={ins.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <GraduationCap className="size-4 text-purple-500 shrink-0" />
-                          <div>
-                            <div className="font-medium text-sm">{p.name}</div>
-                            <div className="text-xs text-muted-foreground">{p.email}</div>
-                          </div>
+                          <span className="text-sm font-medium">{ins.email}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">{p.partnerAcademy || <span className="text-muted-foreground">-</span>}</TableCell>
+                      <TableCell className="text-sm">{ins.academy || <span className="text-muted-foreground">-</span>}</TableCell>
+                      <TableCell className="text-sm">{ins.subject || <span className="text-muted-foreground">-</span>}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <div className="max-w-[240px] truncate" title={ins.notes || ''}>{ins.notes || '-'}</div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          {mods.length === 0 ? <span className="text-xs text-muted-foreground">없음</span> :
-                            mods.map(m => {
-                              const cfg = FEATURE_MODULES.find(f => f.key === m)
-                              return <Badge key={m} variant="outline" className="text-[10px]">{cfg ? t(cfg.labelKey) : m}</Badge>
-                            })}
+                          {routeLabels.length === 0 ? <span className="text-xs text-muted-foreground">없음</span> :
+                            routeLabels.slice(0, 3).map((lk, i) => <Badge key={i} variant="outline" className="text-[10px]">{t(lk)}</Badge>)}
+                          {routeLabels.length > 3 && <Badge variant="outline" className="text-[10px]">+{routeLabels.length - 3}</Badge>}
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-0.5">
-                          <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-purple-600" title="수정" onClick={() => setDialogUserId(p.id)}>
+                          <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-purple-600" title="수정" onClick={() => setEditing(ins)}>
                             <Pencil className="size-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" title="삭제"
+                            onClick={() => { if (confirm(`'${ins.email}' 강사를 삭제할까요?`)) del.mutate(ins.id) }}>
+                            <Trash2 className="size-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -126,119 +141,107 @@ export function PartnerInstructorsPage() {
         </CardContent>
       </Card>
 
-      {/* 강사 추가: 사용자 선택 */}
-      {addOpen && (
-        <AddInstructorDialog
-          candidates={nonInstructors}
-          onClose={() => setAddOpen(false)}
-          onPick={(id) => { setAddOpen(false); setDialogUserId(id) }}
-        />
-      )}
-
-      {/* 강사 설정(소속학원 + 접근가능기능) */}
-      {editing && (
+      {(addOpen || editing) && (
         <InstructorDialog
-          profile={editing}
-          currentModules={getEffectiveModules(editing, featureAccess)}
-          onClose={() => setDialogUserId(null)}
+          instructor={editing}
+          academyOptions={academyOptions}
+          onClose={() => { setAddOpen(false); setEditing(null) }}
         />
       )}
     </div>
   )
 }
 
-function AddInstructorDialog({ candidates, onClose, onPick }: { candidates: User[]; onClose: () => void; onPick: (id: string) => void }) {
-  const [sel, setSel] = useState('')
-  return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>강사 추가</DialogTitle></DialogHeader>
-        <div className="space-y-2">
-          <Label className="text-xs">사용자 선택</Label>
-          <Select value={sel} onValueChange={(v) => setSel(v || '')}>
-            <SelectTrigger><SelectValue placeholder="사용자 선택" /></SelectTrigger>
-            <SelectContent>
-              {candidates.length === 0 ? (
-                <div className="px-2 py-1.5 text-xs text-muted-foreground">추가할 사용자가 없습니다</div>
-              ) : candidates.map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {p.email}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <p className="text-[11px] text-muted-foreground">선택 후 소속학원명과 접근가능기능을 설정합니다.</p>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button disabled={!sel} onClick={() => sel && onPick(sel)}>다음</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function InstructorDialog({ profile, currentModules, onClose }: { profile: User; currentModules: FeatureModule[]; onClose: () => void }) {
+function InstructorDialog({ instructor, academyOptions, onClose }: {
+  instructor: PartnerInstructor | null
+  academyOptions: string[]
+  onClose: () => void
+}) {
   const t = useT()
-  const updateProfile = useUpdateProfile()
-  const updateFeatureAccess = useUpdateFeatureAccess()
+  const upsert = useUpsertPartnerInstructor()
 
-  const [academy, setAcademy] = useState(profile.partnerAcademy || '')
-  const [mods, setMods] = useState<FeatureModule[]>(currentModules)
-  const saving = updateProfile.isPending || updateFeatureAccess.isPending
+  const [email, setEmail] = useState(instructor?.email || '')
+  const [academy, setAcademy] = useState(instructor?.academy || '')
+  const [subject, setSubject] = useState(instructor?.subject || '')
+  const [notes, setNotes] = useState(instructor?.notes || '')
+  const [routes, setRoutes] = useState<string[]>(instructor?.enabledRoutes || [])
 
-  const toggle = (m: FeatureModule) => setMods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
+  const toggleRoute = (path: string) => setRoutes(prev => prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path])
 
-  const handleSave = async () => {
-    try {
-      await updateProfile.mutateAsync({ id: profile.id, isPartner: true, partnerAcademy: academy.trim() || null })
-      await updateFeatureAccess.mutateAsync({ userId: profile.id, enabledModules: mods, enabledRoutes: routesForModules(mods) })
-      onClose()
-    } catch (e: unknown) {
-      const err = e as { message?: string }
-      alert(`저장에 실패했습니다.\n${err?.message || ''}`)
-    }
-  }
+  const emailValid = /.+@.+\..+/.test(email.trim())
+  const canSave = emailValid && !upsert.isPending
 
-  const handleRemove = async () => {
-    if (!confirm(`'${profile.name}'을(를) 파트너 강사에서 제외할까요?`)) return
-    try {
-      await updateProfile.mutateAsync({ id: profile.id, isPartner: false })
-      onClose()
-    } catch (e: unknown) {
-      const err = e as { message?: string }
-      alert(`저장에 실패했습니다.\n${err?.message || ''}`)
-    }
+  const handleSave = () => {
+    if (!canSave) return
+    upsert.mutate(
+      { id: instructor?.id, email: email.trim(), academy: academy || undefined, subject, notes, enabledRoutes: routes },
+      {
+        onSuccess: onClose,
+        onError: (e: unknown) => {
+          const err = e as { message?: string; code?: string }
+          alert(`저장에 실패했습니다.\n${err?.message || ''}${err?.code === '23505' ? '\n(이미 등록된 이메일입니다)' : ''}`)
+        },
+      },
+    )
   }
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>{profile.name} · 강사 설정</DialogTitle></DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>{instructor ? '강사 수정' : '강사 추가'}</DialogTitle></DialogHeader>
         <div className="space-y-4">
+          {/* 1. 이메일주소 */}
           <div className="space-y-1">
-            <Label className="text-xs">소속학원명</Label>
-            <Input value={academy} onChange={e => setAcademy(e.target.value)} placeholder="예: 김효진 수학" />
+            <Label className="text-xs">이메일주소 <span className="text-red-500">*</span></Label>
+            <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="instructor@example.com" disabled={!!instructor} />
+            {!!instructor && <p className="text-[11px] text-muted-foreground">이메일은 수정할 수 없습니다.</p>}
           </div>
+          {/* 2. 소속학원 */}
+          <div className="space-y-1">
+            <Label className="text-xs">소속학원</Label>
+            <Select value={academy || undefined} onValueChange={v => setAcademy(v || '')}>
+              <SelectTrigger><SelectValue placeholder="소속학원 선택" /></SelectTrigger>
+              <SelectContent>
+                {academyOptions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* 3. 담당과목 */}
+          <div className="space-y-1">
+            <Label className="text-xs">담당과목</Label>
+            <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="예: 수학, 물리" />
+          </div>
+          {/* 4. 특이사항 */}
+          <div className="space-y-1">
+            <Label className="text-xs">특이사항</Label>
+            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="어떤 학생의 선생님인지 등" />
+          </div>
+          {/* 5. 접근가능권한 */}
           <div className="space-y-2">
-            <Label className="text-xs">접근가능기능</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {FEATURE_MODULES.map(m => (
-                <label key={m.key} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 cursor-pointer">
-                  <span className="text-sm">{t(m.labelKey)}</span>
-                  <Switch checked={mods.includes(m.key)} onCheckedChange={() => toggle(m.key)} />
-                </label>
+            <Label className="text-xs">접근가능권한 <span className="text-muted-foreground font-normal">(내부 웹 게시판 섹션 선택)</span></Label>
+            <div className="space-y-3 rounded-md border p-3 max-h-64 overflow-y-auto">
+              {SELECTABLE_SECTIONS.map(sec => (
+                <div key={sec.key}>
+                  <div className="text-[11px] font-semibold text-muted-foreground mb-1">{t(sec.labelKey)}</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {sec.routes.map(r => (
+                      <label key={r.path} className="flex items-center justify-between gap-2 rounded border px-2 py-1 cursor-pointer">
+                        <span className="text-xs truncate">{t(r.labelKey)}</span>
+                        <Switch checked={routes.includes(r.path)} onCheckedChange={() => toggleRoute(r.path)} />
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-            <p className="text-[11px] text-muted-foreground">선택한 기능(모듈)에 해당하는 메뉴만 이 강사에게 보입니다.</p>
+            <p className="text-[11px] text-muted-foreground">선택한 게시판만 이 강사가 로그인 시 볼 수 있습니다.</p>
           </div>
         </div>
-        <DialogFooter className="justify-between sm:justify-between">
-          <Button variant="ghost" className="text-destructive" onClick={handleRemove} disabled={saving}>
-            <Trash2 className="size-4 mr-1" /> 강사 제외
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={upsert.isPending}>취소</Button>
+          <Button onClick={handleSave} disabled={!canSave}>
+            {upsert.isPending ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}저장
           </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} disabled={saving}>취소</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}저장
-            </Button>
-          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
