@@ -5,7 +5,8 @@ import { createNotificationsForUsers } from './useUserNotifications'
 const KWAK_JISOO_ID = '1a80e844-703e-41d2-87e7-763a5ea06343'
 
 export type OrderStatus = 'requested' | 'approved' | 'ordered' | 'delivered' | 'rejected'
-export type OrderCategory = 'office' | 'snack' | 'equipment' | 'living' | 'other'
+export type OrderCategory = 'office' | 'snack' | 'equipment' | 'living' | 'staff_other' | 'customer_other' | 'other'
+export type PaymentApproverRole = 'sales_director' | 'finance_director'
 
 /** IDs of users who can approve orders (admin or the '주문승인' permission). */
 async function fetchApproverIds(): Promise<string[]> {
@@ -21,8 +22,20 @@ export const ORDER_CATEGORIES: { key: OrderCategory; labelKey: string }[] = [
   { key: 'snack', labelKey: 'coupang.categorySnack' },
   { key: 'equipment', labelKey: 'coupang.categoryEquipment' },
   { key: 'living', labelKey: 'coupang.categoryLiving' },
-  { key: 'other', labelKey: 'coupang.categoryOther' },
+  { key: 'staff_other', labelKey: 'coupang.categoryStaffOther' },
+  { key: 'customer_other', labelKey: 'coupang.categoryCustomerOther' },
 ]
+
+/** Label lookup incl. legacy 'other' (removed from the dropdown but kept for old rows). */
+export const ORDER_CATEGORY_LABELS: Record<string, string> = {
+  office: 'coupang.categoryOffice',
+  snack: 'coupang.categorySnack',
+  equipment: 'coupang.categoryEquipment',
+  living: 'coupang.categoryLiving',
+  staff_other: 'coupang.categoryStaffOther',
+  customer_other: 'coupang.categoryCustomerOther',
+  other: 'coupang.categoryOther',
+}
 
 export const ORDER_STATUS_CONFIG: Record<OrderStatus, { labelKey: string; className: string }> = {
   requested: { labelKey: 'coupang.statusRequested', className: 'bg-amber-100 text-amber-700' },
@@ -42,6 +55,9 @@ export interface CoupangOrder {
   estimatedPrice?: number
   category: OrderCategory
   reason?: string
+  neededBy?: string
+  paymentApproverId?: string
+  paymentApproverRole?: PaymentApproverRole
   status: OrderStatus
   orderedBy?: string
   orderedByName?: string
@@ -67,6 +83,9 @@ function mapOrder(row: Record<string, unknown>): CoupangOrder {
     estimatedPrice: (row.estimated_price as number) || undefined,
     category: (row.category as OrderCategory) || 'office',
     reason: (row.reason as string) || undefined,
+    neededBy: (row.needed_by as string) || undefined,
+    paymentApproverId: (row.payment_approver_id as string) || undefined,
+    paymentApproverRole: (row.payment_approver_role as PaymentApproverRole) || undefined,
     status: (row.status as OrderStatus) || 'requested',
     orderedBy: (row.ordered_by as string) || undefined,
     orderedByName: orderer?.name as string | undefined,
@@ -113,6 +132,9 @@ export function useCreateCoupangOrder() {
       estimatedPrice?: number
       category: OrderCategory
       reason?: string
+      neededBy?: string
+      paymentApproverId?: string
+      paymentApproverRole?: PaymentApproverRole
     }) => {
       const { error } = await supabase.from('coupang_orders').insert({
         requester_id: order.requesterId,
@@ -122,16 +144,22 @@ export function useCreateCoupangOrder() {
         estimated_price: order.estimatedPrice || null,
         category: order.category,
         reason: order.reason || null,
+        needed_by: order.neededBy || null,
+        payment_approver_id: order.paymentApproverId || null,
+        payment_approver_role: order.paymentApproverRole || null,
       })
       if (error) throw error
 
-      // Notify everyone who can approve (falls back to the default orderer)
+      // Notify the selected 결제요청자 (세일즈이사/재무이사); fall back to all approvers
       const approverIds = await fetchApproverIds()
-      const targets = approverIds.length > 0 ? approverIds : [KWAK_JISOO_ID]
+      const targets = order.paymentApproverId
+        ? [order.paymentApproverId]
+        : (approverIds.length > 0 ? approverIds : [KWAK_JISOO_ID])
+      const urgentTag = order.neededBy ? ` (필요일: ${order.neededBy})` : ''
       await createNotificationsForUsers(targets, {
         type: 'coupang_order',
-        title: '쿠팡 주문 승인 요청',
-        message: `${order.requesterName}님이 "${order.productName}" 주문 승인을 요청했습니다.`,
+        title: '주문요청 승인 요청',
+        message: `${order.requesterName}님이 "${order.productName}" 주문요청을 보냈습니다.${urgentTag}`,
         link: '/common/coupang-orders',
       })
     },
@@ -171,8 +199,8 @@ export function useUpdateCoupangOrder() {
         const approved = rest.status === 'approved'
         await createNotificationsForUsers([rest.requesterId], {
           type: 'coupang_order',
-          title: approved ? '쿠팡 주문 승인됨' : '쿠팡 주문 반려됨',
-          message: `"${rest.productName || '요청하신'}" 주문이 ${approved ? '승인되었습니다. 곧 주문이 진행됩니다.' : '반려되었습니다.'}`,
+          title: approved ? '주문요청 승인됨' : '주문요청 반려됨',
+          message: `"${rest.productName || '요청하신'}" 주문요청이 ${approved ? '승인되었습니다. 곧 주문이 진행됩니다.' : '반려되었습니다.'}`,
           link: '/common/coupang-orders',
         })
       }
