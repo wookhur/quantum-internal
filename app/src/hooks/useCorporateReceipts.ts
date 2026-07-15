@@ -1,6 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { createNotificationsForUsers } from './useUserNotifications'
+
+/** 재무이사(직책에 '이사' + '재무'/'finance') id 목록. 없으면 admin으로 폴백. */
+async function fetchFinanceDirectorIds(): Promise<string[]> {
+  const { data } = await supabase.from('profiles').select('id, position, role')
+  const rows = (data || []) as Record<string, unknown>[]
+  const directors = rows.filter(p => {
+    const pos = ((p.position as string) || '').toLowerCase()
+    return pos.includes('이사') && (pos.includes('재무') || pos.includes('finance'))
+  }).map(p => p.id as string)
+  if (directors.length) return directors
+  return rows.filter(p => p.role === 'admin').map(p => p.id as string)
+}
 
 export interface CorporateReceipt {
   id: string
@@ -79,6 +92,15 @@ export function useCreateCorporateReceipt() {
         created_by: user?.id || null,
       })
       if (error) throw error
+
+      // 등록 완료 시 재무이사님께 알림 (본인 제외)
+      const directorIds = (await fetchFinanceDirectorIds()).filter(id => id !== user?.id)
+      await createNotificationsForUsers(directorIds, {
+        type: 'corporate_receipt',
+        title: '법인카드 영수증 등록',
+        message: `${user?.name || '관리자'}님이 영수증을 등록했습니다.${input.reason?.trim() ? ` (${input.reason.trim()})` : ''}`,
+        link: '/finance/corporate-receipts',
+      })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['corporate-receipts'] }),
   })
