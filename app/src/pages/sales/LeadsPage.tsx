@@ -34,8 +34,9 @@ import {
   TrendingUp,
   CalendarDays,
   BarChart3,
+  RefreshCw,
 } from 'lucide-react'
-import { useLeads, useCreateLead, useLeadStats } from '@/hooks/useLeads'
+import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads } from '@/hooks/useLeads'
 import { ColdCallView } from './ColdCallPage'
 import type { Lead, PipelineStage } from '@/types'
 import {
@@ -177,6 +178,7 @@ function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void
 
   const { data: stats } = useLeadStats()
   const createLead = useCreateLead()
+  const syncSheet = useSyncGoogleSheetLeads()
 
   // -- Compute unique assigned users for the filter dropdown
   const assignedUsers = useMemo(() => {
@@ -303,10 +305,28 @@ function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void
             </p>
           </div>
         </div>
-        <Button className="gap-1.5" onClick={() => setDialogOpen(true)}>
-          <Plus className="size-4" />
-          {t('leads.newLead')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => syncSheet.mutate(undefined, {
+              onSuccess: (data) => {
+                alert(`동기화 완료: ${data?.inserted ?? 0}건의 새 리드가 추가되었습니다.`)
+              },
+              onError: () => {
+                alert('동기화 실패: Google API 키 설정을 확인해주세요.')
+              },
+            })}
+            disabled={syncSheet.isPending}
+          >
+            <RefreshCw className={`size-4 ${syncSheet.isPending ? 'animate-spin' : ''}`} />
+            {syncSheet.isPending ? '동기화 중...' : '시트 동기화'}
+          </Button>
+          <Button className="gap-1.5" onClick={() => setDialogOpen(true)}>
+            <Plus className="size-4" />
+            {t('leads.newLead')}
+          </Button>
+        </div>
       </div>
 
       {/* ---- Filter Bar ---- */}

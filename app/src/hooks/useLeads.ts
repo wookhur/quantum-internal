@@ -488,3 +488,18 @@ export function useLeadStats() {
     },
   })
 }
+
+export function useSyncGoogleSheetLeads() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('sync-google-sheet-leads')
+      if (error) throw error
+      return data as { success: boolean; inserted: number; tabs: number; totalFetched: number; errors?: string[] }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['lead-stats'] })
+    },
+  })
+}
