@@ -30,6 +30,8 @@ export function PartnerStudentsPage() {
   const { data: programFees = [] } = useAllServiceProgramFees()
   const { data: profiles = [] } = useProfiles()
   const { data: myInstructor } = useMyPartnerInstructor()
+  // 파트너사(외부 강사) 로그인: 학생의 다른 수업/프로그램 정보는 감추고 이름·학교만 노출
+  const isPartnerViewer = !isAdmin && (!!myInstructor || !!user?.isPartner)
   const { data: myMeetings = [] } = usePartnerStudentMeetings(isAdmin ? undefined : partnerId)
   const { data: allMeetings = [] } = useAllPartnerStudentMeetings(isAdmin)
   const meetings = isAdmin ? allMeetings : myMeetings
@@ -155,7 +157,7 @@ export function PartnerStudentsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">담당 학생을 선택해 미팅 일정과 내용을 기록하세요.</p>
       </div>
 
-      {partnerOptions.length > 0 && (
+      {!isPartnerViewer && partnerOptions.length > 0 && (
         <div className="flex items-center gap-2">
           <Select value={partnerFilter} onValueChange={v => { if (v) { setPartnerFilter(v); setSelected('') } }}>
             <SelectTrigger className="h-9 w-72"><SelectValue placeholder="프로그램(파트너사) 선택" /></SelectTrigger>
@@ -193,7 +195,7 @@ export function PartnerStudentsPage() {
                       <GraduationCap className="size-3" />{s.school}
                     </div>
                   )}
-                  {s.partners && (
+                  {!isPartnerViewer && s.partners && (
                     <div className="text-[11px] text-primary/80 mt-0.5 truncate">🤝 {s.partners}</div>
                   )}
                 </button>
@@ -235,6 +237,7 @@ export function PartnerStudentsPage() {
                     <Label className="text-xs">미팅 일정</Label>
                     <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} className="h-9 w-44" />
                   </div>
+                  {!isPartnerViewer && (
                   <div className="space-y-1 flex-1 min-w-[160px]">
                     <Label className="text-xs">프로그램 (파트너사)</Label>
                     {selectedLabels.length > 0 ? (
@@ -249,6 +252,7 @@ export function PartnerStudentsPage() {
                       <Input value={form.program} onChange={e => setForm(f => ({ ...f, program: e.target.value }))} placeholder="예: USACO 대회, 리서치 …" className="h-9" />
                     )}
                   </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">미팅 내용</Label>
