@@ -8,6 +8,7 @@ export interface PartnerInstructor {
   academy?: string
   subject?: string        // 담당과목
   notes?: string          // 특이사항
+  studentIds: string[]    // 담당학생 (service_students.id)
   enabledRoutes: string[] // 접근가능 게시판(라우트)
   createdAt: string
   updatedAt: string
@@ -20,6 +21,7 @@ function mapRow(row: Record<string, unknown>): PartnerInstructor {
     academy: (row.academy as string) || undefined,
     subject: (row.subject as string) || undefined,
     notes: (row.notes as string) || undefined,
+    studentIds: (row.student_ids as string[]) || [],
     enabledRoutes: (row.enabled_routes as string[]) || [],
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -59,16 +61,35 @@ async function applyToProfileIfExists(email: string, academy: string | undefined
   }, { onConflict: 'user_id' })
 }
 
+/** The current user's own partner-instructor record (matched by email), if any. */
+export function useMyPartnerInstructor() {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: ['my-partner-instructor', user?.email],
+    enabled: !!user?.email,
+    queryFn: async (): Promise<PartnerInstructor | null> => {
+      const { data, error } = await supabase
+        .from('partner_instructors')
+        .select('*')
+        .ilike('email', user!.email)
+        .maybeSingle()
+      if (error) return null
+      return data ? mapRow(data as Record<string, unknown>) : null
+    },
+  })
+}
+
 export function useUpsertPartnerInstructor() {
   const qc = useQueryClient()
   const { user } = useAuth()
   return useMutation({
-    mutationFn: async (input: { id?: string; email: string; academy?: string; subject?: string; notes?: string; enabledRoutes: string[] }) => {
+    mutationFn: async (input: { id?: string; email: string; academy?: string; subject?: string; notes?: string; studentIds: string[]; enabledRoutes: string[] }) => {
       const row = {
         email: input.email.trim(),
         academy: input.academy?.trim() || null,
         subject: input.subject?.trim() || null,
         notes: input.notes?.trim() || null,
+        student_ids: input.studentIds,
         enabled_routes: input.enabledRoutes,
       }
       if (input.id) {

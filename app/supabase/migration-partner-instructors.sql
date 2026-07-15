@@ -8,11 +8,16 @@ CREATE TABLE IF NOT EXISTS public.partner_instructors (
   academy        text,
   subject        text,
   notes          text,
+  student_ids    text[] NOT NULL DEFAULT '{}',   -- 담당학생 (service_students.id)
   enabled_routes text[] NOT NULL DEFAULT '{}',
   created_by     uuid,
   created_at     timestamptz NOT NULL DEFAULT now(),
   updated_at     timestamptz NOT NULL DEFAULT now()
 );
+
+-- for tables created before student_ids existed
+ALTER TABLE public.partner_instructors
+  ADD COLUMN IF NOT EXISTS student_ids text[] NOT NULL DEFAULT '{}';
 
 -- one row per email (case-insensitive)
 CREATE UNIQUE INDEX IF NOT EXISTS partner_instructors_email_key

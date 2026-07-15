@@ -12,6 +12,7 @@ import { useT } from '@/i18n/LanguageContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useMyPartnerInstructor } from '@/hooks/usePartnerInstructors'
 import {
   usePartnerStudentMeetings, useAllPartnerStudentMeetings, useCreatePartnerStudentMeeting,
   useUpdatePartnerStudentMeeting, useDeletePartnerStudentMeeting,
@@ -28,6 +29,7 @@ export function PartnerStudentsPage() {
   const { data: allStudents = [], isLoading } = useServiceStudents()
   const { data: programFees = [] } = useAllServiceProgramFees()
   const { data: profiles = [] } = useProfiles()
+  const { data: myInstructor } = useMyPartnerInstructor()
   const { data: myMeetings = [] } = usePartnerStudentMeetings(isAdmin ? undefined : partnerId)
   const { data: allMeetings = [] } = useAllPartnerStudentMeetings(isAdmin)
   const meetings = isAdmin ? allMeetings : myMeetings
@@ -72,14 +74,27 @@ export function PartnerStudentsPage() {
   }, [programFees])
 
   // Admins/관리자 see every student with a partner program for oversight.
+  // 파트너 강사(비관리자)는 자기 소속학원 학생 + 담당학생으로 지정된 학생만 봅니다.
   const students = useMemo(() => {
+    const myAcademyKey = nrm(myInstructor?.academy)
+    const myStudentIds = new Set(myInstructor?.studentIds || [])
     return allStudents
       .filter(s => {
         const entry = studentPartners.get(s.id)
-        if (!entry) return false
-        if (!isAdmin && !(!!partnerKey && Array.from(entry.names).some(n => n.includes(partnerKey)))) return false
+        const assigned = myStudentIds.has(s.id)
+        if (!entry && !assigned) return false
+        if (!isAdmin) {
+          if (myInstructor) {
+            // 소속학원 라벨 매칭 또는 담당학생 지정
+            const byAcademy = !!myAcademyKey && !!entry && Array.from(entry.display).some(d => nrm(d) === myAcademyKey || nrm(d).includes(myAcademyKey))
+            if (!byAcademy && !assigned) return false
+          } else {
+            // 강사 레지스트리가 없으면 기존 이름 기반 폴백
+            if (!(entry && !!partnerKey && Array.from(entry.names).some(n => n.includes(partnerKey)))) return false
+          }
+        }
         // 파트너 필터: 그 파트너가 지정된 학생만
-        if (partnerFilter !== 'all' && !Array.from(entry.display).some(d => nrm(d) === nrm(partnerFilter))) return false
+        if (partnerFilter !== 'all' && !(entry && Array.from(entry.display).some(d => nrm(d) === nrm(partnerFilter)))) return false
         return true
       })
       .map(s => ({
@@ -87,7 +102,7 @@ export function PartnerStudentsPage() {
         partners: Array.from(studentPartners.get(s.id)?.display || []).join(', '),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [allStudents, studentPartners, partnerKey, isAdmin, partnerFilter])
+  }, [allStudents, studentPartners, partnerKey, isAdmin, partnerFilter, myInstructor])
 
   const [selected, setSelected] = useState('')
   useEffect(() => {

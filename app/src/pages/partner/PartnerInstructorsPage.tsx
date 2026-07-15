@@ -22,7 +22,9 @@ import {
   FEATURE_MODULES, NAV_ROUTE_DEFS, ADMIN_ONLY_ROUTES,
 } from '@/hooks/useProfiles'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
+import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { EC_PARTNERS } from '@/lib/ecPartners'
+import { X } from 'lucide-react'
 import {
   usePartnerInstructors, useUpsertPartnerInstructor, useDeletePartnerInstructor,
   type PartnerInstructor,
@@ -36,6 +38,11 @@ const SELECTABLE_SECTIONS = FEATURE_MODULES
     routes: NAV_ROUTE_DEFS.filter(r => r.module === m.key && !ADMIN_ONLY_ROUTES.includes(r.path)),
   }))
   .filter(s => s.routes.length > 0)
+
+function isActiveStudent(status?: string): boolean {
+  if (!status) return true
+  return !/(pause|중단|중지|hold|ended|종료|해지|complete|완료|graduat|졸업|inactive)/i.test(status)
+}
 
 export function PartnerInstructorsPage() {
   const t = useT()
@@ -159,14 +166,27 @@ function InstructorDialog({ instructor, academyOptions, onClose }: {
 }) {
   const t = useT()
   const upsert = useUpsertPartnerInstructor()
+  const { data: students = [] } = useServiceStudents()
 
   const [email, setEmail] = useState(instructor?.email || '')
   const [academy, setAcademy] = useState(instructor?.academy || '')
   const [subject, setSubject] = useState(instructor?.subject || '')
   const [notes, setNotes] = useState(instructor?.notes || '')
+  const [studentIds, setStudentIds] = useState<string[]>(instructor?.studentIds || [])
   const [routes, setRoutes] = useState<string[]>(instructor?.enabledRoutes || [])
 
   const toggleRoute = (path: string) => setRoutes(prev => prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path])
+
+  const activeStudents = useMemo(
+    () => students.filter(s => isActiveStudent(s.status)).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')),
+    [students],
+  )
+  const studentLabel = (id: string) => {
+    const s = students.find(x => x.id === id)
+    return s ? (s.koreanName ? `${s.name} · ${s.koreanName}` : s.name) : id
+  }
+  const addStudent = (id: string) => setStudentIds(prev => prev.includes(id) ? prev : [...prev, id])
+  const removeStudent = (id: string) => setStudentIds(prev => prev.filter(x => x !== id))
 
   const emailValid = /.+@.+\..+/.test(email.trim())
   const canSave = emailValid && !upsert.isPending
@@ -174,7 +194,7 @@ function InstructorDialog({ instructor, academyOptions, onClose }: {
   const handleSave = () => {
     if (!canSave) return
     upsert.mutate(
-      { id: instructor?.id, email: email.trim(), academy: academy || undefined, subject, notes, enabledRoutes: routes },
+      { id: instructor?.id, email: email.trim(), academy: academy || undefined, subject, notes, studentIds, enabledRoutes: routes },
       {
         onSuccess: onClose,
         onError: (e: unknown) => {
@@ -211,7 +231,31 @@ function InstructorDialog({ instructor, academyOptions, onClose }: {
             <Label className="text-xs">담당과목</Label>
             <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="예: 수학, 물리" />
           </div>
-          {/* 4. 특이사항 */}
+          {/* 4. 담당학생 (현재 서비스 중인 학생) */}
+          <div className="space-y-1">
+            <Label className="text-xs">담당학생</Label>
+            <Select value="" onValueChange={v => v && addStudent(v)}>
+              <SelectTrigger><SelectValue placeholder="담당학생 선택 (여러 명 선택 가능)" /></SelectTrigger>
+              <SelectContent>
+                {activeStudents.filter(s => !studentIds.includes(s.id)).length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">선택할 학생이 없습니다</div>
+                ) : activeStudents.filter(s => !studentIds.includes(s.id)).map(s => (
+                  <SelectItem key={s.id} value={s.id}>{s.koreanName ? `${s.name} · ${s.koreanName}` : s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {studentIds.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                {studentIds.map(id => (
+                  <Badge key={id} variant="secondary" className="gap-1 text-[11px]">
+                    {studentLabel(id)}
+                    <button type="button" onClick={() => removeStudent(id)} className="hover:text-red-600"><X className="size-3" /></button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* 5. 특이사항 */}
           <div className="space-y-1">
             <Label className="text-xs">특이사항</Label>
             <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="어떤 학생의 선생님인지 등" />
