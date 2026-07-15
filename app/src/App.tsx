@@ -51,6 +51,7 @@ import { PersonProfilePage } from '@/pages/common/PersonProfilePage'
 import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
 import { CommissionRatesPage } from '@/pages/partner/CommissionRatesPage'
 import { PartnerStudentsPage } from '@/pages/partner/PartnerStudentsPage'
+import { PartnerInstructorsPage } from '@/pages/partner/PartnerInstructorsPage'
 import { PartnerCompaniesPage } from '@/pages/partner/PartnerCompaniesPage'
 import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
 import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
@@ -124,6 +125,7 @@ export default function App() {
 
                 <Route path="/partner/contracts" element={<CommissionRatesPage />} />
                 <Route path="/partner/students" element={<PartnerStudentsPage />} />
+                <Route path="/partner/instructors" element={<PartnerInstructorsPage />} />
                 <Route path="/partner/companies" element={<PartnerCompaniesPage />} />
                 <Route path="/partner/calendar" element={<CalendarPage />} />
 

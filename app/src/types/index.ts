@@ -19,6 +19,7 @@ export interface User {
   hireDate?: string  // 입사일 — 연차 계산 기준
   isExternal: boolean
   isPartner?: boolean
+  partnerAcademy?: string  // 파트너 강사 소속학원명
   canApproveOrders?: boolean  // 쿠팡 주문 '주문승인' 권한
   canApproveLeave?: boolean   // '연차·휴가 승인' 권한
   avatarUrl?: string

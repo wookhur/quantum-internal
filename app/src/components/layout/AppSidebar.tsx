@@ -16,6 +16,7 @@ import {
   LogOut,
   LayoutDashboard,
   Users,
+  GraduationCap,
   ClipboardList,
   CheckSquare,
   TrendingUp,
@@ -96,6 +97,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     module: 'partner',
     items: [
       { labelKey: 'nav.partnerStudents', to: '/partner/students', icon: UserSearch },
+      { labelKey: 'nav.partnerInstructors', to: '/partner/instructors', icon: GraduationCap },
       { labelKey: 'nav.partnerCompanies', to: '/partner/companies', icon: Briefcase },
       { labelKey: 'nav.partnerContracts', to: '/partner/contracts', icon: Percent },
     ],

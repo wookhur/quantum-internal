@@ -21,6 +21,7 @@ function mapProfile(row: Record<string, unknown>): User {
     hireDate: (row.hire_date as string) || undefined,
     isExternal: (row.is_external as boolean) || false,
     isPartner: (row.is_partner as boolean) || false,
+    partnerAcademy: (row.partner_academy as string) || undefined,
     canApproveOrders: (row.can_approve_orders as boolean) || false,
     canApproveLeave: (row.can_approve_leave as boolean) || false,
     workerType: (row.worker_type as WorkerType) || undefined,
@@ -64,6 +65,7 @@ export function useUpdateProfile() {
       name?: string
       isExternal?: boolean
       isPartner?: boolean
+      partnerAcademy?: string | null
       canApproveOrders?: boolean
       canApproveLeave?: boolean
     }) => {
@@ -84,6 +86,7 @@ export function useUpdateProfile() {
       if (updates.name !== undefined) row.name = updates.name
       if (updates.isExternal !== undefined) row.is_external = updates.isExternal
       if (updates.isPartner !== undefined) row.is_partner = updates.isPartner
+      if (updates.partnerAcademy !== undefined) row.partner_academy = updates.partnerAcademy
       if (updates.canApproveOrders !== undefined) row.can_approve_orders = updates.canApproveOrders
       if (updates.canApproveLeave !== undefined) row.can_approve_leave = updates.canApproveLeave
 
@@ -178,6 +181,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/hr/personal-info', labelKey: 'nav.personalInfo', module: 'hr' },
   // ── Partner ──
   { path: '/partner/students', labelKey: 'nav.partnerStudents', module: 'partner' },
+  { path: '/partner/instructors', labelKey: 'nav.partnerInstructors', module: 'partner' },
   { path: '/partner/companies', labelKey: 'nav.partnerCompanies', module: 'partner' },
   { path: '/partner/contracts', labelKey: 'nav.partnerContracts', module: 'partner' },
   { path: '/partner/calendar', labelKey: 'nav.calendar', module: 'partner' },
@@ -201,7 +205,7 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
 ]
 
 /** Routes that require admin role — non-admins are always blocked */
-export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info']
+export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info', '/partner/instructors']
 
 /** 서비스입금관리: 관리자(admin)만 열람/편집 */
 export const SERVICE_FINANCE_ROUTES: string[] = ['/service/external-fees']
