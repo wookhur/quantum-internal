@@ -21,6 +21,10 @@ export function LoginPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [settingPassword, setSettingPassword] = useState(false)
   const [passwordSet, setPasswordSet] = useState(false)
+  // 외부 파트너 강사 셀프 가입
+  const [signupMode, setSignupMode] = useState(false)
+  const [signupConfirm, setSignupConfirm] = useState('')
+  const [signupInfo, setSignupInfo] = useState('')
 
   // Detect invite/recovery flow from URL hash
   useEffect(() => {
@@ -61,6 +65,34 @@ export function LoginPage() {
     const { error: err } = await signInWithEmail(email, password)
     if (err) setError(err.message)
     setSubmitting(false)
+  }
+
+  const handleSignup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(''); setSignupInfo('')
+    if (password.length < 6) { setError(t('login.passwordMinLength')); return }
+    if (password !== signupConfirm) { setError(t('login.passwordMismatch')); return }
+    setSubmitting(true)
+    try {
+      // 등록된 파트너 강사 이메일만 가입 허용
+      const { data: allowed, error: rpcErr } = await supabase.rpc('instructor_email_exists', { p_email: email.trim() })
+      if (rpcErr) { setError(rpcErr.message); setSubmitting(false); return }
+      if (!allowed) {
+        setError('파트너 강사관리에 등록된 이메일이 아닙니다. 관리자에게 등록을 요청하세요.')
+        setSubmitting(false); return
+      }
+      const { data, error: signErr } = await supabase.auth.signUp({ email: email.trim(), password })
+      if (signErr) { setError(signErr.message); setSubmitting(false); return }
+      if (data.session) {
+        // 이메일 확인이 꺼져 있으면 바로 로그인됨 → 리다이렉트
+        setSignupInfo('')
+      } else {
+        setSignupInfo('계정이 생성되었습니다. 확인 이메일이 발송된 경우 확인 후 이메일/비밀번호로 로그인하세요.')
+        setSignupMode(false)
+      }
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleSetPassword = async (e: React.FormEvent) => {
@@ -162,6 +194,11 @@ export function LoginPage() {
                 {error}
               </div>
             )}
+            {signupInfo && (
+              <div className="text-sm text-emerald-700 bg-emerald-50 rounded-md p-3">
+                {signupInfo}
+              </div>
+            )}
 
             {/* Google OAuth */}
             <Button
@@ -187,14 +224,14 @@ export function LoginPage() {
               </div>
             </div>
 
-            {/* Email/Password */}
-            <form onSubmit={handleEmail} className="space-y-3">
+            {/* Email/Password (login or 외부 강사 가입) */}
+            <form onSubmit={signupMode ? handleSignup : handleEmail} className="space-y-3">
               <div className="space-y-1.5">
                 <Label htmlFor="email" className="text-sm">{t('login.email')}</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@quantumadmissions.com"
+                  placeholder="you@example.com"
                   className="h-10"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
@@ -202,7 +239,7 @@ export function LoginPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-sm">{t('login.password')}</Label>
+                <Label htmlFor="password" className="text-sm">{signupMode ? '비밀번호 설정' : t('login.password')}</Label>
                 <Input
                   id="password"
                   type="password"
@@ -211,12 +248,38 @@ export function LoginPage() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
+                  minLength={signupMode ? 6 : undefined}
                 />
               </div>
+              {signupMode && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="signupConfirm" className="text-sm">비밀번호 확인</Label>
+                  <Input
+                    id="signupConfirm"
+                    type="password"
+                    placeholder="••••••••"
+                    className="h-10"
+                    value={signupConfirm}
+                    onChange={e => setSignupConfirm(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                </div>
+              )}
               <Button className="w-full h-10" type="submit" disabled={submitting}>
-                {submitting ? t('login.submitting') : t('login.submit')}
+                {submitting ? t('login.submitting') : (signupMode ? '외부 강사 계정 만들기' : t('login.submit'))}
               </Button>
             </form>
+
+            <div className="text-center">
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+                onClick={() => { setSignupMode(m => !m); setError(''); setSignupInfo(''); setSignupConfirm('') }}
+              >
+                {signupMode ? '← 로그인으로 돌아가기' : '외부 파트너 강사이신가요? 계정 만들기'}
+              </button>
+            </div>
           </CardContent>
         </Card>
 
