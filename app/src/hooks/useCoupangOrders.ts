@@ -194,13 +194,24 @@ export function useUpdateCoupangOrder() {
       const { error } = await supabase.from('coupang_orders').update(update).eq('id', id)
       if (error) throw error
 
-      // Let the requester know the approval outcome
-      if ((rest.status === 'approved' || rest.status === 'rejected') && rest.requesterId) {
-        const approved = rest.status === 'approved'
+      // Let the requester know the outcome at each step (승인/반려/주문완료/배송완료)
+      const NOTIFY_TITLE: Record<string, string> = {
+        approved: '주문요청 승인됨',
+        rejected: '주문요청 반려됨',
+        ordered: '주문 완료',
+        delivered: '배송 완료',
+      }
+      const NOTIFY_TAIL: Record<string, string> = {
+        approved: '승인되었습니다. 곧 주문이 진행됩니다.',
+        rejected: '반려되었습니다.',
+        ordered: '주문이 완료되었습니다.',
+        delivered: '배송이 완료되었습니다.',
+      }
+      if (rest.status && rest.requesterId && NOTIFY_TITLE[rest.status]) {
         await createNotificationsForUsers([rest.requesterId], {
           type: 'coupang_order',
-          title: approved ? '주문요청 승인됨' : '주문요청 반려됨',
-          message: `"${rest.productName || '요청하신'}" 주문요청이 ${approved ? '승인되었습니다. 곧 주문이 진행됩니다.' : '반려되었습니다.'}`,
+          title: NOTIFY_TITLE[rest.status],
+          message: `"${rest.productName || '요청하신'}" 주문요청이 ${NOTIFY_TAIL[rest.status]}`,
           link: '/common/coupang-orders',
         })
       }
