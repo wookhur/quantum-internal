@@ -13,6 +13,8 @@ import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useMyPartnerInstructor } from '@/hooks/usePartnerInstructors'
+import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
+import { canonicalConsultantName } from '@/lib/consultants'
 import {
   usePartnerStudentMeetings, useAllPartnerStudentMeetings, useCreatePartnerStudentMeeting,
   useUpdatePartnerStudentMeeting, useDeletePartnerStudentMeeting,
@@ -144,9 +146,26 @@ export function PartnerStudentsPage() {
     } else {
       create.mutate(
         { partnerId, studentName: selected, schoolName: selectedSchool, meetingDate: form.meetingDate || undefined, program: form.program || undefined, content: form.content || undefined, createdBy: partnerId },
-        { onSuccess: reset },
+        { onSuccess: () => { notifyAssignedConsultant(); reset() } },
       )
     }
+  }
+
+  // 미팅 코멘트 입력 시 그 학생의 담당 컨설턴트에게 알림
+  const notifyAssignedConsultant = () => {
+    const stu = allStudents.find(s => s.name === selected)
+    const cName = stu?.assignedConsultant
+    if (!cName) return
+    const canon = canonicalConsultantName(cName)
+    const prof = profiles.find(p => canonicalConsultantName(p.name) === canon)
+    if (!prof || prof.id === user?.id) return
+    const from = myInstructor?.academy || user?.name || '파트너사'
+    createNotificationsForUsers([prof.id], {
+      type: 'partner_comment',
+      title: '파트너 학생 코멘트 등록',
+      message: `${from}에서 ${selected} 학생 미팅 코멘트를 남겼습니다.`,
+      link: '/partner/students',
+    }).catch(() => {})
   }
 
   return (
