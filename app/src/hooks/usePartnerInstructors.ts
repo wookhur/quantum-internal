@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -59,6 +60,28 @@ async function applyToProfileIfExists(email: string, academy: string | undefined
     enabled_routes: enabledRoutes,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
+}
+
+/**
+ * On login, apply the current user's own partner-instructor access (routes/academy)
+ * to their account via a SECURITY DEFINER RPC. Runs once per session; no-op for
+ * users who aren't registered partner instructors.
+ */
+export function useApplyMyInstructorAccess() {
+  const { user } = useAuth()
+  const qc = useQueryClient()
+  const doneFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!user?.id || doneFor.current === user.id) return
+    doneFor.current = user.id
+    ;(async () => {
+      const { error } = await supabase.rpc('apply_my_instructor_access')
+      if (error) return
+      qc.invalidateQueries({ queryKey: ['feature-access'] })
+      qc.invalidateQueries({ queryKey: ['profiles'] })
+      qc.invalidateQueries({ queryKey: ['my-partner-instructor'] })
+    })()
+  }, [user?.id, qc])
 }
 
 /** The current user's own partner-instructor record (matched by email), if any. */

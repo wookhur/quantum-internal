@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar'
 import { AppSidebar } from './AppSidebar'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
@@ -13,6 +13,7 @@ import { AccountSettingsDialog } from '@/components/AccountSettingsDialog'
 import { useUnreadCount, useMessageSubscription } from '@/hooks/useMessages'
 import { useUIScale } from '@/hooks/useUIScale'
 import { useFeatureAccess, getEffectiveRoutes } from '@/hooks/useProfiles'
+import { useApplyMyInstructorAccess } from '@/hooks/usePartnerInstructors'
 
 export function AppLayout() {
   const { user } = useAuth()
@@ -24,6 +25,7 @@ export function AppLayout() {
   const { data: featureAccess = [] } = useFeatureAccess()
   useMessageSubscription()
   useUIScale() // applies saved font-size to document root
+  useApplyMyInstructorAccess() // 파트너 강사: 로그인 시 접근권한 자동 적용
 
   // Check route-level access
   const enabledRoutes = user ? getEffectiveRoutes(user, featureAccess) : []
@@ -32,6 +34,13 @@ export function AppLayout() {
   const hasRouteAccess = enabledRoutes.some(route =>
     currentPath === route || currentPath.startsWith(route + '/'),
   )
+
+  // 접근 불가한 기본 랜딩(대시보드)에 들어온 경우, 허용된 첫 화면으로 이동
+  useEffect(() => {
+    if (user && !hasRouteAccess && enabledRoutes.length > 0 && currentPath === '/dashboard') {
+      navigate(enabledRoutes[0], { replace: true })
+    }
+  }, [user, hasRouteAccess, enabledRoutes, currentPath, navigate])
 
   return (
     <SidebarProvider>
