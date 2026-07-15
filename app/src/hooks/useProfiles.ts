@@ -156,7 +156,6 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/consulting/collections', labelKey: 'nav.monthlyCollection', module: 'finance' },
   { path: '/finance/invoices', labelKey: 'nav.invoices', module: 'finance' },
   { path: '/finance/receipts', labelKey: 'nav.receipts', module: 'finance' },
-  { path: '/finance/corporate-receipts', labelKey: 'nav.corporateReceipts', module: 'finance' },
   { path: '/finance/wire-invoice', labelKey: 'nav.wireInvoice', module: 'finance' },
   { path: '/finance/incentives/by-contract', labelKey: 'nav.incentives', module: 'finance' },
   { path: '/finance/incentives/by-person', labelKey: 'nav.incentives', module: 'finance' },
@@ -202,7 +201,7 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
 ]
 
 /** Routes that require admin role — non-admins are always blocked */
-export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info', '/finance/corporate-receipts']
+export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info']
 
 /** 서비스입금관리: 관리자(admin)만 열람/편집 */
 export const SERVICE_FINANCE_ROUTES: string[] = ['/service/external-fees']
