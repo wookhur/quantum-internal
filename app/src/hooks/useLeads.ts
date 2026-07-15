@@ -142,6 +142,7 @@ export function useLeads(
         .from('leads')
         .select('*, profiles!leads_assigned_to_fkey(id, name, email)')
         .order(SORT_FIELD_MAP[sort.field], { ascending: sort.direction === 'asc' })
+        .limit(5000)
 
       // Stage filter
       if (filters?.stage && filters.stage !== 'all') {
@@ -440,6 +441,7 @@ export function useLeadStats() {
       const { data, error } = await supabase
         .from('leads')
         .select('pipeline_stage, source_channel, lead_date')
+        .limit(5000)
       if (error) throw error
 
       const rows = data || []
