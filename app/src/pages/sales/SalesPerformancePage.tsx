@@ -13,13 +13,17 @@ import { useLeads } from '@/hooks/useLeads'
 import {
   useSeminarsWithRegistrations,
   useAllContactActivities,
+  useAllMeetingsSlim,
+  meetingsForLeads,
   computeColdCallOutcome,
   leadMatchesSeminar,
   dedupeLeadsByPerson,
   type SeminarLite,
+  type MeetingSlim,
 } from '@/hooks/useSeminarPerformance'
+import { useSeminarRegistrations } from '@/hooks/useSeminars'
 import type { Lead, SalesEvent } from '@/types'
-import { getStageConfig } from '@/types'
+import { getStageConfig, MEETING_METHODS } from '@/types'
 import { Link } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 
@@ -113,8 +117,20 @@ export function SalesPerformancePage() {
   const { data: seminars = [] } = useSeminarsWithRegistrations()
   const { data: allLeads = [] } = useLeads()
   const { data: contactActivities = [] } = useAllContactActivities()
+  const { data: allMeetings = [] } = useAllMeetingsSlim()
 
-  const [leadsDialogRow, setLeadsDialogRow] = useState<PerfRow | null>(null)
+  // Which cell was clicked → which list to show
+  const [detailDialog, setDetailDialog] = useState<{
+    row: PerfRow
+    kind: 'leads' | 'registrants' | 'meetings'
+    /** meeting_method filter for kind='meetings'; undefined = all meetings */
+    method?: string
+  } | null>(null)
+
+  // Registrant list for the applicants dialog (fetched on demand)
+  const { data: dialogRegistrations = [], isLoading: regsLoading } = useSeminarRegistrations(
+    detailDialog?.kind === 'registrants' ? detailDialog.row.seminar?.id : undefined,
+  )
 
   // Merge manual sales_events with auto-aggregated seminars
   const rows = useMemo((): PerfRow[] => {
@@ -137,12 +153,16 @@ export function SalesPerformancePage() {
       seminar: seminars.find(s => s.title === e.eventName) ?? null,
     }))
 
-    // Seminars from 세미나 관리 not manually recorded → auto rows
+    // Seminars from 세미나 관리 not manually recorded → auto rows.
+    // Consultation counts come from actual meeting records (미팅 기록),
+    // broken down by meeting_method.
     const autoRows: PerfRow[] = seminars
       .filter(s => !manualNames.has(s.title.trim()))
       .map(s => {
         const matched = dedupeLeadsByPerson(allLeads.filter(l => leadMatchesSeminar(l, s)))
         const outcome = computeColdCallOutcome(matched, contactActivities, s.applicants)
+        const matchedMeetings = meetingsForLeads(allMeetings, matched)
+        const byMethod = (m: string) => matchedMeetings.filter(mt => mt.meetingMethod === m).length
         const month = (s.date || s.createdAt).slice(0, 7)
         return {
           id: `seminar-${s.id}`,
@@ -150,10 +170,10 @@ export function SalesPerformancePage() {
           eventName: s.title,
           applicants: s.applicants,
           attendees: 0,
-          phoneConsultations: outcome.confirmed,
-          zoomBookings: 0,
-          inPersonBookings: 0,
-          totalMeetings: outcome.consultScheduled,
+          phoneConsultations: byMethod('phone'),
+          zoomBookings: byMethod('zoom'),
+          inPersonBookings: byMethod('in_person'),
+          totalMeetings: matchedMeetings.length,
           contracts: outcome.contracted,
           contractRate: s.applicants > 0 ? (outcome.contracted / s.applicants) * 100 : 0,
           auto: true,
@@ -167,7 +187,7 @@ export function SalesPerformancePage() {
       merged = merged.filter(r => r.month === monthFilter)
     }
     return merged
-  }, [events, seminars, allLeads, contactActivities, monthFilter])
+  }, [events, seminars, allLeads, contactActivities, allMeetings, monthFilter])
 
   // Extract unique months for the filter dropdown (from all rows, unfiltered)
   const months = useMemo(() => {
@@ -176,15 +196,26 @@ export function SalesPerformancePage() {
     return Array.from(set).filter(Boolean).sort().reverse()
   }, [events, seminars])
 
-  // Leads for the clicked event row
+  // Leads matched to the clicked event row
   const dialogLeads = useMemo((): Lead[] => {
-    if (!leadsDialogRow) return []
-    if (leadsDialogRow.seminar) {
-      const s = leadsDialogRow.seminar
+    if (!detailDialog) return []
+    const row = detailDialog.row
+    if (row.seminar) {
+      const s = row.seminar
       return dedupeLeadsByPerson(allLeads.filter(l => leadMatchesSeminar(l, s)))
     }
-    return allLeads.filter(l => l.sourceChannel === leadsDialogRow.eventName)
-  }, [leadsDialogRow, allLeads])
+    return allLeads.filter(l => l.sourceChannel === row.eventName)
+  }, [detailDialog, allLeads])
+
+  // Meetings matched to the clicked event row (optionally by method)
+  const dialogMeetings = useMemo((): MeetingSlim[] => {
+    if (!detailDialog || detailDialog.kind !== 'meetings') return []
+    let matched = meetingsForLeads(allMeetings, dialogLeads)
+    if (detailDialog.method) {
+      matched = matched.filter(m => m.meetingMethod === detailDialog.method)
+    }
+    return matched
+  }, [detailDialog, allMeetings, dialogLeads])
 
   // Summary calculations
   const totalApplicants = rows.reduce((sum, e) => sum + (e.applicants || 0), 0)
@@ -317,7 +348,7 @@ export function SalesPerformancePage() {
                     <TableRow
                       key={row.id}
                       className="cursor-pointer"
-                      onClick={() => setLeadsDialogRow(row)}
+                      onClick={() => setDetailDialog({ row, kind: 'leads' })}
                     >
                       {idx === 0 ? (
                         <TableCell
@@ -342,12 +373,41 @@ export function SalesPerformancePage() {
                           <ChevronRight className="size-3 text-muted-foreground" />
                         </span>
                       </TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{row.applicants}</TableCell>
+                      <TableCell
+                        className={`text-right text-sm tabular-nums ${row.seminar ? 'hover:underline hover:text-primary' : ''}`}
+                        onClick={(e) => {
+                          if (!row.seminar) return
+                          e.stopPropagation()
+                          setDetailDialog({ row, kind: 'registrants' })
+                        }}
+                      >
+                        {row.applicants}
+                      </TableCell>
                       <TableCell className="text-right text-sm tabular-nums">{row.attendees || '-'}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{row.phoneConsultations}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{row.zoomBookings}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{row.inPersonBookings}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums font-medium">{row.totalMeetings}</TableCell>
+                      <TableCell
+                        className="text-right text-sm tabular-nums hover:underline hover:text-primary"
+                        onClick={(e) => { e.stopPropagation(); setDetailDialog({ row, kind: 'meetings', method: 'phone' }) }}
+                      >
+                        {row.phoneConsultations}
+                      </TableCell>
+                      <TableCell
+                        className="text-right text-sm tabular-nums hover:underline hover:text-primary"
+                        onClick={(e) => { e.stopPropagation(); setDetailDialog({ row, kind: 'meetings', method: 'zoom' }) }}
+                      >
+                        {row.zoomBookings}
+                      </TableCell>
+                      <TableCell
+                        className="text-right text-sm tabular-nums hover:underline hover:text-primary"
+                        onClick={(e) => { e.stopPropagation(); setDetailDialog({ row, kind: 'meetings', method: 'in_person' }) }}
+                      >
+                        {row.inPersonBookings}
+                      </TableCell>
+                      <TableCell
+                        className="text-right text-sm tabular-nums font-medium hover:underline hover:text-primary"
+                        onClick={(e) => { e.stopPropagation(); setDetailDialog({ row, kind: 'meetings' }) }}
+                      >
+                        {row.totalMeetings}
+                      </TableCell>
                       <TableCell className="text-right text-sm tabular-nums">
                         <span className={row.contracts > 0 ? 'text-success font-medium' : ''}>
                           {row.contracts}
@@ -480,61 +540,177 @@ export function SalesPerformancePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Leads for Event Dialog */}
-      <Dialog open={!!leadsDialogRow} onOpenChange={(open) => { if (!open) setLeadsDialogRow(null) }}>
+      {/* Detail Dialog: leads / registrants / meetings */}
+      <Dialog open={!!detailDialog} onOpenChange={(open) => { if (!open) setDetailDialog(null) }}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {t('salesPerf.leadsDialogTitle').replace('{name}', leadsDialogRow?.eventName ?? '')}
+              {detailDialog?.kind === 'registrants'
+                ? t('salesPerf.registrantsDialogTitle').replace('{name}', detailDialog.row.eventName)
+                : detailDialog?.kind === 'meetings'
+                  ? t('salesPerf.meetingsDialogTitle')
+                      .replace('{name}', detailDialog.row.eventName)
+                      .replace(
+                        '{method}',
+                        detailDialog.method
+                          ? (MEETING_METHODS.find(m => m.value === detailDialog.method)?.label ?? detailDialog.method)
+                          : t('salesPerf.allMethods'),
+                      )
+                  : t('salesPerf.leadsDialogTitle').replace('{name}', detailDialog?.row.eventName ?? '')}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
-                {t('salesPerf.leadsDialogCount').replace('{n}', String(dialogLeads.length))}
+                {t('salesPerf.leadsDialogCount').replace(
+                  '{n}',
+                  String(
+                    detailDialog?.kind === 'registrants'
+                      ? dialogRegistrations.length
+                      : detailDialog?.kind === 'meetings'
+                        ? dialogMeetings.length
+                        : dialogLeads.length,
+                  ),
+                )}
               </span>
             </DialogTitle>
           </DialogHeader>
-          {dialogLeads.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-10">
-              {t('salesPerf.noMatchingLeads')}
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('leads.col.parentName')}</TableHead>
-                  <TableHead>{t('leads.col.studentName')}</TableHead>
-                  <TableHead>{t('leads.col.school')}</TableHead>
-                  <TableHead>{t('leads.col.grade')}</TableHead>
-                  <TableHead>{t('leads.sourceChannel')}</TableHead>
-                  <TableHead>{t('leads.col.stage')}</TableHead>
-                  <TableHead className="w-[40px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {dialogLeads.map((lead) => {
-                  const stage = getStageConfig(lead.pipelineStage)
-                  return (
-                    <TableRow key={lead.id}>
-                      <TableCell className="text-sm font-medium">{lead.parentName}</TableCell>
-                      <TableCell className="text-sm">{lead.studentName || '-'}</TableCell>
-                      <TableCell className="text-sm">{lead.currentSchool || '-'}</TableCell>
-                      <TableCell className="text-sm">{lead.grade || '-'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{lead.sourceChannel}</TableCell>
-                      <TableCell>
-                        <span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>
-                          {stage.label}
-                        </span>
+
+          {/* Registrants list */}
+          {detailDialog?.kind === 'registrants' && (
+            regsLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : dialogRegistrations.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                {t('salesPerf.noMatchingLeads')}
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('seminars.regDate')}</TableHead>
+                    <TableHead>{t('leads.col.parentName')}</TableHead>
+                    <TableHead>{t('common.phone')}</TableHead>
+                    <TableHead>{t('common.email')}</TableHead>
+                    <TableHead>{t('leads.col.studentName')}</TableHead>
+                    <TableHead>{t('leads.col.grade')}</TableHead>
+                    <TableHead>{t('leads.col.school')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dialogRegistrations.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(r.createdAt).toLocaleDateString('ko-KR')}
                       </TableCell>
+                      <TableCell className="text-sm font-medium">{r.parentName}</TableCell>
+                      <TableCell className="text-sm font-mono">{r.phone || '-'}</TableCell>
+                      <TableCell className="text-sm">{r.email || '-'}</TableCell>
+                      <TableCell className="text-sm">{r.studentName || '-'}</TableCell>
+                      <TableCell className="text-sm">{r.grade || '-'}</TableCell>
+                      <TableCell className="text-sm">{r.school || '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          )}
+
+          {/* Meetings list */}
+          {detailDialog?.kind === 'meetings' && (
+            dialogMeetings.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                {t('salesPerf.noMatchingMeetings')}
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('meetings.col.meetingDate')}</TableHead>
+                    <TableHead>{t('meetings.col.method')}</TableHead>
+                    <TableHead>{t('meetings.col.meetingNumber')}</TableHead>
+                    <TableHead>{t('leads.col.parentName')}</TableHead>
+                    <TableHead>{t('leads.col.studentName')}</TableHead>
+                    <TableHead>{t('common.phone')}</TableHead>
+                    <TableHead className="w-[40px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dialogMeetings.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell className="text-sm font-mono">{m.meetingDate || '-'}</TableCell>
+                      <TableCell className="text-sm">
+                        {m.meetingMethod
+                          ? (MEETING_METHODS.find(mm => mm.value === m.meetingMethod)?.label ?? m.meetingMethod)
+                          : <span className="text-muted-foreground">{t('salesPerf.methodUnknown')}</span>}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {m.meetingNumber ? t('meetings.nthMeeting').replace('{n}', String(m.meetingNumber)) : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm font-medium">{m.parentName || '-'}</TableCell>
+                      <TableCell className="text-sm">{m.studentName || '-'}</TableCell>
+                      <TableCell className="text-sm font-mono">{m.phone || '-'}</TableCell>
                       <TableCell>
-                        <Link to={`/sales/leads/${lead.id}`}>
-                          <Button variant="ghost" size="icon" className="size-6">
-                            <ChevronRight className="size-3.5" />
-                          </Button>
-                        </Link>
+                        {m.leadId && (
+                          <Link to={`/sales/leads/${m.leadId}`}>
+                            <Button variant="ghost" size="icon" className="size-6">
+                              <ChevronRight className="size-3.5" />
+                            </Button>
+                          </Link>
+                        )}
                       </TableCell>
                     </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          )}
+
+          {/* Leads list */}
+          {detailDialog?.kind === 'leads' && (
+            dialogLeads.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                {t('salesPerf.noMatchingLeads')}
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('leads.col.parentName')}</TableHead>
+                    <TableHead>{t('leads.col.studentName')}</TableHead>
+                    <TableHead>{t('leads.col.school')}</TableHead>
+                    <TableHead>{t('leads.col.grade')}</TableHead>
+                    <TableHead>{t('leads.sourceChannel')}</TableHead>
+                    <TableHead>{t('leads.col.stage')}</TableHead>
+                    <TableHead className="w-[40px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dialogLeads.map((lead) => {
+                    const stage = getStageConfig(lead.pipelineStage)
+                    return (
+                      <TableRow key={lead.id}>
+                        <TableCell className="text-sm font-medium">{lead.parentName}</TableCell>
+                        <TableCell className="text-sm">{lead.studentName || '-'}</TableCell>
+                        <TableCell className="text-sm">{lead.currentSchool || '-'}</TableCell>
+                        <TableCell className="text-sm">{lead.grade || '-'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{lead.sourceChannel}</TableCell>
+                        <TableCell>
+                          <span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>
+                            {stage.label}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Link to={`/sales/leads/${lead.id}`}>
+                            <Button variant="ghost" size="icon" className="size-6">
+                              <ChevronRight className="size-3.5" />
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            )
           )}
         </DialogContent>
       </Dialog>

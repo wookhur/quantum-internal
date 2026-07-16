@@ -700,6 +700,14 @@ const koTranslations = {
   'salesPerf.leadsDialogCount': '총 {n}건',
   'salesPerf.noMatchingLeads': '이 이벤트에 연결된 리드가 없습니다.',
   'salesPerf.col.confirmed': '통화성공',
+  'salesPerf.registrantsDialogTitle': '{name} 신청자 목록',
+  'salesPerf.meetingsDialogTitle': '{name} 미팅 목록 ({method})',
+  'salesPerf.allMethods': '전체',
+  'salesPerf.noMatchingMeetings': '이 이벤트에 연결된 미팅 기록이 없습니다.',
+  'salesPerf.methodUnknown': '방식 미입력',
+  'meetings.col.method': '미팅 방식',
+  'meetings.methodPlaceholder': '방식 선택',
+  'seminars.regDate': '신청일',
 
   // ── Sales Funnel ──
   'funnel.title': '영업 퍼널',
@@ -3162,6 +3170,14 @@ const enTranslations: Record<string, string> = {
   'salesPerf.leadsDialogCount': '{n} total',
   'salesPerf.noMatchingLeads': 'No leads linked to this event.',
   'salesPerf.col.confirmed': 'Reached',
+  'salesPerf.registrantsDialogTitle': '{name} Registrants',
+  'salesPerf.meetingsDialogTitle': '{name} Meetings ({method})',
+  'salesPerf.allMethods': 'All',
+  'salesPerf.noMatchingMeetings': 'No meeting records linked to this event.',
+  'salesPerf.methodUnknown': 'Not set',
+  'meetings.col.method': 'Method',
+  'meetings.methodPlaceholder': 'Select method',
+  'seminars.regDate': 'Registered',
 
   // ── Sales Funnel ──
   'funnel.title': 'Sales Funnel',

@@ -16,7 +16,8 @@ import {
   Paperclip, Trash2, ExternalLink, LinkIcon,
 } from 'lucide-react'
 import { useMeetings, useCreateMeeting, useUpdateMeeting, useDeleteMeeting, useUpdateNoteDelivered, useUploadMeetingPdf, useDeleteMeetingPdf } from '@/hooks/useMeetings'
-import type { Meeting } from '@/types'
+import type { Meeting, MeetingMethod } from '@/types'
+import { MEETING_METHODS } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { currentMonthStrKST } from '@/lib/date'
 import { extractTextFromPdf, renderPdfPagesToImages } from '@/lib/pdf-extract'
@@ -39,6 +40,7 @@ function getMeetingBadge(num: number, t: (key: string, params?: Record<string, s
 const INITIAL_MEETING_FORM = {
   meetingDate: '',
   meetingNumber: '1',
+  meetingMethod: '' as '' | MeetingMethod,
   parentName: '',
   studentName: '',
   phone: '',
@@ -109,6 +111,11 @@ function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdf
             <Calendar className="size-3.5 text-muted-foreground shrink-0" />
             <span className="text-muted-foreground">{t('meetings.col.meetingDate')}</span>
             <span className="font-mono font-medium">{meeting.meetingDate || '-'}</span>
+            {meeting.meetingMethod && (
+              <Badge variant="outline" className="text-[10px]">
+                {MEETING_METHODS.find(m => m.value === meeting.meetingMethod)?.label ?? meeting.meetingMethod}
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Phone className="size-3.5 text-muted-foreground shrink-0" />
@@ -280,6 +287,7 @@ export function MeetingsPage() {
       setForm({
         meetingDate: extracted.meetingDate || '',
         meetingNumber: extracted.meetingNumber ? String(extracted.meetingNumber) : '1',
+        meetingMethod: '',
         parentName: extracted.parentName || '',
         studentName: extracted.studentName || '',
         phone: extracted.phone || '',
@@ -310,6 +318,7 @@ export function MeetingsPage() {
       {
         meetingDate: form.meetingDate,
         meetingNumber: parseInt(form.meetingNumber),
+        meetingMethod: form.meetingMethod || undefined,
         parentName: form.parentName,
         studentName: form.studentName,
         phone: form.phone,
@@ -341,6 +350,7 @@ export function MeetingsPage() {
       id: m.id,
       meetingDate: m.meetingDate || '',
       meetingNumber: String(m.meetingNumber),
+      meetingMethod: m.meetingMethod || '',
       parentName: m.parentName || '',
       studentName: m.studentName || '',
       phone: m.phone || '',
@@ -362,6 +372,7 @@ export function MeetingsPage() {
       id: editForm.id,
       meetingDate: editForm.meetingDate,
       meetingNumber: parseInt(editForm.meetingNumber),
+      meetingMethod: (editForm.meetingMethod || undefined) as MeetingMethod | undefined,
       parentName: editForm.parentName,
       studentName: editForm.studentName,
       phone: editForm.phone,
@@ -663,7 +674,7 @@ export function MeetingsPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>{t('meetings.col.meetingDate')} *</Label>
                   <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} />
@@ -676,6 +687,17 @@ export function MeetingsPage() {
                       <SelectItem value="1">{t('meetings.nthMeeting').replace('{n}', '1')}</SelectItem>
                       <SelectItem value="2">{t('meetings.nthMeeting').replace('{n}', '2')}</SelectItem>
                       <SelectItem value="3">{t('meetings.nthMeeting').replace('{n}', '3')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>{t('meetings.col.method')} *</Label>
+                  <Select value={form.meetingMethod} onValueChange={v => setForm(f => ({ ...f, meetingMethod: (v || '') as '' | MeetingMethod }))}>
+                    <SelectTrigger><SelectValue placeholder={t('meetings.methodPlaceholder')} /></SelectTrigger>
+                    <SelectContent>
+                      {MEETING_METHODS.map(m => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -738,7 +760,7 @@ export function MeetingsPage() {
             <DialogTitle>{t('meetings.editMeeting')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 overflow-y-auto pr-1 -mr-1">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>{t('meetings.col.meetingDate')} *</Label>
                 <Input type="date" value={editForm.meetingDate} onChange={e => setEditForm(f => ({ ...f, meetingDate: e.target.value }))} />
@@ -751,6 +773,17 @@ export function MeetingsPage() {
                     <SelectItem value="1">{t('meetings.nthMeeting').replace('{n}', '1')}</SelectItem>
                     <SelectItem value="2">{t('meetings.nthMeeting').replace('{n}', '2')}</SelectItem>
                     <SelectItem value="3">{t('meetings.nthMeeting').replace('{n}', '3')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('meetings.col.method')}</Label>
+                <Select value={editForm.meetingMethod} onValueChange={v => setEditForm(f => ({ ...f, meetingMethod: (v || '') as '' | MeetingMethod }))}>
+                  <SelectTrigger><SelectValue placeholder={t('meetings.methodPlaceholder')} /></SelectTrigger>
+                  <SelectContent>
+                    {MEETING_METHODS.map(m => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

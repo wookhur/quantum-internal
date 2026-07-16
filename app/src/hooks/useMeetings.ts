@@ -8,6 +8,7 @@ function mapMeeting(row: Record<string, unknown>): Meeting {
     leadId: row.lead_id as string | undefined,
     meetingDate: row.meeting_date as string,
     meetingNumber: row.meeting_number as number,
+    meetingMethod: row.meeting_method as Meeting['meetingMethod'],
     parentName: row.parent_name as string,
     studentName: row.student_name as string | undefined,
     phone: row.phone as string | undefined,
@@ -148,6 +149,7 @@ export function useCreateMeeting() {
       const row: Record<string, unknown> = {
         meeting_date: meeting.meetingDate,
         meeting_number: meeting.meetingNumber,
+        meeting_method: meeting.meetingMethod ?? null,
         parent_name: meeting.parentName,
         student_name: meeting.studentName,
         phone: meeting.phone,
@@ -182,6 +184,7 @@ export function useUpdateMeeting() {
       id: string
       meetingDate?: string
       meetingNumber?: number
+      meetingMethod?: Meeting['meetingMethod']
       parentName?: string
       studentName?: string
       phone?: string
@@ -197,6 +200,7 @@ export function useUpdateMeeting() {
       const row: Record<string, unknown> = {}
       if (updates.meetingDate !== undefined) row.meeting_date = updates.meetingDate
       if (updates.meetingNumber !== undefined) row.meeting_number = updates.meetingNumber
+      if (updates.meetingMethod !== undefined) row.meeting_method = updates.meetingMethod || null
       if (updates.parentName !== undefined) row.parent_name = updates.parentName
       if (updates.studentName !== undefined) row.student_name = updates.studentName || null
       if (updates.phone !== undefined) row.phone = updates.phone || null

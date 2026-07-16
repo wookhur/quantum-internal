@@ -373,11 +373,20 @@ export interface VideoProject {
 }
 
 // ============ MEETINGS (legacy, may be merged into activities) ============
+export type MeetingMethod = 'phone' | 'zoom' | 'in_person'
+
+export const MEETING_METHODS: { value: MeetingMethod; label: string }[] = [
+  { value: 'phone', label: '전화상담' },
+  { value: 'zoom', label: 'Zoom' },
+  { value: 'in_person', label: '대면' },
+]
+
 export interface Meeting {
   id: string
   leadId?: string
   meetingDate: string
   meetingNumber: number
+  meetingMethod?: MeetingMethod
   parentName: string
   studentName?: string
   phone?: string

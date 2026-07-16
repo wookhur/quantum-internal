@@ -139,6 +139,69 @@ export function useSeminarsWithRegistrations() {
   })
 }
 
+export interface MeetingSlim {
+  id: string
+  leadId: string | null
+  meetingMethod: string | null
+  meetingDate: string | null
+  meetingNumber: number | null
+  parentName: string | null
+  studentName: string | null
+  phone: string | null
+}
+
+/** All meeting records (slim) — used to count consultations by method. */
+export function useAllMeetingsSlim() {
+  return useQuery({
+    queryKey: ['all-meetings-slim'],
+    queryFn: async () => {
+      const PAGE = 1000
+      let from = 0
+      const rows: MeetingSlim[] = []
+      while (true) {
+        const { data, error } = await supabase
+          .from('meetings')
+          .select('id, lead_id, meeting_method, meeting_date, meeting_number, parent_name, student_name, phone')
+          .order('meeting_date', { ascending: false })
+          .range(from, from + PAGE - 1)
+        if (error) throw error
+        const batch = (data || []) as Record<string, unknown>[]
+        rows.push(
+          ...batch.map((r) => ({
+            id: r.id as string,
+            leadId: (r.lead_id as string | null) ?? null,
+            meetingMethod: (r.meeting_method as string | null) ?? null,
+            meetingDate: (r.meeting_date as string | null) ?? null,
+            meetingNumber: (r.meeting_number as number | null) ?? null,
+            parentName: (r.parent_name as string | null) ?? null,
+            studentName: (r.student_name as string | null) ?? null,
+            phone: (r.phone as string | null) ?? null,
+          })),
+        )
+        if (batch.length < PAGE) break
+        from += PAGE
+      }
+      return rows
+    },
+  })
+}
+
+/**
+ * Meetings linked to a set of leads: by lead_id, or by phone when the
+ * meeting was never linked to a lead.
+ */
+export function meetingsForLeads(meetings: MeetingSlim[], leads: Lead[]): MeetingSlim[] {
+  const leadIds = new Set(leads.map((l) => l.id))
+  const leadPhones = new Set(
+    leads.map((l) => normalizePhone(l.phone)).filter((p) => isUsablePhone(p)),
+  )
+  return meetings.filter((m) => {
+    if (m.leadId && leadIds.has(m.leadId)) return true
+    const p = normalizePhone(m.phone)
+    return isUsablePhone(p) && leadPhones.has(p)
+  })
+}
+
 export interface ContactActivitySlim {
   leadId: string
   activityType: string
