@@ -762,6 +762,11 @@ const koTranslations = {
   'ads.friendsDiff': '친구 증감',
   'ads.note': '비고',
   'ads.totalSpend': '총 광고비',
+  'ads.editCampaign': '캠페인 수정',
+  'ads.deleteConfirmTitle': '캠페인 삭제',
+  'ads.deleteConfirmMsg': '을(를) 삭제하시겠습니까?',
+  'ads.friendsBefore': '친구 (전)',
+  'ads.friendsAfter': '친구 (후)',
 
   // ── Events ──
   'events.title': '이벤트 관리',
@@ -3153,6 +3158,11 @@ const enTranslations: Record<string, string> = {
   'ads.friendsDiff': 'Friend Change',
   'ads.note': 'Note',
   'ads.totalSpend': 'Total Ad Spend',
+  'ads.editCampaign': 'Edit Campaign',
+  'ads.deleteConfirmTitle': 'Delete Campaign',
+  'ads.deleteConfirmMsg': 'will be deleted. Are you sure?',
+  'ads.friendsBefore': 'Friends (Before)',
+  'ads.friendsAfter': 'Friends (After)',
 
   // ── Events ──
   'events.title': 'Event Management',

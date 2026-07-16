@@ -150,6 +150,13 @@ export function PlanningOverviewPage() {
   }, [mergedRows])
 
   const latestMonth = mergedRows.length > 0 ? mergedRows[0] : null
+  const hasMixedCurrency = regionFilter === 'all' && mergedRows.some(r => r.currency === 'KRW') && mergedRows.some(r => r.currency === 'USD')
+  const krwRows = mergedRows.filter(r => r.currency === 'KRW')
+  const usdRows = mergedRows.filter(r => r.currency === 'USD')
+  const totalTargetKRW = krwRows.reduce((sum, p) => sum + p.target, 0)
+  const totalActualKRW = krwRows.reduce((sum, p) => sum + p.actual, 0)
+  const totalTargetUSD = usdRows.reduce((sum, p) => sum + p.target, 0)
+  const totalActualUSD = usdRows.reduce((sum, p) => sum + p.actual, 0)
   const totalTarget = mergedRows.reduce((sum, p) => sum + p.target, 0)
   const totalActual = mergedRows.reduce((sum, p) => sum + p.actual, 0)
   const avgAchievementRate = mergedRows.filter(r => r.target > 0).length > 0
@@ -401,9 +408,18 @@ export function PlanningOverviewPage() {
 
       {/* Summary Footer */}
       {mergedRows.length > 0 && (
-        <div className="flex items-center gap-4 text-sm text-gray-500">
-          <span>{t('planOverview.totalTarget')}: {formatCurrency(totalTarget, mergedRows[0].currency)}</span>
-          <span>{t('planOverview.totalActual')}: {formatCurrency(totalActual, mergedRows[0].currency)}</span>
+        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+          {hasMixedCurrency ? (
+            <>
+              <span>{t('planOverview.totalTarget')}: {formatCurrency(totalTargetKRW, 'KRW')} / {formatCurrency(totalTargetUSD, 'USD')}</span>
+              <span>{t('planOverview.totalActual')}: {formatCurrency(totalActualKRW, 'KRW')} / {formatCurrency(totalActualUSD, 'USD')}</span>
+            </>
+          ) : (
+            <>
+              <span>{t('planOverview.totalTarget')}: {formatCurrency(totalTarget, mergedRows[0].currency)}</span>
+              <span>{t('planOverview.totalActual')}: {formatCurrency(totalActual, mergedRows[0].currency)}</span>
+            </>
+          )}
           <span>{t('planOverview.avgAchievementRate')}: {avgAchievementRate.toFixed(1)}%</span>
           <span>{t('planOverview.totalNewContracts')}: {totalNewContracts}{t('common.count')}</span>
         </div>

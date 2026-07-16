@@ -138,50 +138,52 @@ export function useLeads(
   return useQuery({
     queryKey: ['leads', filters, sort],
     queryFn: async () => {
-      let query = supabase
-        .from('leads')
-        .select('*, profiles!leads_assigned_to_fkey(id, name, email)')
-        .order(SORT_FIELD_MAP[sort.field], { ascending: sort.direction === 'asc' })
-        .limit(5000)
+      const PAGE_SIZE = 1000
+      const allRows: Record<string, unknown>[] = []
+      let from = 0
 
-      // Stage filter
-      if (filters?.stage && filters.stage !== 'all') {
-        query = query.eq('pipeline_stage', filters.stage)
-      }
+      while (true) {
+        let query = supabase
+          .from('leads')
+          .select('*, profiles!leads_assigned_to_fkey(id, name, email)')
+          .order(SORT_FIELD_MAP[sort.field], { ascending: sort.direction === 'asc' })
+          .range(from, from + PAGE_SIZE - 1)
 
-      // Source channel filter
-      if (filters?.source && filters.source !== 'all') {
-        query = query.eq('source_channel', filters.source)
-      }
-
-      // Assigned-to filter
-      if (filters?.assignedTo && filters.assignedTo !== 'all') {
-        query = query.eq('assigned_to', filters.assignedTo)
-      }
-
-      // Date range filter
-      if (filters?.dateRange) {
-        if (filters.dateRange.from) {
-          query = query.gte('lead_date', filters.dateRange.from)
+        if (filters?.stage && filters.stage !== 'all') {
+          query = query.eq('pipeline_stage', filters.stage)
         }
-        if (filters.dateRange.to) {
-          query = query.lte('lead_date', filters.dateRange.to)
+        if (filters?.source && filters.source !== 'all') {
+          query = query.eq('source_channel', filters.source)
         }
+        if (filters?.assignedTo && filters.assignedTo !== 'all') {
+          query = query.eq('assigned_to', filters.assignedTo)
+        }
+        if (filters?.dateRange) {
+          if (filters.dateRange.from) {
+            query = query.gte('lead_date', filters.dateRange.from)
+          }
+          if (filters.dateRange.to) {
+            query = query.lte('lead_date', filters.dateRange.to)
+          }
+        }
+        if (filters?.search) {
+          const s = filters.search.trim()
+          if (s) {
+            query = query.or(
+              `parent_name.ilike.%${s}%,student_name.ilike.%${s}%,phone.ilike.%${s}%,current_school.ilike.%${s}%`,
+            )
+          }
+        }
+
+        const { data, error } = await query
+        if (error) throw error
+        const rows = data || []
+        allRows.push(...(rows as Record<string, unknown>[]))
+        if (rows.length < PAGE_SIZE) break
+        from += PAGE_SIZE
       }
 
-      // Free-text search across multiple columns
-      if (filters?.search) {
-        const s = filters.search.trim()
-        if (s) {
-          query = query.or(
-            `parent_name.ilike.%${s}%,student_name.ilike.%${s}%,phone.ilike.%${s}%,current_school.ilike.%${s}%`,
-          )
-        }
-      }
-
-      const { data, error } = await query
-      if (error) throw error
-      return (data || []).map((row) => mapLead(row as Record<string, unknown>))
+      return allRows.map((row) => mapLead(row))
     },
   })
 }
@@ -438,13 +440,22 @@ export function useLeadStats() {
   return useQuery({
     queryKey: ['lead-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('leads')
-        .select('pipeline_stage, source_channel, lead_date')
-        .limit(5000)
-      if (error) throw error
+      const PAGE_SIZE = 1000
+      const allRows: Record<string, unknown>[] = []
+      let from = 0
+      while (true) {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('pipeline_stage, source_channel, lead_date')
+          .range(from, from + PAGE_SIZE - 1)
+        if (error) throw error
+        const batch = data || []
+        allRows.push(...(batch as Record<string, unknown>[]))
+        if (batch.length < PAGE_SIZE) break
+        from += PAGE_SIZE
+      }
 
-      const rows = data || []
+      const rows = allRows
       const now = new Date()
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
 

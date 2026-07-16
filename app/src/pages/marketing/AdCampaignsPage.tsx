@@ -8,10 +8,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Loader2, DollarSign, MousePointerClick, BarChart3, Plus } from 'lucide-react'
-import { useAdCampaigns, useCreateAdCampaign } from '@/hooks/useAdCampaigns'
+import { Loader2, DollarSign, MousePointerClick, BarChart3, Plus, Pencil, Trash2 } from 'lucide-react'
+import { useAdCampaigns, useCreateAdCampaign, useUpdateAdCampaign, useDeleteAdCampaign } from '@/hooks/useAdCampaigns'
 import { useT } from '@/i18n/LanguageContext'
-import type { AdPlatform } from '@/types'
+import type { AdCampaign, AdPlatform } from '@/types'
 
 const PLATFORM_CONFIG: Record<string, { label: string; className: string }> = {
   meta: { label: 'Meta', className: 'bg-blue-100 text-blue-700 border-blue-200' },
@@ -35,6 +35,9 @@ const INITIAL_CAMPAIGN_FORM = {
   clicks: 0,
   cost: 0,
   note: '',
+  comments: 0,
+  friendsBefore: 0,
+  friendsAfter: 0,
 }
 
 export function AdCampaignsPage() {
@@ -42,31 +45,68 @@ export function AdCampaignsPage() {
   const [platformFilter, setPlatformFilter] = useState<string>('all')
   const [monthFilter, setMonthFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingCampaign, setEditingCampaign] = useState<AdCampaign | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AdCampaign | null>(null)
   const [form, setForm] = useState(INITIAL_CAMPAIGN_FORM)
   const createCampaign = useCreateAdCampaign()
+  const updateCampaign = useUpdateAdCampaign()
+  const deleteCampaign = useDeleteAdCampaign()
 
-  const handleCreateCampaign = () => {
+  const handleSubmitCampaign = () => {
     const ctr = form.impressions > 0 ? (form.clicks / form.impressions) * 100 : 0
     const cpc = form.clicks > 0 ? form.cost / form.clicks : 0
-    createCampaign.mutate(
-      {
-        platform: form.platform,
-        event_name: form.eventName,
-        impressions: form.impressions,
-        reach: form.reach,
-        clicks: form.clicks,
-        cost: form.cost,
-        ctr: Math.round(ctr * 100) / 100,
-        cpc: Math.round(cpc * 100) / 100,
-        note: form.note || undefined,
-      },
-      {
-        onSuccess: () => {
-          setDialogOpen(false)
-          setForm(INITIAL_CAMPAIGN_FORM)
-        },
-      }
-    )
+    const commentRate = form.impressions > 0 && form.comments > 0 ? (form.comments / form.impressions) * 100 : 0
+    const costPerComment = form.comments > 0 ? form.cost / form.comments : 0
+    const payload = {
+      platform: form.platform,
+      event_name: form.eventName,
+      impressions: form.impressions,
+      reach: form.reach,
+      clicks: form.clicks,
+      cost: form.cost,
+      ctr: Math.round(ctr * 100) / 100,
+      cpc: Math.round(cpc * 100) / 100,
+      note: form.note || undefined,
+      comments: form.comments || undefined,
+      comment_rate: form.comments > 0 ? Math.round(commentRate * 100) / 100 : undefined,
+      cost_per_comment: form.comments > 0 ? Math.round(costPerComment * 100) / 100 : undefined,
+      friends_before: form.friendsBefore || undefined,
+      friends_after: form.friendsAfter || undefined,
+    }
+    const onSuccess = () => {
+      setDialogOpen(false)
+      setEditingCampaign(null)
+      setForm(INITIAL_CAMPAIGN_FORM)
+    }
+    if (editingCampaign) {
+      updateCampaign.mutate({ id: editingCampaign.id, ...payload }, { onSuccess })
+    } else {
+      createCampaign.mutate(payload, { onSuccess })
+    }
+  }
+
+  const openEditDialog = (c: AdCampaign) => {
+    setEditingCampaign(c)
+    setForm({
+      platform: c.platform,
+      eventName: c.eventName,
+      impressions: c.impressions,
+      reach: c.reach,
+      clicks: c.clicks,
+      cost: c.cost,
+      note: c.note || '',
+      comments: c.comments || 0,
+      friendsBefore: c.friendsBefore || 0,
+      friendsAfter: c.friendsAfter || 0,
+    })
+    setDialogOpen(true)
+  }
+
+  const handleDelete = () => {
+    if (!deleteTarget) return
+    deleteCampaign.mutate(deleteTarget.id, {
+      onSuccess: () => setDeleteTarget(null),
+    })
   }
 
   const { data: campaigns = [], isLoading, error } = useAdCampaigns({
@@ -94,14 +134,14 @@ export function AdCampaignsPage() {
             {isLoading ? t('common.loading') : t('ads.totalCampaigns', { n: campaigns.length }) + (monthFilter !== 'all' ? ` · ${monthFilter.split('-')[0]}년 ${Number(monthFilter.split('-')[1])}월` : '')}
           </p>
         </div>
-        <Button size="sm" className="h-9" onClick={() => setDialogOpen(true)}>
+        <Button size="sm" className="h-9" onClick={() => { setEditingCampaign(null); setForm(INITIAL_CAMPAIGN_FORM); setDialogOpen(true) }}>
           <Plus className="size-4 mr-1" />
           {t('ads.addCampaign')}
         </Button>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { setEditingCampaign(null); setForm(INITIAL_CAMPAIGN_FORM) } setDialogOpen(open) }}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{t('ads.addCampaign')}</DialogTitle>
+              <DialogTitle>{editingCampaign ? t('ads.editCampaign') : t('ads.addCampaign')}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -166,6 +206,32 @@ export function AdCampaignsPage() {
                   {t('ads.autoCalc')} - CTR: {((form.clicks / form.impressions) * 100).toFixed(2)}% / CPC: {Math.round(form.cost / form.clicks).toLocaleString()}원
                 </div>
               )}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>{t('ads.comments')}</Label>
+                  <Input
+                    type="number"
+                    value={form.comments}
+                    onChange={e => setForm(f => ({ ...f, comments: Number(e.target.value) }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('ads.friendsBefore')}</Label>
+                  <Input
+                    type="number"
+                    value={form.friendsBefore}
+                    onChange={e => setForm(f => ({ ...f, friendsBefore: Number(e.target.value) }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('ads.friendsAfter')}</Label>
+                  <Input
+                    type="number"
+                    value={form.friendsAfter}
+                    onChange={e => setForm(f => ({ ...f, friendsAfter: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label>{t('ads.note')}</Label>
                 <Textarea
@@ -176,10 +242,10 @@ export function AdCampaignsPage() {
               </div>
               <Button
                 className="w-full"
-                onClick={handleCreateCampaign}
-                disabled={createCampaign.isPending || !form.eventName}
+                onClick={handleSubmitCampaign}
+                disabled={(createCampaign.isPending || updateCampaign.isPending) || !form.eventName}
               >
-                {createCampaign.isPending ? t('common.saving') : t('common.add')}
+                {(createCampaign.isPending || updateCampaign.isPending) ? t('common.saving') : editingCampaign ? t('common.save') : t('common.add')}
               </Button>
             </div>
           </DialogContent>
@@ -301,6 +367,7 @@ export function AdCampaignsPage() {
                     <TableHead className="text-right">{t('ads.comments')}</TableHead>
                     <TableHead className="text-right">{t('ads.friendsDiff')}</TableHead>
                     <TableHead>{t('ads.note')}</TableHead>
+                    <TableHead className="w-[80px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -332,6 +399,16 @@ export function AdCampaignsPage() {
                         <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate">
                           {c.note || '-'}
                         </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1 justify-end">
+                            <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(c)}>
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(c)}>
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -341,6 +418,25 @@ export function AdCampaignsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('ads.deleteConfirmTitle')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            <strong>{deleteTarget?.eventName}</strong> ({PLATFORM_CONFIG[deleteTarget?.platform || '']?.label || deleteTarget?.platform}) {t('ads.deleteConfirmMsg')}
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>{t('common.cancel')}</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteCampaign.isPending}>
+              {deleteCampaign.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              {t('common.delete')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

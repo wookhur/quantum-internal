@@ -52,25 +52,8 @@ async function fetchInstagram(accessToken: string, igUserId: string): Promise<Ch
   }
 }
 
-async function fetchKakao(adminKey: string, channelId: string): Promise<ChannelResult> {
-  // Kakao Channel friend count via Kakao Talk Channel API
-  // Requires admin key + channel public ID
-  try {
-    const url = `https://kapi.kakao.com/v1/api/talk/channels?channel_public_id=${channelId}`
-    const res = await fetch(url, {
-      headers: { Authorization: `KakaoAK ${adminKey}` },
-    })
-    if (!res.ok) {
-      const body = await res.text()
-      return { channel: 'kakao', metric: '채널 친구 수', value: 0, error: `Kakao API ${res.status}: ${body}` }
-    }
-    const data = await res.json()
-    const friendCount = data.channels?.[0]?.user_count ?? 0
-    return { channel: 'kakao', metric: '채널 친구 수', value: friendCount }
-  } catch (err) {
-    return { channel: 'kakao', metric: '채널 친구 수', value: 0, error: `Kakao fetch error: ${err}` }
-  }
-}
+// Kakao does not provide a public API to retrieve total channel friend count.
+// Channel friend count must be entered manually from the Kakao Business Partner Center dashboard.
 
 // ─── Main Handler ───
 
@@ -99,8 +82,7 @@ Deno.serve(async (req) => {
     const ytChannelId = Deno.env.get('YOUTUBE_CHANNEL_ID') || ''
     const igAccessToken = Deno.env.get('INSTAGRAM_ACCESS_TOKEN') || ''
     const igUserId = Deno.env.get('INSTAGRAM_USER_ID') || ''
-    const kakaoAdminKey = Deno.env.get('KAKAO_ADMIN_KEY') || ''
-    const kakaoChannelId = Deno.env.get('KAKAO_CHANNEL_ID') || ''
+    // Kakao: no public API for channel friend count — enter manually via UI
 
     const now = new Date()
     const year = now.getFullYear()
@@ -124,11 +106,7 @@ Deno.serve(async (req) => {
       errors.push('Instagram: access token or user ID not configured')
     }
 
-    if (kakaoAdminKey && kakaoChannelId) {
-      promises.push(fetchKakao(kakaoAdminKey, kakaoChannelId))
-    } else {
-      errors.push('Kakao: admin key or channel ID not configured')
-    }
+    // Kakao: skipped (no public API for friend count)
 
     const fetched = await Promise.all(promises)
 
