@@ -20,7 +20,7 @@ import {
   Users, Calendar, AlertCircle, FileText, CheckSquare,
   Loader2, Trash2, UserSearch,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   useServiceStudents, useServiceDiary,
   useUpdateServiceMeeting, useDeleteServiceMeeting,
@@ -839,6 +839,7 @@ function WeekCalendar({
   onEditMilestone: (m: DashboardMilestone) => void
 }) {
   const t = useT()
+  const consultantName = useConsultantName()
   const today = todayKST()
   const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
@@ -882,17 +883,21 @@ function WeekCalendar({
 
           return (
             <div key={dateStr} className={`p-1.5 space-y-1 min-h-64 ${isToday ? 'bg-blue-50/30' : ''}`}>
-              {dm.map(m => (
+              {dm.map(m => {
+                const cName = consultantName(m.consultantId || m.studentConsultant)
+                return (
                 <button
                   key={m.id}
                   onClick={() => onEditMeeting(m)}
                   className={`w-full text-left text-[11px] px-1.5 py-1 rounded border font-medium truncate hover:opacity-80 transition-opacity ${MEETING_COLOR}`}
-                  title={`${m.studentName} ${t('serviceDash.meeting')} (${t('serviceDash.clickToEdit')})`}
+                  title={`${m.studentName}${m.meetingType ? ` · ${m.meetingType}` : ''}${cName ? ` · ${cName}` : ''} (미팅노트 보기)`}
                 >
                   {m.studentName}
                   {m.meetingType && <span className="opacity-70"> · {m.meetingType}</span>}
+                  {cName && <span className="opacity-60"> · {cName}</span>}
                 </button>
-              ))}
+                )
+              })}
               {gm.map(g => (
                 <div
                   key={`ghost-${g.studentId}-${g.dateStr}`}
@@ -975,6 +980,7 @@ function MonthCalendar({
   onEditMilestone: (m: DashboardMilestone) => void
 }) {
   const t = useT()
+  const consultantName = useConsultantName()
   const today = todayKST()
   const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
   const grid = getMonthGrid(year, month)
@@ -1025,12 +1031,16 @@ function MonthCalendar({
                   {dayNum}
                 </span>
                 <div className="space-y-0.5">
-                  {dm.slice(0, 2).map(m => (
+                  {dm.slice(0, 2).map(m => {
+                    const cName = consultantName(m.consultantId || m.studentConsultant)
+                    return (
                     <button key={m.id} onClick={() => onSelectMeeting(m)}
+                      title={`${m.studentName}${m.meetingType ? ` · ${m.meetingType}` : ''}${cName ? ` · ${cName}` : ''} (미팅노트 보기)`}
                       className={`w-full text-left text-[10px] px-1 py-0.5 rounded truncate font-medium ${MEETING_COLOR}`}>
-                      {m.studentName}
+                      {m.studentName}{m.meetingType ? ` · ${m.meetingType}` : ''}{cName ? ` · ${cName}` : ''}
                     </button>
-                  ))}
+                    )
+                  })}
                   {gm.slice(0, Math.max(0, 2 - Math.min(dm.length, 2))).map(g => (
                     <div key={`ghost-${g.studentId}-${g.dateStr}`}
                       className={`text-[10px] px-1 py-0.5 rounded border border-dashed truncate font-medium ${GHOST_MEETING_COLOR}`}>
@@ -1443,10 +1453,13 @@ function days0Class(days: number): string {
 
 export function ServiceDashboardPage() {
   const t = useT()
+  const routerNav = useNavigate()
   const consultantPool = useConsultantPool()
   const consultantName = useConsultantName()
   const today = todayKST()
   const todayDate = new Date(today + 'T00:00:00')
+  // 캘린더의 학생 미팅을 클릭하면 해당 학생의 Student 360(미팅노트) 화면으로 이동
+  const openMeetingNote = (m: DashboardMeeting) => routerNav(`/service/student-360?student=${m.studentId}`)
 
   const [view,             setView]             = useState<'calendar' | 'cycle' | 'student'>('calendar')
   const [calMode,          setCalMode]          = useState<'week' | 'month'>('week')
@@ -1467,12 +1480,6 @@ export function ServiceDashboardPage() {
     setDefaultMilestoneDate(undefined)
     setEditingMilestone(m)
     setShowAddMilestone(true)
-  }
-
-  // Open the meeting dialog in edit mode for an existing meeting
-  const openEditMeeting = (m: DashboardMeeting) => {
-    setEditingMeeting(m)
-    setShowEditMeeting(true)
   }
 
   // Compute date ranges
@@ -1785,7 +1792,7 @@ export function ServiceDashboardPage() {
             ghostMeetings={ghostMeetings}
             consultantFilter={consultantFilter}
             birthdaysByMmdd={birthdaysByMmdd}
-            onEditMeeting={openEditMeeting}
+            onEditMeeting={openMeetingNote}
             onAddMilestone={dateStr => {
               setDefaultMilestoneStudentId(undefined)
               setDefaultMilestoneDate(dateStr)
@@ -1806,7 +1813,7 @@ export function ServiceDashboardPage() {
             ghostMeetings={ghostMeetings}
             consultantFilter={consultantFilter}
             birthdaysByMmdd={birthdaysByMmdd}
-            onSelectMeeting={setSelectedMeeting}
+            onSelectMeeting={openMeetingNote}
             onEditMilestone={openEditMilestone}
           />
         )}
