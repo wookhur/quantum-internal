@@ -180,6 +180,12 @@ function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void
   const createLead = useCreateLead()
   const syncSheet = useSyncGoogleSheetLeads()
 
+  // -- Dynamic source channels from stats (all leads, not filtered)
+  const dynamicSourceChannels = useMemo(() => {
+    if (!stats?.bySource) return SOURCE_CHANNELS as unknown as string[]
+    return Object.keys(stats.bySource).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [stats])
+
   // -- Compute unique assigned users for the filter dropdown
   const assignedUsers = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>()
@@ -380,7 +386,7 @@ function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('leads.allChannels')}</SelectItem>
-              {SOURCE_CHANNELS.map((ch) => (
+              {dynamicSourceChannels.map((ch) => (
                 <SelectItem key={ch} value={ch}>
                   {ch}
                 </SelectItem>
@@ -752,7 +758,7 @@ function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void
                   <SelectValue placeholder={t('leads.sourceChannelPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {SOURCE_CHANNELS.map((ch) => (
+                  {dynamicSourceChannels.map((ch) => (
                     <SelectItem key={ch} value={ch}>
                       {ch}
                     </SelectItem>
