@@ -311,7 +311,9 @@ function ExtraIncentiveAddForm({
           }, {
             onSuccess: () => setForm({ profileId: '', customName: '', selectedOption: '', customPct: '', customLabel: '' }),
             onError: (err) => {
-              window.alert(`${t('contractDetail.incentiveAddFailed')}: ${err instanceof Error ? err.message : t('contractDetail.unknownError')}`)
+              const e = err as { message?: string; details?: string; hint?: string; code?: string }
+              const msg = e?.message || e?.details || t('contractDetail.unknownError')
+              window.alert(`${t('contractDetail.incentiveAddFailed')}: ${msg}${e?.hint ? `\n${e.hint}` : ''}${e?.code ? `\n(${e.code})` : ''}`)
             },
           })
         }}
@@ -1282,7 +1284,9 @@ export function ContractDetailPage() {
                         setIncentiveFormKey(k => k + 1)
                       },
                       onError: (err) => {
-                        window.alert(`${t('contractDetail.incentiveAddFailed')}: ${err instanceof Error ? err.message : t('contractDetail.unknownError')}`)
+                        const e = err as { message?: string; details?: string; hint?: string; code?: string }
+                        const msg = e?.message || e?.details || t('contractDetail.unknownError')
+                        window.alert(`${t('contractDetail.incentiveAddFailed')}: ${msg}${e?.hint ? `\n${e.hint}` : ''}${e?.code ? `\n(${e.code})` : ''}`)
                       },
                     })
                   }}
