@@ -684,6 +684,10 @@ export function ContractDetailPage() {
         setCancelDialogOpen(false)
         setCancelReason('')
       },
+      onError: (e: unknown) => {
+        const err = e as { message?: string }
+        alert(`계약 취소 처리에 실패했습니다.\n${err?.message || ''}`)
+      },
     })
   }, [id, cancelReason, cancelContract])
 
@@ -942,7 +946,12 @@ export function ContractDetailPage() {
               className="gap-1.5 text-amber-700 border-amber-300 hover:bg-amber-50"
               onClick={() => {
                 if (window.confirm(`'${contract.contractorName}' 계약을 서비스 중도해지 처리할까요?`)) {
-                  updateContract.mutate({ id: contract.id, status: 'terminated' })
+                  updateContract.mutate({ id: contract.id, status: 'terminated' }, {
+                    onError: (e: unknown) => {
+                      const err = e as { message?: string }
+                      alert(`중도해지 처리에 실패했습니다.\n${err?.message || ''}`)
+                    },
+                  })
                 }
               }}
             >
