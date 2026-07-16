@@ -187,12 +187,17 @@ export function LeaveManagementPage() {
           onClose={() => setShowForm(false)}
           pending={createReq.isPending}
           onSubmit={async (payload) => {
-            await createReq.mutateAsync({
-              requesterId: user.id,
-              requesterName: user.name,
-              ...payload,
-            })
-            setShowForm(false)
+            try {
+              await createReq.mutateAsync({
+                requesterId: user.id,
+                requesterName: user.name,
+                ...payload,
+              })
+              setShowForm(false)
+            } catch (e: unknown) {
+              const err = e as { message?: string; details?: string; hint?: string; code?: string }
+              alert(`휴가 신청 저장에 실패했습니다.\n${err?.message || ''}${err?.details ? `\n${err.details}` : ''}${err?.hint ? `\n${err.hint}` : ''}${err?.code ? `\n(${err.code})` : ''}`)
+            }
           }}
         />
       )}

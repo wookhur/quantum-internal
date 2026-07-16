@@ -49,18 +49,25 @@ export function useLeaveRequests() {
   return useQuery({
     queryKey: ['leave-requests'],
     queryFn: async () => {
+      // No FK embed — a broken/ambiguous relationship would drop the whole list.
+      // Resolve requester & approver names in one batch instead.
       const { data, error } = await supabase
         .from('leave_requests')
-        .select('*, requester:requester_id(name)')
+        .select('*')
         .order('created_at', { ascending: false })
       if (error) throw error
       const rows = (data || []).map(r => mapRow(r as Record<string, unknown>))
-      // approved_by has no FK relationship, so resolve names separately
-      const approverIds = [...new Set(rows.map(r => r.approvedBy).filter(Boolean))] as string[]
-      if (approverIds.length > 0) {
-        const { data: profs } = await supabase.from('profiles').select('id, name').in('id', approverIds)
+      const ids = [...new Set([
+        ...rows.map(r => r.requesterId),
+        ...rows.map(r => r.approvedBy),
+      ].filter(Boolean))] as string[]
+      if (ids.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, name').in('id', ids)
         const nameMap = new Map((profs || []).map((p: Record<string, unknown>) => [p.id as string, p.name as string]))
-        rows.forEach(r => { if (r.approvedBy) r.approvedByName = nameMap.get(r.approvedBy) })
+        rows.forEach(r => {
+          r.requesterName = nameMap.get(r.requesterId) || r.requesterName
+          if (r.approvedBy) r.approvedByName = nameMap.get(r.approvedBy)
+        })
       }
       return rows
     },
