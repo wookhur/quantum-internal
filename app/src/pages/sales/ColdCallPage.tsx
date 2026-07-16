@@ -42,13 +42,14 @@ import {
   UserX,
   Pause,
   CalendarCheck,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react'
-import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead } from '@/hooks/useLeads'
+import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead, useDeleteActivity } from '@/hooks/useLeads'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
 import { getStageConfig, GRADES } from '@/types'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 // ============ Priority scoring ============
 
@@ -301,6 +302,12 @@ function getActivityIcon(type: string): { icon: LucideIcon; color: string } {
 }
 
 // ============ Main Component ============
+
+/** Standalone route page for /sales/cold-call */
+export function ColdCallPage() {
+  const navigate = useNavigate()
+  return <ColdCallView onSwitchToTable={() => navigate('/sales/leads')} />
+}
 
 export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void }) {
   const t = useT()
@@ -614,6 +621,7 @@ function ColdCallDetail({
   const { data: activities = [], isLoading: activitiesLoading } = useLeadActivities(lead.id)
   const createActivity = useCreateActivity()
   const updateLead = useUpdateLead()
+  const deleteActivity = useDeleteActivity()
 
   const [callNote, setCallNote] = useState('')
   const [contactMethod, setContactMethod] = useState<ContactMethod>('call')
@@ -621,6 +629,7 @@ function ColdCallDetail({
   const [memoEdit, setMemoEdit] = useState(lead.memo || '')
   const [showMemoEdit, setShowMemoEdit] = useState(false)
   const [excludeConfirm, setExcludeConfirm] = useState<PipelineStage | null>(null)
+  const [deleteActivityConfirm, setDeleteActivityConfirm] = useState<string | null>(null)
 
   const methodConfig = CONTACT_METHODS[contactMethod]
 
@@ -1091,10 +1100,11 @@ function ColdCallDetail({
               {activities.map((a: LeadActivity) => {
                 const actIcon = getActivityIcon(a.activityType)
                 const ActIcon = actIcon.icon
+                const isDeleting = deleteActivityConfirm === a.id
                 return (
                 <div
                   key={a.id}
-                  className="flex items-start gap-2.5 py-2 border-b border-gray-100 last:border-0"
+                  className="group flex items-start gap-2.5 py-2 border-b border-gray-100 last:border-0"
                 >
                   <div className="mt-0.5">
                     <ActIcon className={`size-3.5 ${actIcon.color}`} />
@@ -1111,6 +1121,41 @@ function ColdCallDetail({
                       {a.createdByUser && ` · ${a.createdByUser.name}`}
                     </p>
                   </div>
+                  {isDeleting ? (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="h-6 text-[10px] px-2"
+                        disabled={deleteActivity.isPending}
+                        onClick={() =>
+                          deleteActivity.mutate(
+                            { id: a.id, leadId: lead.id },
+                            { onSuccess: () => setDeleteActivityConfirm(null) },
+                          )
+                        }
+                      >
+                        {deleteActivity.isPending ? <Loader2 className="size-3 animate-spin" /> : t('common.delete')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[10px] px-2"
+                        onClick={() => setDeleteActivityConfirm(null)}
+                      >
+                        {t('common.cancel')}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                      onClick={() => setDeleteActivityConfirm(a.id)}
+                    >
+                      <Trash2 className="size-3" />
+                    </Button>
+                  )}
                 </div>
                 )
               })}

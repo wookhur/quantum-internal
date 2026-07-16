@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useT } from '@/i18n/LanguageContext'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,7 +37,6 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads } from '@/hooks/useLeads'
-import { ColdCallView } from './ColdCallPage'
 import type { Lead, PipelineStage } from '@/types'
 import {
   PIPELINE_STAGES,
@@ -140,13 +139,8 @@ function AssignedAvatar({ user }: { user: Lead['assignedUser'] }) {
 // ============ Main component ============
 
 export function LeadsPage() {
-  const [viewMode, setViewMode] = useState<'table' | 'coldcall'>('table')
-
-  if (viewMode === 'coldcall') {
-    return <ColdCallView onSwitchToTable={() => setViewMode('table')} />
-  }
-
-  return <LeadsTableView onSwitchToColdCall={() => setViewMode('coldcall')} />
+  const navigate = useNavigate()
+  return <LeadsTableView onSwitchToColdCall={() => navigate('/sales/cold-call')} />
 }
 
 function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void }) {

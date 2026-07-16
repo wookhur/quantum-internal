@@ -39,6 +39,7 @@ import {
   Target,
   ShoppingCart,
   Presentation,
+  Phone,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -70,6 +71,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     module: 'sales',
     items: [
       { labelKey: 'nav.leadManagement', to: '/sales/leads', icon: Users },
+      { labelKey: 'nav.coldCall', to: '/sales/cold-call', icon: Phone },
       { labelKey: 'nav.meetingRecords', to: '/sales/meetings', icon: ClipboardList },
       { labelKey: 'nav.salesPerformance', to: '/sales/performance', icon: TrendingUp },
     ],
