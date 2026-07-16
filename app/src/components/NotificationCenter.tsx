@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Bell, X, AlertTriangle, AlertCircle, Info, ExternalLink, Check, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppNotifications } from '@/hooks/useNotifications'
-import { useUserNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/hooks/useUserNotifications'
+import { useUserNotifications, useAllUserNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/hooks/useUserNotifications'
 import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/hooks/useNotificationPreferences'
 import { useNavigate } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -19,6 +19,8 @@ export function NotificationCenter() {
   const { data: prefs } = useNotificationPreferences()
   const updatePrefs = useUpdateNotificationPreferences()
   const [open, setOpen] = useState(false)
+  const [historyMode, setHistoryMode] = useState(false)
+  const { data: allNotifs = [] } = useAllUserNotifications(open && historyMode)
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const panelRef = useRef<HTMLDivElement>(null)
   const hasAutoOpenedRef = useRef(false)
@@ -84,10 +86,17 @@ export function NotificationCenter() {
   }, [markAllRead])
 
   // Closing the panel acknowledges the notifications so they don't reappear
+  // (but NOT while viewing history — that's read-only).
   const closePanel = useCallback(() => {
-    if (dbNotifications.length > 0) markAllRead.mutate()
+    if (!historyMode && dbNotifications.length > 0) markAllRead.mutate()
     setOpen(false)
-  }, [dbNotifications.length, markAllRead])
+  }, [historyMode, dbNotifications.length, markAllRead])
+
+  // Re-show any app alerts the user hid via "더 이상 보지 않기"
+  const handleResetHidden = useCallback(() => {
+    updatePrefs.mutate([])
+    setDismissed(new Set())
+  }, [updatePrefs])
 
   const severityIcon = {
     warning: <AlertTriangle className="size-4 text-amber-500 shrink-0" />,
@@ -140,7 +149,14 @@ export function NotificationCenter() {
               )}
             </h3>
             <div className="flex items-center gap-1">
-              {dbNotifications.length > 0 && (
+              <button
+                onClick={() => setHistoryMode(h => !h)}
+                className={`text-xs font-medium px-2 py-1 rounded transition-colors ${historyMode ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                title="지난 알림 전체 보기"
+              >
+                {historyMode ? '최근' : '전체 기록'}
+              </button>
+              {!historyMode && dbNotifications.length > 0 && (
                 <button
                   onClick={handleMarkAllRead}
                   className="text-xs text-blue-600 hover:text-blue-800 font-medium px-2 py-1 rounded hover:bg-blue-50 transition-colors"
@@ -150,7 +166,7 @@ export function NotificationCenter() {
               )}
               <button
                 onClick={closePanel}
-                title="닫기 (읽음 처리)"
+                title="닫기"
                 className="text-gray-400 hover:text-gray-600 rounded p-1 hover:bg-gray-100"
               >
                 <X className="size-4" />
@@ -160,7 +176,45 @@ export function NotificationCenter() {
 
           {/* Notification list */}
           <div className="max-h-[450px] overflow-y-auto">
-            {totalCount === 0 ? (
+            {historyMode ? (
+              /* ── History: all notifications (read + unread), read-only ── */
+              <div className="p-2 space-y-2">
+                <div className="flex items-center justify-between px-1 pb-1">
+                  <span className="text-[11px] text-gray-400">지난 알림 전체 ({allNotifs.length})</span>
+                  <button onClick={handleResetHidden} className="text-[11px] text-blue-600 hover:underline">
+                    숨긴 알림 다시 표시
+                  </button>
+                </div>
+                {allNotifs.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-gray-400">알림 기록이 없습니다.</div>
+                ) : allNotifs.map((notif) => {
+                  const icon = typeIcon[notif.type] || <Info className="size-4 text-blue-500 shrink-0" />
+                  return (
+                    <div key={`hist-${notif.id}`} className={`relative rounded-lg border p-3 ${notif.isRead ? 'bg-gray-50 border-gray-200 opacity-70' : (typeBg[notif.type] || 'bg-blue-50 border-blue-200')}`}>
+                      <div className="flex items-start gap-2">
+                        {icon}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
+                            {notif.title}
+                            {notif.isRead && <span className="text-[9px] text-gray-400 font-normal">읽음</span>}
+                          </div>
+                          <div className="text-xs text-gray-600 mt-0.5">{notif.message}</div>
+                          <div className="text-[10px] text-gray-400 mt-1">{formatTimeAgo(notif.createdAt)}</div>
+                          {notif.link && (
+                            <button
+                              onClick={() => handleNavigate(notif.link!)}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 mt-2"
+                            >
+                              {t('notif.viewDetail')} <ExternalLink className="size-3" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : totalCount === 0 ? (
               <div className="py-12 text-center text-sm text-gray-400">
                 {t('notif.noNotifications')}
               </div>

@@ -54,6 +54,28 @@ export function useUserNotifications() {
   })
 }
 
+/** Fetch ALL notifications (read + unread) for the current user — history view. */
+export function useAllUserNotifications(enabled = true) {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: ['user-notifications-all', user?.id],
+    enabled: !!user?.id && enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_notifications')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (error) {
+        console.warn('Failed to fetch notification history:', error.message)
+        return []
+      }
+      return (data || []).map((r) => mapNotification(r as Record<string, unknown>))
+    },
+  })
+}
+
 /** Mark a single notification as read */
 export function useMarkNotificationRead() {
   const qc = useQueryClient()

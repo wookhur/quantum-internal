@@ -158,7 +158,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
   const location = useLocation()
   const { user, signOut } = useAuth()
   const { data: featureAccess = [] } = useFeatureAccess()
-  const { t } = useLanguage()
+  const { t, tBoth } = useLanguage()
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
 
@@ -206,7 +206,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
               <SidebarSeparator className="mx-3 my-1 bg-gray-100" />
             )}
             <SidebarGroupLabel className="px-3 mb-0.5 text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-              {t(section.titleKey)}
+              {tBoth(section.titleKey).both}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -220,7 +220,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
                         render={<Link to={item.to} />}
                         isActive={active}
                         className={`
-                          relative rounded-md mx-1 h-9 px-3 gap-3
+                          relative rounded-md mx-1 min-h-9 py-1 px-3 gap-3
                           transition-all duration-150 ease-in-out
                           ${
                             active
@@ -238,9 +238,15 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
                           size={18}
                           strokeWidth={active ? 2 : 1.75}
                         />
-                        <span className="truncate text-[13px]">
-                          {t(item.labelKey)}
-                        </span>
+                        {(() => {
+                          const lab = tBoth(item.labelKey)
+                          return (
+                            <span className="flex flex-col min-w-0 leading-tight">
+                              <span className="truncate text-[13px]">{lab.ko}</span>
+                              {lab.en !== lab.ko && <span className="truncate text-[10px] text-gray-400">{lab.en}</span>}
+                            </span>
+                          )
+                        })()}
                         {!hasAccess && (
                           <Lock size={12} className="ml-auto shrink-0 text-gray-300" />
                         )}

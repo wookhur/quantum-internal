@@ -7,6 +7,8 @@ interface LanguageContextValue {
   language: Language
   setLanguage: (lang: Language) => void
   t: (key: TranslationKeys | (string & {}), params?: Record<string, string | number>) => string
+  /** Korean + English together ("한국어 / English") for bilingual labels like menus. */
+  tBoth: (key: TranslationKeys | (string & {})) => { ko: string; en: string; both: string }
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null)
@@ -37,8 +39,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     [language],
   )
 
+  const tBoth = useCallback((key: TranslationKeys | (string & {})) => {
+    const kk = ko[key] || key
+    const ee = en[key] || kk
+    return { ko: kk, en: ee, both: kk === ee ? kk : `${kk} / ${ee}` }
+  }, [])
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, t, tBoth }}>
       {children}
     </LanguageContext.Provider>
   )
