@@ -138,6 +138,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/common/coupang-orders', labelKey: 'nav.coupangOrders', module: 'dashboard' },
   // ── Sales ──
   { path: '/sales/leads', labelKey: 'nav.leadManagement', module: 'sales' },
+  { path: '/sales/cold-call', labelKey: 'nav.coldCall', module: 'sales' },
   { path: '/sales/pipeline', labelKey: 'nav.pipeline', module: 'sales' },
   { path: '/sales/meetings', labelKey: 'nav.meetingRecords', module: 'sales' },
   { path: '/sales/funnel', labelKey: 'nav.salesFunnel', module: 'sales' },
