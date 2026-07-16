@@ -45,14 +45,6 @@ function mapRow(row: Record<string, unknown>): LeaveRequest {
   }
 }
 
-async function fetchLeaveApproverIds(): Promise<string[]> {
-  const { data } = await supabase
-    .from('profiles')
-    .select('id')
-    .or('role.eq.admin,can_approve_leave.eq.true')
-  return (data || []).map((r: Record<string, unknown>) => r.id as string)
-}
-
 export function useLeaveRequests() {
   return useQuery({
     queryKey: ['leave-requests'],
@@ -101,15 +93,14 @@ export function useCreateLeaveRequest() {
       })
       if (error) throw error
 
-      const approverIds = await fetchLeaveApproverIds()
-      if (approverIds.length > 0) {
-        await createNotificationsForUsers(approverIds, {
-          type: 'leave_request',
-          title: '휴가 승인 요청',
-          message: `${input.requesterName}님이 ${input.startDate} ~ ${input.endDate} 휴가(${input.days}일)를 신청했습니다.`,
-          link: '/hr/leave',
-        })
-      }
+      // 승인자 전원에게 알림 (SECURITY DEFINER RPC로 신청자 세션의 RLS 우회)
+      const { error: rpcErr } = await supabase.rpc('notify_leave_approvers', {
+        p_requester_name: input.requesterName,
+        p_start: input.startDate,
+        p_end: input.endDate,
+        p_days: input.days,
+      })
+      if (rpcErr) console.warn('notify_leave_approvers failed:', rpcErr.message)
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['leave-requests'] }),
   })
