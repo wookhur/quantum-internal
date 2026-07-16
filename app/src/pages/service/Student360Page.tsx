@@ -98,6 +98,22 @@ const ACADEMY_PRESETS = [
 
 const SEASON_OPTIONS = ['방학', '학기중'] as const
 
+/** Student statuses. finished/canceled = archived (hidden from active list). */
+const STUDENT_STATUS_OPTIONS = [
+  { value: 'active', labelKey: 'student360.statusActive' },
+  { value: 'finished', labelKey: 'student360.statusFinished' },
+  { value: 'canceled', labelKey: 'student360.statusCanceled' },
+] as const
+
+export function isArchivedStatus(status?: string): boolean {
+  return status === 'finished' || status === 'canceled'
+}
+
+function statusLabelFor(t: (k: string) => string, status?: string): string {
+  const o = STUDENT_STATUS_OPTIONS.find(x => x.value === status)
+  return o ? t(o.labelKey) : (status || '')
+}
+
 function ecSalesSelectVal(stored?: string) {
   if (!stored) return ''
   return (EC_SALES_PRESETS as readonly string[]).includes(stored) ? stored : '직접입력'
@@ -166,6 +182,7 @@ export function Student360Page() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [consultantFilter, setConsultantFilter] = useState('')
+  const [showArchive, setShowArchive] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('student'))
 
   // Keep ?student= in the URL in sync so links from the KPI page (and back/forward) work.
@@ -200,9 +217,16 @@ export function Student360Page() {
   // Selected filter resolves to a canonical name so a pick of 남연서 (live UUID)
   // also matches legacy 'yeonse' rows and vice versa.
   const filterName = consultantFilter ? consultantName(consultantFilter) : ''
+
+  // Archived = 서비스 완료(finished) / 서비스 취소(canceled). Archived students keep
+  // all their data but are hidden from the active list; the 아카이브 tab shows them.
+  const archiveCount = useMemo(() => students.filter(s => isArchivedStatus(s.status)).length, [students])
+  const activeCount = students.length - archiveCount
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return students.filter(s => {
+      if (showArchive ? !isArchivedStatus(s.status) : isArchivedStatus(s.status)) return false
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
       if (!q) return true
       return (
@@ -212,9 +236,13 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     })
-  }, [students, search, filterName, consultantName])
+  }, [students, search, filterName, consultantName, showArchive])
 
   const selected = students.find(s => s.id === selectedId) || null
+  const statusLabel = (status?: string) => {
+    const o = STUDENT_STATUS_OPTIONS.find(x => x.value === status)
+    return o ? t(o.labelKey) : (status || '')
+  }
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-3.5rem)] -m-3 md:-m-6 p-3 md:p-6">
@@ -223,9 +251,7 @@ export function Student360Page() {
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-lg font-bold">
             {t('nav.student360')}{' '}
-            <span className="text-muted-foreground font-normal">
-              ({consultantFilter ? `${filtered.length} / ${students.length}` : students.length})
-            </span>
+            <span className="text-muted-foreground font-normal">({filtered.length})</span>
           </h1>
           <StudentDialog
             trigger={<Button size="sm"><Plus className="size-4 mr-1" />{t('student360.newStudent')}</Button>}
@@ -258,6 +284,21 @@ export function Student360Page() {
             ))}
           </SelectContent>
         </Select>
+        {/* Active / Archive toggle */}
+        <div className="mb-2 flex rounded-md border overflow-hidden text-xs">
+          <button
+            onClick={() => { setShowArchive(false); setSelectedId(null) }}
+            className={`flex-1 py-1.5 font-medium transition-colors ${!showArchive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            {t('student360.activeTab')} ({activeCount})
+          </button>
+          <button
+            onClick={() => { setShowArchive(true); setSelectedId(null) }}
+            className={`flex-1 py-1.5 font-medium border-l transition-colors ${showArchive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            {t('student360.archiveTab')} ({archiveCount})
+          </button>
+        </div>
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-muted-foreground">
           <span className="font-medium">KPI</span>
           {KPI_LEGEND.map(l => (
@@ -307,7 +348,7 @@ export function Student360Page() {
                   />
                 </div>
                 {s.status && (
-                  <Badge variant="outline" className="text-[10px] shrink-0">{s.status}</Badge>
+                  <Badge variant="outline" className={`text-[10px] shrink-0 ${isArchivedStatus(s.status) ? (s.status === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}`}>{statusLabel(s.status)}</Badge>
                 )}
               </div>
               <div className="text-xs text-muted-foreground mt-1 truncate">
@@ -412,7 +453,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
           <UserIcon className="size-5 text-primary" />
           {student.name}
           {student.koreanName && <span className="text-muted-foreground font-normal">· {student.koreanName}</span>}
-          {student.status && <Badge variant="outline">{student.status}</Badge>}
+          {student.status && <Badge variant="outline" className={isArchivedStatus(student.status) ? (student.status === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}>{statusLabelFor(t, student.status)}</Badge>}
         </CardTitle>
         <div className="flex gap-2">
           <StudentDialog
@@ -478,7 +519,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        <Field label={t('student360.status')} value={student.status} />
+        <Field label={t('student360.status')} value={statusLabelFor(t, student.status)} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
         <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
         <Field label={t('student360.preferredLanguage')} value={student.preferredLanguage} />
@@ -1233,7 +1274,20 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           <div className="col-span-2">
             <LabeledInput label={t('student360.additionalServices')} value={form.additionalServices} onChange={v => set('additionalServices', v)} />
           </div>
-          <LabeledInput label={t('student360.status')} value={form.status} onChange={v => set('status', v)} />
+          <div>
+            <Label className="text-xs">{t('student360.status')}</Label>
+            <Select value={form.status || 'active'} onValueChange={v => set('status', v ?? 'active')}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {STUDENT_STATUS_OPTIONS.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
+                ))}
+                {form.status && !STUDENT_STATUS_OPTIONS.some(o => o.value === form.status) && (
+                  <SelectItem value={form.status}>{form.status}</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
           <LabeledInput label={t('student360.acceptedUni')} value={form.acceptedUni} onChange={v => set('acceptedUni', v)} />
           <div>
             <Label className="text-xs">{t('student360.commPlatform')}</Label>

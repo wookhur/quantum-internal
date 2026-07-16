@@ -800,7 +800,7 @@ function monthRange(month: string): { start: string; end: string } {
 /** Treat a student as active unless their status explicitly says otherwise. */
 function isActiveStudent(status?: string): boolean {
   if (!status) return true
-  return !/(pause|중단|중지|hold|ended|종료|해지|complete|완료|graduat|졸업|inactive)/i.test(status)
+  return !/(pause|중단|중지|hold|ended|종료|해지|complete|완료|graduat|졸업|inactive|finish|cancel|취소)/i.test(status)
 }
 
 function studentLabel(name?: string, koreanName?: string): string {
