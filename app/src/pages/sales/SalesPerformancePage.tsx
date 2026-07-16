@@ -7,10 +7,38 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Users, Handshake, CalendarCheck, TrendingUp, Plus, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { Users, Handshake, CalendarCheck, TrendingUp, Plus, Loader2, Pencil, Trash2, ChevronRight, Zap } from 'lucide-react'
 import { useSalesEvents, useCreateSalesEvent, useUpdateSalesEvent, useDeleteSalesEvent } from '@/hooks/useSalesEvents'
-import type { SalesEvent } from '@/types'
+import { useLeads } from '@/hooks/useLeads'
+import {
+  useSeminarsWithRegistrations,
+  useAllContactActivities,
+  computeColdCallOutcome,
+  leadMatchesSeminar,
+  type SeminarLite,
+} from '@/hooks/useSeminarPerformance'
+import type { Lead, SalesEvent } from '@/types'
+import { getStageConfig } from '@/types'
+import { Link } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
+
+/** One display row: manual sales_event or auto-aggregated seminar. */
+interface PerfRow {
+  id: string
+  month: string
+  eventName: string
+  applicants: number
+  attendees: number
+  phoneConsultations: number
+  zoomBookings: number
+  inPersonBookings: number
+  totalMeetings: number
+  contracts: number
+  contractRate: number
+  auto: boolean
+  source: SalesEvent | null
+  seminar: SeminarLite | null
+}
 
 const INITIAL_EVENT_FORM = {
   month: '',
@@ -80,34 +108,101 @@ export function SalesPerformancePage() {
     })
   }
 
-  const { data: events = [], isLoading, error } = useSalesEvents({
-    month: monthFilter !== 'all' ? monthFilter : undefined,
-  })
+  const { data: events = [], isLoading, error } = useSalesEvents()
+  const { data: seminars = [] } = useSeminarsWithRegistrations()
+  const { data: allLeads = [] } = useLeads()
+  const { data: contactActivities = [] } = useAllContactActivities()
 
-  // Extract unique months for the filter dropdown
+  const [leadsDialogRow, setLeadsDialogRow] = useState<PerfRow | null>(null)
+
+  // Merge manual sales_events with auto-aggregated seminars
+  const rows = useMemo((): PerfRow[] => {
+    const manualNames = new Set(events.map(e => e.eventName.trim()))
+
+    const manualRows: PerfRow[] = events.map(e => ({
+      id: e.id,
+      month: e.month,
+      eventName: e.eventName,
+      applicants: e.applicants,
+      attendees: e.attendees,
+      phoneConsultations: e.phoneConsultations,
+      zoomBookings: e.zoomBookings,
+      inPersonBookings: e.inPersonBookings,
+      totalMeetings: e.totalMeetings,
+      contracts: e.contracts,
+      contractRate: e.contractRate,
+      auto: false,
+      source: e,
+      seminar: seminars.find(s => s.title === e.eventName) ?? null,
+    }))
+
+    // Seminars from 세미나 관리 not manually recorded → auto rows
+    const autoRows: PerfRow[] = seminars
+      .filter(s => !manualNames.has(s.title.trim()))
+      .map(s => {
+        const matched = allLeads.filter(l => leadMatchesSeminar(l, s))
+        const outcome = computeColdCallOutcome(matched, contactActivities, s.applicants)
+        const month = (s.date || s.createdAt).slice(0, 7)
+        return {
+          id: `seminar-${s.id}`,
+          month,
+          eventName: s.title,
+          applicants: s.applicants,
+          attendees: 0,
+          phoneConsultations: outcome.confirmed,
+          zoomBookings: 0,
+          inPersonBookings: 0,
+          totalMeetings: outcome.consultScheduled,
+          contracts: outcome.contracted,
+          contractRate: s.applicants > 0 ? (outcome.contracted / s.applicants) * 100 : 0,
+          auto: true,
+          source: null,
+          seminar: s,
+        }
+      })
+
+    let merged = [...manualRows, ...autoRows]
+    if (monthFilter !== 'all') {
+      merged = merged.filter(r => r.month === monthFilter)
+    }
+    return merged
+  }, [events, seminars, allLeads, contactActivities, monthFilter])
+
+  // Extract unique months for the filter dropdown (from all rows, unfiltered)
   const months = useMemo(() => {
-    const set = new Set(events.map(e => e.month))
-    return Array.from(set).sort().reverse()
-  }, [events])
+    const set = new Set<string>(events.map(e => e.month))
+    for (const s of seminars) set.add((s.date || s.createdAt).slice(0, 7))
+    return Array.from(set).filter(Boolean).sort().reverse()
+  }, [events, seminars])
+
+  // Leads for the clicked event row
+  const dialogLeads = useMemo((): Lead[] => {
+    if (!leadsDialogRow) return []
+    if (leadsDialogRow.seminar) {
+      const s = leadsDialogRow.seminar
+      return allLeads.filter(l => leadMatchesSeminar(l, s))
+    }
+    return allLeads.filter(l => l.sourceChannel === leadsDialogRow.eventName)
+  }, [leadsDialogRow, allLeads])
 
   // Summary calculations
-  const totalApplicants = events.reduce((sum, e) => sum + (e.applicants || 0), 0)
-  const totalMeetings = events.reduce((sum, e) => sum + (e.totalMeetings || 0), 0)
-  const totalContracts = events.reduce((sum, e) => sum + (e.contracts || 0), 0)
-  const avgContractRate = events.length > 0
-    ? events.reduce((sum, e) => sum + (e.contractRate || 0), 0) / events.length
+  const totalApplicants = rows.reduce((sum, e) => sum + (e.applicants || 0), 0)
+  const totalMeetings = rows.reduce((sum, e) => sum + (e.totalMeetings || 0), 0)
+  const totalContracts = rows.reduce((sum, e) => sum + (e.contracts || 0), 0)
+  const avgContractRate = rows.length > 0
+    ? rows.reduce((sum, e) => sum + (e.contractRate || 0), 0) / rows.length
     : 0
 
-  // Group events by month for display
+  // Group rows by month for display
   const groupedByMonth = useMemo(() => {
-    const map = new Map<string, typeof events>()
-    for (const event of events) {
-      const month = event.month || t('salesPerf.undecided')
+    const map = new Map<string, PerfRow[]>()
+    for (const row of rows) {
+      const month = row.month || t('salesPerf.undecided')
       if (!map.has(month)) map.set(month, [])
-      map.get(month)!.push(event)
+      map.get(month)!.push(row)
     }
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
-  }, [events])
+  }, [rows, t])
 
   return (
     <div className="space-y-6">
@@ -116,7 +211,7 @@ export function SalesPerformancePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('salesPerf.title')}</h1>
           <p className="text-muted-foreground">
-            {isLoading ? t('common.loading') : t('salesPerf.totalEvents').replace('{n}', String(events.length))}
+            {isLoading ? t('common.loading') : t('salesPerf.totalEvents').replace('{n}', String(rows.length))}
           </p>
         </div>
         <Button className="gap-2" onClick={() => { setEditingEvent(null); setForm(INITIAL_EVENT_FORM); setDialogOpen(true) }}>
@@ -194,7 +289,7 @@ export function SalesPerformancePage() {
             <div className="text-center py-20 text-destructive text-sm">
               {t('common.error')}
             </div>
-          ) : events.length === 0 ? (
+          ) : rows.length === 0 ? (
             <div className="text-center py-20 text-muted-foreground text-sm">
               {t('salesPerf.noEvents')}
             </div>
@@ -216,48 +311,66 @@ export function SalesPerformancePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {groupedByMonth.map(([month, monthEvents]) => (
-                  monthEvents.map((event, idx) => (
-                    <TableRow key={event.id}>
+                {groupedByMonth.map(([month, monthRows]) => (
+                  monthRows.map((row, idx) => (
+                    <TableRow
+                      key={row.id}
+                      className="cursor-pointer"
+                      onClick={() => setLeadsDialogRow(row)}
+                    >
                       {idx === 0 ? (
                         <TableCell
-                          rowSpan={monthEvents.length}
+                          rowSpan={monthRows.length}
                           className="font-medium text-sm align-top border-r"
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <Badge variant="outline" className="text-xs font-normal">
                             {month}
                           </Badge>
                         </TableCell>
                       ) : null}
-                      <TableCell className="font-medium text-sm">{event.eventName}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{event.applicants}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{event.attendees}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{event.phoneConsultations}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{event.zoomBookings}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{event.inPersonBookings}</TableCell>
-                      <TableCell className="text-right text-sm tabular-nums font-medium">{event.totalMeetings}</TableCell>
+                      <TableCell className="font-medium text-sm">
+                        <span className="inline-flex items-center gap-1.5">
+                          {row.eventName}
+                          {row.auto && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 gap-0.5" title={t('salesPerf.autoTooltip')}>
+                              <Zap className="size-2.5" />
+                              {t('salesPerf.autoBadge')}
+                            </Badge>
+                          )}
+                          <ChevronRight className="size-3 text-muted-foreground" />
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">{row.applicants}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">{row.attendees || '-'}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">{row.phoneConsultations}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">{row.zoomBookings}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">{row.inPersonBookings}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums font-medium">{row.totalMeetings}</TableCell>
                       <TableCell className="text-right text-sm tabular-nums">
-                        <span className={event.contracts > 0 ? 'text-success font-medium' : ''}>
-                          {event.contracts}
+                        <span className={row.contracts > 0 ? 'text-success font-medium' : ''}>
+                          {row.contracts}
                         </span>
                       </TableCell>
                       <TableCell className="text-right text-sm tabular-nums">
                         <Badge
-                          variant={event.contractRate >= 10 ? 'default' : 'outline'}
-                          className={`text-xs ${event.contractRate >= 10 ? 'bg-success text-white' : ''}`}
+                          variant={row.contractRate >= 10 ? 'default' : 'outline'}
+                          className={`text-xs ${row.contractRate >= 10 ? 'bg-success text-white' : ''}`}
                         >
-                          {event.contractRate.toFixed(1)}%
+                          {row.contractRate.toFixed(1)}%
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1 justify-end">
-                          <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(event)}>
-                            <Pencil className="size-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(event)}>
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {row.source && (
+                          <div className="flex gap-1 justify-end">
+                            <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(row.source!)}>
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(row.source!)}>
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -268,16 +381,16 @@ export function SalesPerformancePage() {
                     <TableCell colSpan={2} className="text-sm">{t('common.total')}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">{totalApplicants}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      {events.reduce((s, e) => s + (e.attendees || 0), 0)}
+                      {rows.reduce((s, e) => s + (e.attendees || 0), 0)}
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      {events.reduce((s, e) => s + (e.phoneConsultations || 0), 0)}
+                      {rows.reduce((s, e) => s + (e.phoneConsultations || 0), 0)}
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      {events.reduce((s, e) => s + (e.zoomBookings || 0), 0)}
+                      {rows.reduce((s, e) => s + (e.zoomBookings || 0), 0)}
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
-                      {events.reduce((s, e) => s + (e.inPersonBookings || 0), 0)}
+                      {rows.reduce((s, e) => s + (e.inPersonBookings || 0), 0)}
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">{totalMeetings}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums text-success">{totalContracts}</TableCell>
@@ -363,6 +476,65 @@ export function SalesPerformancePage() {
               {t('common.delete')}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Leads for Event Dialog */}
+      <Dialog open={!!leadsDialogRow} onOpenChange={(open) => { if (!open) setLeadsDialogRow(null) }}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {t('salesPerf.leadsDialogTitle').replace('{name}', leadsDialogRow?.eventName ?? '')}
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                {t('salesPerf.leadsDialogCount').replace('{n}', String(dialogLeads.length))}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          {dialogLeads.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-10">
+              {t('salesPerf.noMatchingLeads')}
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t('leads.col.parentName')}</TableHead>
+                  <TableHead>{t('leads.col.studentName')}</TableHead>
+                  <TableHead>{t('leads.col.school')}</TableHead>
+                  <TableHead>{t('leads.col.grade')}</TableHead>
+                  <TableHead>{t('leads.sourceChannel')}</TableHead>
+                  <TableHead>{t('leads.col.stage')}</TableHead>
+                  <TableHead className="w-[40px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dialogLeads.map((lead) => {
+                  const stage = getStageConfig(lead.pipelineStage)
+                  return (
+                    <TableRow key={lead.id}>
+                      <TableCell className="text-sm font-medium">{lead.parentName}</TableCell>
+                      <TableCell className="text-sm">{lead.studentName || '-'}</TableCell>
+                      <TableCell className="text-sm">{lead.currentSchool || '-'}</TableCell>
+                      <TableCell className="text-sm">{lead.grade || '-'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{lead.sourceChannel}</TableCell>
+                      <TableCell>
+                        <span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>
+                          {stage.label}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Link to={`/sales/leads/${lead.id}`}>
+                          <Button variant="ghost" size="icon" className="size-6">
+                            <ChevronRight className="size-3.5" />
+                          </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
         </DialogContent>
       </Dialog>
     </div>

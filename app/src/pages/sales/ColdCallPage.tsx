@@ -43,9 +43,18 @@ import {
   Pause,
   CalendarCheck,
   Trash2,
+  Users2,
   type LucideIcon,
 } from 'lucide-react'
 import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead, useDeleteActivity } from '@/hooks/useLeads'
+import {
+  useSeminarsWithRegistrations,
+  useAllContactActivities,
+  computeColdCallOutcome,
+  leadMatchesSeminar,
+  type SeminarLite,
+  type ColdCallOutcome,
+} from '@/hooks/useSeminarPerformance'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
 import { getStageConfig, GRADES } from '@/types'
@@ -321,33 +330,55 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
 
   // Fetch leads in cold-callable stages
   const { data: allLeads = [], isLoading } = useLeads()
-  // Build event filter options: only show events that have matching leads (by source_channel)
+  // Seminars with registrant phone sets — so leads that registered for a
+  // seminar are matched even if their lead source is another channel
+  const { data: seminars = [] } = useSeminarsWithRegistrations()
+  const { data: contactActivities = [] } = useAllContactActivities()
+
+  // Build event filter options: seminars from 세미나 관리 + legacy source channels
   const eventFilterOptions = useMemo(() => {
-    // Collect all unique source_channels that actually exist in cold-callable leads
+    const options: { label: string; value: string }[] = []
+    const seen = new Set<string>()
+    // 1. All seminars created in 세미나 관리
+    for (const s of seminars) {
+      if (!seen.has(s.title)) {
+        seen.add(s.title)
+        options.push({ label: s.title, value: s.title })
+      }
+    }
+    // 2. Legacy seminar/webinar source channels not backed by a seminar record
     const leadChannels = new Set(
       allLeads
         .filter(l => COLD_CALL_STAGES.includes(l.pipelineStage))
         .map(l => l.sourceChannel)
         .filter((sc): sc is string => !!sc && sc.trim().length > 0),
     )
-    // Only show source_channels that contain 세미나 or 웨비나 and are specific (not generic)
     const GENERIC_NAMES = new Set(['세미나', '웨비나', '세미나 참석', '웨비나 참석'])
-    const options: { label: string; value: string }[] = []
     for (const sc of leadChannels) {
-      if (!GENERIC_NAMES.has(sc) && (sc.includes('세미나') || sc.includes('웨비나'))) {
+      if (!seen.has(sc) && !GENERIC_NAMES.has(sc) && (sc.includes('세미나') || sc.includes('웨비나'))) {
+        seen.add(sc)
         options.push({ label: sc, value: sc })
       }
     }
     return options
-  }, [allLeads])
+  }, [allLeads, seminars])
+
+  const selectedSeminar: SeminarLite | undefined = useMemo(
+    () => seminars.find((s) => s.title === selectedEvent),
+    [seminars, selectedEvent],
+  )
 
   // Filter and score leads
   const coldCallLeads = useMemo(() => {
     let leads = allLeads.filter((l) => COLD_CALL_STAGES.includes(l.pipelineStage))
 
-    // Event filter — exact match on source_channel only
+    // Event filter — source_channel match OR registered phone match
     if (selectedEvent !== 'all') {
-      leads = leads.filter((l) => l.sourceChannel === selectedEvent)
+      if (selectedSeminar) {
+        leads = leads.filter((l) => leadMatchesSeminar(l, selectedSeminar))
+      } else {
+        leads = leads.filter((l) => l.sourceChannel === selectedEvent)
+      }
     }
 
     // Grade group filter
@@ -391,7 +422,7 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
     }
 
     return scored
-  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, search, sortBy])
+  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy])
 
   const selectedLead = coldCallLeads.find((l) => l.id === selectedLeadId)
 
@@ -399,6 +430,19 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
   const totalColdCallable = allLeads.filter((l) => COLD_CALL_STAGES.includes(l.pipelineStage)).length
   const highPriorityCount = coldCallLeads.filter((l) => l._priority >= 80).length
   const filteredCount = coldCallLeads.length
+
+  // Dashboard: computed over ALL leads in scope (all stages), so leads that
+  // advanced past cold-call stages (consultation, contract) still count
+  const dashboardLeads = useMemo(() => {
+    if (selectedEvent === 'all') return allLeads
+    if (selectedSeminar) return allLeads.filter((l) => leadMatchesSeminar(l, selectedSeminar))
+    return allLeads.filter((l) => l.sourceChannel === selectedEvent)
+  }, [allLeads, selectedEvent, selectedSeminar])
+
+  const outcome = useMemo(
+    () => computeColdCallOutcome(dashboardLeads, contactActivities, selectedSeminar?.applicants ?? 0),
+    [dashboardLeads, contactActivities, selectedSeminar],
+  )
 
   return (
     <div className="flex flex-col md:flex-row h-[calc(100vh-3.5rem)] overflow-hidden -m-3 md:-m-6">
@@ -591,18 +635,147 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
         </div>
       </div>
 
-      {/* Right Panel: Lead Detail */}
+      {/* Right Panel: Lead Detail or Dashboard */}
       <div className="flex-1 overflow-y-auto bg-muted/30 min-w-0">
         {selectedLead ? (
           <ColdCallDetail lead={selectedLead} onClose={() => setSelectedLeadId(null)} />
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <Phone className="size-12 mb-4 opacity-30" />
-            <p className="text-sm">{t('coldCall.selectLead')}</p>
-            <p className="text-xs mt-1">{t('coldCall.selectLeadDesc')}</p>
-          </div>
+          <ColdCallDashboard
+            eventLabel={selectedEvent !== 'all' ? selectedEvent : null}
+            outcome={outcome}
+          />
         )}
       </div>
+    </div>
+  )
+}
+
+// ============ Dashboard Panel ============
+
+function ColdCallDashboard({
+  eventLabel,
+  outcome,
+}: {
+  eventLabel: string | null
+  outcome: ColdCallOutcome
+}) {
+  const t = useT()
+  const pct = (n: number, base: number) => (base > 0 ? `${Math.round((n / base) * 100)}%` : '-')
+
+  const statCards: { label: string; value: string; sub?: string; icon: LucideIcon; color: string }[] = [
+    ...(eventLabel
+      ? [{
+          label: t('coldCall.dashApplicants'),
+          value: String(outcome.applicants),
+          sub: t('coldCall.dashLeadsMatched', { n: outcome.totalLeads }),
+          icon: Users2,
+          color: 'text-primary bg-primary/10',
+        }]
+      : [{
+          label: t('coldCall.dashTotalLeads'),
+          value: String(outcome.totalLeads),
+          icon: Users2,
+          color: 'text-primary bg-primary/10',
+        }]),
+    {
+      label: t('coldCall.dashConfirmed'),
+      value: String(outcome.confirmed),
+      sub: pct(outcome.confirmed, eventLabel ? outcome.applicants : outcome.totalLeads),
+      icon: PhoneCall,
+      color: 'text-emerald-600 bg-emerald-50',
+    },
+    {
+      label: t('coldCall.dashUnreachable'),
+      value: String(outcome.unreachable),
+      sub: pct(outcome.unreachable, outcome.contacted),
+      icon: PhoneOff,
+      color: 'text-red-500 bg-red-50',
+    },
+    {
+      label: t('coldCall.dashCallback'),
+      value: String(outcome.callbackNeeded),
+      icon: Clock,
+      color: 'text-amber-600 bg-amber-50',
+    },
+    {
+      label: t('coldCall.dashConsult'),
+      value: String(outcome.consultScheduled),
+      sub: pct(outcome.consultScheduled, outcome.totalLeads),
+      icon: CalendarCheck,
+      color: 'text-blue-600 bg-blue-50',
+    },
+    {
+      label: t('coldCall.dashContracted'),
+      value: String(outcome.contracted),
+      icon: CheckCircle2,
+      color: 'text-green-600 bg-green-50',
+    },
+  ]
+
+  return (
+    <div className="p-6 space-y-5 max-w-3xl">
+      <div>
+        <h2 className="text-lg font-bold flex items-center gap-2">
+          <Phone className="size-4 text-primary" />
+          {t('coldCall.dashTitle')}
+        </h2>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {eventLabel || t('coldCall.dashAllEvents')}
+        </p>
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        {statCards.map((s) => {
+          const StatIcon = s.icon
+          return (
+            <Card key={s.label}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`p-2 rounded-lg shrink-0 ${s.color}`}>
+                  <StatIcon className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xl font-bold leading-tight">
+                    {s.value}
+                    {s.sub && <span className="ml-1.5 text-xs font-medium text-muted-foreground">{s.sub}</span>}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground truncate">{s.label}</div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Progress summary */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            {t('coldCall.dashProgress')}
+          </h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span>{t('coldCall.dashContacted')}</span>
+              <span className="font-medium tabular-nums">
+                {outcome.contacted} / {outcome.totalLeads} ({pct(outcome.contacted, outcome.totalLeads)})
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: outcome.totalLeads > 0 ? `${(outcome.contacted / outcome.totalLeads) * 100}%` : '0%' }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t('coldCall.dashUncontactedNote', { n: outcome.uncontacted })}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <p className="text-xs text-muted-foreground">
+        {t('coldCall.selectLeadDesc')}
+      </p>
     </div>
   )
 }
