@@ -4,7 +4,34 @@ import type { Lead, PipelineStage } from '@/types'
 
 /** Strip everything except digits so phones match across sources. */
 export function normalizePhone(raw: string | undefined | null): string {
-  return (raw || '').replace(/\D/g, '')
+  let d = (raw || '').replace(/\D/g, '')
+  // Normalize Korean country code: 8210... → 010...
+  if (d.startsWith('8210')) d = '0' + d.slice(2)
+  else if (d.startsWith('82') && d.length >= 11) d = '0' + d.slice(2)
+  return d
+}
+
+/** Lowercase + trim an email. Empty string if missing. */
+export function normalizeEmail(raw: string | undefined | null): string {
+  return (raw || '').trim().toLowerCase()
+}
+
+/** Compact a name key: strip spaces, lowercase. Empty string if missing. */
+export function normalizeName(raw: string | undefined | null): string {
+  return (raw || '').replace(/\s+/g, '').toLowerCase()
+}
+
+/** A registrant's combined match keys. A phone only counts if it looks real. */
+export interface MatchKeys {
+  phone: string
+  email: string
+  /** parentName+studentName, used only as a last-resort match. */
+  nameKey: string
+}
+
+function isUsablePhone(p: string): boolean {
+  // Reject empty, too short, or obviously non-phone (e.g. all same digit)
+  return p.length >= 9
 }
 
 export interface SeminarLite {
@@ -13,16 +40,20 @@ export interface SeminarLite {
   date: string | null
   createdAt: string
   active: boolean
-  /** Normalized phone numbers of all registrants (deduplicated). */
-  registrationPhones: Set<string>
-  /** Unique registrant count (by phone). */
+  /** Usable normalized phones of registrants. */
+  phones: Set<string>
+  /** Normalized emails of registrants. */
+  emails: Set<string>
+  /** Name keys (parentName+studentName) of registrants. */
+  names: Set<string>
+  /** Unique registrant count (deduped by best available key). */
   applicants: number
 }
 
 /**
- * All seminars with their registrant phone sets.
- * Used to match leads back to the seminar they registered for,
- * even when the lead's source_channel points to another channel.
+ * All seminars with their registrant match keys (phone/email/name).
+ * Used to link leads back to the seminar they registered for even when
+ * the phone number is malformed or the lead entered via another channel.
  */
 export function useSeminarsWithRegistrations() {
   return useQuery({
@@ -36,38 +67,72 @@ export function useSeminarsWithRegistrations() {
 
       const PAGE = 1000
       let from = 0
-      const regs: { seminar_id: string; phone: string }[] = []
+      const regs: {
+        seminar_id: string
+        phone: string | null
+        email: string | null
+        parent_name: string | null
+        student_name: string | null
+      }[] = []
       while (true) {
         const { data, error } = await supabase
           .from('seminar_registrations')
-          .select('seminar_id, phone')
+          .select('seminar_id, phone, email, parent_name, student_name')
           .range(from, from + PAGE - 1)
         if (error) throw error
-        const batch = (data || []) as { seminar_id: string; phone: string }[]
+        const batch = (data || []) as typeof regs
         regs.push(...batch)
         if (batch.length < PAGE) break
         from += PAGE
       }
 
-      const bySeminar = new Map<string, Set<string>>()
+      interface Acc {
+        phones: Set<string>
+        emails: Set<string>
+        names: Set<string>
+        /** dedup keys for counting unique registrants */
+        personKeys: Set<string>
+      }
+      const bySeminar = new Map<string, Acc>()
       for (const r of regs) {
-        const p = normalizePhone(r.phone)
-        if (!p) continue
-        if (!bySeminar.has(r.seminar_id)) bySeminar.set(r.seminar_id, new Set())
-        bySeminar.get(r.seminar_id)!.add(p)
+        if (!bySeminar.has(r.seminar_id)) {
+          bySeminar.set(r.seminar_id, {
+            phones: new Set(),
+            emails: new Set(),
+            names: new Set(),
+            personKeys: new Set(),
+          })
+        }
+        const acc = bySeminar.get(r.seminar_id)!
+        const phone = normalizePhone(r.phone)
+        const email = normalizeEmail(r.email)
+        const nameKey = normalizeName(r.parent_name) + '|' + normalizeName(r.student_name)
+        if (isUsablePhone(phone)) acc.phones.add(phone)
+        if (email) acc.emails.add(email)
+        if (nameKey !== '|') acc.names.add(nameKey)
+        // Unique person: prefer email, then usable phone, then name
+        const personKey = email || (isUsablePhone(phone) ? phone : '') || nameKey
+        if (personKey && personKey !== '|') acc.personKeys.add(personKey)
       }
 
       return (seminars || []).map((s): SeminarLite => {
         const row = s as Record<string, unknown>
-        const phones = bySeminar.get(row.id as string) ?? new Set<string>()
+        const acc = bySeminar.get(row.id as string) ?? {
+          phones: new Set<string>(),
+          emails: new Set<string>(),
+          names: new Set<string>(),
+          personKeys: new Set<string>(),
+        }
         return {
           id: row.id as string,
           title: row.title as string,
           date: row.date as string | null,
           createdAt: row.created_at as string,
           active: row.active as boolean,
-          registrationPhones: phones,
-          applicants: phones.size,
+          phones: acc.phones,
+          emails: acc.emails,
+          names: acc.names,
+          applicants: acc.personKeys.size,
         }
       })
     },
@@ -207,12 +272,70 @@ export function computeColdCallOutcome(
 }
 
 /**
- * Match leads to a seminar: either the lead's source_channel is the seminar
- * title, or the lead's phone appears in the seminar's registrations
- * (covers leads that entered earlier through another channel).
+ * Match a lead to a seminar by any of: seminar title as source, phone,
+ * or email. This tolerates malformed phone numbers (e.g. an email typed
+ * into the phone field) by falling back to the email key. Name matching is
+ * intentionally NOT used here — Korean homonyms produce false positives.
  */
 export function leadMatchesSeminar(lead: Lead, seminar: SeminarLite): boolean {
   if (lead.sourceChannel === seminar.title) return true
-  const p = normalizePhone(lead.phone)
-  return p.length > 0 && seminar.registrationPhones.has(p)
+
+  const phone = normalizePhone(lead.phone)
+  if (phone.length >= 9 && seminar.phones.has(phone)) return true
+
+  const email = normalizeEmail(lead.email)
+  if (email && seminar.emails.has(email)) return true
+
+  return false
+}
+
+/** Rank a pipeline stage so we can keep the most-progressed duplicate. */
+const STAGE_RANK: Record<string, number> = {
+  contracted: 100,
+  contract_review: 90,
+  third_consultation: 80,
+  second_consultation: 70,
+  first_consultation: 60,
+  consultation_scheduled: 50,
+  contact_attempted: 40,
+  new_lead: 30,
+  no_response: 20,
+  on_hold: 15,
+  rejected: 10,
+  lost: 5,
+}
+
+/**
+ * A person key that merges duplicate lead rows for the same person while
+ * keeping siblings (same parent phone/email, different student) separate.
+ * Uses the strongest identifier available (email → usable phone) plus the
+ * student name; falls back to parent+student name when neither exists.
+ */
+function personKey(lead: Lead): string {
+  const email = normalizeEmail(lead.email)
+  const phone = normalizePhone(lead.phone)
+  const strong = email || (phone.length >= 9 ? phone : '')
+  const student = normalizeName(lead.studentName)
+  if (strong) return `${strong}|${student}`
+  return `p:${normalizeName(lead.parentName)}|${student}`
+}
+
+/**
+ * Collapse duplicate lead rows that represent the same person, keeping the
+ * most-progressed one (e.g. a contracted row wins over a raw new_lead).
+ */
+export function dedupeLeadsByPerson<T extends Lead>(leads: T[]): T[] {
+  const best = new Map<string, T>()
+  for (const lead of leads) {
+    const key = personKey(lead)
+    const existing = best.get(key)
+    if (!existing) {
+      best.set(key, lead)
+      continue
+    }
+    const a = STAGE_RANK[lead.pipelineStage] ?? 0
+    const b = STAGE_RANK[existing.pipelineStage] ?? 0
+    if (a > b) best.set(key, lead)
+  }
+  return Array.from(best.values())
 }

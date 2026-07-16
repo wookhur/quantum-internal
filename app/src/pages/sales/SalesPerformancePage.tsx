@@ -15,6 +15,7 @@ import {
   useAllContactActivities,
   computeColdCallOutcome,
   leadMatchesSeminar,
+  dedupeLeadsByPerson,
   type SeminarLite,
 } from '@/hooks/useSeminarPerformance'
 import type { Lead, SalesEvent } from '@/types'
@@ -140,7 +141,7 @@ export function SalesPerformancePage() {
     const autoRows: PerfRow[] = seminars
       .filter(s => !manualNames.has(s.title.trim()))
       .map(s => {
-        const matched = allLeads.filter(l => leadMatchesSeminar(l, s))
+        const matched = dedupeLeadsByPerson(allLeads.filter(l => leadMatchesSeminar(l, s)))
         const outcome = computeColdCallOutcome(matched, contactActivities, s.applicants)
         const month = (s.date || s.createdAt).slice(0, 7)
         return {
@@ -180,7 +181,7 @@ export function SalesPerformancePage() {
     if (!leadsDialogRow) return []
     if (leadsDialogRow.seminar) {
       const s = leadsDialogRow.seminar
-      return allLeads.filter(l => leadMatchesSeminar(l, s))
+      return dedupeLeadsByPerson(allLeads.filter(l => leadMatchesSeminar(l, s)))
     }
     return allLeads.filter(l => l.sourceChannel === leadsDialogRow.eventName)
   }, [leadsDialogRow, allLeads])

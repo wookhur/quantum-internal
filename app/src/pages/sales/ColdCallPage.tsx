@@ -52,6 +52,7 @@ import {
   useAllContactActivities,
   computeColdCallOutcome,
   leadMatchesSeminar,
+  dedupeLeadsByPerson,
   type SeminarLite,
   type ColdCallOutcome,
 } from '@/hooks/useSeminarPerformance'
@@ -372,10 +373,10 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
   const coldCallLeads = useMemo(() => {
     let leads = allLeads.filter((l) => COLD_CALL_STAGES.includes(l.pipelineStage))
 
-    // Event filter — source_channel match OR registered phone match
+    // Event filter — source_channel match OR registered phone/email match
     if (selectedEvent !== 'all') {
       if (selectedSeminar) {
-        leads = leads.filter((l) => leadMatchesSeminar(l, selectedSeminar))
+        leads = dedupeLeadsByPerson(leads.filter((l) => leadMatchesSeminar(l, selectedSeminar)))
       } else {
         leads = leads.filter((l) => l.sourceChannel === selectedEvent)
       }
@@ -435,7 +436,7 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
   // advanced past cold-call stages (consultation, contract) still count
   const dashboardLeads = useMemo(() => {
     if (selectedEvent === 'all') return allLeads
-    if (selectedSeminar) return allLeads.filter((l) => leadMatchesSeminar(l, selectedSeminar))
+    if (selectedSeminar) return dedupeLeadsByPerson(allLeads.filter((l) => leadMatchesSeminar(l, selectedSeminar)))
     return allLeads.filter((l) => l.sourceChannel === selectedEvent)
   }, [allLeads, selectedEvent, selectedSeminar])
 
