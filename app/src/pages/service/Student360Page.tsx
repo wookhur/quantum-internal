@@ -36,7 +36,7 @@ import {
 } from '@/hooks/useServiceReports'
 import {
   useServiceFollowups, useCreateFollowup, useBulkCreateFollowups,
-  useToggleFollowup, useDeleteFollowup, splitFollowupText,
+  useToggleFollowup, useUpdateFollowup, useDeleteFollowup, splitFollowupText,
 } from '@/hooks/useServiceFollowups'
 import {
   usePortalTokens, useCreatePortalToken, useTogglePortalToken, useDeletePortalToken,
@@ -2226,9 +2226,19 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
   )
   const toggle = useToggleFollowup()
   const create = useCreateFollowup()
+  const update = useUpdateFollowup()
   const del = useDeleteFollowup()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+
+  const startEdit = (id: string, text: string) => { setEditingId(id); setEditDraft(text) }
+  const saveEdit = () => {
+    const v = editDraft.trim()
+    if (!editingId || !v) { setEditingId(null); return }
+    update.mutate({ id: editingId, studentId, text: v }, { onSuccess: () => setEditingId(null), onError: reportSaveError })
+  }
 
   // Nothing to render: no structured items AND no raw text
   if (!items.length && !fallbackText && !adding) {
@@ -2279,22 +2289,38 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
       <ul className="space-y-1.5">
         {items.map(f => (
           <li key={f.id} className="flex items-center gap-2 text-sm">
-            {showToggle && (
+            {showToggle && editingId !== f.id && (
               <Switch
                 checked={f.done}
                 onCheckedChange={(v) => toggle.mutate({ id: f.id, studentId, done: !!v })}
                 className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-red-500"
               />
             )}
-            <span className={`flex-1 ${showToggle && f.done ? 'line-through text-muted-foreground' : ''}`}>
-              {f.text}
-            </span>
-            <Button
-              size="sm" variant="ghost"
-              onClick={() => del.mutate({ id: f.id, studentId })}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
+            {editingId === f.id ? (
+              <>
+                <Input
+                  value={editDraft}
+                  onChange={e => setEditDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingId(null) }}
+                  className="flex-1 h-8"
+                  autoFocus
+                />
+                <Button size="sm" onClick={saveEdit} disabled={!editDraft.trim()}>{t('common.save')}</Button>
+                <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>{t('common.cancel')}</Button>
+              </>
+            ) : (
+              <>
+                <span className={`flex-1 ${showToggle && f.done ? 'line-through text-muted-foreground' : ''}`}>
+                  {f.text}
+                </span>
+                <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-primary" onClick={() => startEdit(f.id, f.text)}>
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => del.mutate({ id: f.id, studentId })}>
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </>
+            )}
           </li>
         ))}
       </ul>

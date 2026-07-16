@@ -110,6 +110,23 @@ export function useToggleFollowup() {
   })
 }
 
+export function useUpdateFollowup() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, text }: { id: string; studentId: string; text: string }) => {
+      const { error } = await supabase
+        .from('service_followups')
+        .update({ text })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['service_followups', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['student_status_pending_followups'] })
+    },
+  })
+}
+
 export function useDeleteFollowup() {
   const qc = useQueryClient()
   return useMutation({
