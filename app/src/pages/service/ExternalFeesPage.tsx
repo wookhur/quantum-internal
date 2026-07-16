@@ -114,6 +114,7 @@ export function ExternalFeesPage() {
     return fees.filter(f =>
       f.label.toLowerCase().includes(q) ||
       f.studentName.toLowerCase().includes(q) ||
+      (f.studentKoreanName || '').toLowerCase().includes(q) ||
       (f.contributor1 || '').toLowerCase().includes(q) ||
       (f.contributor2 || '').toLowerCase().includes(q),
     )
@@ -225,7 +226,9 @@ export function ExternalFeesPage() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">{f.studentName}</TableCell>
+                      <TableCell className="text-sm">
+                        {f.studentName}{f.studentKoreanName && f.studentKoreanName !== f.studentName ? ` · ${f.studentKoreanName}` : ''}
+                      </TableCell>
                       <TableCell>
                         {rows.length > 0 ? (
                           <div className="space-y-1" onClick={e => e.stopPropagation()}>
@@ -371,7 +374,7 @@ function ProgramFeeDialog({
             {fee.label}
           </DialogTitle>
           <DialogDescription>
-            {fee.studentName} · {fee.source === 'ec' ? 'Extra Curricular' : 'Academic Support'}
+            {fee.studentName}{fee.studentKoreanName && fee.studentKoreanName !== fee.studentName ? ` · ${fee.studentKoreanName}` : ''} · {fee.source === 'ec' ? 'Extra Curricular' : 'Academic Support'}
           </DialogDescription>
         </DialogHeader>
 

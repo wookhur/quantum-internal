@@ -10,6 +10,7 @@ export interface ServiceProgramFee {
   source: 'ec' | 'academic'
   studentId: string
   studentName: string
+  studentKoreanName?: string
   label: string          // EC: partner / Academic: academy name
   detail?: string        // EC: program / Academic: subject
   periodStart?: string
@@ -38,11 +39,11 @@ export function useAllServiceProgramFees() {
       const [ecRes, acRes] = await Promise.all([
         supabase
           .from('service_ec_activities')
-          .select('*, service_students:student_id(name)')
+          .select('*, service_students:student_id(name, korean_name)')
           .order('created_at', { ascending: false }),
         supabase
           .from('service_academic_support')
-          .select('*, service_students:student_id(name)')
+          .select('*, service_students:student_id(name, korean_name)')
           .order('created_at', { ascending: false }),
       ])
       if (ecRes.error) throw ecRes.error
@@ -56,6 +57,7 @@ export function useAllServiceProgramFees() {
           source: 'ec',
           studentId: r.student_id as string,
           studentName: (s?.name as string) || '',
+          studentKoreanName: (s?.korean_name as string) || undefined,
           label: canonicalPartnerName(r.partner as string) || 'EC',
           detail: (r.program as string) || undefined,
           periodStart: (r.period_start as string) || undefined,
@@ -79,6 +81,7 @@ export function useAllServiceProgramFees() {
           source: 'academic',
           studentId: r.student_id as string,
           studentName: (s?.name as string) || '',
+          studentKoreanName: (s?.korean_name as string) || undefined,
           label: canonicalPartnerName(r.academy_name as string) || 'Academic',
           detail: (r.subject as string) || undefined,
           periodStart: (r.period_start as string) || undefined,
