@@ -23,6 +23,7 @@ import { useDefaultRates, usePartnerRateMap, normalizePartner, rateForTeam, type
 import { useProfiles, canManageServiceFinance } from '@/hooks/useProfiles'
 import { consultantNameKey } from '@/lib/consultants'
 import { useAuth } from '@/contexts/AuthContext'
+import { useT } from '@/i18n/LanguageContext'
 import { todayKST } from '@/lib/date'
 import { formatCurrency } from '@/types'
 
@@ -70,9 +71,9 @@ function incentiveOf(f: ServiceProgramFee, autoTeam: TeamResolver, salesRate: nu
   return contributorRows(f, autoTeam, salesRate, serviceRate).reduce((s, c) => s + c.inc, 0)
 }
 
-const TEAM_LABEL: Record<ContributorTeam, string> = { sales: '세일즈', service: '서비스' }
-
 export function ExternalFeesPage() {
+  const t = useT()
+  const teamLabel = (team: ContributorTeam) => t(team === 'sales' ? 'svcpay.teamSales' : 'svcpay.teamService')
   const { user } = useAuth()
   const { data: fees = [], isLoading } = useAllServiceProgramFees()
   const { salesRate: defSales, serviceRate: defService } = useDefaultRates()
@@ -134,8 +135,8 @@ export function ExternalFeesPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
         <Lock className="size-8 text-muted-foreground" />
-        <h1 className="text-xl font-bold">접근 권한이 없습니다</h1>
-        <p className="text-sm text-muted-foreground">서비스입금관리는 관리자만 열람할 수 있습니다.</p>
+        <h1 className="text-xl font-bold">{t('svcpay.accessDeniedTitle')}</h1>
+        <p className="text-sm text-muted-foreground">{t('svcpay.accessDeniedDesc')}</p>
       </div>
     )
   }
@@ -143,34 +144,32 @@ export function ExternalFeesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">서비스입금관리</h1>
-        <p className="text-sm text-muted-foreground">
-          기존 고객에게 세일즈한 EC·Academic 서비스(Student 360 기준)의 금액·수금상태·기여자를 관리합니다. 인센티브는 기여자의 <b>소속팀(세일즈/서비스)</b>에 따라 <b>수수료관리</b>에서 정한 팀별 수수료율(청구금액 × 율)로 계산되며, 수금 완료 시 확정됩니다.
-        </p>
+        <h1 className="text-2xl font-bold">{t('svcpay.title')}</h1>
+        <p className="text-sm text-muted-foreground">{t('svcpay.desc')}</p>
       </div>
 
       <div className="grid grid-cols-4 gap-3">
         <Card className="border-l-[3px] border-l-purple-400">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-muted-foreground">프로그램 항목</div>
+            <div className="text-xs text-muted-foreground">{t('svcpay.statItems')}</div>
             <div className="text-2xl font-bold mt-1">{fees.length}</div>
           </CardContent>
         </Card>
         <Card className="border-l-[3px] border-l-orange-400">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-muted-foreground">총 청구금액</div>
+            <div className="text-xs text-muted-foreground">{t('svcpay.statBilled')}</div>
             <div className="text-2xl font-bold mt-1">{formatCurrency(totalBilled)}</div>
           </CardContent>
         </Card>
         <Card className="border-l-[3px] border-l-emerald-400">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-muted-foreground">수금 완료</div>
+            <div className="text-xs text-muted-foreground">{t('svcpay.statCollected')}</div>
             <div className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(collected)}</div>
           </CardContent>
         </Card>
         <Card className="border-l-[3px] border-l-blue-400">
           <CardContent className="py-3 px-4">
-            <div className="text-xs text-muted-foreground">총 인센티브</div>
+            <div className="text-xs text-muted-foreground">{t('svcpay.statIncentive')}</div>
             <div className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totalIncentive)}</div>
           </CardContent>
         </Card>
@@ -179,7 +178,7 @@ export function ExternalFeesPage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
         <Input
-          placeholder="학생, 프로그램, 기여자 검색..."
+          placeholder={t('svcpay.searchPlaceholder')}
           className="pl-9"
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -192,18 +191,18 @@ export function ExternalFeesPage() {
             <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : filtered.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
-              Student 360에서 입력된 EC·Academic 프로그램이 없습니다.
+              {t('svcpay.empty')}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>프로그램</TableHead>
-                  <TableHead>학생</TableHead>
-                  <TableHead>수수료 대상</TableHead>
-                  <TableHead className="text-right">청구금액</TableHead>
-                  <TableHead>수금상태</TableHead>
-                  <TableHead className="text-right">인센티브</TableHead>
+                  <TableHead>{t('svcpay.colProgram')}</TableHead>
+                  <TableHead>{t('svcpay.colStudent')}</TableHead>
+                  <TableHead>{t('svcpay.colContributor')}</TableHead>
+                  <TableHead className="text-right">{t('svcpay.colBilled')}</TableHead>
+                  <TableHead>{t('svcpay.colStatus')}</TableHead>
+                  <TableHead className="text-right">{t('svcpay.colIncentive')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -240,42 +239,42 @@ export function ExternalFeesPage() {
                                     <Select value={c.override || 'auto'} onValueChange={v => setTeam(f, c.slot, (v as 'auto' | ContributorTeam) || 'auto')}>
                                       <SelectTrigger className={`h-6 w-[86px] text-xs px-2 ${!c.team ? 'text-amber-600 border-amber-300' : ''}`}><SelectValue /></SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="auto">{c.source === 'auto' && c.team ? `자동(${TEAM_LABEL[c.team]})` : '자동'}</SelectItem>
-                                        <SelectItem value="sales">세일즈</SelectItem>
-                                        <SelectItem value="service">서비스</SelectItem>
+                                        <SelectItem value="auto">{c.source === 'auto' && c.team ? t('svcpay.autoDetected', { team: teamLabel(c.team) }) : t('svcpay.auto')}</SelectItem>
+                                        <SelectItem value="sales">{teamLabel('sales')}</SelectItem>
+                                        <SelectItem value="service">{teamLabel('service')}</SelectItem>
                                       </SelectContent>
                                     </Select>
                                     <span className="text-[10px] text-muted-foreground w-8">{c.team ? `${c.rate}%` : ''}</span>
                                   </>
                                 ) : c.team ? (
                                   <Badge variant="outline" className={c.team === 'sales' ? 'text-blue-600 border-blue-200 px-1 py-0 text-[10px]' : 'text-emerald-600 border-emerald-200 px-1 py-0 text-[10px]'}>
-                                    {TEAM_LABEL[c.team]} {c.rate}%
+                                    {teamLabel(c.team)} {c.rate}%
                                   </Badge>
                                 ) : (
-                                  <Badge variant="outline" className="text-amber-600 border-amber-200 px-1 py-0 text-[10px]">팀 미확인</Badge>
+                                  <Badge variant="outline" className="text-amber-600 border-amber-200 px-1 py-0 text-[10px]">{t('svcpay.teamUnknown')}</Badge>
                                 )}
                               </div>
                             ))}
                           </div>
-                        ) : <span className="text-xs text-muted-foreground">미입력</span>}
+                        ) : <span className="text-xs text-muted-foreground">{t('svcpay.notEntered')}</span>}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
                         {f.billedAmount ? formatCurrency(f.billedAmount, f.currency as 'KRW' | 'USD') : '-'}
                       </TableCell>
                       <TableCell>
                         {isPaid ? (
-                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="size-3" /> 수금 완료</Badge>
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="size-3" /> {t('svcpay.paid')}</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1"><Clock className="size-3" /> 미수금</Badge>
+                          <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1"><Clock className="size-3" /> {t('svcpay.unpaid')}</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
                         {inc <= 0 ? (
-                          <span className="text-xs text-muted-foreground">{needsTeam ? '팀 지정 필요' : '-'}</span>
+                          <span className="text-xs text-muted-foreground">{needsTeam ? t('svcpay.needTeam') : '-'}</span>
                         ) : isPaid ? (
                           <span className="text-emerald-600">{formatCurrency(inc, f.currency as 'KRW' | 'USD')}</span>
                         ) : (
-                          <span className="text-muted-foreground">예정 {formatCurrency(inc, f.currency as 'KRW' | 'USD')}</span>
+                          <span className="text-muted-foreground">{t('svcpay.expected')} {formatCurrency(inc, f.currency as 'KRW' | 'USD')}</span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -322,6 +321,8 @@ function ProgramFeeDialog({
   isAdmin: boolean
   onClose: () => void
 }) {
+  const t = useT()
+  const teamLabel = (team: ContributorTeam) => t(team === 'sales' ? 'svcpay.teamSales' : 'svcpay.teamService')
   const updateEC = useUpdateECActivity()
   const updateAC = useUpdateAcademicSupport()
 
@@ -380,54 +381,54 @@ function ProgramFeeDialog({
 
         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
           <LinkIcon className="size-3" />
-          기여자는 Student 360에서 세일즈한 담당자입니다.
+          {t('svcpay.contributorsNote')}
           <Link to={`/service/student-360?student=${fee.studentId}`} className="text-blue-600 hover:underline" onClick={onClose}>
-            Student 360에서 보기
+            {t('svcpay.viewStudent360')}
           </Link>
         </div>
 
         {/* Billing (admin editable) */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">청구금액</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('svcpay.colBilled')}</label>
             {isAdmin ? (
               <Input type="number" value={billed} onChange={e => setBilled(e.target.value)} placeholder="0" className="h-8 text-sm" />
             ) : <div className="text-sm font-mono">{fee.billedAmount ? formatCurrency(fee.billedAmount, fee.currency as 'KRW' | 'USD') : '-'}</div>}
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">수금상태</label>
+            <label className="text-xs font-medium text-muted-foreground">{t('svcpay.status')}</label>
             {isAdmin ? (
               <Select value={status} onValueChange={v => setStatus((v as 'pending' | 'paid') ?? 'pending')}>
                 <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pending">미수금</SelectItem>
-                  <SelectItem value="paid">수금 완료</SelectItem>
+                  <SelectItem value="pending">{t('svcpay.unpaid')}</SelectItem>
+                  <SelectItem value="paid">{t('svcpay.paid')}</SelectItem>
                 </SelectContent>
               </Select>
-            ) : <div className="text-sm">{fee.collectionStatus === 'paid' ? '수금 완료' : '미수금'}</div>}
+            ) : <div className="text-sm">{fee.collectionStatus === 'paid' ? t('svcpay.paid') : t('svcpay.unpaid')}</div>}
           </div>
         </div>
 
         <div className="rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-700">
           {hasPartnerRate
-            ? <>이 파트너사({fee.label})는 개별 수수료율(세일즈 <b>{salesRate}%</b> / 서비스 <b>{serviceRate}%</b>)이 적용됩니다.</>
-            : <>기본 수수료율(세일즈 <b>{salesRate}%</b> / 서비스 <b>{serviceRate}%</b>)이 적용됩니다.</>}
+            ? t('svcpay.partnerRateBanner', { partner: fee.label, sales: salesRate, service: serviceRate })
+            : t('svcpay.defaultRateBanner', { sales: salesRate, service: serviceRate })}
         </div>
 
         {/* Contributors + team + incentive */}
         <div className="space-y-2 pt-2 border-t">
           <div className="grid grid-cols-[1fr_130px_auto] items-center gap-2 text-[11px] text-muted-foreground px-1">
-            <span>기여자 (세일즈 담당)</span><span className="text-center">소속팀</span><span className="w-24 text-right">인센티브</span>
+            <span>{t('svcpay.contributorsHead')}</span><span className="text-center">{t('svcpay.teamHead')}</span><span className="w-24 text-right">{t('svcpay.colIncentive')}</span>
           </div>
           {slots.map((c, i) => {
             const r = resolve(c.name, c.team)
-            const detected = r.auto ? `자동 (${TEAM_LABEL[r.auto]})` : '자동 (미확인)'
+            const detected = r.auto ? t('svcpay.autoDetected', { team: teamLabel(r.auto) }) : t('svcpay.autoUnknown')
             return (
               <div key={i} className="grid grid-cols-[1fr_130px_auto] items-center gap-2">
                 <Input
                   value={c.name}
                   onChange={e => c.setName(e.target.value)}
-                  placeholder={i === 0 ? '기여자 이름' : '기여자 2 (선택)'}
+                  placeholder={i === 0 ? t('svcpay.contribName1') : t('svcpay.contribName2')}
                   className="h-8 text-sm"
                   disabled={!isAdmin}
                 />
@@ -435,8 +436,8 @@ function ProgramFeeDialog({
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="auto">{detected}</SelectItem>
-                    <SelectItem value="sales">세일즈 ({salesRate}%)</SelectItem>
-                    <SelectItem value="service">서비스 ({serviceRate}%)</SelectItem>
+                    <SelectItem value="sales">{teamLabel('sales')} ({salesRate}%)</SelectItem>
+                    <SelectItem value="service">{teamLabel('service')} ({serviceRate}%)</SelectItem>
                   </SelectContent>
                 </Select>
                 <span className="text-sm font-mono w-24 text-right">
@@ -446,24 +447,21 @@ function ProgramFeeDialog({
             )
           })}
           <div className="flex items-center justify-between text-sm pt-1 border-t">
-            <span className="text-muted-foreground">총 인센티브</span>
+            <span className="text-muted-foreground">{t('svcpay.totalIncentive')}</span>
             <span className="font-mono font-medium">{totalInc > 0 ? formatCurrency(totalInc, fee.currency as 'KRW' | 'USD') : '-'}</span>
           </div>
         </div>
 
-        <p className="text-[11px] text-muted-foreground">
-          수수료율은 <b>수수료관리</b>(파트너 &gt; 수수료관리)에서 설정합니다. 기본은 소속팀(세일즈/서비스) 기준이며 <b>인사관리</b>로 자동 판별됩니다.
-          "자동 (미확인)"이면 여기서 팀을 직접 지정하세요. 파트너사에 개별 수수료율이 지정돼 있으면 그 율이 우선 적용됩니다.
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('svcpay.footerNote')}</p>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>닫기</Button>
+          <Button variant="outline" onClick={onClose}>{t('svcpay.close')}</Button>
           {isAdmin ? (
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}저장
+              {saving ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}{t('svcpay.save')}
             </Button>
           ) : (
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lock className="size-3" /> admin만 편집할 수 있습니다</span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><Lock className="size-3" /> {t('svcpay.adminOnly')}</span>
           )}
         </DialogFooter>
       </DialogContent>
