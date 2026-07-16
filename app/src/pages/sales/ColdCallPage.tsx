@@ -1305,7 +1305,32 @@ function ColdCallDetail({
                         onClick={() =>
                           deleteActivity.mutate(
                             { id: a.id, leadId: lead.id },
-                            { onSuccess: () => setDeleteActivityConfirm(null) },
+                            {
+                              onSuccess: () => {
+                                setDeleteActivityConfirm(null)
+                                // Contact logging auto-assigns the logger as
+                                // the sales assignee — if their last contact
+                                // record on this lead is deleted, unassign them
+                                const CONTACT_TYPES = ['call', 'sms', 'katalk', 'email']
+                                const wasAssigneeRecord =
+                                  lead.assignedTo &&
+                                  a.createdBy === lead.assignedTo &&
+                                  CONTACT_TYPES.includes(a.activityType)
+                                const hasOtherContactByAssignee = activities.some(
+                                  (other) =>
+                                    other.id !== a.id &&
+                                    CONTACT_TYPES.includes(other.activityType) &&
+                                    other.createdBy === lead.assignedTo,
+                                )
+                                if (wasAssigneeRecord && !hasOtherContactByAssignee) {
+                                  updateLead.mutate({
+                                    id: lead.id,
+                                    data: { assignedTo: null } as unknown as Partial<Lead>,
+                                    previousStage: lead.pipelineStage,
+                                  })
+                                }
+                              },
+                            },
                           )
                         }
                       >
