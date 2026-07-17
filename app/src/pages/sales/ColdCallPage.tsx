@@ -53,6 +53,7 @@ import {
   useAllContactActivities,
   computeColdCallOutcome,
   leadMatchesSeminar,
+  seminarSessionsForLead,
   dedupeLeadsByPerson,
   type SeminarLite,
   type ColdCallOutcome,
@@ -326,6 +327,7 @@ export function ColdCallView() {
   const [selectedGrade, setSelectedGrade] = useState('all')
   const [selectedSchool, setSelectedSchool] = useState('')
   const [selectedEvent, setSelectedEvent] = useState('all')
+  const [sessionFilter, setSessionFilter] = useState<string[]>([]) // 신청 웨비나(세션) 다중선택
   const [levelFilter, setLevelFilter] = useState<'all' | LeadLevel>('all')
   const [sortBy, setSortBy] = useState<'priority' | 'level' | 'date' | 'grade'>('priority')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
@@ -378,6 +380,13 @@ export function ColdCallView() {
     if (selectedEvent !== 'all') {
       if (selectedSeminar) {
         leads = dedupeLeadsByPerson(leads.filter((l) => leadMatchesSeminar(l, selectedSeminar)))
+        // Sub-webinar (session) filter — the 4 진학전략 webinars
+        if (sessionFilter.length > 0) {
+          leads = leads.filter((l) => {
+            const applied = seminarSessionsForLead(selectedSeminar, l)
+            return applied.some((s) => sessionFilter.includes(s))
+          })
+        }
       } else {
         leads = leads.filter((l) => l.sourceChannel === selectedEvent)
       }
@@ -431,7 +440,7 @@ export function ColdCallView() {
     }
 
     return scored
-  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy, levelFilter])
+  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy, levelFilter, sessionFilter])
 
   const selectedLead = coldCallLeads.find((l) => l.id === selectedLeadId)
 
@@ -557,7 +566,7 @@ export function ColdCallView() {
                 onChange={(e) => setSelectedSchool(e.target.value)}
               />
             </div>
-            <Select value={selectedEvent} onValueChange={(v) => setSelectedEvent(v || 'all')}>
+            <Select value={selectedEvent} onValueChange={(v) => { setSelectedEvent(v || 'all'); setSessionFilter([]) }}>
               <SelectTrigger className="h-7 text-xs flex-1">
                 <Calendar className="size-3 mr-1" />
                 <SelectValue placeholder={t('coldCall.eventFilter')} />
@@ -572,6 +581,30 @@ export function ColdCallView() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Sub-webinar (신청 웨비나) multi-select — for events with sessions like 진학전략웨비나 */}
+          {selectedSeminar && selectedSeminar.sessions.length > 0 && (
+            <div className="rounded-md border bg-muted/30 p-2 space-y-1">
+              <p className="text-[10px] font-medium text-muted-foreground">신청 웨비나 (복수 선택 가능)</p>
+              <div className="flex flex-wrap gap-1">
+                {selectedSeminar.sessions.map((s) => {
+                  const on = sessionFilter.includes(s)
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => setSessionFilter((prev) => on ? prev.filter((x) => x !== s) : [...prev, s])}
+                      className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${on ? 'bg-primary text-primary-foreground border-primary' : 'bg-white text-muted-foreground hover:bg-muted'}`}
+                    >
+                      {s}
+                    </button>
+                  )
+                })}
+                {sessionFilter.length > 0 && (
+                  <button onClick={() => setSessionFilter([])} className="text-[10px] px-1.5 py-0.5 text-muted-foreground hover:text-foreground">전체</button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Lead List */}
@@ -622,6 +655,16 @@ export function ColdCallView() {
                           {lead.parentName} ({t('coldCall.parent')})
                         </p>
                       )}
+                      {selectedSeminar && selectedSeminar.sessions.length > 0 && (() => {
+                        const applied = seminarSessionsForLead(selectedSeminar, lead)
+                        return applied.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {applied.map((s, i) => (
+                              <Badge key={i} variant="outline" className="text-[9px] px-1 py-0 h-4 text-indigo-600 border-indigo-200">📎 {s}</Badge>
+                            ))}
+                          </div>
+                        ) : null
+                      })()}
                       <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                         {lead.currentSchool && (
                           <span className="flex items-center gap-1">
