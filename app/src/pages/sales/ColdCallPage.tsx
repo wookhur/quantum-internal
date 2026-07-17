@@ -38,6 +38,7 @@ import {
   Globe,
   XCircle,
   UserX,
+  UserCheck,
   Pause,
   CalendarCheck,
   Trash2,
@@ -880,6 +881,7 @@ function ColdCallDetail({
   const [contactMethod, setContactMethod] = useState<ContactMethod>('call')
   const [callResult, setCallResult] = useState<string>('')
   const [callDate, setCallDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
+  const [oneOnOneSuccess, setOneOnOneSuccess] = useState(false)
   const [memoEdit, setMemoEdit] = useState(lead.memo || '')
   const [showMemoEdit, setShowMemoEdit] = useState(false)
   const [levelReason, setLevelReason] = useState(lead.leadLevelReason || '')
@@ -914,13 +916,17 @@ function ColdCallDetail({
       ? new Date().toISOString()
       : new Date(`${callDate}T12:00:00`).toISOString()
 
+    const metadata: Record<string, unknown> = { contactMethod }
+    if (callResult) metadata.callResult = callResult
+    if (oneOnOneSuccess) metadata.oneOnOneConsult = true
+
     createActivity.mutate(
       {
         leadId: lead.id,
         activityType: contactMethod,
         title,
         content,
-        metadata: callResult ? { callResult, contactMethod } : { contactMethod },
+        metadata,
         createdAt,
       },
       {
@@ -928,6 +934,7 @@ function ColdCallDetail({
           setCallNote('')
           setCallResult('')
           setCallDate(new Date().toISOString().slice(0, 10))
+          setOneOnOneSuccess(false)
 
           // Build update payload
           const updateData: Record<string, unknown> = {}
@@ -953,7 +960,7 @@ function ColdCallDetail({
         },
       },
     )
-  }, [callNote, callResult, callDate, contactMethod, methodConfig, lead, createActivity, updateLead, user, t])
+  }, [callNote, callResult, callDate, oneOnOneSuccess, contactMethod, methodConfig, lead, createActivity, updateLead, user, t])
 
   const handleExclude = useCallback(
     (targetStage: PipelineStage) => {
@@ -1013,7 +1020,15 @@ function ColdCallDetail({
           <ActIcon className={`size-3.5 ${actIcon.color}`} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium">{a.title}</p>
+          <p className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+            {a.title}
+            {a.metadata?.oneOnOneConsult === true && (
+              <Badge className="bg-violet-600 hover:bg-violet-600 text-white text-[10px] px-1.5 py-0 h-4 gap-0.5">
+                <UserCheck className="size-2.5" />
+                {t('coldCall.oneOnOneBadge')}
+              </Badge>
+            )}
+          </p>
           {a.content && (
             <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">
               {a.content}
@@ -1385,8 +1400,8 @@ function ColdCallDetail({
               })}
             </div>
 
-            {/* Contact date */}
-            <div className="flex items-center gap-2">
+            {/* Contact date + 1:1 상담유도 성공 toggle */}
+            <div className="flex items-center gap-2 flex-wrap">
               <Calendar className="size-3.5 text-muted-foreground shrink-0" />
               <span className="text-xs text-muted-foreground shrink-0">{t('coldCall.contactDate')}</span>
               <Input
@@ -1396,6 +1411,16 @@ function ColdCallDetail({
                 onChange={(e) => setCallDate(e.target.value || new Date().toISOString().slice(0, 10))}
                 className="h-8 text-xs bg-white w-auto"
               />
+              <Button
+                type="button"
+                size="sm"
+                variant={oneOnOneSuccess ? 'default' : 'outline'}
+                className={`h-8 text-xs gap-1.5 ${oneOnOneSuccess ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'text-violet-700 border-violet-200 hover:bg-violet-50'}`}
+                onClick={() => setOneOnOneSuccess((v) => !v)}
+              >
+                <UserCheck className="size-3.5" />
+                {t('coldCall.oneOnOneSuccess')}
+              </Button>
             </div>
 
             {/* Note input */}
