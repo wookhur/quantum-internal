@@ -310,7 +310,6 @@ const INACTIVE_DROP_CONFIG: {
   hoverBg: string
   descriptionKey: string
 }[] = [
-  { key: 'on_hold', labelKey: 'stage.on_hold', icon: Pause, color: 'text-amber-600', bgColor: 'bg-amber-50', hoverBg: 'bg-amber-100', descriptionKey: 'pipeline.onHoldDesc' },
   { key: 'no_response', labelKey: 'stage.no_response', icon: PhoneOff, color: 'text-gray-500', bgColor: 'bg-gray-50', hoverBg: 'bg-gray-100', descriptionKey: 'pipeline.noResponseDesc' },
   { key: 'rejected', labelKey: 'stage.rejected', icon: XCircle, color: 'text-red-500', bgColor: 'bg-red-50', hoverBg: 'bg-red-100', descriptionKey: 'pipeline.rejectedDesc' },
   { key: 'lost', labelKey: 'stage.lost', icon: UserX, color: 'text-gray-400', bgColor: 'bg-gray-50', hoverBg: 'bg-gray-100', descriptionKey: 'pipeline.lostDesc' },

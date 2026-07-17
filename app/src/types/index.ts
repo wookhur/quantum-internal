@@ -45,13 +45,14 @@ export type PipelineStage =
 export const PIPELINE_STAGES: { key: PipelineStage; label: string; color: string; group: 'active' | 'won' | 'inactive' }[] = [
   { key: 'new_lead', label: '신규 리드', color: 'stage-new-lead', group: 'active' },
   { key: 'contact_attempted', label: '컨택 시도', color: 'stage-contact-attempted', group: 'active' },
+  // 보류: 아직 이탈/거절이 확정되지 않은 진행중 리드. 파이프라인·리드관리에서 계속 관리.
+  { key: 'on_hold', label: '보류', color: 'stage-on-hold', group: 'active' },
   { key: 'consultation_scheduled', label: '상담 예약', color: 'stage-consultation-scheduled', group: 'active' },
   { key: 'first_consultation', label: '1차 상담', color: 'stage-first-consultation', group: 'active' },
   { key: 'second_consultation', label: '2차 상담', color: 'stage-second-consultation', group: 'active' },
   { key: 'third_consultation', label: '3차 상담', color: 'stage-third-consultation', group: 'active' },
   { key: 'contract_review', label: '계약 검토', color: 'stage-contract-review', group: 'active' },
   { key: 'contracted', label: '계약 완료', color: 'stage-contracted', group: 'won' },
-  { key: 'on_hold', label: '보류', color: 'stage-on-hold', group: 'inactive' },
   { key: 'no_response', label: '응답없음', color: 'stage-no-response', group: 'inactive' },
   { key: 'rejected', label: '거절', color: 'stage-rejected', group: 'inactive' },
   { key: 'lost', label: '이탈', color: 'stage-lost', group: 'inactive' },
