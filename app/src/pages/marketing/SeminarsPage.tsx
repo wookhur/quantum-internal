@@ -44,6 +44,7 @@ import {
   type Seminar,
   type SeminarSession,
 } from '@/hooks/useSeminars'
+import { useAllLeadAttendance } from '@/hooks/useLeadAttendance'
 
 function formatSeminarDate(raw: string): string {
   const [datePart, timePart] = raw.split(' ')
@@ -283,6 +284,16 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
 export function SeminarsPage() {
   const { t } = useLanguage()
   const { data: seminars = [], isLoading } = useSeminars()
+  const { data: attendance = [] } = useAllLeadAttendance()
+  const attBySeminar = useMemo(() => {
+    const m = new Map<string, { planned: number; unsure: number; no_contact: number; attended: number }>()
+    for (const a of attendance) {
+      const c = m.get(a.seminarId) || { planned: 0, unsure: 0, no_contact: 0, attended: 0 }
+      c[a.status] = (c[a.status] || 0) + 1
+      m.set(a.seminarId, c)
+    }
+    return m
+  }, [attendance])
   const createMut = useCreateSeminar()
   const updateMut = useUpdateSeminar()
   const deleteMut = useDeleteSeminar()
@@ -443,6 +454,18 @@ export function SeminarsPage() {
                 )}
               </CardHeader>
               <CardContent className="pt-0">
+                {(() => {
+                  const c = attBySeminar.get(s.id)
+                  return c && (c.planned + c.unsure + c.no_contact + c.attended) > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 mb-2 text-[11px]">
+                      <span className="text-muted-foreground">콜드콜 집계:</span>
+                      <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">참석예정 {c.planned}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">미정 {c.unsure}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">연락안됨 {c.no_contact}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">참석완료 {c.attended}</span>
+                    </div>
+                  ) : null
+                })()}
                 <Button
                   variant="ghost"
                   size="sm"
