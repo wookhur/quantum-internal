@@ -32,8 +32,6 @@ import {
   CheckCircle2,
   X,
   ArrowUpDown,
-  Flame,
-  Sparkles,
   Send,
   Video,
   Save,
@@ -214,13 +212,6 @@ function getLeadPriority(lead: Lead): number {
   return Math.max(0, Math.min(100, score))
 }
 
-function getPriorityLabel(score: number, t: (key: string, params?: Record<string, string | number>) => string): { label: string; color: string; icon: typeof Flame } {
-  if (score >= 80) return { label: t('coldCall.rank1'), color: 'bg-red-500 text-white', icon: Flame }
-  if (score >= 60) return { label: t('coldCall.rank2'), color: 'bg-orange-500 text-white', icon: Star }
-  if (score >= 40) return { label: t('coldCall.rank3'), color: 'bg-yellow-500 text-white', icon: Sparkles }
-  return { label: t('coldCall.rank4'), color: 'bg-gray-400 text-white', icon: Clock }
-}
-
 // ============ Grade groups for filtering ============
 
 const GRADE_GROUPS = [
@@ -330,7 +321,7 @@ export function ColdCallView() {
   const [selectedEvent, setSelectedEvent] = useState('all')
   const [sessionFilter, setSessionFilter] = useState<string[]>([]) // 신청 웨비나(세션) 다중선택
   const [levelFilter, setLevelFilter] = useState<'all' | LeadLevel>('all')
-  const [sortBy, setSortBy] = useState<'priority' | 'level' | 'date' | 'grade'>('priority')
+  const [sortBy, setSortBy] = useState<'level' | 'date' | 'grade'>('level')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
 
   // Fetch leads in cold-callable stages
@@ -441,9 +432,7 @@ export function ColdCallView() {
     // Score and sort
     const scored = leads.map((l) => ({ ...l, _priority: getLeadPriority(l) }))
 
-    if (sortBy === 'priority') {
-      scored.sort((a, b) => b._priority - a._priority)
-    } else if (sortBy === 'level') {
+    if (sortBy === 'level') {
       scored.sort((a, b) => (leadLevelConfig(b.leadLevel)?.rank || 0) - (leadLevelConfig(a.leadLevel)?.rank || 0))
     } else if (sortBy === 'date') {
       scored.sort((a, b) => new Date(b.leadDate).getTime() - new Date(a.leadDate).getTime())
@@ -458,7 +447,6 @@ export function ColdCallView() {
 
   // Stats
   const totalColdCallable = allLeads.filter((l) => COLD_CALL_STAGES.includes(l.pipelineStage)).length
-  const highPriorityCount = coldCallLeads.filter((l) => l._priority >= 80).length
   const filteredCount = coldCallLeads.length
 
   // Dashboard: computed over ALL leads in scope (all stages), so leads that
@@ -487,9 +475,6 @@ export function ColdCallView() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {isLoading ? t('common.loading') : t('coldCall.countSummary', { filtered: filteredCount, total: totalColdCallable })}
-                {highPriorityCount > 0 && (
-                  <span className="text-red-500 font-medium"> ({t('coldCall.highPriorityCount', { n: highPriorityCount })})</span>
-                )}
               </p>
             </div>
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
@@ -498,7 +483,6 @@ export function ColdCallView() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="priority">{t('coldCall.sortPriority')}</SelectItem>
                 <SelectItem value="level">리드 레벨순</SelectItem>
                 <SelectItem value="date">{t('coldCall.sortDate')}</SelectItem>
                 <SelectItem value="grade">{t('coldCall.sortGrade')}</SelectItem>
@@ -631,8 +615,6 @@ export function ColdCallView() {
             </div>
           ) : (
             coldCallLeads.map((lead) => {
-              const priority = getPriorityLabel(lead._priority, t)
-              const PriorityIcon = priority.icon
               const isSelected = lead.id === selectedLeadId
               return (
                 <button
@@ -655,10 +637,7 @@ export function ColdCallView() {
                               {lvl.emoji} {lvl.labelEn}
                             </Badge>
                           ) : (
-                            <Badge variant="secondary" className={`${priority.color} text-[10px] px-1.5 py-0 h-4 shrink-0`}>
-                              <PriorityIcon className="size-2.5 mr-0.5" />
-                              {priority.label}
-                            </Badge>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 shrink-0 text-muted-foreground border-dashed">미분류</Badge>
                           )
                         })()}
                       </div>
@@ -905,7 +884,6 @@ function ColdCallDetail({
 
   const methodConfig = CONTACT_METHODS[contactMethod]
 
-  const priority = getPriorityLabel(lead._priority, t)
   const stage = getStageConfig(lead.pipelineStage)
 
   const handleLogCall = useCallback(() => {
@@ -1012,9 +990,14 @@ function ColdCallDetail({
             <span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>
               {stage.label}
             </span>
-            <Badge className={`${priority.color} text-xs`}>
-              {t('coldCall.priorityScore', { score: lead._priority })}
-            </Badge>
+            {(() => {
+              const lvl = leadLevelConfig(lead.leadLevel)
+              return lvl ? (
+                <Badge variant="outline" className={`${lvl.badge} text-xs`} title={lvl.meaningKo}>
+                  {lvl.emoji} {lvl.labelEn}
+                </Badge>
+              ) : null
+            })()}
           </div>
           {lead.studentName && (
             <p className="text-sm text-muted-foreground">{lead.parentName} ({t('coldCall.parent')})</p>
