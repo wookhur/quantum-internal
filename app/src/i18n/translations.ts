@@ -399,7 +399,7 @@ const koTranslations = {
 
   // ── Pipeline stages ──
   'stage.new_lead': '신규 리드',
-  'stage.contact_attempted': '컨택 시도',
+  'stage.contact_attempted': '컨택 완료',
   'stage.consultation_scheduled': '상담 예약',
   'stage.first_consultation': '1차 상담',
   'stage.second_consultation': '2차 상담',
@@ -537,7 +537,7 @@ const koTranslations = {
   'coldCall.dashConsult': '상담 예약 이상',
   'coldCall.dashContracted': '계약 완료',
   'coldCall.dashProgress': '콜드콜 진행률',
-  'coldCall.dashContacted': '연락 시도 완료',
+  'coldCall.dashContacted': '컨택 완료',
   'coldCall.dashUncontactedNote': '아직 연락하지 않은 리드 {n}건',
   'coldCall.contact': '연락처',
   'coldCall.studentInfo': '학생 정보',
@@ -2878,7 +2878,7 @@ const enTranslations: Record<string, string> = {
 
   // ── Pipeline stages ──
   'stage.new_lead': 'New Lead',
-  'stage.contact_attempted': 'Contact Attempted',
+  'stage.contact_attempted': 'Contacted',
   'stage.consultation_scheduled': 'Consult Scheduled',
   'stage.first_consultation': '1st Consultation',
   'stage.second_consultation': '2nd Consultation',
@@ -3014,7 +3014,7 @@ const enTranslations: Record<string, string> = {
   'coldCall.dashConsult': 'Consultation+',
   'coldCall.dashContracted': 'Contracted',
   'coldCall.dashProgress': 'Cold Call Progress',
-  'coldCall.dashContacted': 'Contact Attempted',
+  'coldCall.dashContacted': 'Contacted',
   'coldCall.dashUncontactedNote': '{n} leads not yet contacted',
   'coldCall.contact': 'Contact',
   'coldCall.studentInfo': 'Student Info',

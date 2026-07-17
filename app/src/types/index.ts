@@ -44,7 +44,7 @@ export type PipelineStage =
 // Stage config with label, color (for status pills), and column grouping
 export const PIPELINE_STAGES: { key: PipelineStage; label: string; color: string; group: 'active' | 'won' | 'inactive' }[] = [
   { key: 'new_lead', label: '신규 리드', color: 'stage-new-lead', group: 'active' },
-  { key: 'contact_attempted', label: '컨택 시도', color: 'stage-contact-attempted', group: 'active' },
+  { key: 'contact_attempted', label: '컨택 완료', color: 'stage-contact-attempted', group: 'active' },
   // 보류: 아직 이탈/거절이 확정되지 않은 진행중 리드. 파이프라인·리드관리에서 계속 관리.
   { key: 'on_hold', label: '보류', color: 'stage-on-hold', group: 'active' },
   { key: 'consultation_scheduled', label: '상담 예약', color: 'stage-consultation-scheduled', group: 'active' },
