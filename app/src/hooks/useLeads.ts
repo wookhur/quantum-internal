@@ -358,6 +358,7 @@ export function useCreateActivity() {
       meetingDate?: string
       googleMeetLink?: string
       metadata?: Record<string, unknown>
+      createdAt?: string
     }) => {
       const { data, error } = await supabase
         .from('lead_activities')
@@ -372,6 +373,7 @@ export function useCreateActivity() {
           google_meet_link: activity.googleMeetLink ?? null,
           metadata: activity.metadata ?? null,
           created_by: user?.id ?? null,
+          ...(activity.createdAt ? { created_at: activity.createdAt } : {}),
         })
         .select('*, profiles!lead_activities_created_by_fkey(id, name, email)')
         .single()

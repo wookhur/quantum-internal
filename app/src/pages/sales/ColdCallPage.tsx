@@ -876,6 +876,7 @@ function ColdCallDetail({
   const [callNote, setCallNote] = useState('')
   const [contactMethod, setContactMethod] = useState<ContactMethod>('call')
   const [callResult, setCallResult] = useState<string>('')
+  const [callDate, setCallDate] = useState<string>(() => new Date().toISOString().slice(0, 10))
   const [memoEdit, setMemoEdit] = useState(lead.memo || '')
   const [showMemoEdit, setShowMemoEdit] = useState(false)
   const [levelReason, setLevelReason] = useState(lead.leadLevelReason || '')
@@ -897,6 +898,13 @@ function ColdCallDetail({
     const title = callResult ? `${methodLabel} - ${resultLabel}` : methodLabel
     const content = callNote.trim() || undefined
 
+    // If the chosen date is today, keep the current time; otherwise stamp
+    // noon local on the chosen day so the record sorts on the right date.
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const createdAt = callDate === todayStr
+      ? new Date().toISOString()
+      : new Date(`${callDate}T12:00:00`).toISOString()
+
     createActivity.mutate(
       {
         leadId: lead.id,
@@ -904,11 +912,13 @@ function ColdCallDetail({
         title,
         content,
         metadata: callResult ? { callResult, contactMethod } : { contactMethod },
+        createdAt,
       },
       {
         onSuccess: () => {
           setCallNote('')
           setCallResult('')
+          setCallDate(new Date().toISOString().slice(0, 10))
 
           // Build update payload
           const updateData: Record<string, unknown> = {}
@@ -934,7 +944,7 @@ function ColdCallDetail({
         },
       },
     )
-  }, [callNote, callResult, contactMethod, methodConfig, lead, createActivity, updateLead, user, t])
+  }, [callNote, callResult, callDate, contactMethod, methodConfig, lead, createActivity, updateLead, user, t])
 
   const handleExclude = useCallback(
     (targetStage: PipelineStage) => {
@@ -1276,6 +1286,19 @@ function ColdCallDetail({
                   </Button>
                 )
               })}
+            </div>
+
+            {/* Contact date */}
+            <div className="flex items-center gap-2">
+              <Calendar className="size-3.5 text-muted-foreground shrink-0" />
+              <span className="text-xs text-muted-foreground shrink-0">{t('coldCall.contactDate')}</span>
+              <Input
+                type="date"
+                value={callDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setCallDate(e.target.value || new Date().toISOString().slice(0, 10))}
+                className="h-8 text-xs bg-white w-auto"
+              />
             </div>
 
             {/* Note input */}
