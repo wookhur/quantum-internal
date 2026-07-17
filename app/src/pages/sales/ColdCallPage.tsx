@@ -48,6 +48,7 @@ import {
 } from 'lucide-react'
 import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead, useDeleteActivity } from '@/hooks/useLeads'
 import { LEAD_LEVELS, leadLevelConfig, type LeadLevel } from '@/lib/leadLevels'
+import { useAllLeadAttendance, useUpsertLeadAttendance, ATTENDANCE_OPTIONS, type AttendanceStatus } from '@/hooks/useLeadAttendance'
 import {
   useSeminarsWithRegistrations,
   useAllContactActivities,
@@ -337,6 +338,17 @@ export function ColdCallView() {
   // Seminars with registrant phone sets — so leads that registered for a
   // seminar are matched even if their lead source is another channel
   const { data: seminars = [] } = useSeminarsWithRegistrations()
+  const { data: attendanceRows = [] } = useAllLeadAttendance()
+  const attendedByLead = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const a of attendanceRows) {
+      if (a.status !== 'attended') continue
+      const arr = m.get(a.leadId) || []
+      arr.push(a.sessionLabel || '세미나')
+      m.set(a.leadId, arr)
+    }
+    return m
+  }, [attendanceRows])
   const { data: contactActivities = [] } = useAllContactActivities()
 
   // Build event filter options: seminars from 세미나 관리 + legacy source channels
@@ -665,6 +677,13 @@ export function ColdCallView() {
                           </div>
                         ) : null
                       })()}
+                      {(attendedByLead.get(lead.id) || []).length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(attendedByLead.get(lead.id) || []).map((s, i) => (
+                            <Badge key={i} variant="outline" className="text-[9px] px-1 py-0 h-4 text-emerald-700 border-emerald-200 bg-emerald-50">✅ {s}</Badge>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                         {lead.currentSchool && (
                           <span className="flex items-center gap-1">
@@ -705,7 +724,7 @@ export function ColdCallView() {
       {/* Right Panel: Lead Detail or Dashboard */}
       <div className="flex-1 overflow-y-auto bg-muted/30 min-w-0">
         {selectedLead ? (
-          <ColdCallDetail lead={selectedLead} onClose={() => setSelectedLeadId(null)} />
+          <ColdCallDetail lead={selectedLead} seminars={seminars} attendance={attendanceRows.filter(a => a.leadId === selectedLead.id)} onClose={() => setSelectedLeadId(null)} />
         ) : (
           <ColdCallDashboard
             eventLabel={selectedEvent !== 'all' ? selectedEvent : null}
@@ -851,13 +870,25 @@ function ColdCallDashboard({
 
 function ColdCallDetail({
   lead,
+  seminars,
+  attendance,
   onClose,
 }: {
   lead: Lead & { _priority: number }
+  seminars: SeminarLite[]
+  attendance: { seminarId: string; sessionLabel: string; status: AttendanceStatus }[]
   onClose: () => void
 }) {
   const t = useT()
   const { user } = useAuth()
+  const upsertAttendance = useUpsertLeadAttendance()
+  // Seminars this lead registered for, with the specific sessions they applied to
+  const appliedSeminars = useMemo(() => seminars
+    .map(s => ({ seminar: s, sessions: seminarSessionsForLead(s, lead) }))
+    .filter(x => x.sessions.length > 0 || (x.seminar.sessions.length === 0 && leadMatchesSeminar(lead, x.seminar))),
+    [seminars, lead])
+  const statusOf = (seminarId: string, session: string): AttendanceStatus | '' =>
+    attendance.find(a => a.seminarId === seminarId && a.sessionLabel === session)?.status || ''
   const { data: activities = [], isLoading: activitiesLoading } = useLeadActivities(lead.id)
   const createActivity = useCreateActivity()
   const updateLead = useUpdateLead()
@@ -1029,6 +1060,41 @@ function ColdCallDetail({
           </div>
         </CardContent>
       </Card>
+
+      {/* Seminar attendance (신청 웨비나별 참석 상태 → 세미나관리 연동) */}
+      {appliedSeminars.length > 0 && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">세미나 참석 (세미나관리 연동)</h3>
+            {appliedSeminars.map(({ seminar, sessions }) => (
+              <div key={seminar.id} className="space-y-1.5">
+                <p className="text-sm font-medium">{seminar.title}</p>
+                {(sessions.length ? sessions : ['']).map((session) => {
+                  const st = statusOf(seminar.id, session)
+                  return (
+                    <div key={session} className="flex items-center gap-2">
+                      <span className="text-xs flex-1 truncate">{session || '(전체)'}</span>
+                      <Select value={st || ''} onValueChange={(v) => v && upsertAttendance.mutate({ leadId: lead.id, seminarId: seminar.id, sessionLabel: session, status: v as AttendanceStatus })}>
+                        <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="상태 선택" /></SelectTrigger>
+                        <SelectContent>
+                          {ATTENDANCE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.ko}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {st !== 'attended' && (
+                        <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1"
+                          onClick={() => upsertAttendance.mutate({ leadId: lead.id, seminarId: seminar.id, sessionLabel: session, status: 'attended' })}>
+                          <CheckCircle2 className="size-3" /> 참석완료
+                        </Button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+            <p className="text-[10px] text-muted-foreground">참석예정/미정/연락안됨/참석완료 선택 시 세미나관리 집계에 반영되고, 참석완료는 리드 이름 옆에 뱃지로 쌓입니다.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Info Cards */}
       <div className="grid grid-cols-2 gap-3">
