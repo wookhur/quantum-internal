@@ -190,6 +190,9 @@ const COLD_CALL_STAGES: PipelineStage[] = [
   'no_response',
 ]
 
+/** Activity types that are contact logs (vs. stage/status changes). */
+const CONTACT_TYPES = ['call', 'sms', 'katalk', 'email']
+
 function getLeadPriority(lead: Lead): number {
   // Grade score (max ~50)
   let score = GRADE_PRIORITY[lead.grade] || 5
@@ -887,6 +890,12 @@ function ColdCallDetail({
 
   const stage = getStageConfig(lead.pipelineStage)
 
+  // Split the activity feed: contact logs (calls / messages) show inside the
+  // contact-log card; everything else (pipeline stage / status changes) shows
+  // in the separate 활동기록 card.
+  const contactLogs = activities.filter((a: LeadActivity) => CONTACT_TYPES.includes(a.activityType))
+  const statusLogs = activities.filter((a: LeadActivity) => !CONTACT_TYPES.includes(a.activityType))
+
   const handleLogCall = useCallback(() => {
     if (!callNote.trim() && !callResult) return
 
@@ -989,6 +998,94 @@ function ColdCallDetail({
     updateLead.mutate({ id: lead.id, data: { leadLevel: (v as LeadLevel) || undefined }, previousStage: lead.pipelineStage })
   const saveLevelReason = () =>
     updateLead.mutate({ id: lead.id, data: { leadLevelReason: levelReason }, previousStage: lead.pipelineStage })
+
+  // One row in either the contact-log list or the status-change list.
+  const renderActivity = (a: LeadActivity) => {
+    const actIcon = getActivityIcon(a.activityType)
+    const ActIcon = actIcon.icon
+    const isDeleting = deleteActivityConfirm === a.id
+    return (
+      <div
+        key={a.id}
+        className="group flex items-start gap-2.5 py-2 border-b border-gray-100 last:border-0"
+      >
+        <div className="mt-0.5">
+          <ActIcon className={`size-3.5 ${actIcon.color}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium">{a.title}</p>
+          {a.content && (
+            <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">
+              {a.content}
+            </p>
+          )}
+          <p className="text-[10px] text-gray-400 mt-1">
+            {new Date(a.createdAt).toLocaleString('ko-KR')}
+            {a.createdByUser && ` · ${a.createdByUser.name}`}
+          </p>
+        </div>
+        {isDeleting ? (
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-6 text-[10px] px-2"
+              disabled={deleteActivity.isPending}
+              onClick={() =>
+                deleteActivity.mutate(
+                  { id: a.id, leadId: lead.id },
+                  {
+                    onSuccess: () => {
+                      setDeleteActivityConfirm(null)
+                      // Contact logging auto-assigns the logger as
+                      // the sales assignee — if their last contact
+                      // record on this lead is deleted, unassign them
+                      const wasAssigneeRecord =
+                        lead.assignedTo &&
+                        a.createdBy === lead.assignedTo &&
+                        CONTACT_TYPES.includes(a.activityType)
+                      const hasOtherContactByAssignee = activities.some(
+                        (other) =>
+                          other.id !== a.id &&
+                          CONTACT_TYPES.includes(other.activityType) &&
+                          other.createdBy === lead.assignedTo,
+                      )
+                      if (wasAssigneeRecord && !hasOtherContactByAssignee) {
+                        updateLead.mutate({
+                          id: lead.id,
+                          data: { assignedTo: null } as unknown as Partial<Lead>,
+                          previousStage: lead.pipelineStage,
+                        })
+                      }
+                    },
+                  },
+                )
+              }
+            >
+              {deleteActivity.isPending ? <Loader2 className="size-3 animate-spin" /> : t('common.delete')}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px] px-2"
+              onClick={() => setDeleteActivityConfirm(null)}
+            >
+              {t('common.cancel')}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+            onClick={() => setDeleteActivityConfirm(a.id)}
+          >
+            <Trash2 className="size-3" />
+          </Button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 space-y-5 max-w-3xl">
@@ -1322,6 +1419,18 @@ function ColdCallDetail({
               )}
               {t('coldCall.saveContactLog')}
             </Button>
+
+            {/* Contact-log history: accumulates right under the save button */}
+            {contactLogs.length > 0 && (
+              <div className="pt-2 border-t border-primary/15">
+                <p className="text-[11px] font-semibold text-muted-foreground mb-1">
+                  {t('coldCall.contactLogHistory')} ({contactLogs.length})
+                </p>
+                <div className="rounded-lg bg-white/70 px-3">
+                  {contactLogs.map(renderActivity)}
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1428,109 +1537,23 @@ function ColdCallDetail({
         </CardContent>
       </Card>
 
-      {/* Activity History */}
+      {/* Activity History — pipeline/status changes only */}
       <Card>
         <CardContent className="p-4">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            {t('coldCall.activityHistory')} ({activities.length})
+            {t('coldCall.activityHistory')} ({statusLogs.length})
           </h3>
           {activitiesLoading ? (
             <div className="flex justify-center py-6">
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
             </div>
-          ) : activities.length === 0 ? (
+          ) : statusLogs.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
               {t('coldCall.noActivities')}
             </p>
           ) : (
             <div className="space-y-2">
-              {activities.map((a: LeadActivity) => {
-                const actIcon = getActivityIcon(a.activityType)
-                const ActIcon = actIcon.icon
-                const isDeleting = deleteActivityConfirm === a.id
-                return (
-                <div
-                  key={a.id}
-                  className="group flex items-start gap-2.5 py-2 border-b border-gray-100 last:border-0"
-                >
-                  <div className="mt-0.5">
-                    <ActIcon className={`size-3.5 ${actIcon.color}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{a.title}</p>
-                    {a.content && (
-                      <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">
-                        {a.content}
-                      </p>
-                    )}
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      {new Date(a.createdAt).toLocaleString('ko-KR')}
-                      {a.createdByUser && ` · ${a.createdByUser.name}`}
-                    </p>
-                  </div>
-                  {isDeleting ? (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="h-6 text-[10px] px-2"
-                        disabled={deleteActivity.isPending}
-                        onClick={() =>
-                          deleteActivity.mutate(
-                            { id: a.id, leadId: lead.id },
-                            {
-                              onSuccess: () => {
-                                setDeleteActivityConfirm(null)
-                                // Contact logging auto-assigns the logger as
-                                // the sales assignee — if their last contact
-                                // record on this lead is deleted, unassign them
-                                const CONTACT_TYPES = ['call', 'sms', 'katalk', 'email']
-                                const wasAssigneeRecord =
-                                  lead.assignedTo &&
-                                  a.createdBy === lead.assignedTo &&
-                                  CONTACT_TYPES.includes(a.activityType)
-                                const hasOtherContactByAssignee = activities.some(
-                                  (other) =>
-                                    other.id !== a.id &&
-                                    CONTACT_TYPES.includes(other.activityType) &&
-                                    other.createdBy === lead.assignedTo,
-                                )
-                                if (wasAssigneeRecord && !hasOtherContactByAssignee) {
-                                  updateLead.mutate({
-                                    id: lead.id,
-                                    data: { assignedTo: null } as unknown as Partial<Lead>,
-                                    previousStage: lead.pipelineStage,
-                                  })
-                                }
-                              },
-                            },
-                          )
-                        }
-                      >
-                        {deleteActivity.isPending ? <Loader2 className="size-3 animate-spin" /> : t('common.delete')}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 text-[10px] px-2"
-                        onClick={() => setDeleteActivityConfirm(null)}
-                      >
-                        {t('common.cancel')}
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="size-6 shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                      onClick={() => setDeleteActivityConfirm(a.id)}
-                    >
-                      <Trash2 className="size-3" />
-                    </Button>
-                  )}
-                </div>
-                )
-              })}
+              {statusLogs.map(renderActivity)}
             </div>
           )}
         </CardContent>
