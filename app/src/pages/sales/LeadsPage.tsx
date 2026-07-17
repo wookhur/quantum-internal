@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useT } from '@/i18n/LanguageContext'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,6 +37,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads } from '@/hooks/useLeads'
+import { leadLevelConfig } from '@/lib/leadLevels'
 import type { Lead, PipelineStage } from '@/types'
 import {
   PIPELINE_STAGES,
@@ -139,11 +140,10 @@ function AssignedAvatar({ user }: { user: Lead['assignedUser'] }) {
 // ============ Main component ============
 
 export function LeadsPage() {
-  const navigate = useNavigate()
-  return <LeadsTableView onSwitchToColdCall={() => navigate('/sales/cold-call')} />
+  return <LeadsTableView />
 }
 
-function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void }) {
+function LeadsTableView() {
   const t = useT()
   // -- Filter state
   const [search, setSearch] = useState('')
@@ -281,19 +281,6 @@ function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-2xl font-bold tracking-tight">{t('leads.title')}</h1>
-              <div className="inline-flex items-center bg-muted rounded-lg p-0.5">
-                <button
-                  className="px-2.5 py-1 text-xs font-medium rounded-md bg-white text-foreground shadow-sm"
-                >
-                  {t('leads.viewTable')}
-                </button>
-                <button
-                  onClick={onSwitchToColdCall}
-                  className="px-2.5 py-1 text-xs font-medium rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {t('leads.viewColdCall')}
-                </button>
-              </div>
               {!isLoading && (
                 <Badge variant="secondary" className="text-xs font-semibold">
                   {totalCount}
@@ -527,7 +514,19 @@ function LeadsTableView({ onSwitchToColdCall }: { onSwitchToColdCall: () => void
                         {lead.parentName}
                       </Link>
                     </td>
-                    <td className="text-sm">{lead.studentName || '-'}</td>
+                    <td className="text-sm">
+                      <span className="inline-flex items-center gap-1.5">
+                        {lead.studentName || '-'}
+                        {(() => {
+                          const lvl = leadLevelConfig(lead.leadLevel)
+                          return lvl ? (
+                            <Badge variant="outline" className={`${lvl.badge} text-[10px] px-1.5 py-0 h-4`} title={lvl.meaningKo}>
+                              {lvl.emoji} {lvl.labelEn}
+                            </Badge>
+                          ) : null
+                        })()}
+                      </span>
+                    </td>
                     <td className="hidden md:table-cell text-sm text-muted-foreground">
                       {lead.currentSchool || '-'}
                     </td>

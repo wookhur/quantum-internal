@@ -60,7 +60,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
 import { getStageConfig, GRADES } from '@/types'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 // ============ Priority scoring ============
 
@@ -316,11 +316,10 @@ function getActivityIcon(type: string): { icon: LucideIcon; color: string } {
 
 /** Standalone route page for /sales/cold-call */
 export function ColdCallPage() {
-  const navigate = useNavigate()
-  return <ColdCallView onSwitchToTable={() => navigate('/sales/leads')} />
+  return <ColdCallView />
 }
 
-export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void }) {
+export function ColdCallView() {
   const t = useT()
   const [search, setSearch] = useState('')
   const [gradeGroup, setGradeGroup] = useState('all')
@@ -463,20 +462,7 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2.5 mb-1">
-                <h1 className="text-lg font-bold tracking-tight">{t('leads.title')}</h1>
-                <div className="inline-flex items-center bg-muted rounded-lg p-0.5">
-                  <button
-                    onClick={onSwitchToTable}
-                    className="px-2.5 py-1 text-[11px] font-medium rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {t('leads.viewTable')}
-                  </button>
-                  <button
-                    className="px-2.5 py-1 text-[11px] font-medium rounded-md bg-white text-foreground shadow-sm"
-                  >
-                    {t('leads.viewColdCall')}
-                  </button>
-                </div>
+                <h1 className="text-lg font-bold tracking-tight">{t('nav.coldCall')}</h1>
               </div>
               <p className="text-xs text-muted-foreground">
                 {isLoading ? t('common.loading') : t('coldCall.countSummary', { filtered: filteredCount, total: totalColdCallable })}
