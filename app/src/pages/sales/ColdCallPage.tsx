@@ -958,10 +958,17 @@ function ColdCallDetail({
           // Build update payload
           const updateData: Record<string, unknown> = {}
 
-          // Auto-advance stage if new_lead
-          if (lead.pipelineStage === 'new_lead') {
-            const noResponse = callResult === 'no_answer' || callResult === 'no_reply'
-            updateData.pipelineStage = noResponse ? 'no_response' : 'contact_attempted'
+          // Stage auto-advance from a contact log:
+          // - 부재중/무응답(no_answer/no_reply) → 항상 '응답없음'으로 통일
+          //   (단, 상담 예약 이후로 진행된 리드는 되돌리지 않음)
+          // - 그 외 결과(통화 성공 등) → 신규 리드면 '컨택 시도'로 이동
+          const noResponse = callResult === 'no_answer' || callResult === 'no_reply'
+          if (noResponse) {
+            if (COLD_CALL_STAGES.includes(lead.pipelineStage) && lead.pipelineStage !== 'no_response') {
+              updateData.pipelineStage = 'no_response'
+            }
+          } else if (lead.pipelineStage === 'new_lead') {
+            updateData.pipelineStage = 'contact_attempted'
           }
 
           // Auto-assign current user if lead has no assignee
