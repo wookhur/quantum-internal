@@ -60,7 +60,7 @@ import {
 } from '@/hooks/useSeminarPerformance'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
-import { getStageConfig, GRADES } from '@/types'
+import { getStageConfig, GRADES, PIPELINE_STAGES } from '@/types'
 import { Link } from 'react-router-dom'
 
 // ============ Priority scoring ============
@@ -326,6 +326,8 @@ export function ColdCallView() {
   const [sessionFilter, setSessionFilter] = useState<string[]>([]) // 신청 웨비나(세션) 다중선택
   const [levelFilter, setLevelFilter] = useState<'all' | LeadLevel>('all')
   const [sortBy, setSortBy] = useState<'level' | 'date' | 'grade'>('level')
+  // 단계 필터: 'coldcall'(기본, 콜드콜 대상 3단계) 또는 특정 파이프라인 단계
+  const [stageFilter, setStageFilter] = useState<'coldcall' | PipelineStage>('coldcall')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
 
   // Fetch leads in cold-callable stages
@@ -381,7 +383,10 @@ export function ColdCallView() {
 
   // Filter and score leads
   const coldCallLeads = useMemo(() => {
-    let leads = allLeads.filter((l) => COLD_CALL_STAGES.includes(l.pipelineStage))
+    // Base list: 기본은 콜드콜 대상 3단계, 특정 단계 선택 시 그 단계만
+    let leads = stageFilter === 'coldcall'
+      ? allLeads.filter((l) => COLD_CALL_STAGES.includes(l.pipelineStage))
+      : allLeads.filter((l) => l.pipelineStage === stageFilter)
 
     // Event filter — source_channel match OR registered phone/email match
     if (selectedEvent !== 'all') {
@@ -445,7 +450,7 @@ export function ColdCallView() {
     }
 
     return scored
-  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy, levelFilter, sessionFilter])
+  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy, levelFilter, sessionFilter, stageFilter])
 
   const selectedLead = coldCallLeads.find((l) => l.id === selectedLeadId)
 
@@ -481,17 +486,31 @@ export function ColdCallView() {
                 {isLoading ? t('common.loading') : t('coldCall.countSummary', { filtered: filteredCount, total: totalColdCallable })}
               </p>
             </div>
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-              <SelectTrigger className="w-[130px] h-8 text-xs">
-                <ArrowUpDown className="size-3 mr-1" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="level">리드 레벨순</SelectItem>
-                <SelectItem value="date">{t('coldCall.sortDate')}</SelectItem>
-                <SelectItem value="grade">{t('coldCall.sortGrade')}</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select value={stageFilter} onValueChange={(v) => setStageFilter((v as 'coldcall' | PipelineStage) || 'coldcall')}>
+                <SelectTrigger className="w-[150px] h-8 text-xs">
+                  <Filter className="size-3 mr-1" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="coldcall">{t('coldCall.stageFilterColdCall')}</SelectItem>
+                  {PIPELINE_STAGES.map((s) => (
+                    <SelectItem key={s.key} value={s.key}>{t('stage.' + s.key)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+                <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <ArrowUpDown className="size-3 mr-1" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="level">리드 레벨순</SelectItem>
+                  <SelectItem value="date">{t('coldCall.sortDate')}</SelectItem>
+                  <SelectItem value="grade">{t('coldCall.sortGrade')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Lead level legend + filter */}
