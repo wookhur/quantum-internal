@@ -17,11 +17,13 @@ import {
   meetingsForLeads,
   computeColdCallOutcome,
   leadMatchesSeminar,
+  seminarSessionsForLead,
   dedupeLeadsByPerson,
   type SeminarLite,
   type MeetingSlim,
 } from '@/hooks/useSeminarPerformance'
 import { useSeminarRegistrations } from '@/hooks/useSeminars'
+import { useAllLeadAttendance } from '@/hooks/useLeadAttendance'
 import type { Lead, SalesEvent } from '@/types'
 import { getStageConfig, MEETING_METHODS } from '@/types'
 import { Link } from 'react-router-dom'
@@ -32,7 +34,11 @@ interface PerfRow {
   id: string
   month: string
   eventName: string
+  /** For a session sub-row of a multi-session seminar; null otherwise. */
+  sessionLabel: string | null
   applicants: number
+  /** Cold-call planned (참석예정) toggles for this seminar/session. */
+  plannedAttendees: number
   attendees: number
   phoneConsultations: number
   zoomBookings: number
@@ -118,6 +124,7 @@ export function SalesPerformancePage() {
   const { data: allLeads = [] } = useLeads()
   const { data: contactActivities = [] } = useAllContactActivities()
   const { data: allMeetings = [] } = useAllMeetingsSlim()
+  const { data: leadAttendance = [] } = useAllLeadAttendance()
 
   // Which cell was clicked → which list to show
   const [detailDialog, setDetailDialog] = useState<{
@@ -128,9 +135,15 @@ export function SalesPerformancePage() {
   } | null>(null)
 
   // Registrant list for the applicants dialog (fetched on demand)
-  const { data: dialogRegistrations = [], isLoading: regsLoading } = useSeminarRegistrations(
+  const { data: dialogRegistrationsRaw = [], isLoading: regsLoading } = useSeminarRegistrations(
     detailDialog?.kind === 'registrants' ? detailDialog.row.seminar?.id : undefined,
   )
+  // Scope registrants to the clicked session when it's a session sub-row.
+  const dialogRegistrations = useMemo(() => {
+    const label = detailDialog?.row.sessionLabel
+    if (!label) return dialogRegistrationsRaw
+    return dialogRegistrationsRaw.filter(r => r.sessionLabels.includes(label))
+  }, [dialogRegistrationsRaw, detailDialog])
 
   // Merge manual sales_events with auto-aggregated seminars
   const rows = useMemo((): PerfRow[] => {
@@ -140,7 +153,9 @@ export function SalesPerformancePage() {
       id: e.id,
       month: e.month,
       eventName: e.eventName,
+      sessionLabel: null,
       applicants: e.applicants,
+      plannedAttendees: 0,
       attendees: e.attendees,
       phoneConsultations: e.phoneConsultations,
       zoomBookings: e.zoomBookings,
@@ -155,31 +170,81 @@ export function SalesPerformancePage() {
 
     // Seminars from 세미나 관리 not manually recorded → auto rows.
     // Consultation counts come from actual meeting records (미팅 기록),
-    // broken down by meeting_method.
+    // broken down by meeting_method. Multi-session seminars (e.g. the 4
+    // 진학전략 webinars) expand into one row per session/topic.
     const autoRows: PerfRow[] = seminars
       .filter(s => !manualNames.has(s.title.trim()))
-      .map(s => {
-        const matched = dedupeLeadsByPerson(allLeads.filter(l => leadMatchesSeminar(l, s)))
-        const outcome = computeColdCallOutcome(matched, contactActivities, s.applicants)
-        const matchedMeetings = meetingsForLeads(allMeetings, matched)
-        const byMethod = (m: string) => matchedMeetings.filter(mt => mt.meetingMethod === m).length
+      .flatMap((s): PerfRow[] => {
+        const allMatched = dedupeLeadsByPerson(allLeads.filter(l => leadMatchesSeminar(l, s)))
         const month = (s.date || s.createdAt).slice(0, 7)
-        return {
-          id: `seminar-${s.id}`,
-          month,
-          eventName: s.title,
-          applicants: s.applicants,
-          attendees: 0,
-          phoneConsultations: byMethod('phone'),
-          zoomBookings: byMethod('zoom'),
-          inPersonBookings: byMethod('in_person'),
-          totalMeetings: matchedMeetings.length,
-          contracts: outcome.contracted,
-          contractRate: s.applicants > 0 ? (outcome.contracted / s.applicants) * 100 : 0,
-          auto: true,
-          source: null,
-          seminar: s,
+        const attForSeminar = leadAttendance.filter(a => a.seminarId === s.id)
+
+        const buildRow = (opts: {
+          idSuffix: string
+          eventName: string
+          sessionLabel: string | null
+          applicants: number
+          matched: Lead[]
+          planned: number
+          attended: number
+        }): PerfRow => {
+          const outcome = computeColdCallOutcome(opts.matched, contactActivities, opts.applicants)
+          const matchedMeetings = meetingsForLeads(allMeetings, opts.matched)
+          const byMethod = (m: string) => matchedMeetings.filter(mt => mt.meetingMethod === m).length
+          return {
+            id: `seminar-${s.id}${opts.idSuffix}`,
+            month,
+            eventName: opts.eventName,
+            sessionLabel: opts.sessionLabel,
+            applicants: opts.applicants,
+            plannedAttendees: opts.planned,
+            attendees: opts.attended,
+            phoneConsultations: byMethod('phone'),
+            zoomBookings: byMethod('zoom'),
+            inPersonBookings: byMethod('in_person'),
+            totalMeetings: matchedMeetings.length,
+            contracts: outcome.contracted,
+            contractRate: opts.applicants > 0 ? (outcome.contracted / opts.applicants) * 100 : 0,
+            auto: true,
+            source: null,
+            seminar: s,
+          }
         }
+
+        // Multi-session seminar → break out one row per session/topic.
+        if (s.sessions.length > 1) {
+          return s.sessions.map(session => {
+            const matched = allMatched.filter(l => seminarSessionsForLead(s, l).includes(session))
+            const planned = new Set(
+              attForSeminar.filter(a => a.sessionLabel === session && a.status === 'planned').map(a => a.leadId),
+            ).size
+            const attended = new Set(
+              attForSeminar.filter(a => a.sessionLabel === session && a.status === 'attended').map(a => a.leadId),
+            ).size
+            return buildRow({
+              idSuffix: `-${session}`,
+              eventName: session,
+              sessionLabel: session,
+              applicants: s.sessionApplicants.get(session) ?? 0,
+              matched,
+              planned,
+              attended,
+            })
+          })
+        }
+
+        // Single-session (or no sub-sessions) seminar → one aggregate row.
+        const planned = new Set(attForSeminar.filter(a => a.status === 'planned').map(a => a.leadId)).size
+        const attended = new Set(attForSeminar.filter(a => a.status === 'attended').map(a => a.leadId)).size
+        return [buildRow({
+          idSuffix: '',
+          eventName: s.title,
+          sessionLabel: null,
+          applicants: s.applicants,
+          matched: allMatched,
+          planned,
+          attended,
+        })]
       })
 
     let merged = [...manualRows, ...autoRows]
@@ -187,7 +252,7 @@ export function SalesPerformancePage() {
       merged = merged.filter(r => r.month === monthFilter)
     }
     return merged
-  }, [events, seminars, allLeads, contactActivities, allMeetings, monthFilter])
+  }, [events, seminars, allLeads, contactActivities, allMeetings, leadAttendance, monthFilter])
 
   // Extract unique months for the filter dropdown (from all rows, unfiltered)
   const months = useMemo(() => {
@@ -196,13 +261,18 @@ export function SalesPerformancePage() {
     return Array.from(set).filter(Boolean).sort().reverse()
   }, [events, seminars])
 
-  // Leads matched to the clicked event row
+  // Leads matched to the clicked event row (scoped to the session when the
+  // row is a session sub-row of a multi-session seminar).
   const dialogLeads = useMemo((): Lead[] => {
     if (!detailDialog) return []
     const row = detailDialog.row
     if (row.seminar) {
       const s = row.seminar
-      return dedupeLeadsByPerson(allLeads.filter(l => leadMatchesSeminar(l, s)))
+      let matched = dedupeLeadsByPerson(allLeads.filter(l => leadMatchesSeminar(l, s)))
+      if (row.sessionLabel) {
+        matched = matched.filter(l => seminarSessionsForLead(s, l).includes(row.sessionLabel!))
+      }
+      return matched
     }
     return allLeads.filter(l => l.sourceChannel === row.eventName)
   }, [detailDialog, allLeads])
@@ -332,6 +402,7 @@ export function SalesPerformancePage() {
                   <TableHead className="w-[90px]">{t('common.month')}</TableHead>
                   <TableHead>{t('salesPerf.col.eventName')}</TableHead>
                   <TableHead className="text-right w-[70px]">{t('salesPerf.col.applicants')}</TableHead>
+                  <TableHead className="text-right w-[80px]">{t('salesPerf.col.plannedAttendees')}</TableHead>
                   <TableHead className="text-right w-[70px]">{t('salesPerf.col.attendees')}</TableHead>
                   <TableHead className="text-right w-[70px]">{t('salesPerf.col.phoneConsult')}</TableHead>
                   <TableHead className="text-right w-[70px]">Zoom</TableHead>
@@ -362,7 +433,13 @@ export function SalesPerformancePage() {
                         </TableCell>
                       ) : null}
                       <TableCell className="font-medium text-sm">
+                        {row.sessionLabel && row.seminar && (
+                          <div className="text-[11px] font-normal text-muted-foreground truncate">
+                            {row.seminar.title}
+                          </div>
+                        )}
                         <span className="inline-flex items-center gap-1.5">
+                          {row.sessionLabel && <span className="text-muted-foreground">└</span>}
                           {row.eventName}
                           {row.auto && (
                             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 gap-0.5" title={t('salesPerf.autoTooltip')}>
@@ -382,6 +459,16 @@ export function SalesPerformancePage() {
                         }}
                       >
                         {row.applicants}
+                      </TableCell>
+                      <TableCell
+                        className={`text-right text-sm tabular-nums ${row.seminar ? 'hover:underline hover:text-primary' : ''} ${row.plannedAttendees > 0 ? 'text-blue-600 font-medium' : ''}`}
+                        onClick={(e) => {
+                          if (!row.seminar) return
+                          e.stopPropagation()
+                          setDetailDialog({ row, kind: 'leads' })
+                        }}
+                      >
+                        {row.plannedAttendees || '-'}
                       </TableCell>
                       <TableCell className="text-right text-sm tabular-nums">{row.attendees || '-'}</TableCell>
                       <TableCell
@@ -441,6 +528,9 @@ export function SalesPerformancePage() {
                   <TableRow className="bg-muted/50 font-medium">
                     <TableCell colSpan={2} className="text-sm">{t('common.total')}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">{totalApplicants}</TableCell>
+                    <TableCell className="text-right text-sm tabular-nums">
+                      {rows.reduce((s, e) => s + (e.plannedAttendees || 0), 0)}
+                    </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">
                       {rows.reduce((s, e) => s + (e.attendees || 0), 0)}
                     </TableCell>

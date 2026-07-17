@@ -50,6 +50,8 @@ export interface SeminarLite {
   applicants: number
   /** The seminar's sub-webinar session labels (e.g. the 4 진학전략 webinars). */
   sessions: string[]
+  /** session label → unique registrant count for that session. */
+  sessionApplicants: Map<string, number>
   /** normalized phone → applied session labels. */
   sessionsByPhone: Map<string, string[]>
   /** normalized email → applied session labels. */
@@ -115,12 +117,15 @@ export function useSeminarsWithRegistrations() {
         names: Set<string>
         /** dedup keys for counting unique registrants */
         personKeys: Set<string>
+        /** session label → unique person keys registered for that session */
+        sessionPersonKeys: Map<string, Set<string>>
         sessionsByPhone: Map<string, string[]>
         sessionsByEmail: Map<string, string[]>
         sessionsByName: Map<string, string[]>
       }
       const newAcc = (): Acc => ({
         phones: new Set(), emails: new Set(), names: new Set(), personKeys: new Set(),
+        sessionPersonKeys: new Map(),
         sessionsByPhone: new Map(), sessionsByEmail: new Map(), sessionsByName: new Map(),
       })
       const bySeminar = new Map<string, Acc>()
@@ -136,7 +141,13 @@ export function useSeminarsWithRegistrations() {
         if (nameKey !== '|') { acc.names.add(nameKey); if (labels.length) acc.sessionsByName.set(nameKey, labels) }
         // Unique person: prefer email, then usable phone, then name
         const personKey = email || (isUsablePhone(phone) ? phone : '') || nameKey
-        if (personKey && personKey !== '|') acc.personKeys.add(personKey)
+        if (personKey && personKey !== '|') {
+          acc.personKeys.add(personKey)
+          for (const label of labels) {
+            if (!acc.sessionPersonKeys.has(label)) acc.sessionPersonKeys.set(label, new Set())
+            acc.sessionPersonKeys.get(label)!.add(personKey)
+          }
+        }
       }
 
       return (seminars || []).map((s): SeminarLite => {
@@ -146,6 +157,10 @@ export function useSeminarsWithRegistrations() {
         const sessions: string[] = Array.isArray(rawSessions)
           ? rawSessions.map((x) => (typeof x === 'string' ? x : (x as { label?: string })?.label)).filter(Boolean) as string[]
           : []
+        const sessionApplicants = new Map<string, number>()
+        for (const label of sessions) {
+          sessionApplicants.set(label, acc.sessionPersonKeys.get(label)?.size ?? 0)
+        }
         return {
           id: row.id as string,
           title: row.title as string,
@@ -157,6 +172,7 @@ export function useSeminarsWithRegistrations() {
           names: acc.names,
           applicants: acc.personKeys.size,
           sessions,
+          sessionApplicants,
           sessionsByPhone: acc.sessionsByPhone,
           sessionsByEmail: acc.sessionsByEmail,
           sessionsByName: acc.sessionsByName,
