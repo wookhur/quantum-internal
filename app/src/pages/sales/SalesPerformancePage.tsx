@@ -129,7 +129,7 @@ export function SalesPerformancePage() {
   // Which cell was clicked → which list to show
   const [detailDialog, setDetailDialog] = useState<{
     row: PerfRow
-    kind: 'leads' | 'registrants' | 'meetings'
+    kind: 'leads' | 'registrants' | 'meetings' | 'planned'
     /** meeting_method filter for kind='meetings'; undefined = all meetings */
     method?: string
   } | null>(null)
@@ -276,6 +276,19 @@ export function SalesPerformancePage() {
     }
     return allLeads.filter(l => l.sourceChannel === row.eventName)
   }, [detailDialog, allLeads])
+
+  // Leads marked 참석예정(planned) in cold call for the clicked row's seminar/session
+  const dialogPlannedLeads = useMemo((): Lead[] => {
+    if (!detailDialog || detailDialog.kind !== 'planned' || !detailDialog.row.seminar) return []
+    const s = detailDialog.row.seminar
+    const label = detailDialog.row.sessionLabel
+    const plannedIds = new Set(
+      leadAttendance
+        .filter(a => a.seminarId === s.id && a.status === 'planned' && (!label || a.sessionLabel === label))
+        .map(a => a.leadId),
+    )
+    return allLeads.filter(l => plannedIds.has(l.id))
+  }, [detailDialog, leadAttendance, allLeads])
 
   // Meetings matched to the clicked event row (optionally by method)
   const dialogMeetings = useMemo((): MeetingSlim[] => {
@@ -461,11 +474,11 @@ export function SalesPerformancePage() {
                         {row.applicants}
                       </TableCell>
                       <TableCell
-                        className={`text-right text-sm tabular-nums ${row.seminar ? 'hover:underline hover:text-primary' : ''} ${row.plannedAttendees > 0 ? 'text-blue-600 font-medium' : ''}`}
+                        className={`text-right text-sm tabular-nums ${row.seminar && row.plannedAttendees > 0 ? 'hover:underline hover:text-primary cursor-pointer' : ''} ${row.plannedAttendees > 0 ? 'text-blue-600 font-medium' : ''}`}
                         onClick={(e) => {
-                          if (!row.seminar) return
+                          if (!row.seminar || row.plannedAttendees === 0) return
                           e.stopPropagation()
-                          setDetailDialog({ row, kind: 'leads' })
+                          setDetailDialog({ row, kind: 'planned' })
                         }}
                       >
                         {row.plannedAttendees || '-'}
@@ -646,7 +659,9 @@ export function SalesPerformancePage() {
                           ? (MEETING_METHODS.find(m => m.value === detailDialog.method)?.label ?? detailDialog.method)
                           : t('salesPerf.allMethods'),
                       )
-                  : t('salesPerf.leadsDialogTitle').replace('{name}', detailDialog?.row.eventName ?? '')}
+                  : detailDialog?.kind === 'planned'
+                    ? t('salesPerf.plannedDialogTitle').replace('{name}', detailDialog.row.eventName)
+                    : t('salesPerf.leadsDialogTitle').replace('{name}', detailDialog?.row.eventName ?? '')}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 {t('salesPerf.leadsDialogCount').replace(
                   '{n}',
@@ -655,7 +670,9 @@ export function SalesPerformancePage() {
                       ? dialogRegistrations.length
                       : detailDialog?.kind === 'meetings'
                         ? dialogMeetings.length
-                        : dialogLeads.length,
+                        : detailDialog?.kind === 'planned'
+                          ? dialogPlannedLeads.length
+                          : dialogLeads.length,
                   ),
                 )}
               </span>
@@ -754,9 +771,10 @@ export function SalesPerformancePage() {
             )
           )}
 
-          {/* Leads list */}
-          {detailDialog?.kind === 'leads' && (
-            dialogLeads.length === 0 ? (
+          {/* Leads list (matched leads or 참석예정 leads) */}
+          {(detailDialog?.kind === 'leads' || detailDialog?.kind === 'planned') && (() => {
+            const leadsToShow = detailDialog.kind === 'planned' ? dialogPlannedLeads : dialogLeads
+            return leadsToShow.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-10">
                 {t('salesPerf.noMatchingLeads')}
               </p>
@@ -774,7 +792,7 @@ export function SalesPerformancePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dialogLeads.map((lead) => {
+                  {leadsToShow.map((lead) => {
                     const stage = getStageConfig(lead.pipelineStage)
                     return (
                       <TableRow key={lead.id}>
@@ -801,7 +819,7 @@ export function SalesPerformancePage() {
                 </TableBody>
               </Table>
             )
-          )}
+          })()}
         </DialogContent>
       </Dialog>
     </div>

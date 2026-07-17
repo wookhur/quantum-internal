@@ -184,11 +184,12 @@ function getSchoolTierScore(school: string): number {
   return 0
 }
 
-/** Stages eligible for cold calling */
+/** Stages eligible for cold calling (보류 포함 — 콜드콜에서 계속 관리) */
 const COLD_CALL_STAGES: PipelineStage[] = [
   'new_lead',
   'contact_attempted',
   'no_response',
+  'on_hold',
 ]
 
 /** Activity types that are contact logs (vs. stage/status changes). */
@@ -964,7 +965,8 @@ function ColdCallDetail({
           // - 그 외 결과(통화 성공 등) → 신규 리드면 '컨택 시도'로 이동
           const noResponse = callResult === 'no_answer' || callResult === 'no_reply'
           if (noResponse) {
-            if (COLD_CALL_STAGES.includes(lead.pipelineStage) && lead.pipelineStage !== 'no_response') {
+            // 보류는 수동으로 지정한 상태이므로 부재중이어도 유지
+            if (lead.pipelineStage === 'new_lead' || lead.pipelineStage === 'contact_attempted') {
               updateData.pipelineStage = 'no_response'
             }
           } else if (lead.pipelineStage === 'new_lead') {
