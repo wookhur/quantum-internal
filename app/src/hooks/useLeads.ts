@@ -66,6 +66,8 @@ function mapLead(row: Record<string, unknown>): Lead {
     memo: (row.memo as string) || '',
     requiredAction: row.required_action as string | undefined,
     pipelineStage: row.pipeline_stage as PipelineStage,
+    leadLevel: (row.lead_level as string) || undefined,
+    leadLevelReason: (row.lead_level_reason as string) || undefined,
     assignedTo: row.assigned_to as string | undefined,
     assignedUser: mapUser(profileData),
     contactChannel: row.contact_channel as string | undefined,
@@ -120,6 +122,8 @@ function leadToRow(lead: Partial<Lead>): Record<string, unknown> {
   if (lead.memo !== undefined) row.memo = lead.memo
   if (lead.requiredAction !== undefined) row.required_action = lead.requiredAction
   if (lead.pipelineStage !== undefined) row.pipeline_stage = lead.pipelineStage
+  if (lead.leadLevel !== undefined) row.lead_level = lead.leadLevel || null
+  if (lead.leadLevelReason !== undefined) row.lead_level_reason = lead.leadLevelReason || null
   if (lead.assignedTo !== undefined) row.assigned_to = lead.assignedTo
   if (lead.contactChannel !== undefined) row.contact_channel = lead.contactChannel
   if (lead.googleMeetLink !== undefined) row.google_meet_link = lead.googleMeetLink

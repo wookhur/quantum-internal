@@ -78,6 +78,8 @@ export interface Lead {
   memo: string
   requiredAction?: string
   pipelineStage: PipelineStage
+  leadLevel?: string       // hot | warm | qualified | cold | info_seeker
+  leadLevelReason?: string
   assignedTo?: string  // profile id
   assignedUser?: User  // joined
   contactChannel?: string  // 단톡방, 카카오 비즈, 전화

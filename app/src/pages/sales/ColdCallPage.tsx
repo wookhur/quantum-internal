@@ -47,6 +47,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead, useDeleteActivity } from '@/hooks/useLeads'
+import { LEAD_LEVELS, leadLevelConfig, type LeadLevel } from '@/lib/leadLevels'
 import {
   useSeminarsWithRegistrations,
   useAllContactActivities,
@@ -326,7 +327,8 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
   const [selectedGrade, setSelectedGrade] = useState('all')
   const [selectedSchool, setSelectedSchool] = useState('')
   const [selectedEvent, setSelectedEvent] = useState('all')
-  const [sortBy, setSortBy] = useState<'priority' | 'date' | 'grade'>('priority')
+  const [levelFilter, setLevelFilter] = useState<'all' | LeadLevel>('all')
+  const [sortBy, setSortBy] = useState<'priority' | 'level' | 'date' | 'grade'>('priority')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
 
   // Fetch leads in cold-callable stages
@@ -411,11 +413,18 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
       )
     }
 
+    // Lead level filter
+    if (levelFilter !== 'all') {
+      leads = leads.filter((l) => l.leadLevel === levelFilter)
+    }
+
     // Score and sort
     const scored = leads.map((l) => ({ ...l, _priority: getLeadPriority(l) }))
 
     if (sortBy === 'priority') {
       scored.sort((a, b) => b._priority - a._priority)
+    } else if (sortBy === 'level') {
+      scored.sort((a, b) => (leadLevelConfig(b.leadLevel)?.rank || 0) - (leadLevelConfig(a.leadLevel)?.rank || 0))
     } else if (sortBy === 'date') {
       scored.sort((a, b) => new Date(b.leadDate).getTime() - new Date(a.leadDate).getTime())
     } else if (sortBy === 'grade') {
@@ -423,7 +432,7 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
     }
 
     return scored
-  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy])
+  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy, levelFilter])
 
   const selectedLead = coldCallLeads.find((l) => l.id === selectedLeadId)
 
@@ -483,8 +492,30 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="priority">{t('coldCall.sortPriority')}</SelectItem>
+                <SelectItem value="level">리드 레벨순</SelectItem>
                 <SelectItem value="date">{t('coldCall.sortDate')}</SelectItem>
                 <SelectItem value="grade">{t('coldCall.sortGrade')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Lead level legend + filter */}
+          <div className="rounded-lg border bg-muted/30 p-2">
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {LEAD_LEVELS.map(l => (
+                <span key={l.key} className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" title={l.meaningKo}>
+                  <span>{l.emoji}</span>
+                  <span className="font-medium text-foreground/80">{l.labelEn}</span>
+                </span>
+              ))}
+            </div>
+            <Select value={levelFilter} onValueChange={(v) => setLevelFilter((v as 'all' | LeadLevel) || 'all')}>
+              <SelectTrigger className="h-7 text-xs mt-2"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 리드 레벨</SelectItem>
+                {LEAD_LEVELS.map(l => (
+                  <SelectItem key={l.key} value={l.key}>{l.emoji} {l.labelEn}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -586,13 +617,19 @@ export function ColdCallView({ onSwitchToTable }: { onSwitchToTable: () => void 
                         <span className="font-medium text-sm truncate">
                           {lead.studentName || lead.parentName}
                         </span>
-                        <Badge
-                          variant="secondary"
-                          className={`${priority.color} text-[10px] px-1.5 py-0 h-4 shrink-0`}
-                        >
-                          <PriorityIcon className="size-2.5 mr-0.5" />
-                          {priority.label}
-                        </Badge>
+                        {(() => {
+                          const lvl = leadLevelConfig(lead.leadLevel)
+                          return lvl ? (
+                            <Badge variant="outline" className={`${lvl.badge} text-[10px] px-1.5 py-0 h-4 shrink-0`} title={lvl.meaningKo}>
+                              {lvl.emoji} {lvl.labelEn}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className={`${priority.color} text-[10px] px-1.5 py-0 h-4 shrink-0`}>
+                              <PriorityIcon className="size-2.5 mr-0.5" />
+                              {priority.label}
+                            </Badge>
+                          )
+                        })()}
                       </div>
                       {lead.studentName && (
                         <p className="text-xs text-muted-foreground mt-0.5">
@@ -802,6 +839,7 @@ function ColdCallDetail({
   const [callResult, setCallResult] = useState<string>('')
   const [memoEdit, setMemoEdit] = useState(lead.memo || '')
   const [showMemoEdit, setShowMemoEdit] = useState(false)
+  const [levelReason, setLevelReason] = useState(lead.leadLevelReason || '')
   const [excludeConfirm, setExcludeConfirm] = useState<PipelineStage | null>(null)
   const [deleteActivityConfirm, setDeleteActivityConfirm] = useState<string | null>(null)
 
@@ -899,6 +937,11 @@ function ColdCallDetail({
     )
   }, [lead, memoEdit, updateLead])
 
+  const setLevel = (v: string | null) =>
+    updateLead.mutate({ id: lead.id, data: { leadLevel: (v as LeadLevel) || undefined }, previousStage: lead.pipelineStage })
+  const saveLevelReason = () =>
+    updateLead.mutate({ id: lead.id, data: { leadLevelReason: levelReason }, previousStage: lead.pipelineStage })
+
   return (
     <div className="p-6 space-y-5 max-w-3xl">
       {/* Header */}
@@ -928,6 +971,35 @@ function ColdCallDetail({
           </Button>
         </div>
       </div>
+
+      {/* Lead level + reason */}
+      <Card>
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">리드 레벨</h3>
+            <Select value={lead.leadLevel || ''} onValueChange={setLevel}>
+              <SelectTrigger className="h-8 text-sm w-52">
+                <SelectValue placeholder="리드 레벨 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {LEAD_LEVELS.map(l => (
+                  <SelectItem key={l.key} value={l.key}>{l.emoji} {l.labelEn} · {l.labelKo}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {leadLevelConfig(lead.leadLevel) && (
+              <span className="text-[11px] text-muted-foreground">{leadLevelConfig(lead.leadLevel)!.meaningKo}</span>
+            )}
+          </div>
+          <div className="flex items-end gap-2">
+            <div className="flex-1 space-y-1">
+              <label className="text-[11px] text-muted-foreground">선택 이유 (메모)</label>
+              <Textarea value={levelReason} onChange={e => setLevelReason(e.target.value)} rows={2} placeholder="예: 상담 반응 좋음, 계약 의사 있음 등" className="text-sm" />
+            </div>
+            <Button size="sm" variant="outline" onClick={saveLevelReason} disabled={updateLead.isPending}>{t('common.save')}</Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Info Cards */}
       <div className="grid grid-cols-2 gap-3">
