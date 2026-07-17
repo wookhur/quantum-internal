@@ -960,7 +960,7 @@ function ColdCallDetail({
           const updateData: Record<string, unknown> = {}
 
           // Stage auto-advance from a contact log:
-          // - 부재중/무응답(no_answer/no_reply) → 항상 '응답없음'으로 통일
+          // - 부재중/무응답(no_answer/no_reply) → 항상 '부재중'(no_response)으로 통일
           //   (단, 상담 예약 이후로 진행된 리드는 되돌리지 않음)
           // - 그 외 결과(통화 성공 등) → 신규 리드면 '컨택 시도'로 이동
           const noResponse = callResult === 'no_answer' || callResult === 'no_reply'

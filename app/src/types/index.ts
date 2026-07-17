@@ -53,7 +53,7 @@ export const PIPELINE_STAGES: { key: PipelineStage; label: string; color: string
   { key: 'third_consultation', label: '3차 상담', color: 'stage-third-consultation', group: 'active' },
   { key: 'contract_review', label: '계약 검토', color: 'stage-contract-review', group: 'active' },
   { key: 'contracted', label: '계약 완료', color: 'stage-contracted', group: 'won' },
-  { key: 'no_response', label: '응답없음', color: 'stage-no-response', group: 'inactive' },
+  { key: 'no_response', label: '부재중', color: 'stage-no-response', group: 'inactive' },
   { key: 'rejected', label: '거절', color: 'stage-rejected', group: 'inactive' },
   { key: 'lost', label: '이탈', color: 'stage-lost', group: 'inactive' },
 ]
