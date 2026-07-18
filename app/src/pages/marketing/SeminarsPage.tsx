@@ -288,17 +288,26 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
                   <TableCell className="min-w-[160px] max-w-[300px]">
                     {editId === r.id && hasSessions ? (
                       <div className="space-y-1">
-                        {seminar.sessions.map((s, i) => (
-                          <label key={i} className="flex items-start gap-1.5 cursor-pointer text-[11px]">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5 size-3.5 accent-indigo-600"
-                              checked={editLabels.includes(s.label)}
-                              onChange={() => toggleEditLabel(s.label)}
-                            />
-                            <span className="leading-snug">{s.label}</span>
-                          </label>
-                        ))}
+                        <p className="text-[10px] text-amber-600 mb-1">한 부만 하려면 다른 부는 체크 해제하세요 (다중 선택 가능)</p>
+                        {[
+                          ...seminar.sessions.map(s => s.label),
+                          ...editLabels.filter(l => !seminar.sessions.some(s => s.label === l)),
+                        ].map((label, i) => {
+                          const orphaned = !seminar.sessions.some(s => s.label === label)
+                          return (
+                            <label key={`${label}-${i}`} className="flex items-start gap-1.5 cursor-pointer text-[11px]">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 size-3.5 accent-indigo-600"
+                                checked={editLabels.includes(label)}
+                                onChange={() => toggleEditLabel(label)}
+                              />
+                              <span className={`leading-snug ${orphaned ? 'text-muted-foreground line-through' : ''}`}>
+                                {label}{orphaned ? ' (옛 라벨)' : ''}
+                              </span>
+                            </label>
+                          )
+                        })}
                       </div>
                     ) : r.sessionLabels.length === 0 ? (
                       <span className="text-muted-foreground">-</span>

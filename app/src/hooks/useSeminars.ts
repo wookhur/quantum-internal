@@ -268,6 +268,37 @@ export function useDeleteRegistration() {
   })
 }
 
+/**
+ * Bulk-move (or copy) registrants from one session label to another.
+ * `from` may be an old/orphaned label that is no longer a current session.
+ */
+export function useMoveRegistrationSessions() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ regs, from, to, mode }: {
+      regs: { id: string; sessionLabels: string[] }[]
+      from: string
+      to: string
+      mode: 'move' | 'copy'
+    }) => {
+      const affected = regs.filter(r => r.sessionLabels.includes(from))
+      for (const r of affected) {
+        const base = mode === 'move'
+          ? r.sessionLabels.map(l => (l === from ? to : l))
+          : [...r.sessionLabels, to]
+        const next = Array.from(new Set(base))
+        const { error } = await supabase.from('seminar_registrations').update({ session_labels: next }).eq('id', r.id)
+        if (error) throw error
+      }
+      return affected.length
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seminar-registrations'] })
+      qc.invalidateQueries({ queryKey: ['seminars-with-registrations'] })
+    },
+  })
+}
+
 /** Update which session(s) a registrant selected (e.g. assign to 1부/2부). */
 export function useUpdateRegistrationSessions() {
   const qc = useQueryClient()
