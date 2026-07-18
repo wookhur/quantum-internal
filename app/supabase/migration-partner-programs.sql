@@ -6,7 +6,8 @@
 -- ── 프로그램 마스터 ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.partner_programs (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  partner_company_id uuid REFERENCES public.partner_companies(id) ON DELETE SET NULL,
+  partner_company_id uuid REFERENCES public.partner_companies(id) ON DELETE SET NULL,  -- (legacy, unused)
+  partner_name       text,                    -- 파트너사(소속학원) 라벨. EC_PARTNERS + 서비스 프로그램 학원명과 동일한 소스
   name               text NOT NULL,
   guide              text,                    -- 프로그램 안내 (브로셔에서 자동 정리 + 수동 편집)
   brochure_url       text,                    -- 업로드한 브로셔 이미지 URL
@@ -14,6 +15,9 @@ CREATE TABLE IF NOT EXISTS public.partner_programs (
   created_at         timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now()
 );
+
+-- 기존에 테이블을 이미 만든 경우를 위한 컬럼 추가
+ALTER TABLE public.partner_programs ADD COLUMN IF NOT EXISTS partner_name text;
 
 DROP TRIGGER IF EXISTS set_updated_at ON public.partner_programs;
 CREATE TRIGGER set_updated_at

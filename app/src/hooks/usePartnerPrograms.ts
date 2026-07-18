@@ -22,8 +22,8 @@ export const PROGRAM_COMMENT_METHODS: { key: ProgramCommentMethod; ko: string; e
 
 export interface PartnerProgram {
   id: string
-  partnerCompanyId: string | null
-  partnerCompanyName: string | null
+  /** 파트너사(소속학원) 라벨 — EC_PARTNERS + 서비스 프로그램 학원명과 동일 소스 */
+  partnerName: string | null
   name: string
   guide: string | null
   brochureUrl: string | null
@@ -60,11 +60,9 @@ export interface ProgramComment {
 
 // ── Programs ────────────────────────────────────────────────────
 function mapProgram(row: Record<string, unknown>): PartnerProgram {
-  const company = row.partner_companies as Record<string, unknown> | null
   return {
     id: row.id as string,
-    partnerCompanyId: (row.partner_company_id as string) ?? null,
-    partnerCompanyName: (company?.name as string) ?? null,
+    partnerName: (row.partner_name as string) ?? null,
     name: row.name as string,
     guide: (row.guide as string) ?? null,
     brochureUrl: (row.brochure_url as string) ?? null,
@@ -79,7 +77,7 @@ export function usePartnerPrograms() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('partner_programs')
-        .select('*, partner_companies(name)')
+        .select('*')
         .order('created_at', { ascending: false })
       if (error) throw error
       return (data || []).map((r) => mapProgram(r as Record<string, unknown>))
@@ -91,16 +89,16 @@ export function useCreateProgram() {
   const qc = useQueryClient()
   const { user } = useAuth()
   return useMutation({
-    mutationFn: async (input: { name: string; partnerCompanyId: string | null; guide?: string | null }) => {
+    mutationFn: async (input: { name: string; partnerName: string | null; guide?: string | null }) => {
       const { data, error } = await supabase
         .from('partner_programs')
         .insert({
           name: input.name,
-          partner_company_id: input.partnerCompanyId,
+          partner_name: input.partnerName,
           guide: input.guide ?? null,
           created_by: user?.id ?? null,
         })
-        .select('*, partner_companies(name)')
+        .select('*')
         .single()
       if (error) throw error
       return mapProgram(data as Record<string, unknown>)
@@ -112,10 +110,10 @@ export function useCreateProgram() {
 export function useUpdateProgram() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { id: string; name?: string; partnerCompanyId?: string | null; guide?: string | null; brochureUrl?: string | null }) => {
+    mutationFn: async (input: { id: string; name?: string; partnerName?: string | null; guide?: string | null; brochureUrl?: string | null }) => {
       const row: Record<string, unknown> = {}
       if (input.name !== undefined) row.name = input.name
-      if (input.partnerCompanyId !== undefined) row.partner_company_id = input.partnerCompanyId
+      if (input.partnerName !== undefined) row.partner_name = input.partnerName
       if (input.guide !== undefined) row.guide = input.guide
       if (input.brochureUrl !== undefined) row.brochure_url = input.brochureUrl
       const { error } = await supabase.from('partner_programs').update(row).eq('id', input.id)

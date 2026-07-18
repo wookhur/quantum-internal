@@ -18,7 +18,8 @@ import {
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useLeads } from '@/hooks/useLeads'
 import { leadLevelConfig } from '@/lib/leadLevels'
-import { usePartnerCompanies } from '@/hooks/usePartnerCompanies'
+import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
+import { EC_PARTNERS } from '@/lib/ecPartners'
 import {
   usePartnerPrograms, useCreateProgram, useUpdateProgram, useDeleteProgram,
   useUploadBrochure, useProgramEntries, useAddProgramEntry, useUpdateProgramEntry,
@@ -28,6 +29,17 @@ import {
 } from '@/hooks/usePartnerPrograms'
 import { extractProgramGuideFromImage, fileToBase64 } from '@/lib/extract-program-ai'
 import type { Lead } from '@/types'
+
+/** Partner (소속학원) options — same source as Student 360 / 파트너 학생관리. */
+function usePartnerOptions(): string[] {
+  const { data: fees = [] } = useAllServiceProgramFees()
+  return useMemo(() => {
+    const s = new Set<string>()
+    for (const p of EC_PARTNERS) s.add(p)
+    for (const f of fees) if (f.label?.trim()) s.add(f.label.trim())
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [fees])
+}
 
 /** Force-download an image URL (works cross-origin via blob). */
 async function downloadImage(url: string, filename: string) {
@@ -245,7 +257,7 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
 function ProgramDetail({ program }: { program: PartnerProgram }) {
   const { language: lang } = useLanguage()
   const { data: entries = [], isLoading } = useProgramEntries(program.id)
-  const { data: companies = [] } = usePartnerCompanies()
+  const partnerOptions = usePartnerOptions()
   const updateProgram = useUpdateProgram()
   const uploadBrochure = useUploadBrochure()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -297,12 +309,12 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
       <div className="flex items-center gap-2">
         <Label className="text-xs text-muted-foreground shrink-0">{lang === 'en' ? 'Partner' : '파트너사'}</Label>
         <select
-          value={program.partnerCompanyId || ''}
-          onChange={(e) => updateProgram.mutate({ id: program.id, partnerCompanyId: e.target.value || null })}
+          value={program.partnerName || ''}
+          onChange={(e) => updateProgram.mutate({ id: program.id, partnerName: e.target.value || null })}
           className="h-8 w-[240px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <option value="">{lang === 'en' ? 'No partner' : '파트너사 미지정'}</option>
-          {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {partnerOptions.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
 
@@ -416,17 +428,17 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
 export function ProgramsPage() {
   const { language: lang } = useLanguage()
   const { data: programs = [], isLoading } = usePartnerPrograms()
-  const { data: companies = [] } = usePartnerCompanies()
+  const partnerOptions = usePartnerOptions()
   const createProgram = useCreateProgram()
   const deleteProgram = useDeleteProgram()
 
   const [companyFilter, setCompanyFilter] = useState<string>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState<{ name: string; companyId: string }>({ name: '', companyId: '' })
+  const [form, setForm] = useState<{ name: string; partnerName: string }>({ name: '', partnerName: '' })
 
   const filtered = useMemo(
-    () => programs.filter((p) => companyFilter === 'all' || p.partnerCompanyId === companyFilter),
+    () => programs.filter((p) => companyFilter === 'all' || p.partnerName === companyFilter),
     [programs, companyFilter],
   )
   const selected = programs.find((p) => p.id === selectedId) || filtered[0] || null
@@ -435,9 +447,9 @@ export function ProgramsPage() {
     if (!form.name.trim()) return
     const created = await createProgram.mutateAsync({
       name: form.name.trim(),
-      partnerCompanyId: form.companyId || null,
+      partnerName: form.partnerName || null,
     })
-    setForm({ name: '', companyId: '' })
+    setForm({ name: '', partnerName: '' })
     setShowCreate(false)
     setSelectedId(created.id)
   }
@@ -467,7 +479,7 @@ export function ProgramsPage() {
               <SelectTrigger className="w-[220px] h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{lang === 'en' ? 'All partners' : '전체 파트너사'}</SelectItem>
-                {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                {partnerOptions.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -493,7 +505,7 @@ export function ProgramsPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{p.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{p.partnerCompanyName || (lang === 'en' ? 'No partner' : '파트너사 미지정')}</p>
+                    <p className="text-xs text-muted-foreground truncate">{p.partnerName || (lang === 'en' ? 'No partner' : '파트너사 미지정')}</p>
                   </div>
                   <ChevronRight className={`size-4 shrink-0 ${selected?.id === p.id ? 'text-primary' : 'text-muted-foreground'}`} />
                 </div>
@@ -508,7 +520,7 @@ export function ProgramsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold">{selected.name}</h2>
-                    <p className="text-xs text-muted-foreground">{selected.partnerCompanyName || (lang === 'en' ? 'No partner assigned' : '파트너사 미지정')}</p>
+                    <p className="text-xs text-muted-foreground">{selected.partnerName || (lang === 'en' ? 'No partner assigned' : '파트너사 미지정')}</p>
                   </div>
                   <Button
                     variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5"
@@ -543,20 +555,13 @@ export function ProgramsPage() {
             <div>
               <Label>{lang === 'en' ? 'Partner' : '파트너사'}</Label>
               <select
-                value={form.companyId}
-                onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}
+                value={form.partnerName}
+                onChange={(e) => setForm((f) => ({ ...f, partnerName: e.target.value }))}
                 className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <option value="">{lang === 'en' ? 'Select partner (optional)' : '파트너사 선택 (선택사항)'}</option>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {partnerOptions.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
-              {companies.length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">
-                  {lang === 'en'
-                    ? 'No partner companies yet — register one in 파트너 › 업체 관리 first.'
-                    : '등록된 파트너사가 없습니다. 파트너 › 업체 관리에서 먼저 등록하세요.'}
-                </p>
-              )}
             </div>
             <div>
               <Label>{lang === 'en' ? 'Program name' : '프로그램명'} *</Label>
