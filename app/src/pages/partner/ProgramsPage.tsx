@@ -245,6 +245,7 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
 function ProgramDetail({ program }: { program: PartnerProgram }) {
   const { language: lang } = useLanguage()
   const { data: entries = [], isLoading } = useProgramEntries(program.id)
+  const { data: companies = [] } = usePartnerCompanies()
   const updateProgram = useUpdateProgram()
   const uploadBrochure = useUploadBrochure()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -292,6 +293,19 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
 
   return (
     <div className="space-y-4">
+      {/* Partner assignment */}
+      <div className="flex items-center gap-2">
+        <Label className="text-xs text-muted-foreground shrink-0">{lang === 'en' ? 'Partner' : '파트너사'}</Label>
+        <select
+          value={program.partnerCompanyId || ''}
+          onChange={(e) => updateProgram.mutate({ id: program.id, partnerCompanyId: e.target.value || null })}
+          className="h-8 w-[240px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <option value="">{lang === 'en' ? 'No partner' : '파트너사 미지정'}</option>
+          {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+
       {/* Brochure + guide */}
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
@@ -528,12 +542,21 @@ export function ProgramsPage() {
           <div className="space-y-4">
             <div>
               <Label>{lang === 'en' ? 'Partner' : '파트너사'}</Label>
-              <Select value={form.companyId} onValueChange={(v) => setForm((f) => ({ ...f, companyId: v || '' }))}>
-                <SelectTrigger><SelectValue placeholder={lang === 'en' ? 'Select partner' : '파트너사 선택'} /></SelectTrigger>
-                <SelectContent>
-                  {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <select
+                value={form.companyId}
+                onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">{lang === 'en' ? 'Select partner (optional)' : '파트너사 선택 (선택사항)'}</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              {companies.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">
+                  {lang === 'en'
+                    ? 'No partner companies yet — register one in 파트너 › 업체 관리 first.'
+                    : '등록된 파트너사가 없습니다. 파트너 › 업체 관리에서 먼저 등록하세요.'}
+                </p>
+              )}
             </div>
             <div>
               <Label>{lang === 'en' ? 'Program name' : '프로그램명'} *</Label>
