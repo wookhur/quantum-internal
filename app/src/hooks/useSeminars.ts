@@ -304,11 +304,16 @@ export function useUpdateRegistrationSessions() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, sessionLabels }: { id: string; sessionLabels: string[] }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('seminar_registrations')
         .update({ session_labels: sessionLabels })
         .eq('id', id)
+        .select('id')
       if (error) throw error
+      // RLS may silently block UPDATE (returns 0 rows, no error) — surface it.
+      if (!data || data.length === 0) {
+        throw new Error('저장되지 않았습니다. 신청자 수정 권한(RLS UPDATE 정책)이 없을 수 있어요 — 관리자에게 문의해 주세요.')
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seminar-registrations'] })

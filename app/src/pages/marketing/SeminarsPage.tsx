@@ -175,7 +175,10 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
   const toggleEditLabel = (label: string) =>
     setEditLabels(prev => prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label])
   const saveEdit = (id: string) =>
-    updateSessions.mutate({ id, sessionLabels: editLabels }, { onSuccess: () => setEditId(null) })
+    updateSessions.mutate(
+      { id, sessionLabels: editLabels },
+      { onSuccess: () => setEditId(null), onError: (e) => alert((e as Error).message) },
+    )
 
   const hasSessions = seminar.sessions.length > 1
 
