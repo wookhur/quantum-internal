@@ -183,15 +183,15 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
             {(() => {
               const st = PROGRAM_STAGES.find((s) => s.key === entry.stage)
               return st ? (
-                <Badge variant="outline" className={`${st.badge} text-[10px] px-1.5 py-0 h-4`}>
+                <span className={`inline-flex items-center rounded-full border px-2 h-[18px] text-[10px] font-medium leading-none ${st.badge}`}>
                   {lang === 'en' ? st.en : st.ko}
-                </Badge>
+                </span>
               ) : null
             })()}
             {level && (
-              <Badge variant="outline" className={`${level.badge} text-[10px] px-1.5 py-0 h-4`}>
+              <span className={`inline-flex items-center rounded-full border px-2 h-[18px] text-[10px] font-medium leading-none ${level.badge}`}>
                 {level.emoji} {level.labelEn}
-              </Badge>
+              </span>
             )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
