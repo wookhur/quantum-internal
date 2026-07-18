@@ -16,7 +16,7 @@ import {
   MessageSquare, Image as ImageIcon, Save, ChevronRight,
 } from 'lucide-react'
 import { useLanguage } from '@/i18n/LanguageContext'
-import { useLeads } from '@/hooks/useLeads'
+import { useLeads, useCreateLead } from '@/hooks/useLeads'
 import { leadLevelConfig } from '@/lib/leadLevels'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { EC_PARTNERS } from '@/lib/ecPartners'
@@ -188,11 +188,17 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
 }
 
 // ── Lead search-to-add ──────────────────────────────────────────
+const EMPTY_MANUAL = { studentName: '', parentName: '', currentSchool: '', grade: '', phone: '', sourceChannel: '' }
+
 function AddLeadBox({ programId, existingLeadIds }: { programId: string; existingLeadIds: Set<string> }) {
   const { language: lang } = useLanguage()
   const { data: allLeads = [] } = useLeads()
   const addEntry = useAddProgramEntry()
+  const createLead = useCreateLead()
   const [q, setQ] = useState('')
+  const [showManual, setShowManual] = useState(false)
+  const [manual, setManual] = useState(EMPTY_MANUAL)
+  const [manualErr, setManualErr] = useState<string | null>(null)
 
   const matches = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -208,45 +214,102 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
       .slice(0, 8)
   }, [q, allLeads, existingLeadIds])
 
+  const canSubmitManual = manual.studentName.trim() || manual.parentName.trim()
+
+  const submitManual = async () => {
+    if (!canSubmitManual) return
+    setManualErr(null)
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const created = await createLead.mutateAsync({
+        studentName: manual.studentName.trim(),
+        parentName: manual.parentName.trim(),
+        currentSchool: manual.currentSchool.trim(),
+        grade: manual.grade.trim(),
+        phone: manual.phone.trim(),
+        sourceChannel: manual.sourceChannel.trim() || '프로그램 직접 추가',
+        pipelineStage: 'new_lead',
+        leadDate: today,
+      })
+      await addEntry.mutateAsync({ programId, leadId: created.id })
+      setManual(EMPTY_MANUAL)
+      setShowManual(false)
+    } catch (e) {
+      setManualErr((e as Error).message || (lang === 'en' ? 'Failed to add' : '추가 실패'))
+    }
+  }
+
   return (
-    <div className="relative">
-      <div className="flex items-center gap-2">
-        <Search className="size-4 text-muted-foreground shrink-0" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={lang === 'en' ? 'Search leads by name / phone to add...' : '이름·전화번호로 리드 검색해서 추가...'}
-          className="h-9 text-sm"
-        />
-        {q && (
-          <Button variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => setQ('')}>
-            <X className="size-4" />
+    <div className="space-y-2">
+      <div className="relative">
+        <div className="flex items-center gap-2">
+          <Search className="size-4 text-muted-foreground shrink-0" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={lang === 'en' ? 'Search leads by name / phone to add...' : '이름·전화번호로 리드 검색해서 추가...'}
+            className="h-9 text-sm"
+          />
+          {q && (
+            <Button variant="ghost" size="icon" className="size-8 shrink-0" onClick={() => setQ('')}>
+              <X className="size-4" />
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="h-9 text-xs gap-1 shrink-0" onClick={() => setShowManual((v) => !v)}>
+            <Plus className="size-3.5" /> {lang === 'en' ? 'Add manually' : '직접 추가'}
           </Button>
+        </div>
+        {matches.length > 0 && (
+          <div className="absolute z-20 mt-1 w-full rounded-lg border bg-white shadow-lg max-h-72 overflow-y-auto">
+            {matches.map((l) => {
+              const level = leadLevelConfig(l.leadLevel)
+              return (
+                <button
+                  key={l.id}
+                  className="w-full text-left px-3 py-2 hover:bg-muted/50 border-b last:border-0 flex items-center justify-between gap-2"
+                  onClick={() => addEntry.mutate({ programId, leadId: l.id }, { onSuccess: () => setQ('') })}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{l.studentName || l.parentName}</span>
+                      {level && <Badge variant="outline" className={`${level.badge} text-[10px] px-1.5 py-0 h-4`}>{level.emoji}</Badge>}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {[l.currentSchool, l.grade, l.phone].filter(Boolean).join(' · ')}
+                    </div>
+                  </div>
+                  <Plus className="size-4 text-primary shrink-0" />
+                </button>
+              )
+            })}
+          </div>
         )}
       </div>
-      {matches.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full rounded-lg border bg-white shadow-lg max-h-72 overflow-y-auto">
-          {matches.map((l) => {
-            const level = leadLevelConfig(l.leadLevel)
-            return (
-              <button
-                key={l.id}
-                className="w-full text-left px-3 py-2 hover:bg-muted/50 border-b last:border-0 flex items-center justify-between gap-2"
-                onClick={() => addEntry.mutate({ programId, leadId: l.id }, { onSuccess: () => setQ('') })}
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{l.studentName || l.parentName}</span>
-                    {level && <Badge variant="outline" className={`${level.badge} text-[10px] px-1.5 py-0 h-4`}>{level.emoji}</Badge>}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {[l.currentSchool, l.grade, l.phone].filter(Boolean).join(' · ')}
-                  </div>
-                </div>
-                <Plus className="size-4 text-primary shrink-0" />
-              </button>
-            )
-          })}
+
+      {/* Manual entry — student not in leads */}
+      {showManual && (
+        <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">
+            {lang === 'en' ? 'Add a student not in leads' : '리드에 없는 학생 직접 추가'}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Input value={manual.studentName} onChange={(e) => setManual((m) => ({ ...m, studentName: e.target.value }))} placeholder={lang === 'en' ? 'Student name' : '학생 이름'} className="h-8 text-sm bg-white" />
+            <Input value={manual.parentName} onChange={(e) => setManual((m) => ({ ...m, parentName: e.target.value }))} placeholder={lang === 'en' ? 'Parent name' : '학부모 이름'} className="h-8 text-sm bg-white" />
+            <Input value={manual.currentSchool} onChange={(e) => setManual((m) => ({ ...m, currentSchool: e.target.value }))} placeholder={lang === 'en' ? 'School' : '학교 이름'} className="h-8 text-sm bg-white" />
+            <Input value={manual.grade} onChange={(e) => setManual((m) => ({ ...m, grade: e.target.value }))} placeholder={lang === 'en' ? 'Grade' : '학년'} className="h-8 text-sm bg-white" />
+            <Input value={manual.phone} onChange={(e) => setManual((m) => ({ ...m, phone: e.target.value }))} placeholder={lang === 'en' ? 'Parent phone' : '학부모 전화번호'} className="h-8 text-sm bg-white" />
+            <Input value={manual.sourceChannel} onChange={(e) => setManual((m) => ({ ...m, sourceChannel: e.target.value }))} placeholder={lang === 'en' ? 'Source / memo' : '상담 유입경로 메모'} className="h-8 text-sm bg-white" />
+          </div>
+          {manualErr && <p className="text-xs text-destructive">{manualErr}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setShowManual(false); setManual(EMPTY_MANUAL); setManualErr(null) }}>
+              {lang === 'en' ? 'Cancel' : '취소'}
+            </Button>
+            <Button size="sm" className="h-8 text-xs gap-1" onClick={submitManual} disabled={!canSubmitManual || createLead.isPending || addEntry.isPending}>
+              {(createLead.isPending || addEntry.isPending) ? <Loader2 className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+              {lang === 'en' ? 'Add to program' : '프로그램에 추가'}
+            </Button>
+          </div>
         </div>
       )}
     </div>
