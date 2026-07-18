@@ -44,6 +44,7 @@ export interface ProgramEntry {
   phone: string | null
   currentSchool: string | null
   grade: string | null
+  sourceChannel: string | null
   leadLevel: string | null
   pipelineStage: string | null
 }
@@ -172,6 +173,7 @@ function mapEntry(row: Record<string, unknown>): ProgramEntry {
     phone: (lead?.phone as string) ?? null,
     currentSchool: (lead?.current_school as string) ?? null,
     grade: (lead?.grade as string) ?? null,
+    sourceChannel: (lead?.source_channel as string) ?? null,
     leadLevel: (lead?.lead_level as string) ?? null,
     pipelineStage: (lead?.pipeline_stage as string) ?? null,
   }
@@ -184,7 +186,7 @@ export function useProgramEntries(programId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('partner_program_entries')
-        .select('*, leads(parent_name, student_name, phone, current_school, grade, lead_level, pipeline_stage)')
+        .select('*, leads(parent_name, student_name, phone, current_school, grade, source_channel, lead_level, pipeline_stage)')
         .eq('program_id', programId)
         .order('created_at', { ascending: true })
       if (error) throw error

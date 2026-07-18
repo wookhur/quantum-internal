@@ -13,10 +13,11 @@ import {
 } from '@/components/ui/dialog'
 import {
   Plus, Loader2, Trash2, Upload, Download, Sparkles, Search, X,
-  MessageSquare, Image as ImageIcon, Save, ChevronRight,
+  MessageSquare, Image as ImageIcon, Save, ChevronRight, Pencil,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useLanguage } from '@/i18n/LanguageContext'
-import { useLeads, useCreateLead } from '@/hooks/useLeads'
+import { useLeads, useCreateLead, useUpdateLead } from '@/hooks/useLeads'
 import { leadLevelConfig } from '@/lib/leadLevels'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { EC_PARTNERS } from '@/lib/ecPartners'
@@ -135,8 +136,42 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
   const { language: lang } = useLanguage()
   const updateEntry = useUpdateProgramEntry()
   const removeEntry = useRemoveProgramEntry()
+  const updateLead = useUpdateLead()
+  const qc = useQueryClient()
   const [showComments, setShowComments] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({
+    studentName: entry.studentName || '', parentName: entry.parentName || '',
+    currentSchool: entry.currentSchool || '', grade: entry.grade || '',
+    phone: entry.phone || '', sourceChannel: entry.sourceChannel || '',
+  })
   const level = leadLevelConfig(entry.leadLevel)
+
+  const startEdit = () => {
+    setForm({
+      studentName: entry.studentName || '', parentName: entry.parentName || '',
+      currentSchool: entry.currentSchool || '', grade: entry.grade || '',
+      phone: entry.phone || '', sourceChannel: entry.sourceChannel || '',
+    })
+    setEditing(true)
+  }
+
+  const saveEdit = async () => {
+    await updateLead.mutateAsync({
+      id: entry.leadId,
+      data: {
+        studentName: form.studentName.trim(),
+        parentName: form.parentName.trim(),
+        currentSchool: form.currentSchool.trim(),
+        grade: form.grade.trim(),
+        phone: form.phone.trim(),
+        sourceChannel: form.sourceChannel.trim(),
+      },
+    })
+    // Refresh the joined lead data shown in this program's entry list
+    qc.invalidateQueries({ queryKey: ['partner-program-entries', entry.programId] })
+    setEditing(false)
+  }
 
   return (
     <div className="border rounded-lg p-3">
@@ -157,6 +192,7 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
             {entry.currentSchool && <span>{entry.currentSchool}</span>}
             {entry.grade && <span>{entry.grade}</span>}
             {entry.phone && <span>{entry.phone}</span>}
+            {entry.sourceChannel && <span>· {entry.sourceChannel}</span>}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -171,6 +207,9 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
               ))}
             </SelectContent>
           </Select>
+          <Button variant="ghost" size="icon" className="size-7" onClick={startEdit} title={lang === 'en' ? 'Edit' : '수정'}>
+            <Pencil className="size-3.5" />
+          </Button>
           <Button variant="ghost" size="icon" className="size-7" onClick={() => setShowComments((v) => !v)} title={lang === 'en' ? 'Logs' : '소통 기록'}>
             <MessageSquare className="size-3.5" />
           </Button>
@@ -182,6 +221,28 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
           </Button>
         </div>
       </div>
+
+      {/* Edit student info */}
+      {editing && (
+        <div className="mt-2 rounded-lg bg-muted/40 p-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Input value={form.studentName} onChange={(e) => setForm((m) => ({ ...m, studentName: e.target.value }))} placeholder={lang === 'en' ? 'Student name' : '학생 이름'} className="h-8 text-sm bg-white" />
+            <Input value={form.parentName} onChange={(e) => setForm((m) => ({ ...m, parentName: e.target.value }))} placeholder={lang === 'en' ? 'Parent name' : '학부모 이름'} className="h-8 text-sm bg-white" />
+            <Input value={form.currentSchool} onChange={(e) => setForm((m) => ({ ...m, currentSchool: e.target.value }))} placeholder={lang === 'en' ? 'School' : '학교 이름'} className="h-8 text-sm bg-white" />
+            <Input value={form.grade} onChange={(e) => setForm((m) => ({ ...m, grade: e.target.value }))} placeholder={lang === 'en' ? 'Grade' : '학년'} className="h-8 text-sm bg-white" />
+            <Input value={form.phone} onChange={(e) => setForm((m) => ({ ...m, phone: e.target.value }))} placeholder={lang === 'en' ? 'Parent phone' : '학부모 전화번호'} className="h-8 text-sm bg-white" />
+            <Input value={form.sourceChannel} onChange={(e) => setForm((m) => ({ ...m, sourceChannel: e.target.value }))} placeholder={lang === 'en' ? 'Source / memo' : '상담 유입경로 메모'} className="h-8 text-sm bg-white" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setEditing(false)}>{lang === 'en' ? 'Cancel' : '취소'}</Button>
+            <Button size="sm" className="h-8 text-xs gap-1" onClick={saveEdit} disabled={updateLead.isPending}>
+              {updateLead.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+              {lang === 'en' ? 'Save' : '저장'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {showComments && <EntryComments entry={entry} />}
     </div>
   )
