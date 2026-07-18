@@ -193,11 +193,9 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
                 {level.emoji} {level.labelEn}
               </Badge>
             )}
-            {entry.parentName && entry.studentName && (
-              <span className="text-xs text-muted-foreground">{entry.parentName} ({lang === 'en' ? 'parent' : '학부모'})</span>
-            )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+            {entry.parentName && entry.studentName && <span>{lang === 'en' ? 'Parent' : '학부모'}: {entry.parentName}</span>}
             {entry.currentSchool && <span>{entry.currentSchool}</span>}
             {entry.grade && <span>{entry.grade}</span>}
             {entry.phone && <span>{entry.phone}</span>}
