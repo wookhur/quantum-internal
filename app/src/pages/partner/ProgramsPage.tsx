@@ -180,9 +180,6 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-sm">{entry.studentName || entry.parentName || '-'}</span>
-            {entry.parentName && entry.studentName && (
-              <span className="text-xs text-muted-foreground">{entry.parentName} ({lang === 'en' ? 'parent' : '학부모'})</span>
-            )}
             {(() => {
               const st = PROGRAM_STAGES.find((s) => s.key === entry.stage)
               return st ? (
@@ -195,6 +192,9 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
               <Badge variant="outline" className={`${level.badge} text-[10px] px-1.5 py-0 h-4`}>
                 {level.emoji} {level.labelEn}
               </Badge>
+            )}
+            {entry.parentName && entry.studentName && (
+              <span className="text-xs text-muted-foreground">{entry.parentName} ({lang === 'en' ? 'parent' : '학부모'})</span>
             )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
