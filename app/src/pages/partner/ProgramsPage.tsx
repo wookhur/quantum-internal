@@ -183,6 +183,14 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
             {entry.parentName && entry.studentName && (
               <span className="text-xs text-muted-foreground">{entry.parentName} ({lang === 'en' ? 'parent' : '학부모'})</span>
             )}
+            {(() => {
+              const st = PROGRAM_STAGES.find((s) => s.key === entry.stage)
+              return st ? (
+                <Badge variant="outline" className={`${st.badge} text-[10px] px-1.5 py-0 h-4`}>
+                  {lang === 'en' ? st.en : st.ko}
+                </Badge>
+              ) : null
+            })()}
             {level && (
               <Badge variant="outline" className={`${level.badge} text-[10px] px-1.5 py-0 h-4`}>
                 {level.emoji} {level.labelEn}
