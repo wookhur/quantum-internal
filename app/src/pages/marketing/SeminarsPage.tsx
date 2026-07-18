@@ -42,6 +42,7 @@ import {
   useDeleteSeminar,
   useSeminarRegistrations,
   useDeleteRegistration,
+  useUpdateRegistrationSessions,
   sortSeminarSessions,
   type Seminar,
   type SeminarSession,
@@ -165,7 +166,16 @@ function CopyLinkButton({ seminarId }: { seminarId: string }) {
 function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
   const { data: regs = [], isLoading } = useSeminarRegistrations(seminar.id)
   const deleteMut = useDeleteRegistration()
+  const updateSessions = useUpdateRegistrationSessions()
   const [sessionFilter, setSessionFilter] = useState<string>('all')
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editLabels, setEditLabels] = useState<string[]>([])
+
+  const startEdit = (id: string, labels: string[]) => { setEditId(id); setEditLabels(labels) }
+  const toggleEditLabel = (label: string) =>
+    setEditLabels(prev => prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label])
+  const saveEdit = (id: string) =>
+    updateSessions.mutate({ id, sessionLabels: editLabels }, { onSuccess: () => setEditId(null) })
 
   const hasSessions = seminar.sessions.length > 1
 
@@ -275,8 +285,22 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
                   <TableCell>{r.school || '-'}</TableCell>
                   <TableCell className="max-w-[200px] truncate">{r.interest || '-'}</TableCell>
                   <TableCell className="max-w-[200px] truncate">{r.memo || '-'}</TableCell>
-                  <TableCell className="min-w-[120px] max-w-[260px]">
-                    {r.sessionLabels.length === 0 ? (
+                  <TableCell className="min-w-[160px] max-w-[300px]">
+                    {editId === r.id && hasSessions ? (
+                      <div className="space-y-1">
+                        {seminar.sessions.map((s, i) => (
+                          <label key={i} className="flex items-start gap-1.5 cursor-pointer text-[11px]">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5 size-3.5 accent-indigo-600"
+                              checked={editLabels.includes(s.label)}
+                              onChange={() => toggleEditLabel(s.label)}
+                            />
+                            <span className="leading-snug">{s.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : r.sessionLabels.length === 0 ? (
                       <span className="text-muted-foreground">-</span>
                     ) : (
                       <div className="flex flex-wrap gap-1">
@@ -287,15 +311,31 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        if (confirm('이 신청을 삭제하시겠습니까?')) deleteMut.mutate(r.id)
-                      }}
-                    >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
+                    {editId === r.id ? (
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" className="h-7 text-xs" onClick={() => saveEdit(r.id)} disabled={updateSessions.isPending}>
+                          {updateSessions.isPending ? <Loader2 className="size-3.5 animate-spin" /> : '저장'}
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditId(null)}>취소</Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-0.5">
+                        {hasSessions && (
+                          <Button variant="ghost" size="icon" onClick={() => startEdit(r.id, r.sessionLabels)} aria-label="세션 수정">
+                            <Pencil className="size-4 text-muted-foreground" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            if (confirm('이 신청을 삭제하시겠습니까?')) deleteMut.mutate(r.id)
+                          }}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

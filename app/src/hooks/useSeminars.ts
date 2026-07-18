@@ -267,3 +267,22 @@ export function useDeleteRegistration() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['seminar-registrations'] }),
   })
 }
+
+/** Update which session(s) a registrant selected (e.g. assign to 1부/2부). */
+export function useUpdateRegistrationSessions() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, sessionLabels }: { id: string; sessionLabels: string[] }) => {
+      const { error } = await supabase
+        .from('seminar_registrations')
+        .update({ session_labels: sessionLabels })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seminar-registrations'] })
+      // downstream views that read session_labels
+      qc.invalidateQueries({ queryKey: ['seminars-with-registrations'] })
+    },
+  })
+}
