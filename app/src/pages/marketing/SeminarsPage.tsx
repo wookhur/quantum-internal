@@ -32,6 +32,7 @@ import {
   Download,
   Pencil,
   X,
+  ArrowDownUp,
 } from 'lucide-react'
 import { useLanguage } from '@/i18n/LanguageContext'
 import {
@@ -70,14 +71,41 @@ function SessionsEditor({
   }
   const add = () => onChange([...sessions, { label: '', datetime: '' }])
   const remove = (idx: number) => onChange(sessions.filter((_, i) => i !== idx))
+  const move = (idx: number, dir: -1 | 1) => {
+    const j = idx + dir
+    if (j < 0 || j >= sessions.length) return
+    const next = [...sessions]
+    ;[next[idx], next[j]] = [next[j], next[idx]]
+    onChange(next)
+  }
+  // 날짜·시간(datetime) 오름차순 정렬. 시간 없는 세션은 순서 유지하며 뒤로.
+  const sortByTime = () => {
+    const withIdx = sessions.map((s, i) => ({ s, i }))
+    withIdx.sort((a, b) => {
+      const at = a.s.datetime || ''
+      const bt = b.s.datetime || ''
+      if (at && bt) return at.localeCompare(bt)
+      if (at && !bt) return -1
+      if (!at && bt) return 1
+      return a.i - b.i
+    })
+    onChange(withIdx.map(x => x.s))
+  }
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label>세션 일정 (여러 개 등록 가능)</Label>
-        <Button type="button" variant="outline" size="sm" onClick={add}>
-          <Plus className="size-3 mr-1" /> 세션 추가
-        </Button>
+        <div className="flex gap-1.5">
+          {sessions.length > 1 && (
+            <Button type="button" variant="outline" size="sm" onClick={sortByTime}>
+              <ArrowDownUp className="size-3 mr-1" /> 날짜·시간순 정렬
+            </Button>
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={add}>
+            <Plus className="size-3 mr-1" /> 세션 추가
+          </Button>
+        </div>
       </div>
       {sessions.length === 0 ? (
         <p className="text-xs text-muted-foreground py-2">
@@ -87,6 +115,14 @@ function SessionsEditor({
         <div className="space-y-2">
           {sessions.map((s, i) => (
             <div key={i} className="flex items-start gap-2">
+              <div className="flex flex-col pt-1">
+                <Button type="button" variant="ghost" size="icon" className="size-6" onClick={() => move(i, -1)} disabled={i === 0} aria-label="위로">
+                  <ChevronUp className="size-4 text-muted-foreground" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon" className="size-6" onClick={() => move(i, 1)} disabled={i === sessions.length - 1} aria-label="아래로">
+                  <ChevronDown className="size-4 text-muted-foreground" />
+                </Button>
+              </div>
               <div className="flex-1 space-y-1">
                 <Input
                   value={s.label}
