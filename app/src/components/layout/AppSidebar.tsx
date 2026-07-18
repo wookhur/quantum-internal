@@ -103,6 +103,7 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.partnerStudents', to: '/partner/students', icon: UserSearch },
       { labelKey: 'nav.partnerInstructors', to: '/partner/instructors', icon: GraduationCap },
       { labelKey: 'nav.partnerCompanies', to: '/partner/companies', icon: Briefcase },
+      { labelKey: 'nav.partnerPrograms', to: '/partner/programs', icon: Presentation },
       { labelKey: 'nav.partnerContracts', to: '/partner/contracts', icon: Percent },
     ],
   },

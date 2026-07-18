@@ -53,6 +53,7 @@ import { CommissionRatesPage } from '@/pages/partner/CommissionRatesPage'
 import { PartnerStudentsPage } from '@/pages/partner/PartnerStudentsPage'
 import { PartnerInstructorsPage } from '@/pages/partner/PartnerInstructorsPage'
 import { PartnerCompaniesPage } from '@/pages/partner/PartnerCompaniesPage'
+import { ProgramsPage } from '@/pages/partner/ProgramsPage'
 import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
 import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
 import { SeminarsPage } from '@/pages/marketing/SeminarsPage'
@@ -127,6 +128,7 @@ export default function App() {
                 <Route path="/partner/students" element={<PartnerStudentsPage />} />
                 <Route path="/partner/instructors" element={<PartnerInstructorsPage />} />
                 <Route path="/partner/companies" element={<PartnerCompaniesPage />} />
+                <Route path="/partner/programs" element={<ProgramsPage />} />
                 <Route path="/partner/calendar" element={<CalendarPage />} />
 
                 <Route path="/service/dashboard" element={<ServiceDashboardPage />} />
