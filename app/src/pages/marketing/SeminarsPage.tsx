@@ -42,6 +42,7 @@ import {
   useDeleteSeminar,
   useSeminarRegistrations,
   useDeleteRegistration,
+  sortSeminarSessions,
   type Seminar,
   type SeminarSession,
 } from '@/hooks/useSeminars'
@@ -78,19 +79,8 @@ function SessionsEditor({
     ;[next[idx], next[j]] = [next[j], next[idx]]
     onChange(next)
   }
-  // 날짜·시간(datetime) 오름차순 정렬. 시간 없는 세션은 순서 유지하며 뒤로.
-  const sortByTime = () => {
-    const withIdx = sessions.map((s, i) => ({ s, i }))
-    withIdx.sort((a, b) => {
-      const at = a.s.datetime || ''
-      const bt = b.s.datetime || ''
-      if (at && bt) return at.localeCompare(bt)
-      if (at && !bt) return -1
-      if (!at && bt) return 1
-      return a.i - b.i
-    })
-    onChange(withIdx.map(x => x.s))
-  }
+  // 날짜·시간순 정렬 (datetime 우선, 없으면 라벨의 M/D를 읽어 정렬).
+  const sortByTime = () => onChange(sortSeminarSessions(sessions))
 
   return (
     <div className="space-y-2">

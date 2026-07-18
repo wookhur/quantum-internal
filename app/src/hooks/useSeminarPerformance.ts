@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { sessionSortKey } from '@/hooks/useSeminars'
 import type { Lead, PipelineStage } from '@/types'
 
 /** Strip everything except digits so phones match across sources. */
@@ -154,9 +155,15 @@ export function useSeminarsWithRegistrations() {
         const row = s as Record<string, unknown>
         const acc = bySeminar.get(row.id as string) ?? newAcc()
         const rawSessions = row.sessions
-        const sessions: string[] = Array.isArray(rawSessions)
+        const sessions: string[] = (Array.isArray(rawSessions)
           ? rawSessions.map((x) => (typeof x === 'string' ? x : (x as { label?: string })?.label)).filter(Boolean) as string[]
-          : []
+          : [])
+          .map((label, i) => ({ label, i }))
+          .sort((a, b) => {
+            const ka = sessionSortKey({ label: a.label }), kb = sessionSortKey({ label: b.label })
+            return ka === kb ? a.i - b.i : ka - kb
+          })
+          .map((x) => x.label)
         const sessionApplicants = new Map<string, number>()
         for (const label of sessions) {
           sessionApplicants.set(label, acc.sessionPersonKeys.get(label)?.size ?? 0)

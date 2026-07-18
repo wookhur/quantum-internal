@@ -8,6 +8,37 @@ export interface SeminarSession {
   datetime?: string | null
 }
 
+/**
+ * A comparable sort key for a session: uses `datetime` when present, else
+ * parses a leading "M/D" (and optional "HH:mm") from the label. Undated /
+ * unparseable sessions sort last.
+ */
+export function sessionSortKey(s: SeminarSession): number {
+  if (s.datetime) {
+    const t = Date.parse(s.datetime.replace(' ', 'T'))
+    if (!Number.isNaN(t)) return t
+  }
+  const md = s.label.match(/(\d{1,2})\s*\/\s*(\d{1,2})/)
+  if (md) {
+    const mon = Number(md[1]), day = Number(md[2])
+    const tm = s.label.match(/(\d{1,2}):(\d{2})/)
+    const hh = tm ? Number(tm[1]) : 0, mm = tm ? Number(tm[2]) : 0
+    return new Date(2000, mon - 1, day, hh, mm).getTime()
+  }
+  return Number.MAX_SAFE_INTEGER
+}
+
+/** Return sessions sorted chronologically (stable for equal keys). */
+export function sortSeminarSessions(sessions: SeminarSession[]): SeminarSession[] {
+  return sessions
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => {
+      const ka = sessionSortKey(a.s), kb = sessionSortKey(b.s)
+      return ka === kb ? a.i - b.i : ka - kb
+    })
+    .map((x) => x.s)
+}
+
 export interface Seminar {
   id: string
   title: string
@@ -48,6 +79,7 @@ function mapSeminar(r: Record<string, unknown>): Seminar {
         datetime: (s.datetime as string | null | undefined) ?? null,
       }))
       .filter(s => s.label)
+    sessions = sortSeminarSessions(sessions)
   }
   return {
     id: r.id as string,
