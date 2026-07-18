@@ -29,6 +29,7 @@ import {
   type PartnerProgram, type ProgramEntry, type ProgramStage, type ProgramCommentMethod,
 } from '@/hooks/usePartnerPrograms'
 import { extractProgramGuideFromImage, imageToDownscaledBase64 } from '@/lib/extract-program-ai'
+import { renderPdfPagesToImages } from '@/lib/pdf-extract'
 import type { Lead } from '@/types'
 
 /** Partner (소속학원) options — same source as Student 360 / 파트너 학생관리. */
@@ -42,14 +43,20 @@ function usePartnerOptions(): string[] {
   }, [fees])
 }
 
-/** Force-download an image URL (works cross-origin via blob). */
-async function downloadImage(url: string, filename: string) {
+/** True if the brochure URL points to a PDF (vs. an image). */
+function isPdfUrl(url: string): boolean {
+  return url.toLowerCase().split('?')[0].endsWith('.pdf')
+}
+
+/** Force-download a brochure URL (works cross-origin via blob). */
+async function downloadBrochure(url: string, baseName: string) {
+  const ext = isPdfUrl(url) ? 'pdf' : (url.toLowerCase().split('?')[0].split('.').pop() || 'png')
   try {
     const res = await fetch(url)
     const blob = await res.blob()
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = filename
+    a.download = `${baseName}.${ext}`
     a.click()
     URL.revokeObjectURL(a.href)
   } catch {
@@ -418,19 +425,24 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
     }
   }
 
-  // Upload a brochure, then try AI auto-summary into the guide (best-effort).
+  const isPdfFile = (f: File) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')
+
+  // Upload a brochure (image or PDF), then try AI auto-summary (best-effort).
   const handleFile = async (file: File) => {
     setUploadErr(null)
     try {
       await uploadBrochure.mutateAsync({ programId: program.id, file })
-      const b64 = await imageToDownscaledBase64(file)
-      await runExtract(b64, false)
+      // PDF → render its first page to an image; image → downscale.
+      const b64 = isPdfFile(file)
+        ? (await renderPdfPagesToImages(file, 1))[0]
+        : await imageToDownscaledBase64(file)
+      if (b64) await runExtract(b64, false)
     } catch (e) {
       setUploadErr((e as Error).message || (lang === 'en' ? 'Upload failed' : '업로드 실패'))
     }
   }
 
-  // Explicit "generate from brochure" — re-reads the already-uploaded image.
+  // Explicit "generate from brochure" — re-reads the already-uploaded file.
   const generateFromBrochure = async () => {
     if (!program.brochureUrl) return
     setExtractErr(null)
@@ -438,8 +450,15 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
     try {
       const res = await fetch(program.brochureUrl)
       const blob = await res.blob()
-      const b64 = await imageToDownscaledBase64(blob)
-      await runExtract(b64, true)
+      let b64: string
+      if (isPdfUrl(program.brochureUrl)) {
+        const pdfFile = new File([blob], 'brochure.pdf', { type: 'application/pdf' })
+        b64 = (await renderPdfPagesToImages(pdfFile, 1))[0]
+      } else {
+        b64 = await imageToDownscaledBase64(blob)
+      }
+      if (b64) await runExtract(b64, true)
+      else { setExtractErr(lang === 'en' ? 'Could not read the file.' : '파일을 읽지 못했습니다.'); setExtracting(false) }
     } catch (e) {
       setExtractErr((e as Error).message)
       setExtracting(false)
@@ -475,7 +494,11 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
           </CardHeader>
           <CardContent className="space-y-2">
             {program.brochureUrl ? (
-              <img src={program.brochureUrl} alt="brochure" className="w-full rounded-lg border max-h-[420px] object-contain bg-muted/20" />
+              isPdfUrl(program.brochureUrl) ? (
+                <iframe src={program.brochureUrl} title="brochure" className="w-full h-[420px] rounded-lg border bg-muted/20" />
+              ) : (
+                <img src={program.brochureUrl} alt="brochure" className="w-full rounded-lg border max-h-[420px] object-contain bg-muted/20" />
+              )
             ) : (
               <div className="rounded-lg border border-dashed h-40 flex items-center justify-center text-sm text-muted-foreground">
                 {lang === 'en' ? 'No brochure uploaded' : '업로드된 브로셔가 없습니다'}
@@ -484,17 +507,17 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/*,application/pdf"
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }}
             />
             <div className="flex gap-2 flex-wrap">
               <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => fileRef.current?.click()} disabled={uploadBrochure.isPending || extracting}>
                 {uploadBrochure.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
-                {lang === 'en' ? 'Upload' : '업로드'}
+                {lang === 'en' ? 'Upload (image / PDF)' : '업로드 (이미지/PDF)'}
               </Button>
               {program.brochureUrl && (
-                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => downloadImage(program.brochureUrl!, `${program.name}.png`)}>
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => downloadBrochure(program.brochureUrl!, program.name)}>
                   <Download className="size-3.5" /> {lang === 'en' ? 'Download' : '다운로드'}
                 </Button>
               )}
