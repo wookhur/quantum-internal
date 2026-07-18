@@ -7,10 +7,10 @@ export type ProgramStage = 'inquiry' | 'interest' | 'application' | 'completed'
 export type ProgramCommentMethod = 'call' | 'katalk' | 'sms' | 'other'
 
 export const PROGRAM_STAGES: { key: ProgramStage; ko: string; en: string; badge: string }[] = [
-  { key: 'inquiry',     ko: '문의', en: 'Inquiry',     badge: 'bg-gray-100 text-gray-600 border-gray-200' },
-  { key: 'interest',    ko: '관심', en: 'Interest',    badge: 'bg-amber-100 text-amber-700 border-amber-200' },
-  { key: 'application', ko: '신청', en: 'Application', badge: 'bg-blue-100 text-blue-700 border-blue-200' },
-  { key: 'completed',   ko: '완료', en: 'Completed',   badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  { key: 'inquiry',     ko: '문의',     en: 'Inquiry',      badge: 'bg-gray-100 text-gray-600 border-gray-200' },
+  { key: 'interest',    ko: '관심',     en: 'Interested',   badge: 'bg-amber-100 text-amber-700 border-amber-200' },
+  { key: 'application', ko: '신청',     en: 'Signed-up',    badge: 'bg-blue-100 text-blue-700 border-blue-200' },
+  { key: 'completed',   ko: '참여완료', en: 'Participated', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
 ]
 
 export const PROGRAM_COMMENT_METHODS: { key: ProgramCommentMethod; ko: string; en: string }[] = [

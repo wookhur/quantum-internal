@@ -625,8 +625,8 @@ export function ProgramsPage() {
           <h1 className="text-2xl font-bold tracking-tight">{lang === 'en' ? 'Program Management' : '프로그램 관리'}</h1>
           <p className="text-muted-foreground text-sm">
             {lang === 'en'
-              ? 'Manage partner programs through inquiry → interest → application → completed.'
-              : '파트너사 프로그램을 문의 → 관심 → 신청 → 완료 단계로 관리합니다.'}
+              ? 'Manage partner programs through Inquiry → Interested → Signed-up → Participated.'
+              : '파트너사 프로그램을 문의 → 관심 → 신청 → 참여완료 단계로 관리합니다.'}
           </p>
         </div>
         <Button className="gap-2" onClick={() => setShowCreate(true)}>
