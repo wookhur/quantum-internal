@@ -77,14 +77,15 @@ function EntryComments({ entry }: { entry: ProgramEntry }) {
   return (
     <div className="mt-2 rounded-lg bg-muted/40 p-3 space-y-2">
       <div className="flex gap-2">
-        <Select value={method} onValueChange={(v) => setMethod((v as ProgramCommentMethod) || 'call')}>
-          <SelectTrigger className="w-[90px] h-8 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {PROGRAM_COMMENT_METHODS.map((m) => (
-              <SelectItem key={m.key} value={m.key}>{lang === 'en' ? m.en : m.ko}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <select
+          value={method}
+          onChange={(e) => setMethod((e.target.value as ProgramCommentMethod) || 'call')}
+          className="h-8 w-[90px] rounded-lg border border-input bg-white px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          {PROGRAM_COMMENT_METHODS.map((m) => (
+            <option key={m.key} value={m.key}>{lang === 'en' ? m.en : m.ko}</option>
+          ))}
+        </select>
         <Input
           value={content}
           onChange={(e) => setContent(e.target.value)}
@@ -196,17 +197,15 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <Select
+          <select
             value={entry.stage}
-            onValueChange={(v) => v && updateEntry.mutate({ id: entry.id, programId: entry.programId, stage: v as ProgramStage })}
+            onChange={(e) => updateEntry.mutate({ id: entry.id, programId: entry.programId, stage: e.target.value as ProgramStage })}
+            className="h-7 w-[110px] rounded-lg border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <SelectTrigger className="w-[90px] h-7 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {PROGRAM_STAGES.map((s) => (
-                <SelectItem key={s.key} value={s.key}>{lang === 'en' ? s.en : s.ko}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {PROGRAM_STAGES.map((s) => (
+              <option key={s.key} value={s.key}>{lang === 'en' ? s.en : s.ko}</option>
+            ))}
+          </select>
           <Button variant="ghost" size="icon" className="size-7" onClick={startEdit} title={lang === 'en' ? 'Edit' : '수정'}>
             <Pencil className="size-3.5" />
           </Button>
