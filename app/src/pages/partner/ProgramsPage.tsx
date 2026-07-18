@@ -146,7 +146,6 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
     currentSchool: entry.currentSchool || '', grade: entry.grade || '',
     phone: entry.phone || '', sourceChannel: entry.sourceChannel || '',
   })
-  const level = leadLevelConfig(entry.leadLevel)
 
   const startEdit = () => {
     setForm({
@@ -188,11 +187,6 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
                 </span>
               ) : null
             })()}
-            {level && (
-              <span className={`inline-flex items-center rounded-full border px-2 h-[18px] text-[10px] font-medium leading-none ${level.badge}`}>
-                {level.emoji} {level.labelEn}
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
             {entry.parentName && entry.studentName && <span>{lang === 'en' ? 'Parent' : '학부모'}: {entry.parentName}</span>}
