@@ -265,6 +265,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
   const [guideDirty, setGuideDirty] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [uploadErr, setUploadErr] = useState<string | null>(null)
+  const [extractErr, setExtractErr] = useState<string | null>(null)
 
   const existingLeadIds = useMemo(() => new Set(entries.map((e) => e.leadId)), [entries])
   const byStage = useMemo(() => {
@@ -274,28 +275,56 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
     return m
   }, [entries])
 
-  // Upload a brochure, then try AI auto-summary into the guide.
+  // Run the AI vision summary on a base64 brochure image → fill the guide.
+  const runExtract = async (b64: string, showError: boolean) => {
+    setExtractErr(null)
+    setExtracting(true)
+    try {
+      const { guide: extracted } = await extractProgramGuideFromImage(b64)
+      if (extracted) {
+        setGuide(extracted)
+        setGuideDirty(false)
+        await updateProgram.mutateAsync({ id: program.id, guide: extracted })
+      } else if (showError) {
+        setExtractErr(lang === 'en' ? 'Could not read the brochure.' : '브로셔에서 내용을 읽지 못했습니다.')
+      }
+    } catch (e) {
+      if (showError) setExtractErr((e as Error).message)
+    } finally {
+      setExtracting(false)
+    }
+  }
+
+  // Upload a brochure, then try AI auto-summary into the guide (best-effort).
   const handleFile = async (file: File) => {
     setUploadErr(null)
     try {
       await uploadBrochure.mutateAsync({ programId: program.id, file })
-      // Auto-organize into the guide (best-effort)
-      setExtracting(true)
-      try {
-        const b64 = await fileToBase64(file)
-        const { guide: extracted } = await extractProgramGuideFromImage(b64)
-        if (extracted) {
-          setGuide(extracted)
-          setGuideDirty(false)
-          await updateProgram.mutateAsync({ id: program.id, guide: extracted })
-        }
-      } catch {
-        // Auto-summary unavailable — image still uploaded; user can edit the guide manually.
-      } finally {
-        setExtracting(false)
-      }
+      const b64 = await fileToBase64(file)
+      await runExtract(b64, false)
     } catch (e) {
       setUploadErr((e as Error).message || (lang === 'en' ? 'Upload failed' : '업로드 실패'))
+    }
+  }
+
+  // Explicit "generate from brochure" — re-reads the already-uploaded image.
+  const generateFromBrochure = async () => {
+    if (!program.brochureUrl) return
+    setExtractErr(null)
+    setExtracting(true)
+    try {
+      const res = await fetch(program.brochureUrl)
+      const blob = await res.blob()
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => { const s = r.result as string; const c = s.indexOf(','); resolve(c >= 0 ? s.slice(c + 1) : s) }
+        r.onerror = reject
+        r.readAsDataURL(blob)
+      })
+      await runExtract(b64, true)
+    } catch (e) {
+      setExtractErr((e as Error).message)
+      setExtracting(false)
     }
   }
 
@@ -363,16 +392,32 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center justify-between gap-2">
               <span>{lang === 'en' ? 'Program Guide' : '프로그램 안내'}</span>
-              {guideDirty && (
-                <Button size="sm" className="h-7 text-xs gap-1" onClick={saveGuide} disabled={updateProgram.isPending}>
-                  <Save className="size-3" /> {lang === 'en' ? 'Save' : '저장'}
-                </Button>
-              )}
+              <div className="flex items-center gap-1.5">
+                {program.brochureUrl && (
+                  <Button
+                    size="sm" variant="outline" className="h-7 text-xs gap-1"
+                    onClick={generateFromBrochure} disabled={extracting}
+                  >
+                    {extracting ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                    {lang === 'en' ? 'Generate from brochure' : '브로셔에서 자동 생성'}
+                  </Button>
+                )}
+                {guideDirty && (
+                  <Button size="sm" className="h-7 text-xs gap-1" onClick={saveGuide} disabled={updateProgram.isPending}>
+                    <Save className="size-3" /> {lang === 'en' ? 'Save' : '저장'}
+                  </Button>
+                )}
+              </div>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
+            {extractErr && (
+              <p className="text-xs text-destructive">
+                {lang === 'en' ? 'Auto-generate failed: ' : '자동 생성 실패: '}{extractErr}
+              </p>
+            )}
             <Textarea
               value={guide}
               onChange={(e) => { setGuide(e.target.value); setGuideDirty(true) }}
