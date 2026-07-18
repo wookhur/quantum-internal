@@ -27,7 +27,7 @@ import {
   PROGRAM_STAGES, PROGRAM_COMMENT_METHODS,
   type PartnerProgram, type ProgramEntry, type ProgramStage, type ProgramCommentMethod,
 } from '@/hooks/usePartnerPrograms'
-import { extractProgramGuideFromImage, fileToBase64 } from '@/lib/extract-program-ai'
+import { extractProgramGuideFromImage, imageToDownscaledBase64 } from '@/lib/extract-program-ai'
 import type { Lead } from '@/types'
 
 /** Partner (소속학원) options — same source as Student 360 / 파트너 학생관리. */
@@ -300,7 +300,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
     setUploadErr(null)
     try {
       await uploadBrochure.mutateAsync({ programId: program.id, file })
-      const b64 = await fileToBase64(file)
+      const b64 = await imageToDownscaledBase64(file)
       await runExtract(b64, false)
     } catch (e) {
       setUploadErr((e as Error).message || (lang === 'en' ? 'Upload failed' : '업로드 실패'))
@@ -315,12 +315,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
     try {
       const res = await fetch(program.brochureUrl)
       const blob = await res.blob()
-      const b64 = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader()
-        r.onload = () => { const s = r.result as string; const c = s.indexOf(','); resolve(c >= 0 ? s.slice(c + 1) : s) }
-        r.onerror = reject
-        r.readAsDataURL(blob)
-      })
+      const b64 = await imageToDownscaledBase64(blob)
       await runExtract(b64, true)
     } catch (e) {
       setExtractErr((e as Error).message)
