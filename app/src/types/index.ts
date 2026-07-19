@@ -479,6 +479,8 @@ export interface ServiceMeeting {
   studentId: string
   meetingDate?: string
   meetingType?: string
+  /** 진행 형식: 'online' | 'in_person' */
+  meetingMode?: string
   consultantId?: string
   consultantUser?: User
   summary?: string

@@ -1404,6 +1404,11 @@ function MeetingsSection({ studentId, createdBy, authorName }: {
               <div className="flex items-center gap-2 text-sm font-medium">
                 <span>{m.meetingDate || '—'}</span>
                 {m.meetingType && <Badge variant="outline">{m.meetingType}</Badge>}
+                {m.meetingMode && (
+                  <Badge variant="outline" className={m.meetingMode === 'online' ? 'text-sky-700 border-sky-200 bg-sky-50' : 'text-emerald-700 border-emerald-200 bg-emerald-50'}>
+                    {t(m.meetingMode === 'online' ? 'student360.meetingModeOnline' : 'student360.meetingModeInPerson')}
+                  </Badge>
+                )}
                 <span className="text-muted-foreground font-normal">{consultantName(m.consultantId)}</span>
               </div>
               <div className="flex items-center gap-2">
@@ -1538,6 +1543,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
   const buildForm = () => ({
     meetingDate: meeting?.meetingDate || '',
     meetingType: meeting?.meetingType || '',
+    meetingMode: meeting?.meetingMode || '',
     consultantId: meeting?.consultantId || '',
     summary: meeting?.summary || '',
     prepUrl: meeting?.prepUrl || '',
@@ -1557,6 +1563,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
     const payload = {
       meetingDate: form.meetingDate || undefined,
       meetingType: form.meetingType || undefined,
+      meetingMode: form.meetingMode || undefined,
       consultantId: form.consultantId || undefined,
       summary: form.summary || undefined,
       prepUrl: form.prepUrl || undefined,
@@ -1589,6 +1596,16 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
                 {MEETING_TYPES.map(mt => <SelectItem key={mt} value={mt}>{mt}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">{t('student360.meetingMode')}</Label>
+            <Select value={form.meetingMode} onValueChange={v => set('meetingMode', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="online">{t('student360.meetingModeOnline')}</SelectItem>
+                <SelectItem value="in_person">{t('student360.meetingModeInPerson')}</SelectItem>
               </SelectContent>
             </Select>
           </div>

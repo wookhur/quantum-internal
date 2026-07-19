@@ -53,6 +53,7 @@ function mapMeeting(row: Record<string, unknown>): ServiceMeeting {
     studentId: row.student_id as string,
     meetingDate: (row.meeting_date as string) || undefined,
     meetingType: (row.meeting_type as string) || undefined,
+    meetingMode: (row.meeting_mode as string) || undefined,
     consultantId: (row.consultant_id as string) || undefined,
     summary: (row.summary as string) || undefined,
     prepUrl: (row.prep_url as string) || undefined,
@@ -315,6 +316,7 @@ export function useCreateServiceMeeting() {
       studentId: string
       meetingDate?: string
       meetingType?: string
+      meetingMode?: string
       consultantId?: string
       summary?: string
       prepUrl?: string
@@ -331,6 +333,7 @@ export function useCreateServiceMeeting() {
         student_id: m.studentId,
         meeting_date: m.meetingDate || null,
         meeting_type: m.meetingType,
+        meeting_mode: m.meetingMode || null,
         consultant_id: m.consultantId || null,
         summary: m.summary,
         prep_url: m.prepUrl,
@@ -362,6 +365,7 @@ export function useUpdateServiceMeeting() {
       studentId: string
       meetingDate?: string | null
       meetingType?: string
+      meetingMode?: string
       consultantId?: string | null
       summary?: string
       prepUrl?: string
@@ -377,6 +381,7 @@ export function useUpdateServiceMeeting() {
       const update: Record<string, unknown> = {}
       if (rest.meetingDate !== undefined) update.meeting_date = rest.meetingDate
       if (rest.meetingType !== undefined) update.meeting_type = rest.meetingType
+      if (rest.meetingMode !== undefined) update.meeting_mode = rest.meetingMode || null
       if (rest.consultantId !== undefined) update.consultant_id = rest.consultantId
       if (rest.summary !== undefined) update.summary = rest.summary
       if (rest.prepUrl !== undefined) update.prep_url = rest.prepUrl
