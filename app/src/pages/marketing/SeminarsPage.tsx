@@ -53,7 +53,7 @@ import {
 } from '@/hooks/useSeminars'
 import { useAllLeadAttendance } from '@/hooks/useLeadAttendance'
 import { useLeads } from '@/hooks/useLeads'
-import { normalizePhone, normalizeEmail, normalizeName } from '@/hooks/useSeminarPerformance'
+import { normalizePhone, normalizeEmail, normalizeName, useSeminarsWithRegistrations } from '@/hooks/useSeminarPerformance'
 
 /** Parse CSV text into rows, honoring quoted fields with commas/newlines. */
 function parseCsv(text: string): string[][] {
@@ -587,6 +587,8 @@ export function SeminarsPage() {
   const { t } = useLanguage()
   const { data: seminars = [], isLoading } = useSeminars()
   const { data: attendance = [] } = useAllLeadAttendance()
+  const { data: seminarsLite = [] } = useSeminarsWithRegistrations()
+  const liteById = useMemo(() => new Map(seminarsLite.map(s => [s.id, s])), [seminarsLite])
   const attBySeminar = useMemo(() => {
     const m = new Map<string, { planned: number; unsure: number; no_contact: number; attended: number }>()
     for (const a of attendance) {
@@ -759,6 +761,19 @@ export function SeminarsPage() {
                 )}
               </CardHeader>
               <CardContent className="pt-0">
+                {(() => {
+                  const lite = liteById.get(s.id)
+                  const c = attBySeminar.get(s.id)
+                  const applicants = lite?.applicants ?? 0
+                  const attended = Math.max(lite?.attendees ?? 0, c?.attended ?? 0)
+                  return applicants > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 mb-1 text-[11px]">
+                      <span className="text-muted-foreground">참석 집계:</span>
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">참석 {attended}</span>
+                      <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">총 신청 {applicants}</span>
+                    </div>
+                  ) : null
+                })()}
                 {(() => {
                   const c = attBySeminar.get(s.id)
                   return c && (c.planned + c.unsure + c.no_contact + c.attended) > 0 ? (

@@ -46,6 +46,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead, useDeleteActivity } from '@/hooks/useLeads'
+import { useProfiles } from '@/hooks/useProfiles'
 import { LEAD_LEVELS, leadLevelConfig, type LeadLevel } from '@/lib/leadLevels'
 import { useAllLeadAttendance, useUpsertLeadAttendance, ATTENDANCE_OPTIONS, type AttendanceStatus } from '@/hooks/useLeadAttendance'
 import {
@@ -894,6 +895,7 @@ function ColdCallDetail({
   const statusOf = (seminarId: string, session: string): AttendanceStatus | '' =>
     attendance.find(a => a.seminarId === seminarId && a.sessionLabel === session)?.status || ''
   const { data: activities = [], isLoading: activitiesLoading } = useLeadActivities(lead.id)
+  const { data: profiles = [] } = useProfiles()
   const createActivity = useCreateActivity()
   const updateLead = useUpdateLead()
   const deleteActivity = useDeleteActivity()
@@ -1331,9 +1333,18 @@ function ColdCallDetail({
             </div>
             <div>
               <span className="text-xs text-muted-foreground">{t('coldCall.assignee')}</span>
-              <p className="font-medium mt-0.5">
-                {lead.assignedUser?.name || t('common.unassigned')}
-              </p>
+              <select
+                value={lead.assignedTo || ''}
+                onChange={(e) => updateLead.mutate({
+                  id: lead.id,
+                  data: { assignedTo: (e.target.value || null) as unknown as string | undefined } as Partial<Lead>,
+                  previousStage: lead.pipelineStage,
+                })}
+                className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <option value="">{t('common.unassigned')}</option>
+                {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
             </div>
           </div>
         </CardContent>
