@@ -590,9 +590,9 @@ export function SeminarsPage() {
   const { data: seminarsLite = [] } = useSeminarsWithRegistrations()
   const liteById = useMemo(() => new Map(seminarsLite.map(s => [s.id, s])), [seminarsLite])
   const attBySeminar = useMemo(() => {
-    const m = new Map<string, { planned: number; unsure: number; no_contact: number; attended: number }>()
+    const m = new Map<string, { planned: number; unsure: number; no_contact: number; attended: number; no_show: number }>()
     for (const a of attendance) {
-      const c = m.get(a.seminarId) || { planned: 0, unsure: 0, no_contact: 0, attended: 0 }
+      const c = m.get(a.seminarId) || { planned: 0, unsure: 0, no_contact: 0, attended: 0, no_show: 0 }
       c[a.status] = (c[a.status] || 0) + 1
       m.set(a.seminarId, c)
     }

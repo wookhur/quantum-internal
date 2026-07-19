@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 
-export type AttendanceStatus = 'planned' | 'unsure' | 'no_contact' | 'attended'
+export type AttendanceStatus = 'planned' | 'unsure' | 'no_contact' | 'attended' | 'no_show'
 
 export interface LeadAttendance {
   id: string
@@ -17,6 +17,7 @@ export const ATTENDANCE_OPTIONS: { value: AttendanceStatus; ko: string; badge: s
   { value: 'unsure',     ko: '미정',     badge: 'bg-amber-100 text-amber-700 border-amber-200' },
   { value: 'no_contact', ko: '연락안됨', badge: 'bg-gray-100 text-gray-500 border-gray-200' },
   { value: 'attended',   ko: '참석완료', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  { value: 'no_show',    ko: '불참컨펌', badge: 'bg-rose-100 text-rose-700 border-rose-200' },
 ]
 
 function mapRow(r: Record<string, unknown>): LeadAttendance {

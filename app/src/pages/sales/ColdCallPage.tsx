@@ -1271,7 +1271,7 @@ function ColdCallDetail({
                 })}
               </div>
             ))}
-            <p className="text-[10px] text-muted-foreground">참석예정/미정/연락안됨/참석완료 선택 시 세미나관리 집계에 반영되고, 참석완료는 리드 이름 옆에 뱃지로 쌓입니다.</p>
+            <p className="text-[10px] text-muted-foreground">참석예정/미정/연락안됨/참석완료/불참컨펌 선택 시 세미나관리 집계에 반영되고, 참석완료는 리드 이름 옆에 뱃지로 쌓입니다.</p>
           </CardContent>
         </Card>
       )}
