@@ -338,16 +338,19 @@ export function ColdCallView() {
   // seminar are matched even if their lead source is another channel
   const { data: seminars = [] } = useSeminarsWithRegistrations()
   const { data: attendanceRows = [] } = useAllLeadAttendance()
+  const seminarTitleById = useMemo(() => new Map(seminars.map(s => [s.id, s.title])), [seminars])
   const attendedByLead = useMemo(() => {
-    const m = new Map<string, string[]>()
+    const m = new Map<string, Set<string>>()
     for (const a of attendanceRows) {
       if (a.status !== 'attended') continue
-      const arr = m.get(a.leadId) || []
-      arr.push(a.sessionLabel || '세미나')
-      m.set(a.leadId, arr)
+      const title = seminarTitleById.get(a.seminarId) || a.sessionLabel || '세미나'
+      if (!m.has(a.leadId)) m.set(a.leadId, new Set())
+      m.get(a.leadId)!.add(title)
     }
-    return m
-  }, [attendanceRows])
+    const out = new Map<string, string[]>()
+    for (const [k, v] of m) out.set(k, Array.from(v))
+    return out
+  }, [attendanceRows, seminarTitleById])
   const { data: contactActivities = [] } = useAllContactActivities()
 
   // Build event filter options: seminars from 세미나 관리 + legacy source channels
@@ -691,7 +694,7 @@ export function ColdCallView() {
                       {(attendedByLead.get(lead.id) || []).length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(attendedByLead.get(lead.id) || []).map((s, i) => (
-                            <Badge key={i} variant="outline" className="text-[9px] px-1 py-0 h-4 text-emerald-700 border-emerald-200 bg-emerald-50">✅ {s}</Badge>
+                            <Badge key={i} variant="outline" className="text-[9px] px-1 py-0 h-4 max-w-[180px] truncate text-emerald-700 border-emerald-200 bg-emerald-50" title={s}>✅ {s}</Badge>
                           ))}
                         </div>
                       )}
@@ -1164,7 +1167,7 @@ function ColdCallDetail({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h2 className="text-xl font-bold">{lead.studentName || lead.parentName}</h2>
             <span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>
               {stage.label}
@@ -1178,19 +1181,19 @@ function ColdCallDetail({
               ) : null
             })()}
             {(() => {
-              // Attended = registration flag OR cold-call "참석완료" for this seminar
+              // Attended = registration flag OR cold-call "참석완료" for this seminar.
+              // Show one badge per attended seminar/webinar, named exactly like the dropdown.
               const byReg = seminarsAttendedByLead(seminars, lead)
               const coldIds = new Set(attendance.filter(a => a.status === 'attended').map(a => a.seminarId))
               const map = new Map<string, SeminarLite>()
               for (const s of byReg) map.set(s.id, s)
               for (const s of seminars) if (coldIds.has(s.id)) map.set(s.id, s)
-              const attended = Array.from(map.values())
-              return attended.length > 0 ? (
-                <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200"
-                  title={attended.map(s => s.title).join('\n')}>
-                  🎓 참석 세미나 {attended.length}
+              const attended = Array.from(map.values()).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+              return attended.map(s => (
+                <Badge key={s.id} variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200" title="참석 세미나/웨비나">
+                  🎓 {s.title}
                 </Badge>
-              ) : null
+              ))
             })()}
           </div>
           {lead.studentName && (
