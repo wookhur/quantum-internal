@@ -35,7 +35,6 @@ import {
   Send,
   Video,
   Save,
-  Globe,
   XCircle,
   UserX,
   UserCheck,
@@ -901,6 +900,26 @@ function ColdCallDetail({
     [seminars, lead])
   const statusOf = (seminarId: string, session: string): AttendanceStatus | '' =>
     attendance.find(a => a.seminarId === seminarId && a.sessionLabel === session)?.status || ''
+  // 유입채널 드롭다운 옵션: 세미나(진행일 빠른 순) + 현재 값. 리드가 신청한 세미나는 앞에 표시.
+  const sourceOptions = useMemo(() => {
+    const registeredIds = new Set(appliedSeminars.map(x => x.seminar.id))
+    const sorted = [...seminars].sort((a, b) => {
+      const ra = registeredIds.has(a.id) ? 0 : 1, rb = registeredIds.has(b.id) ? 0 : 1
+      if (ra !== rb) return ra - rb          // registered seminars first
+      return (a.date || '').localeCompare(b.date || '') // then earliest date
+    })
+    const opts: { value: string; label: string }[] = []
+    const seen = new Set<string>()
+    for (const s of sorted) {
+      if (!s.title || seen.has(s.title)) continue
+      seen.add(s.title)
+      opts.push({ value: s.title, label: registeredIds.has(s.id) ? `★ ${s.title}` : s.title })
+    }
+    if (lead.sourceChannel && !seen.has(lead.sourceChannel)) {
+      opts.unshift({ value: lead.sourceChannel, label: lead.sourceChannel })
+    }
+    return opts
+  }, [seminars, appliedSeminars, lead.sourceChannel])
   const { data: activities = [], isLoading: activitiesLoading } = useLeadActivities(lead.id)
   const { data: profiles = [] } = useProfiles()
   const createActivity = useCreateActivity()
@@ -1326,17 +1345,33 @@ function ColdCallDetail({
           <div className="grid grid-cols-3 gap-4 text-sm">
             <div>
               <span className="text-xs text-muted-foreground">{t('coldCall.sourceChannel')}</span>
-              <p className="font-medium flex items-center gap-1.5 mt-0.5">
-                <Globe className="size-3.5 text-primary" />
-                {lead.sourceChannel}
-              </p>
+              <select
+                value={lead.sourceChannel || ''}
+                onChange={(e) => updateLead.mutate({
+                  id: lead.id,
+                  data: { sourceChannel: e.target.value } as Partial<Lead>,
+                  previousStage: lead.pipelineStage,
+                })}
+                className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {!sourceOptions.some(o => o.value === (lead.sourceChannel || '')) && (
+                  <option value={lead.sourceChannel || ''}>{lead.sourceChannel || '—'}</option>
+                )}
+                {sourceOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
             <div>
               <span className="text-xs text-muted-foreground">{t('coldCall.leadDate')}</span>
-              <p className="font-medium flex items-center gap-1.5 mt-0.5">
-                <Calendar className="size-3.5 text-primary" />
-                {lead.leadDate}
-              </p>
+              <input
+                type="date"
+                value={lead.leadDate || ''}
+                onChange={(e) => updateLead.mutate({
+                  id: lead.id,
+                  data: { leadDate: e.target.value } as Partial<Lead>,
+                  previousStage: lead.pipelineStage,
+                })}
+                className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              />
             </div>
             <div>
               <span className="text-xs text-muted-foreground">{t('coldCall.assignee')}</span>
