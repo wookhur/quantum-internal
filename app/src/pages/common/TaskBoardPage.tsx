@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import {
   Plus, Search, Loader2, AlertTriangle, Clock, CheckCircle2,
-  Ban, Send, Calendar, Paperclip, MessageSquare,
+  Ban, Send, Calendar, Paperclip, MessageSquare, Pause,
   ChevronDown, ChevronUp, LayoutList, Columns3,
   ListTodo, Trash2, X, CircleDot,
   FolderKanban, Users, User as UserIcon, Circle, ChevronRight,
@@ -38,7 +38,7 @@ import type { Task, TaskStatus, TaskPriority, Todo, TodoStatus, TodoPriority, Pr
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-const STATUS_ORDER: TaskStatus[] = ['requested', 'in_progress', 'completed', 'cancelled']
+const STATUS_ORDER: TaskStatus[] = ['requested', 'in_progress', 'on_hold', 'completed', 'cancelled']
 
 function usePriorityConfig() {
   const t = useT()
@@ -54,6 +54,7 @@ function useStatusConfig() {
   return {
     requested: { label: t('tasks.requested'), className: 'bg-amber-100 text-amber-700 border-amber-200', icon: Send },
     in_progress: { label: t('tasks.inProgress'), className: 'bg-blue-100 text-blue-700 border-blue-200', icon: Clock },
+    on_hold: { label: t('tasks.onHold'), className: 'bg-orange-100 text-orange-700 border-orange-200', icon: Pause },
     completed: { label: t('tasks.completed'), className: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
     cancelled: { label: t('tasks.cancelled'), className: 'bg-gray-100 text-gray-500 border-gray-300', icon: Ban },
   }
@@ -1083,7 +1084,7 @@ export function TaskBoardPage() {
   // Board view: group by status
   const boardColumns = useMemo(() => {
     const cols: Record<TaskStatus, Task[]> = {
-      requested: [], in_progress: [], completed: [], cancelled: [],
+      requested: [], in_progress: [], on_hold: [], completed: [], cancelled: [],
     }
     for (const task of tasks) {
       cols[task.status]?.push(task)

@@ -590,7 +590,7 @@ export function formatPhone(phone: string): string {
 }
 
 // ============ TASKS ============
-export type TaskStatus = 'requested' | 'in_progress' | 'completed' | 'cancelled'
+export type TaskStatus = 'requested' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled'
 export type TaskPriority = 'urgent' | 'normal' | 'low'
 
 export interface Task {

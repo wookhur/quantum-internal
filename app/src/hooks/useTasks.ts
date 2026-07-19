@@ -8,6 +8,7 @@ import { createNotificationsForUsers } from './useUserNotifications'
 const TASK_TO_TODO_STATUS: Record<TaskStatus, TodoStatus> = {
   requested: 'todo',
   in_progress: 'in_progress',
+  on_hold: 'todo',
   completed: 'done',
   cancelled: 'done',
 }
@@ -406,6 +407,7 @@ export function useUpdateTask() {
       if (updates.status && task.requesterId && task.assigneeId && task.requesterId !== task.assigneeId) {
         const statusLabels: Record<string, string> = {
           in_progress: '진행 중',
+          on_hold: '보류',
           completed: '완료',
           cancelled: '취소',
         }
@@ -461,6 +463,32 @@ export function useAddTaskComment() {
         .select('*, author:profiles!task_comments_author_id_fkey(id, name)')
         .single()
       if (error) throw error
+
+      // Notify the task's other participants (requester + assignee), not the author.
+      try {
+        const { data: taskRow } = await supabase
+          .from('tasks')
+          .select('title, requester_id, assignee_id')
+          .eq('id', params.taskId)
+          .single()
+        if (taskRow) {
+          const recipients = Array.from(new Set(
+            [taskRow.requester_id as string | null, taskRow.assignee_id as string | null]
+              .filter((uid): uid is string => !!uid && uid !== params.authorId),
+          ))
+          if (recipients.length) {
+            const authorName = ((data as Record<string, unknown>).author as Record<string, unknown> | null)?.name as string || '누군가'
+            await createNotificationsForUsers(recipients, {
+              type: 'task_comment',
+              title: '업무 댓글',
+              message: `${authorName}님이 "${taskRow.title}" 업무에 댓글을 남겼습니다.`,
+              link: `/tasks?task=${params.taskId}`,
+              metadata: { taskId: params.taskId },
+            }).catch(() => {})
+          }
+        }
+      } catch { /* notification failure shouldn't block commenting */ }
+
       return mapComment(data as Record<string, unknown>)
     },
     onSuccess: (_data, vars) => {
