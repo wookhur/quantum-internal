@@ -694,7 +694,7 @@ export function ColdCallView() {
                       {(attendedByLead.get(lead.id) || []).length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(attendedByLead.get(lead.id) || []).map((s, i) => (
-                            <Badge key={i} variant="outline" className="text-[9px] px-1 py-0 h-4 max-w-[180px] truncate text-emerald-700 border-emerald-200 bg-emerald-50" title={s}>✅ {s}</Badge>
+                            <Badge key={i} variant="outline" className="text-[9px] px-1 py-0 h-4 max-w-[180px] truncate bg-violet-50 text-violet-700 border-violet-200" title={s}>🎓 {s}</Badge>
                           ))}
                         </div>
                       )}
