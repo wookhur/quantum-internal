@@ -370,8 +370,15 @@ export function ColdCallView() {
         .filter((sc): sc is string => !!sc && sc.trim().length > 0),
     )
     const GENERIC_NAMES = new Set(['세미나', '웨비나', '세미나 참석', '웨비나 참석'])
+    // Exclude note-like source channels (long free text or containing note words)
+    const NOTE_WORDS = /직후|상담|신청|캔슬|취소|완료|컨택|통화|부재중/
     for (const sc of leadChannels) {
-      if (!seen.has(sc) && !GENERIC_NAMES.has(sc) && (sc.includes('세미나') || sc.includes('웨비나'))) {
+      const clean = sc.trim()
+      if (
+        !seen.has(sc) && !GENERIC_NAMES.has(sc) &&
+        (sc.includes('세미나') || sc.includes('웨비나')) &&
+        clean.length <= 22 && !NOTE_WORDS.test(clean)
+      ) {
         seen.add(sc)
         options.push({ label: sc, value: sc })
       }
