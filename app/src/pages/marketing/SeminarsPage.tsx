@@ -52,6 +52,8 @@ import {
   type ImportRegistrationRow,
 } from '@/hooks/useSeminars'
 import { useAllLeadAttendance } from '@/hooks/useLeadAttendance'
+import { useLeads } from '@/hooks/useLeads'
+import { normalizePhone, normalizeEmail, normalizeName } from '@/hooks/useSeminarPerformance'
 
 /** Parse CSV text into rows, honoring quoted fields with commas/newlines. */
 function parseCsv(text: string): string[][] {
@@ -343,10 +345,37 @@ function CopyLinkButton({ seminarId }: { seminarId: string }) {
 
 function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
   const { data: regs = [], isLoading } = useSeminarRegistrations(seminar.id)
+  const { data: allLeads = [] } = useLeads()
+  const { data: leadAttendance = [] } = useAllLeadAttendance()
   const deleteMut = useDeleteRegistration()
   const updateSessions = useUpdateRegistrationSessions()
   const updateAttended = useUpdateRegistrationAttended()
   const [sessionFilter, setSessionFilter] = useState<string>('all')
+
+  // Match keys (phone/email/name) of leads marked 참석완료 in cold-call for this seminar
+  const coldAttendedKeys = useMemo(() => {
+    const attendedLeadIds = new Set(
+      leadAttendance.filter(a => a.seminarId === seminar.id && a.status === 'attended').map(a => a.leadId),
+    )
+    const phones = new Set<string>(), emails = new Set<string>(), names = new Set<string>()
+    for (const l of allLeads) {
+      if (!attendedLeadIds.has(l.id)) continue
+      const p = normalizePhone(l.phone); if (p.length >= 9) phones.add(p)
+      const e = normalizeEmail(l.email); if (e) emails.add(e)
+      const n = normalizeName(l.parentName) + '|' + normalizeName(l.studentName); if (n !== '|') names.add(n)
+    }
+    return { phones, emails, names }
+  }, [leadAttendance, allLeads, seminar.id])
+
+  // A registration counts as attended if its own flag is set OR a matched lead
+  // was marked 참석완료 in cold-call.
+  const isAttended = (r: { attended: boolean; phone: string; email: string | null; parentName: string; studentName: string }) => {
+    if (r.attended) return true
+    const p = normalizePhone(r.phone); if (p.length >= 9 && coldAttendedKeys.phones.has(p)) return true
+    const e = normalizeEmail(r.email); if (e && coldAttendedKeys.emails.has(e)) return true
+    const n = normalizeName(r.parentName) + '|' + normalizeName(r.studentName); if (n !== '|' && coldAttendedKeys.names.has(n)) return true
+    return false
+  }
   const [editId, setEditId] = useState<string | null>(null)
   const [editLabels, setEditLabels] = useState<string[]>([])
 
@@ -460,13 +489,19 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
               {filteredRegs.map(r => (
                 <TableRow key={r.id}>
                   <TableCell>
-                    <button
-                      onClick={() => updateAttended.mutate({ id: r.id, attended: !r.attended })}
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full border ${r.attended ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}
-                      title="참석 여부 토글"
-                    >
-                      {r.attended ? '참석' : '미참석'}
-                    </button>
+                    {(() => {
+                      const attended = isAttended(r)
+                      const fromCold = attended && !r.attended
+                      return (
+                        <button
+                          onClick={() => updateAttended.mutate({ id: r.id, attended: !r.attended })}
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full border ${attended ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}
+                          title={fromCold ? '콜드콜에서 참석완료로 표시됨' : '참석 여부 토글'}
+                        >
+                          {attended ? (fromCold ? '참석(콜드콜)' : '참석') : '미참석'}
+                        </button>
+                      )
+                    })()}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString('ko-KR')}</TableCell>
                   <TableCell>{r.parentName}</TableCell>

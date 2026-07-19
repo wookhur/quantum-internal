@@ -1150,7 +1150,13 @@ function ColdCallDetail({
               ) : null
             })()}
             {(() => {
-              const attended = seminarsAttendedByLead(seminars, lead)
+              // Attended = registration flag OR cold-call "참석완료" for this seminar
+              const byReg = seminarsAttendedByLead(seminars, lead)
+              const coldIds = new Set(attendance.filter(a => a.status === 'attended').map(a => a.seminarId))
+              const map = new Map<string, SeminarLite>()
+              for (const s of byReg) map.set(s.id, s)
+              for (const s of seminars) if (coldIds.has(s.id)) map.set(s.id, s)
+              const attended = Array.from(map.values())
               return attended.length > 0 ? (
                 <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200"
                   title={attended.map(s => s.title).join('\n')}>
