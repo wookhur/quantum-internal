@@ -1148,6 +1148,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
 }) {
   const t = useT()
   const consultantPool = useConsultantPool()
+  const consultantName = useConsultantName()
   const [open, setOpen] = useState(false)
   const create = useCreateServiceStudent()
   const update = useUpdateServiceStudent()
@@ -1251,22 +1252,22 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           <LabeledInput label={t('student360.school')} value={form.school} onChange={v => set('school', v)} />
           <div>
             <Label className="text-xs">{t('student360.consultant')}</Label>
-            <Select value={form.assignedConsultant} onValueChange={v => set('assignedConsultant', v)}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                {consultantPool.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <select value={form.assignedConsultant} onChange={e => set('assignedConsultant', e.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+              <option value="">—</option>
+              {consultantPool.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {form.assignedConsultant && !consultantPool.some(c => c.id === form.assignedConsultant) && (
+                <option value={form.assignedConsultant}>{consultantName(form.assignedConsultant)}</option>
+              )}
+            </select>
           </div>
           <div>
             <Label className="text-xs">{t('student360.essayEditor')}</Label>
-            <Select value={form.essayEditor} onValueChange={v => set('essayEditor', v === '__none__' ? '' : v)}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">{t('student360.unassigned')}</SelectItem>
-                {ESSAY_EDITORS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <select value={form.essayEditor} onChange={e => set('essayEditor', e.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+              <option value="">{t('student360.unassigned')}</option>
+              {ESSAY_EDITORS.map(e => <option key={e} value={e}>{e}</option>)}
+            </select>
           </div>
           <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />
@@ -1276,17 +1277,15 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
           </div>
           <div>
             <Label className="text-xs">{t('student360.status')}</Label>
-            <Select value={form.status || 'active'} onValueChange={v => set('status', v ?? 'active')}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {STUDENT_STATUS_OPTIONS.map(o => (
-                  <SelectItem key={o.value} value={o.value}>{t(o.labelKey)}</SelectItem>
-                ))}
-                {form.status && !STUDENT_STATUS_OPTIONS.some(o => o.value === form.status) && (
-                  <SelectItem value={form.status}>{form.status}</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+            <select value={form.status || 'active'} onChange={e => set('status', e.target.value || 'active')}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+              {STUDENT_STATUS_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
+              ))}
+              {form.status && !STUDENT_STATUS_OPTIONS.some(o => o.value === form.status) && (
+                <option value={form.status}>{form.status}</option>
+              )}
+            </select>
           </div>
           <LabeledInput label={t('student360.acceptedUni')} value={form.acceptedUni} onChange={v => set('acceptedUni', v)} />
           <div>
@@ -1537,6 +1536,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
 }) {
   const t = useT()
   const consultantPool = useConsultantPool()
+  const consultantName = useConsultantName()
   const [open, setOpen] = useState(false)
   const create = useCreateServiceMeeting()
   const update = useUpdateServiceMeeting()
@@ -1593,12 +1593,14 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
           </div>
           <div>
             <Label className="text-xs">{t('student360.consultant')}</Label>
-            <Select value={form.consultantId} onValueChange={v => set('consultantId', v)}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                {consultantPool.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <select value={form.consultantId} onChange={e => set('consultantId', e.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+              <option value="">—</option>
+              {consultantPool.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {form.consultantId && !consultantPool.some(c => c.id === form.consultantId) && (
+                <option value={form.consultantId}>{consultantName(form.consultantId)}</option>
+              )}
+            </select>
           </div>
           {/* 2줄: 유형 / 진행 형식 */}
           <div>
