@@ -68,6 +68,15 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     ],
   },
   {
+    titleKey: 'nav.marketing',
+    module: 'marketing',
+    items: [
+      { labelKey: 'nav.marketingMetrics', to: '/marketing/metrics', icon: BarChart2 },
+      { labelKey: 'nav.adPerformance', to: '/marketing/ads', icon: Megaphone },
+      { labelKey: 'nav.seminars', to: '/marketing/seminars', icon: Presentation },
+    ],
+  },
+  {
     titleKey: 'nav.sales',
     module: 'sales',
     items: [
@@ -76,15 +85,6 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
       { labelKey: 'nav.pipeline', to: '/sales/pipeline', icon: Kanban },
       { labelKey: 'nav.meetingRecords', to: '/sales/meetings', icon: ClipboardList },
       { labelKey: 'nav.salesPerformance', to: '/sales/performance', icon: TrendingUp },
-    ],
-  },
-  {
-    titleKey: 'nav.marketing',
-    module: 'marketing',
-    items: [
-      { labelKey: 'nav.marketingMetrics', to: '/marketing/metrics', icon: BarChart2 },
-      { labelKey: 'nav.adPerformance', to: '/marketing/ads', icon: Megaphone },
-      { labelKey: 'nav.seminars', to: '/marketing/seminars', icon: Presentation },
     ],
   },
   {
