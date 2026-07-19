@@ -1456,7 +1456,6 @@ function days0Class(days: number): string {
 /** True if the service student's status is one of the "archived" outcomes. */
 function isFinished(status?: string) { return status === 'finished' }
 function isCanceled(status?: string) { return status === 'canceled' }
-function isActive(status?: string) { return !status || status === 'active' }
 
 type MetricKind = 'meetings' | 'newEnrolled' | 'active' | 'finished' | 'canceled'
 
@@ -1471,23 +1470,33 @@ function ServiceMetricsSection() {
   const [detail, setDetail] = useState<MetricKind | null>(null)
 
   const cutLen = gran === 'month' ? 7 : 4
+  const cur = today.slice(0, cutLen)
   const studentById = useMemo(() => new Map(students.map(s => [s.id, s])), [students])
-  // When a student is finished/canceled without an explicit end date, fall back
-  // to when the record was last updated (≈ when the status was set).
-  const outcomeDate = (s: { endDate?: string; updatedAt?: string }) => s.endDate || (s.updatedAt || '').slice(0, 10)
+  // Outcome date for finished/canceled = when the status was set (updated_at),
+  // which is more reliable than end_date (which may hold a future contract end).
+  const outcomeDate = (s: { endDate?: string; updatedAt?: string }) => (s.updatedAt || s.endDate || '').slice(0, 10)
 
-  // Available period options derived from data + current
+  // A fixed recent window (last 12 months / 5 years) — avoids future-dated junk.
+  const recentPeriods = useMemo(() => {
+    const y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7))
+    const out: string[] = []
+    if (gran === 'month') {
+      for (let i = 0; i < 12; i++) { let mm = m - i, yy = y; while (mm <= 0) { mm += 12; yy-- }; out.push(`${yy}-${String(mm).padStart(2, '0')}`) }
+    } else {
+      for (let i = 0; i < 5; i++) out.push(String(y - i))
+    }
+    return out
+  }, [gran, today])
+
+  // Options: recent window + any past period that has data (future excluded)
   const periodOptions = useMemo(() => {
-    const set = new Set<string>()
-    const add = (d?: string | null) => { if (d && d.length >= cutLen) set.add(d.slice(0, cutLen)) }
+    const set = new Set<string>(recentPeriods)
+    const add = (d?: string | null) => { if (d && d.length >= cutLen) { const k = d.slice(0, cutLen); if (k <= cur) set.add(k) } }
     students.forEach(s => { add(s.startDate); add(outcomeDate(s)) })
     meetingRows.forEach(m => add(m.meetingDate))
-    add(today)
     return Array.from(set).filter(Boolean).sort().reverse()
-  }, [students, meetingRows, cutLen, today])
+  }, [students, meetingRows, cutLen, cur, recentPeriods])
 
-  // Keep `period` valid when granularity changes
-  const cur = today.slice(0, cutLen)
   const activePeriod = period.length === cutLen ? period : cur
   const inPeriod = (d?: string | null) => !!d && d.slice(0, cutLen) === activePeriod
 
@@ -1495,7 +1504,8 @@ function ServiceMetricsSection() {
   const newEnrolledList = useMemo(() => students.filter(s => inPeriod(s.startDate)), [students, activePeriod, cutLen])
   const finishedList = useMemo(() => students.filter(s => isFinished(s.status) && inPeriod(outcomeDate(s))), [students, activePeriod, cutLen])
   const canceledList = useMemo(() => students.filter(s => isCanceled(s.status) && inPeriod(outcomeDate(s))), [students, activePeriod, cutLen])
-  const activeList = useMemo(() => students.filter(s => isActive(s.status)), [students])
+  // Active = not archived (finished/canceled) — matches Student 360's active count.
+  const activeList = useMemo(() => students.filter(s => !isFinished(s.status) && !isCanceled(s.status)), [students])
   // Meetings held in period, grouped by student → count
   const meetingByStudent = useMemo(() => {
     const m = new Map<string, number>()
@@ -1515,21 +1525,14 @@ function ServiceMetricsSection() {
   const canceled = canceledList.length
   const activeNow = activeList.length
 
-  // Trend: last N periods
-  const trend = useMemo(() => {
-    const keys = new Set<string>()
-    students.forEach(s => { if (s.startDate) keys.add(s.startDate.slice(0, cutLen)); const od = outcomeDate(s); if (od) keys.add(od.slice(0, cutLen)) })
-    meetingRows.forEach(m => { if (m.meetingDate) keys.add(m.meetingDate.slice(0, cutLen)) })
-    keys.add(cur)
-    const sorted = Array.from(keys).filter(Boolean).sort().reverse().slice(0, gran === 'month' ? 12 : 5)
-    return sorted.map(k => ({
-      period: k,
-      meetings: meetingRows.filter(m => m.status !== 'cancelled' && m.meetingDate?.slice(0, cutLen) === k).length,
-      newEnrolled: students.filter(s => s.startDate?.slice(0, cutLen) === k).length,
-      finished: students.filter(s => isFinished(s.status) && outcomeDate(s).slice(0, cutLen) === k).length,
-      canceled: students.filter(s => isCanceled(s.status) && outcomeDate(s).slice(0, cutLen) === k).length,
-    }))
-  }, [students, meetingRows, cutLen, cur, gran])
+  // Trend: the fixed recent window
+  const trend = useMemo(() => recentPeriods.map(k => ({
+    period: k,
+    meetings: meetingRows.filter(m => m.status !== 'cancelled' && m.meetingDate?.slice(0, cutLen) === k).length,
+    newEnrolled: students.filter(s => s.startDate?.slice(0, cutLen) === k).length,
+    finished: students.filter(s => isFinished(s.status) && outcomeDate(s).slice(0, cutLen) === k).length,
+    canceled: students.filter(s => isCanceled(s.status) && outcomeDate(s).slice(0, cutLen) === k).length,
+  })), [students, meetingRows, cutLen, recentPeriods])
 
   if (ls || lm) return <div className="flex justify-center py-16"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
 
