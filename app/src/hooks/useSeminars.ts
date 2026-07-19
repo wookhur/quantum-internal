@@ -65,6 +65,8 @@ export interface SeminarRegistration {
   memo: string | null
   /** Session labels the registrant selected. Empty for legacy single-date seminars. */
   sessionLabels: string[]
+  /** Whether the registrant actually attended. */
+  attended: boolean
   createdAt: string
 }
 
@@ -107,6 +109,7 @@ function mapRegistration(r: Record<string, unknown>): SeminarRegistration {
     interest: r.interest as string | null,
     memo: r.memo as string | null,
     sessionLabels: Array.isArray(r.session_labels) ? (r.session_labels as string[]) : [],
+    attended: !!r.attended,
     createdAt: r.created_at as string,
   }
 }
@@ -318,6 +321,72 @@ export function useUpdateRegistrationSessions() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['seminar-registrations'] })
       // downstream views that read session_labels
+      qc.invalidateQueries({ queryKey: ['seminars-with-registrations'] })
+    },
+  })
+}
+
+/** Toggle a registrant's attended flag. */
+export function useUpdateRegistrationAttended() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, attended }: { id: string; attended: boolean }) => {
+      const { data, error } = await supabase
+        .from('seminar_registrations')
+        .update({ attended })
+        .eq('id', id)
+        .select('id')
+      if (error) throw error
+      if (!data || data.length === 0) throw new Error('저장되지 않았습니다. (수정 권한/RLS 확인 필요)')
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seminar-registrations'] })
+      qc.invalidateQueries({ queryKey: ['seminars-with-registrations'] })
+    },
+  })
+}
+
+export interface ImportRegistrationRow {
+  parentName: string
+  studentName: string
+  email?: string | null
+  phone?: string | null
+  school?: string | null
+  grade?: string | null
+  interest?: string | null
+  memo?: string | null
+  attended: boolean
+}
+
+/** Bulk-insert registrations (from a CSV import) into a seminar. */
+export function useBulkImportRegistrations() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ seminarId, rows }: { seminarId: string; rows: ImportRegistrationRow[] }) => {
+      const CHUNK = 200
+      let inserted = 0
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const chunk = rows.slice(i, i + CHUNK).map(r => ({
+          seminar_id: seminarId,
+          parent_name: r.parentName,
+          student_name: r.studentName,
+          email: r.email || null,
+          phone: r.phone || '',
+          school: r.school || null,
+          grade: r.grade || null,
+          interest: r.interest || null,
+          memo: r.memo || null,
+          session_labels: [] as string[],
+          attended: r.attended,
+        }))
+        const { error } = await supabase.from('seminar_registrations').insert(chunk)
+        if (error) throw error
+        inserted += chunk.length
+      }
+      return inserted
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seminar-registrations'] })
       qc.invalidateQueries({ queryKey: ['seminars-with-registrations'] })
     },
   })

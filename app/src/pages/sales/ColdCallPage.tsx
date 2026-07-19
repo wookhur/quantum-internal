@@ -54,6 +54,7 @@ import {
   computeColdCallOutcome,
   leadMatchesSeminar,
   seminarSessionsForLead,
+  seminarsAttendedByLead,
   dedupeLeadsByPerson,
   type SeminarLite,
   type ColdCallOutcome,
@@ -1145,6 +1146,15 @@ function ColdCallDetail({
               return lvl ? (
                 <Badge variant="outline" className={`${lvl.badge} text-xs`} title={lvl.meaningKo}>
                   {lvl.emoji} {lvl.labelEn}
+                </Badge>
+              ) : null
+            })()}
+            {(() => {
+              const attended = seminarsAttendedByLead(seminars, lead)
+              return attended.length > 0 ? (
+                <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200"
+                  title={attended.map(s => s.title).join('\n')}>
+                  🎓 참석 세미나 {attended.length}
                 </Badge>
               ) : null
             })()}

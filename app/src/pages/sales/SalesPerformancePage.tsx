@@ -129,20 +129,22 @@ export function SalesPerformancePage() {
   // Which cell was clicked → which list to show
   const [detailDialog, setDetailDialog] = useState<{
     row: PerfRow
-    kind: 'leads' | 'registrants' | 'meetings' | 'planned'
+    kind: 'leads' | 'registrants' | 'meetings' | 'planned' | 'attendees'
     /** meeting_method filter for kind='meetings'; undefined = all meetings */
     method?: string
   } | null>(null)
 
   // Registrant list for the applicants dialog (fetched on demand)
   const { data: dialogRegistrationsRaw = [], isLoading: regsLoading } = useSeminarRegistrations(
-    detailDialog?.kind === 'registrants' ? detailDialog.row.seminar?.id : undefined,
+    (detailDialog?.kind === 'registrants' || detailDialog?.kind === 'attendees') ? detailDialog.row.seminar?.id : undefined,
   )
-  // Scope registrants to the clicked session when it's a session sub-row.
+  // Scope registrants to the clicked session; for 'attendees' keep only attended.
   const dialogRegistrations = useMemo(() => {
     const label = detailDialog?.row.sessionLabel
-    if (!label) return dialogRegistrationsRaw
-    return dialogRegistrationsRaw.filter(r => r.sessionLabels.includes(label))
+    let list = dialogRegistrationsRaw
+    if (detailDialog?.kind === 'attendees') list = list.filter(r => r.attended)
+    if (label) list = list.filter(r => r.sessionLabels.includes(label))
+    return list
   }, [dialogRegistrationsRaw, detailDialog])
 
   // Merge manual sales_events with auto-aggregated seminars
@@ -235,7 +237,7 @@ export function SalesPerformancePage() {
 
         // Single-session (or no sub-sessions) seminar → one aggregate row.
         const planned = new Set(attForSeminar.filter(a => a.status === 'planned').map(a => a.leadId)).size
-        const attended = new Set(attForSeminar.filter(a => a.status === 'attended').map(a => a.leadId)).size
+        const attendedLead = new Set(attForSeminar.filter(a => a.status === 'attended').map(a => a.leadId)).size
         return [buildRow({
           idSuffix: '',
           eventName: s.title,
@@ -243,7 +245,8 @@ export function SalesPerformancePage() {
           applicants: s.applicants,
           matched: allMatched,
           planned,
-          attended,
+          // registration attended flag (imported seminars) or cold-call attendance
+          attended: Math.max(s.attendees, attendedLead),
         })]
       })
 
@@ -483,7 +486,16 @@ export function SalesPerformancePage() {
                       >
                         {row.plannedAttendees || '-'}
                       </TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">{row.attendees || '-'}</TableCell>
+                      <TableCell
+                        className={`text-right text-sm tabular-nums ${row.seminar && row.attendees > 0 ? 'hover:underline hover:text-primary cursor-pointer' : ''}`}
+                        onClick={(e) => {
+                          if (!row.seminar || row.attendees === 0) return
+                          e.stopPropagation()
+                          setDetailDialog({ row, kind: 'attendees' })
+                        }}
+                      >
+                        {row.attendees || '-'}
+                      </TableCell>
                       <TableCell
                         className="text-right text-sm tabular-nums hover:underline hover:text-primary"
                         onClick={(e) => { e.stopPropagation(); setDetailDialog({ row, kind: 'meetings', method: 'phone' }) }}
@@ -661,12 +673,14 @@ export function SalesPerformancePage() {
                       )
                   : detailDialog?.kind === 'planned'
                     ? t('salesPerf.plannedDialogTitle').replace('{name}', detailDialog.row.eventName)
-                    : t('salesPerf.leadsDialogTitle').replace('{name}', detailDialog?.row.eventName ?? '')}
+                    : detailDialog?.kind === 'attendees'
+                      ? t('salesPerf.attendeesDialogTitle').replace('{name}', detailDialog.row.eventName)
+                      : t('salesPerf.leadsDialogTitle').replace('{name}', detailDialog?.row.eventName ?? '')}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 {t('salesPerf.leadsDialogCount').replace(
                   '{n}',
                   String(
-                    detailDialog?.kind === 'registrants'
+                    (detailDialog?.kind === 'registrants' || detailDialog?.kind === 'attendees')
                       ? dialogRegistrations.length
                       : detailDialog?.kind === 'meetings'
                         ? dialogMeetings.length
@@ -679,8 +693,8 @@ export function SalesPerformancePage() {
             </DialogTitle>
           </DialogHeader>
 
-          {/* Registrants list */}
-          {detailDialog?.kind === 'registrants' && (
+          {/* Registrants / attendees list */}
+          {(detailDialog?.kind === 'registrants' || detailDialog?.kind === 'attendees') && (
             regsLoading ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="size-5 animate-spin text-muted-foreground" />

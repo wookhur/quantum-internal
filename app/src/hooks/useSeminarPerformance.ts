@@ -49,6 +49,12 @@ export interface SeminarLite {
   names: Set<string>
   /** Unique registrant count (deduped by best available key). */
   applicants: number
+  /** Unique registrants who attended (attended=true). */
+  attendees: number
+  /** Match keys of registrants who attended. */
+  attendedPhones: Set<string>
+  attendedEmails: Set<string>
+  attendedNames: Set<string>
   /** The seminar's sub-webinar session labels (e.g. the 4 진학전략 webinars). */
   sessions: string[]
   /** session label → unique registrant count for that session. */
@@ -75,6 +81,28 @@ export function seminarSessionsForLead(
   return []
 }
 
+/** True if the lead attended this seminar (matched by phone/email/name). */
+export function leadAttendedSeminar(
+  seminar: SeminarLite,
+  lead: { phone?: string; email?: string; parentName?: string; studentName?: string },
+): boolean {
+  const phone = normalizePhone(lead.phone)
+  if (isUsablePhone(phone) && seminar.attendedPhones.has(phone)) return true
+  const email = normalizeEmail(lead.email)
+  if (email && seminar.attendedEmails.has(email)) return true
+  const nameKey = normalizeName(lead.parentName) + '|' + normalizeName(lead.studentName)
+  if (nameKey !== '|' && seminar.attendedNames.has(nameKey)) return true
+  return false
+}
+
+/** Seminars a lead attended (for the lead-card attendance badge). */
+export function seminarsAttendedByLead(
+  seminars: SeminarLite[],
+  lead: { phone?: string; email?: string; parentName?: string; studentName?: string },
+): SeminarLite[] {
+  return seminars.filter(s => leadAttendedSeminar(s, lead))
+}
+
 /**
  * All seminars with their registrant match keys (phone/email/name).
  * Used to link leads back to the seminar they registered for even when
@@ -99,11 +127,12 @@ export function useSeminarsWithRegistrations() {
         parent_name: string | null
         student_name: string | null
         session_labels: string[] | null
+        attended: boolean | null
       }[] = []
       while (true) {
         const { data, error } = await supabase
           .from('seminar_registrations')
-          .select('seminar_id, phone, email, parent_name, student_name, session_labels')
+          .select('seminar_id, phone, email, parent_name, student_name, session_labels, attended')
           .range(from, from + PAGE - 1)
         if (error) throw error
         const batch = (data || []) as typeof regs
@@ -116,8 +145,12 @@ export function useSeminarsWithRegistrations() {
         phones: Set<string>
         emails: Set<string>
         names: Set<string>
+        attendedPhones: Set<string>
+        attendedEmails: Set<string>
+        attendedNames: Set<string>
         /** dedup keys for counting unique registrants */
         personKeys: Set<string>
+        attendedPersonKeys: Set<string>
         /** session label → unique person keys registered for that session */
         sessionPersonKeys: Map<string, Set<string>>
         sessionsByPhone: Map<string, string[]>
@@ -125,7 +158,9 @@ export function useSeminarsWithRegistrations() {
         sessionsByName: Map<string, string[]>
       }
       const newAcc = (): Acc => ({
-        phones: new Set(), emails: new Set(), names: new Set(), personKeys: new Set(),
+        phones: new Set(), emails: new Set(), names: new Set(),
+        attendedPhones: new Set(), attendedEmails: new Set(), attendedNames: new Set(),
+        personKeys: new Set(), attendedPersonKeys: new Set(),
         sessionPersonKeys: new Map(),
         sessionsByPhone: new Map(), sessionsByEmail: new Map(), sessionsByName: new Map(),
       })
@@ -137,13 +172,15 @@ export function useSeminarsWithRegistrations() {
         const email = normalizeEmail(r.email)
         const nameKey = normalizeName(r.parent_name) + '|' + normalizeName(r.student_name)
         const labels = Array.isArray(r.session_labels) ? r.session_labels.filter(Boolean) : []
-        if (isUsablePhone(phone)) { acc.phones.add(phone); if (labels.length) acc.sessionsByPhone.set(phone, labels) }
-        if (email) { acc.emails.add(email); if (labels.length) acc.sessionsByEmail.set(email, labels) }
-        if (nameKey !== '|') { acc.names.add(nameKey); if (labels.length) acc.sessionsByName.set(nameKey, labels) }
+        const attended = !!r.attended
+        if (isUsablePhone(phone)) { acc.phones.add(phone); if (attended) acc.attendedPhones.add(phone); if (labels.length) acc.sessionsByPhone.set(phone, labels) }
+        if (email) { acc.emails.add(email); if (attended) acc.attendedEmails.add(email); if (labels.length) acc.sessionsByEmail.set(email, labels) }
+        if (nameKey !== '|') { acc.names.add(nameKey); if (attended) acc.attendedNames.add(nameKey); if (labels.length) acc.sessionsByName.set(nameKey, labels) }
         // Unique person: prefer email, then usable phone, then name
         const personKey = email || (isUsablePhone(phone) ? phone : '') || nameKey
         if (personKey && personKey !== '|') {
           acc.personKeys.add(personKey)
+          if (attended) acc.attendedPersonKeys.add(personKey)
           for (const label of labels) {
             if (!acc.sessionPersonKeys.has(label)) acc.sessionPersonKeys.set(label, new Set())
             acc.sessionPersonKeys.get(label)!.add(personKey)
@@ -178,6 +215,10 @@ export function useSeminarsWithRegistrations() {
           emails: acc.emails,
           names: acc.names,
           applicants: acc.personKeys.size,
+          attendees: acc.attendedPersonKeys.size,
+          attendedPhones: acc.attendedPhones,
+          attendedEmails: acc.attendedEmails,
+          attendedNames: acc.attendedNames,
           sessions,
           sessionApplicants,
           sessionsByPhone: acc.sessionsByPhone,

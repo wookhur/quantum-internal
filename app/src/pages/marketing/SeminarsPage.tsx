@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +33,7 @@ import {
   Pencil,
   X,
   ArrowDownUp,
+  Upload,
 } from 'lucide-react'
 import { useLanguage } from '@/i18n/LanguageContext'
 import {
@@ -43,11 +44,188 @@ import {
   useSeminarRegistrations,
   useDeleteRegistration,
   useUpdateRegistrationSessions,
+  useUpdateRegistrationAttended,
+  useBulkImportRegistrations,
   sortSeminarSessions,
   type Seminar,
   type SeminarSession,
+  type ImportRegistrationRow,
 } from '@/hooks/useSeminars'
 import { useAllLeadAttendance } from '@/hooks/useLeadAttendance'
+
+/** Parse CSV text into rows, honoring quoted fields with commas/newlines. */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let field = ''
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ } else inQuotes = false
+      } else field += c
+    } else {
+      if (c === '"') inQuotes = true
+      else if (c === ',') { row.push(field); field = '' }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = '' }
+      else if (c === '\r') { /* skip */ }
+      else field += c
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row) }
+  return rows
+}
+
+/** Detect column indices from a header row by keyword. */
+function detectColumns(header: string[]): Record<string, number> {
+  const find = (re: RegExp) => header.findIndex(h => re.test((h || '').trim()))
+  return {
+    parentName: find(/부모|parent/i),
+    studentName: find(/학생|student/i),
+    email: find(/이메일|email/i),
+    phone: find(/연락처|전화|phone/i),
+    school: find(/학교|school/i),
+    grade: find(/학년|grade|year/i),
+    attended: find(/참석\s*인원|attend/i),
+  }
+}
+
+function CsvImportDialog() {
+  const { data: seminars = [] } = useSeminars()
+  const createSeminar = useCreateSeminar()
+  const bulkImport = useBulkImportRegistrations()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [open, setOpen] = useState(false)
+  const [rows, setRows] = useState<ImportRegistrationRow[]>([])
+  const [fileName, setFileName] = useState('')
+  const [target, setTarget] = useState<string>('new') // 'new' | seminarId
+  const [newName, setNewName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [done, setDone] = useState<number | null>(null)
+
+  const reset = () => { setRows([]); setFileName(''); setTarget('new'); setNewName(''); setErr(null); setDone(null) }
+
+  const handleFile = async (file: File) => {
+    setErr(null); setDone(null)
+    try {
+      const text = await file.text()
+      const all = parseCsv(text)
+      // Header = first row containing a parent/student column
+      const headerIdx = all.findIndex(r => r.some(c => /부모|parent/i.test(c)) && r.some(c => /학생|student/i.test(c)))
+      if (headerIdx < 0) { setErr('헤더 행을 찾지 못했습니다. (부모님/학생 컬럼 필요)'); return }
+      const cols = detectColumns(all[headerIdx])
+      if (cols.parentName < 0 && cols.studentName < 0) { setErr('부모님/학생 이름 컬럼을 찾지 못했습니다.'); return }
+      const out: ImportRegistrationRow[] = []
+      for (let i = headerIdx + 1; i < all.length; i++) {
+        const r = all[i]
+        const g = (idx: number) => (idx >= 0 ? (r[idx] || '').trim() : '')
+        const parentName = g(cols.parentName)
+        const studentName = g(cols.studentName)
+        const phone = g(cols.phone)
+        if (!parentName && !studentName && !phone) continue // skip empty rows
+        const attendedRaw = g(cols.attended)
+        const attendedNum = parseInt(attendedRaw.replace(/[^\d]/g, ''), 10)
+        out.push({
+          parentName, studentName,
+          email: g(cols.email) || null,
+          phone: phone || null,
+          school: g(cols.school) || null,
+          grade: g(cols.grade) || null,
+          attended: !Number.isNaN(attendedNum) && attendedNum > 0,
+        })
+      }
+      if (out.length === 0) { setErr('가져올 데이터 행이 없습니다.'); return }
+      setRows(out)
+      setFileName(file.name)
+      if (!newName) setNewName(file.name.replace(/\.csv$/i, '').replace(/\s*\(Responses\).*/i, '').trim())
+    } catch (e) {
+      setErr((e as Error).message || 'CSV 파싱 실패')
+    }
+  }
+
+  const doImport = async () => {
+    setBusy(true); setErr(null)
+    try {
+      let seminarId = target
+      if (target === 'new') {
+        if (!newName.trim()) { setErr('세미나 이름을 입력하세요.'); setBusy(false); return }
+        const created = await createSeminar.mutateAsync({
+          title: newName.trim(), description: null, date: null, location: null, maxCapacity: null, sessions: [],
+        })
+        seminarId = created.id
+      }
+      const n = await bulkImport.mutateAsync({ seminarId, rows })
+      setDone(n)
+    } catch (e) {
+      setErr((e as Error).message || '가져오기 실패')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const attendedCount = rows.filter(r => r.attended).length
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset() }}>
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        <Download className="size-4 mr-2 rotate-180" /> CSV 가져오기
+      </Button>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>세미나 신청자 CSV 가져오기</DialogTitle></DialogHeader>
+        {done !== null ? (
+          <div className="py-6 text-center space-y-2">
+            <p className="text-sm font-medium text-emerald-700">{done}명 신청자를 가져왔습니다.</p>
+            <p className="text-xs text-muted-foreground">참석 {rows.filter(r => r.attended).length}명 · 세미나 성과·고객카드에 자동 반영됩니다.</p>
+            <Button onClick={() => { setOpen(false); reset() }}>닫기</Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }} />
+              <Button variant="outline" onClick={() => fileRef.current?.click()}>
+                <Upload className="size-4 mr-2" /> CSV 파일 선택
+              </Button>
+              {fileName && <span className="ml-2 text-xs text-muted-foreground">{fileName}</span>}
+              <p className="text-[11px] text-muted-foreground mt-1">부모님/학생/이메일/연락처/학교/학년/참석인원 컬럼을 자동 인식합니다. (참석인원 &gt; 0 → 참석)</p>
+            </div>
+
+            {rows.length > 0 && (
+              <>
+                <div className="rounded-lg border bg-muted/30 p-2 text-xs">
+                  <span className="font-medium">{rows.length}명</span> 신청자 인식됨 · 참석 <span className="font-medium text-emerald-700">{attendedCount}명</span>
+                </div>
+                <div>
+                  <Label className="text-xs">가져올 세미나</Label>
+                  <select value={target} onChange={e => setTarget(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring">
+                    <option value="new">＋ 새 세미나로 만들기</option>
+                    {seminars.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                  </select>
+                </div>
+                {target === 'new' && (
+                  <div>
+                    <Label className="text-xs">새 세미나 이름</Label>
+                    <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="예: 선배 초청 세미나" />
+                  </div>
+                )}
+              </>
+            )}
+            {err && <p className="text-xs text-destructive">{err}</p>}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setOpen(false); reset() }}>취소</Button>
+              <Button onClick={doImport} disabled={busy || rows.length === 0 || (target === 'new' && !newName.trim())}>
+                {busy && <Loader2 className="size-4 animate-spin mr-1" />} 가져오기
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 function formatSeminarDate(raw: string): string {
   const [datePart, timePart] = raw.split(' ')
@@ -167,6 +345,7 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
   const { data: regs = [], isLoading } = useSeminarRegistrations(seminar.id)
   const deleteMut = useDeleteRegistration()
   const updateSessions = useUpdateRegistrationSessions()
+  const updateAttended = useUpdateRegistrationAttended()
   const [sessionFilter, setSessionFilter] = useState<string>('all')
   const [editId, setEditId] = useState<string | null>(null)
   const [editLabels, setEditLabels] = useState<string[]>([])
@@ -263,6 +442,7 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>참석</TableHead>
                 <TableHead>신청일</TableHead>
                 <TableHead>학부모</TableHead>
                 <TableHead>연락처</TableHead>
@@ -279,6 +459,15 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
             <TableBody>
               {filteredRegs.map(r => (
                 <TableRow key={r.id}>
+                  <TableCell>
+                    <button
+                      onClick={() => updateAttended.mutate({ id: r.id, attended: !r.attended })}
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full border ${r.attended ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}
+                      title="참석 여부 토글"
+                    >
+                      {r.attended ? '참석' : '미참석'}
+                    </button>
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString('ko-KR')}</TableCell>
                   <TableCell>{r.parentName}</TableCell>
                   <TableCell className="whitespace-nowrap">{r.phone}</TableCell>
@@ -459,9 +648,12 @@ export function SeminarsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t('nav.seminars')}</h1>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus className="size-4 mr-2" /> 새 세미나
-        </Button>
+        <div className="flex items-center gap-2">
+          <CsvImportDialog />
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="size-4 mr-2" /> 새 세미나
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
