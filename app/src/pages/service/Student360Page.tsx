@@ -1586,10 +1586,21 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
           <DialogTitle>{meeting ? t('student360.editMeeting') : t('student360.newMeeting')}</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
+          {/* 1줄: 미팅일 / 담당 컨설턴트 */}
           <div>
             <Label className="text-xs">{t('student360.meetingDate')}</Label>
             <Input type="date" value={form.meetingDate} onChange={e => set('meetingDate', e.target.value)} />
           </div>
+          <div>
+            <Label className="text-xs">{t('student360.consultant')}</Label>
+            <Select value={form.consultantId} onValueChange={v => set('consultantId', v)}>
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {consultantPool.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* 2줄: 유형 / 진행 형식 */}
           <div>
             <Label className="text-xs">{t('student360.meetingType')}</Label>
             <Select value={form.meetingType} onValueChange={v => set('meetingType', v)}>
@@ -1609,15 +1620,10 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label className="text-xs">{t('student360.consultant')}</Label>
-            <Select value={form.consultantId} onValueChange={v => set('consultantId', v)}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                {consultantPool.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* 3줄: 상담 준비 자료 / 리포트 링크 */}
+          <LabeledInput label={t('student360.meetingPrepUrl')} value={form.prepUrl} onChange={v => set('prepUrl', v)} />
+          <LabeledInput label={t('student360.reportUrl')} value={form.reportUrl} onChange={v => set('reportUrl', v)} />
+          {/* 4줄: 리포트 상태 / 리포트일 */}
           <div>
             <Label className="text-xs">{t('student360.reportStatus')}</Label>
             <Select value={form.reportStatus} onValueChange={v => set('reportStatus', v)}>
@@ -1629,8 +1635,6 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
               </SelectContent>
             </Select>
           </div>
-          <LabeledInput label={t('student360.meetingPrepUrl')} value={form.prepUrl} onChange={v => set('prepUrl', v)} />
-          <LabeledInput label={t('student360.reportUrl')} value={form.reportUrl} onChange={v => set('reportUrl', v)} />
           <div>
             <Label className="text-xs">{t('student360.reportDate')}</Label>
             <Input type="date" value={form.reportDate} onChange={e => set('reportDate', e.target.value)} />
