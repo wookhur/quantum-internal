@@ -1458,56 +1458,83 @@ function isFinished(status?: string) { return status === 'finished' }
 function isCanceled(status?: string) { return status === 'canceled' }
 function isActive(status?: string) { return !status || status === 'active' }
 
+type MetricKind = 'meetings' | 'newEnrolled' | 'active' | 'finished' | 'canceled'
+
 function ServiceMetricsSection() {
   const t = useT()
+  const nav = useNavigate()
   const { data: students = [], isLoading: ls } = useServiceStudents()
   const { data: meetingRows = [], isLoading: lm } = useServiceMeetingCounts()
   const [gran, setGran] = useState<'month' | 'year'>('month')
   const today = todayKST()
   const [period, setPeriod] = useState<string>(today.slice(0, 7)) // 'YYYY-MM'
+  const [detail, setDetail] = useState<MetricKind | null>(null)
+
+  const cutLen = gran === 'month' ? 7 : 4
+  const studentById = useMemo(() => new Map(students.map(s => [s.id, s])), [students])
+  // When a student is finished/canceled without an explicit end date, fall back
+  // to when the record was last updated (≈ when the status was set).
+  const outcomeDate = (s: { endDate?: string; updatedAt?: string }) => s.endDate || (s.updatedAt || '').slice(0, 10)
 
   // Available period options derived from data + current
   const periodOptions = useMemo(() => {
     const set = new Set<string>()
-    const add = (d?: string | null) => { if (d && d.length >= (gran === 'month' ? 7 : 4)) set.add(d.slice(0, gran === 'month' ? 7 : 4)) }
-    students.forEach(s => { add(s.startDate); add(s.endDate) })
+    const add = (d?: string | null) => { if (d && d.length >= cutLen) set.add(d.slice(0, cutLen)) }
+    students.forEach(s => { add(s.startDate); add(outcomeDate(s)) })
     meetingRows.forEach(m => add(m.meetingDate))
     add(today)
     return Array.from(set).filter(Boolean).sort().reverse()
-  }, [students, meetingRows, gran, today])
+  }, [students, meetingRows, cutLen, today])
 
   // Keep `period` valid when granularity changes
-  const cur = gran === 'month' ? today.slice(0, 7) : today.slice(0, 4)
-  const activePeriod = period.length === (gran === 'month' ? 7 : 4) ? period : cur
-  const inPeriod = (d?: string | null) => !!d && d.slice(0, gran === 'month' ? 7 : 4) === activePeriod
+  const cur = today.slice(0, cutLen)
+  const activePeriod = period.length === cutLen ? period : cur
+  const inPeriod = (d?: string | null) => !!d && d.slice(0, cutLen) === activePeriod
 
-  // Metrics for the selected period
-  const meetingsHeld = meetingRows.filter(m => m.status !== 'cancelled' && inPeriod(m.meetingDate)).length
-  const newEnrolled = students.filter(s => inPeriod(s.startDate)).length
-  const finished = students.filter(s => isFinished(s.status) && inPeriod(s.endDate)).length
-  const canceled = students.filter(s => isCanceled(s.status) && inPeriod(s.endDate)).length
-  const activeNow = students.filter(s => isActive(s.status)).length
+  // Student lists per metric (for the selected period)
+  const newEnrolledList = useMemo(() => students.filter(s => inPeriod(s.startDate)), [students, activePeriod, cutLen])
+  const finishedList = useMemo(() => students.filter(s => isFinished(s.status) && inPeriod(outcomeDate(s))), [students, activePeriod, cutLen])
+  const canceledList = useMemo(() => students.filter(s => isCanceled(s.status) && inPeriod(outcomeDate(s))), [students, activePeriod, cutLen])
+  const activeList = useMemo(() => students.filter(s => isActive(s.status)), [students])
+  // Meetings held in period, grouped by student → count
+  const meetingByStudent = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of meetingRows) {
+      if (r.status === 'cancelled' || !inPeriod(r.meetingDate) || !r.studentId) continue
+      m.set(r.studentId, (m.get(r.studentId) || 0) + 1)
+    }
+    return Array.from(m.entries())
+      .map(([id, count]) => ({ student: studentById.get(id), count }))
+      .filter(x => x.student)
+      .sort((a, b) => b.count - a.count)
+  }, [meetingRows, activePeriod, cutLen, studentById])
+
+  const meetingsHeld = meetingByStudent.reduce((s, x) => s + x.count, 0)
+  const newEnrolled = newEnrolledList.length
+  const finished = finishedList.length
+  const canceled = canceledList.length
+  const activeNow = activeList.length
 
   // Trend: last N periods
   const trend = useMemo(() => {
     const keys = new Set<string>()
-    students.forEach(s => { if (s.startDate) keys.add(s.startDate.slice(0, gran === 'month' ? 7 : 4)); if (s.endDate) keys.add(s.endDate.slice(0, gran === 'month' ? 7 : 4)) })
-    meetingRows.forEach(m => { if (m.meetingDate) keys.add(m.meetingDate.slice(0, gran === 'month' ? 7 : 4)) })
+    students.forEach(s => { if (s.startDate) keys.add(s.startDate.slice(0, cutLen)); const od = outcomeDate(s); if (od) keys.add(od.slice(0, cutLen)) })
+    meetingRows.forEach(m => { if (m.meetingDate) keys.add(m.meetingDate.slice(0, cutLen)) })
     keys.add(cur)
     const sorted = Array.from(keys).filter(Boolean).sort().reverse().slice(0, gran === 'month' ? 12 : 5)
     return sorted.map(k => ({
       period: k,
-      meetings: meetingRows.filter(m => m.status !== 'cancelled' && m.meetingDate?.slice(0, gran === 'month' ? 7 : 4) === k).length,
-      newEnrolled: students.filter(s => s.startDate?.slice(0, gran === 'month' ? 7 : 4) === k).length,
-      finished: students.filter(s => isFinished(s.status) && s.endDate?.slice(0, gran === 'month' ? 7 : 4) === k).length,
-      canceled: students.filter(s => isCanceled(s.status) && s.endDate?.slice(0, gran === 'month' ? 7 : 4) === k).length,
+      meetings: meetingRows.filter(m => m.status !== 'cancelled' && m.meetingDate?.slice(0, cutLen) === k).length,
+      newEnrolled: students.filter(s => s.startDate?.slice(0, cutLen) === k).length,
+      finished: students.filter(s => isFinished(s.status) && outcomeDate(s).slice(0, cutLen) === k).length,
+      canceled: students.filter(s => isCanceled(s.status) && outcomeDate(s).slice(0, cutLen) === k).length,
     }))
-  }, [students, meetingRows, gran, cur])
+  }, [students, meetingRows, cutLen, cur, gran])
 
   if (ls || lm) return <div className="flex justify-center py-16"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
 
-  const stat = (icon: ReactNode, value: number, label: string, color: string) => (
-    <Card>
+  const stat = (kind: MetricKind, icon: ReactNode, value: number, label: string, color: string) => (
+    <Card className="cursor-pointer transition-shadow hover:shadow-md" onClick={() => setDetail(kind)}>
       <CardContent className="py-4 flex items-center gap-3">
         <div className={color}>{icon}</div>
         <div>
@@ -1517,6 +1544,13 @@ function ServiceMetricsSection() {
       </CardContent>
     </Card>
   )
+
+  const goStudent = (id: string) => { setDetail(null); nav(`/service/student-360?student=${id}`) }
+  const detailTitle: Record<MetricKind, string> = {
+    meetings: t('serviceDash.mMeetings'), newEnrolled: t('serviceDash.mNewEnrolled'),
+    active: t('serviceDash.mActive'), finished: t('serviceDash.mFinished'), canceled: t('serviceDash.mCanceled'),
+  }
+  const nameOf = (s?: { name: string; koreanName?: string }) => s ? (s.koreanName ? `${s.name} (${s.koreanName})` : s.name) : '—'
 
   return (
     <div className="space-y-4">
@@ -1537,14 +1571,54 @@ function ServiceMetricsSection() {
         <span className="text-xs text-muted-foreground">{t('serviceDash.metricsPeriodHint')}</span>
       </div>
 
-      {/* Metric cards */}
+      {/* Metric cards (click to see the list) */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {stat(<Calendar className="size-6" />, meetingsHeld, t('serviceDash.mMeetings'), 'text-blue-500')}
-        {stat(<UserPlus className="size-6" />, newEnrolled, t('serviceDash.mNewEnrolled'), 'text-indigo-500')}
-        {stat(<Activity className="size-6" />, activeNow, t('serviceDash.mActive'), 'text-emerald-600')}
-        {stat(<CheckCircle2 className="size-6" />, finished, t('serviceDash.mFinished'), 'text-gray-500')}
-        {stat(<XCircle className="size-6" />, canceled, t('serviceDash.mCanceled'), 'text-red-500')}
+        {stat('meetings', <Calendar className="size-6" />, meetingsHeld, t('serviceDash.mMeetings'), 'text-blue-500')}
+        {stat('newEnrolled', <UserPlus className="size-6" />, newEnrolled, t('serviceDash.mNewEnrolled'), 'text-indigo-500')}
+        {stat('active', <Activity className="size-6" />, activeNow, t('serviceDash.mActive'), 'text-emerald-600')}
+        {stat('finished', <CheckCircle2 className="size-6" />, finished, t('serviceDash.mFinished'), 'text-gray-500')}
+        {stat('canceled', <XCircle className="size-6" />, canceled, t('serviceDash.mCanceled'), 'text-red-500')}
       </div>
+
+      {/* Detail dialog */}
+      <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null) }}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {detail ? detailTitle[detail] : ''}
+              <span className="ml-2 text-sm font-normal text-muted-foreground">{activePeriod}</span>
+            </DialogTitle>
+          </DialogHeader>
+          {detail === 'meetings' ? (
+            meetingByStudent.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">{t('serviceDash.metricsEmpty')}</p> : (
+              <div className="divide-y">
+                {meetingByStudent.map(({ student, count }) => (
+                  <button key={student!.id} onClick={() => goStudent(student!.id)}
+                    className="w-full flex items-center justify-between py-2 px-1 hover:bg-muted/50 rounded text-left">
+                    <span className="text-sm font-medium">{nameOf(student)}</span>
+                    <Badge variant="outline">{t('serviceDash.timesUnit').replace('{n}', String(count))}</Badge>
+                  </button>
+                ))}
+              </div>
+            )
+          ) : detail ? (
+            (() => {
+              const list = detail === 'newEnrolled' ? newEnrolledList : detail === 'active' ? activeList : detail === 'finished' ? finishedList : canceledList
+              return list.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">{t('serviceDash.metricsEmpty')}</p> : (
+                <div className="divide-y">
+                  {list.map(s => (
+                    <button key={s.id} onClick={() => goStudent(s.id)}
+                      className="w-full flex items-center justify-between py-2 px-1 hover:bg-muted/50 rounded text-left">
+                      <span className="text-sm font-medium">{nameOf(s)}</span>
+                      <ChevronRight className="size-4 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              )
+            })()
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Trend table */}
       <Card>

@@ -15,22 +15,23 @@ export interface DashboardFollowup extends ServiceFollowup {
   studentConsultant?: string
 }
 
-/** Lightweight fetch of every service meeting's date + status, for metrics. */
+/** Lightweight fetch of every service meeting's date + status + student, for metrics. */
 export function useServiceMeetingCounts() {
   return useQuery({
     queryKey: ['service_meeting_counts'],
     queryFn: async () => {
       const PAGE = 1000
       let from = 0
-      const rows: { meetingDate: string | null; status: string }[] = []
+      const rows: { studentId: string | null; meetingDate: string | null; status: string }[] = []
       while (true) {
         const { data, error } = await supabase
           .from('service_meetings')
-          .select('meeting_date, status')
+          .select('student_id, meeting_date, status')
           .range(from, from + PAGE - 1)
         if (error) throw error
         const batch = (data || []) as Record<string, unknown>[]
         rows.push(...batch.map(r => ({
+          studentId: (r.student_id as string) || null,
           meetingDate: (r.meeting_date as string) || null,
           status: (r.status as string) || 'held',
         })))
