@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ import {
 import {
   ChevronLeft, ChevronRight, Plus, X, ExternalLink,
   Users, Calendar, AlertCircle, FileText, CheckSquare,
-  Loader2, Trash2, UserSearch,
+  Loader2, Trash2, UserSearch, BarChart3, UserPlus, CheckCircle2, XCircle, Activity,
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
@@ -31,6 +31,7 @@ import { useAcademicSupport } from '@/hooks/useAcademicSupport'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import {
   useAllServiceMeetings, useAllServiceFollowupsDue, useEmployeeBirthdays,
+  useServiceMeetingCounts,
   type DashboardMeeting, type DashboardFollowup,
 } from '@/hooks/useServiceDashboard'
 import {
@@ -1451,6 +1452,132 @@ function days0Class(days: number): string {
   return 'text-gray-400'
 }
 
+// ─────────────────────── Metrics (지표) ───────────────────────
+/** True if the service student's status is one of the "archived" outcomes. */
+function isFinished(status?: string) { return status === 'finished' }
+function isCanceled(status?: string) { return status === 'canceled' }
+function isActive(status?: string) { return !status || status === 'active' }
+
+function ServiceMetricsSection() {
+  const t = useT()
+  const { data: students = [], isLoading: ls } = useServiceStudents()
+  const { data: meetingRows = [], isLoading: lm } = useServiceMeetingCounts()
+  const [gran, setGran] = useState<'month' | 'year'>('month')
+  const today = todayKST()
+  const [period, setPeriod] = useState<string>(today.slice(0, 7)) // 'YYYY-MM'
+
+  // Available period options derived from data + current
+  const periodOptions = useMemo(() => {
+    const set = new Set<string>()
+    const add = (d?: string | null) => { if (d && d.length >= (gran === 'month' ? 7 : 4)) set.add(d.slice(0, gran === 'month' ? 7 : 4)) }
+    students.forEach(s => { add(s.startDate); add(s.endDate) })
+    meetingRows.forEach(m => add(m.meetingDate))
+    add(today)
+    return Array.from(set).filter(Boolean).sort().reverse()
+  }, [students, meetingRows, gran, today])
+
+  // Keep `period` valid when granularity changes
+  const cur = gran === 'month' ? today.slice(0, 7) : today.slice(0, 4)
+  const activePeriod = period.length === (gran === 'month' ? 7 : 4) ? period : cur
+  const inPeriod = (d?: string | null) => !!d && d.slice(0, gran === 'month' ? 7 : 4) === activePeriod
+
+  // Metrics for the selected period
+  const meetingsHeld = meetingRows.filter(m => m.status !== 'cancelled' && inPeriod(m.meetingDate)).length
+  const newEnrolled = students.filter(s => inPeriod(s.startDate)).length
+  const finished = students.filter(s => isFinished(s.status) && inPeriod(s.endDate)).length
+  const canceled = students.filter(s => isCanceled(s.status) && inPeriod(s.endDate)).length
+  const activeNow = students.filter(s => isActive(s.status)).length
+
+  // Trend: last N periods
+  const trend = useMemo(() => {
+    const keys = new Set<string>()
+    students.forEach(s => { if (s.startDate) keys.add(s.startDate.slice(0, gran === 'month' ? 7 : 4)); if (s.endDate) keys.add(s.endDate.slice(0, gran === 'month' ? 7 : 4)) })
+    meetingRows.forEach(m => { if (m.meetingDate) keys.add(m.meetingDate.slice(0, gran === 'month' ? 7 : 4)) })
+    keys.add(cur)
+    const sorted = Array.from(keys).filter(Boolean).sort().reverse().slice(0, gran === 'month' ? 12 : 5)
+    return sorted.map(k => ({
+      period: k,
+      meetings: meetingRows.filter(m => m.status !== 'cancelled' && m.meetingDate?.slice(0, gran === 'month' ? 7 : 4) === k).length,
+      newEnrolled: students.filter(s => s.startDate?.slice(0, gran === 'month' ? 7 : 4) === k).length,
+      finished: students.filter(s => isFinished(s.status) && s.endDate?.slice(0, gran === 'month' ? 7 : 4) === k).length,
+      canceled: students.filter(s => isCanceled(s.status) && s.endDate?.slice(0, gran === 'month' ? 7 : 4) === k).length,
+    }))
+  }, [students, meetingRows, gran, cur])
+
+  if (ls || lm) return <div className="flex justify-center py-16"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+
+  const stat = (icon: ReactNode, value: number, label: string, color: string) => (
+    <Card>
+      <CardContent className="py-4 flex items-center gap-3">
+        <div className={color}>{icon}</div>
+        <div>
+          <div className="text-2xl font-bold">{value.toLocaleString()}</div>
+          <div className="text-xs text-muted-foreground">{label}</div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+
+  return (
+    <div className="space-y-4">
+      {/* Period controls */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex rounded-md border overflow-hidden">
+          <button onClick={() => { setGran('month'); setPeriod(today.slice(0, 7)) }}
+            className={`px-3 h-8 text-sm font-medium ${gran === 'month' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>{t('serviceDash.byMonth')}</button>
+          <button onClick={() => { setGran('year'); setPeriod(today.slice(0, 4)) }}
+            className={`px-3 h-8 text-sm font-medium border-l ${gran === 'year' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>{t('serviceDash.byYear')}</button>
+        </div>
+        <Select value={activePeriod} onValueChange={(v) => v && setPeriod(v)}>
+          <SelectTrigger className="w-[150px] h-8"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {periodOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <span className="text-xs text-muted-foreground">{t('serviceDash.metricsPeriodHint')}</span>
+      </div>
+
+      {/* Metric cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {stat(<Calendar className="size-6" />, meetingsHeld, t('serviceDash.mMeetings'), 'text-blue-500')}
+        {stat(<UserPlus className="size-6" />, newEnrolled, t('serviceDash.mNewEnrolled'), 'text-indigo-500')}
+        {stat(<Activity className="size-6" />, activeNow, t('serviceDash.mActive'), 'text-emerald-600')}
+        {stat(<CheckCircle2 className="size-6" />, finished, t('serviceDash.mFinished'), 'text-gray-500')}
+        {stat(<XCircle className="size-6" />, canceled, t('serviceDash.mCanceled'), 'text-red-500')}
+      </div>
+
+      {/* Trend table */}
+      <Card>
+        <CardContent className="p-0 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs text-muted-foreground">
+                <th className="text-left px-4 py-2">{gran === 'month' ? t('serviceDash.month') : t('serviceDash.year')}</th>
+                <th className="text-right px-4 py-2">{t('serviceDash.mMeetings')}</th>
+                <th className="text-right px-4 py-2">{t('serviceDash.mNewEnrolled')}</th>
+                <th className="text-right px-4 py-2">{t('serviceDash.mFinished')}</th>
+                <th className="text-right px-4 py-2">{t('serviceDash.mCanceled')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trend.map(r => (
+                <tr key={r.period} className={`border-b last:border-0 ${r.period === activePeriod ? 'bg-primary/5' : ''}`}>
+                  <td className="px-4 py-2 font-medium">{r.period}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{r.meetings}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{r.newEnrolled}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{r.finished}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-red-600">{r.canceled}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+      <p className="text-[11px] text-muted-foreground">{t('serviceDash.metricsNote')}</p>
+    </div>
+  )
+}
+
 export function ServiceDashboardPage() {
   const t = useT()
   const routerNav = useNavigate()
@@ -1461,7 +1588,7 @@ export function ServiceDashboardPage() {
   // 캘린더의 학생 미팅을 클릭하면 해당 학생의 Student 360(미팅노트) 화면으로 이동
   const openMeetingNote = (m: DashboardMeeting) => routerNav(`/service/student-360?student=${m.studentId}`)
 
-  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student'>('calendar')
+  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student' | 'metrics'>('calendar')
   const [calMode,          setCalMode]          = useState<'week' | 'month'>('week')
   const [refDate,          setRefDate]          = useState<Date>(todayDate)
   const [consultantFilter, setConsultantFilter] = useState('all')
@@ -1654,6 +1781,12 @@ export function ServiceDashboardPage() {
                 className={`px-3 h-8 text-sm font-medium border-l ${view === 'student' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 <UserSearch size={14} className="inline mr-1.5" />학생별
+              </button>
+              <button
+                onClick={() => setView('metrics')}
+                className={`px-3 h-8 text-sm font-medium border-l ${view === 'metrics' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              >
+                <BarChart3 size={14} className="inline mr-1.5" />{t('serviceDash.metrics')}
               </button>
             </div>
 
@@ -1912,6 +2045,8 @@ export function ServiceDashboardPage() {
             onEditMilestone={openEditMilestone}
           />
         )}
+
+        {view === 'metrics' && <ServiceMetricsSection />}
       </div>
 
       {/* Session Prep Sheet */}
