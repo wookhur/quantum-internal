@@ -35,6 +35,26 @@ export function useServiceFollowups(studentId?: string) {
   })
 }
 
+/** Structured follow-ups for a set of diary entries (weekly report etc.). */
+export function useServiceFollowupsForDiaries(diaryIds: string[]) {
+  const key = [...diaryIds].sort().join(',')
+  return useQuery({
+    queryKey: ['service_followups_diaries', key],
+    enabled: diaryIds.length > 0,
+    queryFn: async () => {
+      const out: ServiceFollowup[] = []
+      const CHUNK = 150
+      for (let i = 0; i < diaryIds.length; i += CHUNK) {
+        const chunk = diaryIds.slice(i, i + CHUNK)
+        const { data, error } = await supabase.from('service_followups').select('*').in('diary_id', chunk)
+        if (error) throw error
+        out.push(...(data || []).map(r => mapFollowup(r as Record<string, unknown>)))
+      }
+      return out
+    },
+  })
+}
+
 export function useCreateFollowup() {
   const qc = useQueryClient()
   return useMutation({

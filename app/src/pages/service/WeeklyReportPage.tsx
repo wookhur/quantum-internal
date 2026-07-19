@@ -5,6 +5,7 @@ import { Printer } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings, useAllServiceDiaryInRange } from '@/hooks/useServiceDashboard'
+import { useServiceFollowupsForDiaries } from '@/hooks/useServiceFollowups'
 import { useContracts } from '@/hooks/useContracts'
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 
@@ -85,19 +86,37 @@ export function WeeklyReportPage() {
     [diaries],
   )
 
-  // Follow-up commitments due in the period, with completion status
-  // 미팅(다이어리)에 기록된 후속조치(follow-up commitments)를 그대로 불러옴
+  // Structured follow-ups edited in Student 360 take precedence over the raw
+  // diary text, so weekly-report reflects those edits.
+  const diaryIds = useMemo(() => diaries.map(d => d.id).filter(Boolean), [diaries])
+  const { data: structuredFollowups = [] } = useServiceFollowupsForDiaries(diaryIds)
+  const followupsByDiary = useMemo(() => {
+    const m = new Map<string, { text: string; done: boolean }[]>()
+    for (const f of structuredFollowups) {
+      if ((f.category || 'followup') !== 'followup' || !f.diaryId) continue
+      if (!m.has(f.diaryId)) m.set(f.diaryId, [])
+      m.get(f.diaryId)!.push({ text: f.text, done: f.done })
+    }
+    return m
+  }, [structuredFollowups])
+
   const followupNotes = useMemo(
     () => diaries
-      .filter(d => (d.followUpCommitments || '').trim().length > 0)
-      .map(d => ({
-        date: d.entryDate || '',
-        consultant: consultantName(d.studentConsultant),
-        student: d.studentName,
-        text: (d.followUpCommitments || '').trim(),
-      }))
+      .flatMap(d => {
+        const structured = followupsByDiary.get(d.id) || []
+        const text = structured.length > 0
+          ? structured.map(f => (f.done ? '✓ ' : '') + f.text).join(' / ')
+          : (d.followUpCommitments || '').trim()
+        if (!text) return []
+        return [{
+          date: d.entryDate || '',
+          consultant: consultantName(d.studentConsultant),
+          student: d.studentName,
+          text,
+        }]
+      })
       .sort((a, b) => a.consultant.localeCompare(b.consultant) || a.date.localeCompare(b.date)),
-    [diaries],
+    [diaries, followupsByDiary, consultantName],
   )
 
   const cancelReasonText = (m: { cancelledBy?: string; cancellationReason?: string; status: string }) => {
