@@ -98,6 +98,31 @@ function formatTime(t: string | null | undefined): string {
   return t || ''
 }
 
+/** A shift longer than this is treated as a data-entry error, not a real shift. */
+const MAX_SHIFT_MINUTES = 16 * 60
+
+/**
+ * Worked minutes for one day. A clock-out earlier than clock-in means the
+ * shift ran past midnight, so it counts against the next day (+24h).
+ *
+ * Returns null when the record can't be interpreted: missing times, or an
+ * overnight reading that would imply an implausibly long shift (e.g.
+ * in 09:48 / out 09:36 is a typo, not a 23h48m shift).
+ */
+function getWorkedMinutes(
+  clockIn: string | null | undefined,
+  clockOut: string | null | undefined,
+): number | null {
+  if (!clockIn || !clockOut) return null
+  const [h1, m1] = clockIn.split(':').map(Number)
+  const [h2, m2] = clockOut.split(':').map(Number)
+  if ([h1, m1, h2, m2].some(n => Number.isNaN(n))) return null
+  let mins = (h2 * 60 + m2) - (h1 * 60 + m1)
+  if (mins < 0) mins += 24 * 60 // crossed midnight
+  if (mins <= 0 || mins > MAX_SHIFT_MINUTES) return null
+  return mins
+}
+
 /** Local-time YYYY-MM-DD (avoids the UTC shift of toISOString in KST). */
 function toYmd(dt: Date): string {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
@@ -541,13 +566,9 @@ export function AttendancePage() {
   const totalHoursByProfile = useMemo(() => {
     const map = new Map<string, number>() // profileId -> total minutes
     for (const a of attendances) {
-      if (a.clockIn && a.clockOut) {
-        const [h1, m1] = a.clockIn.split(':').map(Number)
-        const [h2, m2] = a.clockOut.split(':').map(Number)
-        const mins = (h2 * 60 + m2) - (h1 * 60 + m1)
-        if (mins > 0) {
-          map.set(a.profileId, (map.get(a.profileId) || 0) + mins)
-        }
+      const mins = getWorkedMinutes(a.clockIn, a.clockOut)
+      if (mins !== null) {
+        map.set(a.profileId, (map.get(a.profileId) || 0) + mins)
       }
     }
     return map
@@ -575,11 +596,8 @@ export function AttendancePage() {
   const weekEntries = useMemo(() => {
     const profileMap = new Map<string, number>()
     for (const a of weekAttendances) {
-      if (!a.clockIn || !a.clockOut) continue
-      const [h1, m1] = a.clockIn.split(':').map(Number)
-      const [h2, m2] = a.clockOut.split(':').map(Number)
-      const mins = (h2 * 60 + m2) - (h1 * 60 + m1)
-      if (mins > 0) profileMap.set(a.profileId, (profileMap.get(a.profileId) || 0) + mins)
+      const mins = getWorkedMinutes(a.clockIn, a.clockOut)
+      if (mins !== null) profileMap.set(a.profileId, (profileMap.get(a.profileId) || 0) + mins)
     }
     const entries = Array.from(profileMap.entries())
       .map(([pid, totalMins]) => ({
@@ -893,15 +911,11 @@ export function AttendancePage() {
               ) : (
                 filteredAttendances.map(att => {
                   let workHrs = ''
-                  if (att.clockIn && att.clockOut) {
-                    const [h1, m1] = att.clockIn.split(':').map(Number)
-                    const [h2, m2] = att.clockOut.split(':').map(Number)
-                    const mins = (h2 * 60 + m2) - (h1 * 60 + m1)
-                    if (mins > 0) {
-                      const hrs = Math.floor(mins / 60)
-                      const rm = mins % 60
-                      workHrs = `${hrs}h${rm > 0 ? ` ${rm}m` : ''}`
-                    }
+                  const workedMins = getWorkedMinutes(att.clockIn, att.clockOut)
+                  if (workedMins !== null) {
+                    const hrs = Math.floor(workedMins / 60)
+                    const rm = workedMins % 60
+                    workHrs = `${hrs}h${rm > 0 ? ` ${rm}m` : ''}`
                   }
                   const weekend = isWeekend(att.date)
                   const late = isLate(att.clockIn, att.date)
