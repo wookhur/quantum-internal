@@ -429,7 +429,7 @@ function UserEditDialog({
             {useCustomAccess && (
               <div className="text-[11px] text-muted-foreground bg-gray-50 rounded p-2 leading-relaxed">
                 게시판을 펼치면 <b className="text-gray-500">없음</b> · <b className="text-blue-600">뷰어</b>(열람만) · <b className="text-emerald-600">편집</b>(열람+수정) 을 게시판별로 지정할 수 있습니다.
-                <br />※ 편집 잠금은 중요 게시판부터 순차 적용 중입니다. 아직 적용되지 않은 게시판은 뷰어로 두어도 수정이 가능할 수 있습니다.
+                <br />※ 뷰어는 데이터를 볼 수 있지만 생성·수정·삭제 버튼이 숨겨집니다. (주간보고서·매출예측 등 조회 전용 게시판은 편집 기능이 없어 뷰어/편집이 동일합니다.)
               </div>
             )}
 
