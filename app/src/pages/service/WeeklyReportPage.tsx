@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Printer, ChevronRight } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
@@ -39,7 +40,7 @@ interface QcRow {
   reportSubmitted: number
   cancelDetails: { student: string; reason: string }[]
   fuCount: number
-  followups: { studentId: string; student: string; text: string }[]
+  followups: { studentId: string; student: string; items: { text: string; done: boolean }[] }[]
 }
 
 function pct(num: number, den: number): string {
@@ -113,15 +114,15 @@ export function WeeklyReportPage() {
     () => diaries
       .flatMap(d => {
         const structured = followupsByDiary.get(d.id) || []
-        const text = structured.length > 0
-          ? structured.map(f => (f.done ? '✓ ' : '') + f.text).join(' / ')
-          : (d.followUpCommitments || '').trim()
-        if (!text) return []
+        const items = structured.length > 0
+          ? structured.map(f => ({ text: f.text, done: f.done }))
+          : ((d.followUpCommitments || '').trim() ? [{ text: (d.followUpCommitments || '').trim(), done: false }] : [])
+        if (items.length === 0) return []
         return [{
           date: d.entryDate || '',
           consultant: consultantName(d.studentConsultant),
           student: d.studentName,
-          text,
+          items,
         }]
       })
       .sort((a, b) => a.consultant.localeCompare(b.consultant) || a.date.localeCompare(b.date)),
@@ -140,11 +141,11 @@ export function WeeklyReportPage() {
       { id: OTHER_ID, name: t('weeklyReport.otherUnassigned') },
     ]
 
-    const diaryFollowupText = (d: typeof diaries[number]) => {
+    const diaryFollowupItems = (d: typeof diaries[number]) => {
       const structured = followupsByDiary.get(d.id) || []
-      return structured.length > 0
-        ? structured.map(f => (f.done ? '✓ ' : '') + f.text).join(' / ')
-        : (d.followUpCommitments || '').trim()
+      if (structured.length > 0) return structured.map(f => ({ text: f.text, done: f.done }))
+      const raw = (d.followUpCommitments || '').trim()
+      return raw ? [{ text: raw, done: false }] : []
     }
 
     const rows: QcRow[] = buckets.map(b => {
@@ -163,8 +164,8 @@ export function WeeklyReportPage() {
         .map(m => ({ student: m.studentName, reason: cancelReasonText(m) }))
       const followups = diaries
         .filter(d => bucketOf(d.studentConsultant) === b.id)
-        .map(d => ({ studentId: d.studentId, student: d.studentName, text: diaryFollowupText(d) }))
-        .filter(x => x.text)
+        .map(d => ({ studentId: d.studentId, student: d.studentName, items: diaryFollowupItems(d) }))
+        .filter(x => x.items.length > 0)
       return {
         id: b.id, name: b.name,
         students: studentsC.length,
@@ -195,7 +196,7 @@ export function WeeklyReportPage() {
   const nav = useNavigate()
   const [detail, setDetail] = useState<
     | { title: string; kind: 'students'; students: { id: string; name: string }[] }
-    | { title: string; kind: 'followups'; followups: { studentId: string; student: string; text: string }[] }
+    | { title: string; kind: 'followups'; followups: { studentId: string; student: string; items: { text: string; done: boolean }[] }[] }
     | null
   >(null)
   const goStudent = (id: string) => { setDetail(null); nav(`/service/student-360?student=${id}`) }
@@ -352,7 +353,16 @@ export function WeeklyReportPage() {
               {followupNotes.map((f, i) => (
                 <li key={i} className="text-sm border-l-2 border-amber-300 pl-2.5">
                   <div className="text-[11px] text-gray-400">{f.date} · {f.consultant} · {f.student}</div>
-                  <div className="text-gray-700 whitespace-pre-wrap">{f.text}</div>
+                  <div className="space-y-0.5">
+                    {f.items.map((it, j) => (
+                      <div key={j} className="text-gray-700 whitespace-pre-wrap">
+                        {it.done && (
+                          <Badge variant="outline" className="mr-1.5 align-middle text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200">완료됨</Badge>
+                        )}
+                        {it.text}
+                      </div>
+                    ))}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -393,7 +403,16 @@ export function WeeklyReportPage() {
                       className="text-sm font-medium hover:underline hover:text-primary flex items-center gap-1">
                       {f.student} <ChevronRight className="size-3.5 text-muted-foreground" />
                     </button>
-                    <p className="text-xs text-gray-600 whitespace-pre-wrap mt-1">{f.text}</p>
+                    <div className="mt-1 space-y-0.5">
+                      {f.items.map((it, j) => (
+                        <p key={j} className="text-xs text-gray-600 whitespace-pre-wrap">
+                          {it.done && (
+                            <Badge variant="outline" className="mr-1.5 align-middle text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200">완료됨</Badge>
+                          )}
+                          {it.text}
+                        </p>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </div>
