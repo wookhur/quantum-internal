@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { createNotificationsForUsers } from './useUserNotifications'
-import type { LeaveType } from '@/lib/leave'
+import type { LeaveType, HalfDayPeriod } from '@/lib/leave'
 
 export type LeaveStatus = 'requested' | 'approved' | 'rejected'
 
@@ -14,6 +14,8 @@ export interface LeaveRequest {
   startDate: string
   endDate: string
   days: number
+  /** 반차(0.5일)일 때 오전/오후 구분. 종일 휴가면 undefined. */
+  halfDayPeriod?: HalfDayPeriod
   paid: boolean
   reason?: string
   status: LeaveStatus
@@ -35,6 +37,7 @@ function mapRow(row: Record<string, unknown>): LeaveRequest {
     startDate: row.start_date as string,
     endDate: row.end_date as string,
     days: Number(row.days) || 0,
+    halfDayPeriod: (row.half_day_period as HalfDayPeriod) || undefined,
     paid: row.paid !== false,
     reason: (row.reason as string) || undefined,
     status: (row.status as LeaveStatus) || 'requested',
@@ -85,6 +88,7 @@ export function useCreateLeaveRequest() {
       startDate: string
       endDate: string
       days: number
+      halfDayPeriod?: HalfDayPeriod
       paid: boolean
       reason?: string
     }) => {
@@ -95,6 +99,7 @@ export function useCreateLeaveRequest() {
         start_date: input.startDate,
         end_date: input.endDate,
         days: input.days,
+        half_day_period: input.halfDayPeriod || null,
         paid: input.paid,
         reason: input.reason || null,
       })

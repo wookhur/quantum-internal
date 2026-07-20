@@ -15,7 +15,7 @@ import {
 } from '@/hooks/useLeaveRequests'
 import {
   computeAnnualEntitlement, dayCount, FAMILY_EVENTS, familyEventLabel,
-  LEAVE_TYPE_LABELS, PAID_LEAVE_ANNUAL, type LeaveType,
+  LEAVE_TYPE_LABELS, PAID_LEAVE_ANNUAL, HALF_DAY_LABELS, type LeaveType, type HalfDayPeriod,
 } from '@/lib/leave'
 import { useProfiles } from '@/hooks/useProfiles'
 import type { User } from '@/types'
@@ -226,11 +226,16 @@ function LeaveCard({ req, isApprover, isOwner, showRequester, onStatus, onDelete
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-sm">{typeLabel}</span>
               <Badge variant="outline" className="text-[10px]">{req.days}일</Badge>
+              {req.halfDayPeriod && (
+                <Badge className={`text-[10px] text-white border-transparent ${req.halfDayPeriod === 'morning' ? 'bg-sky-500' : 'bg-amber-500'}`}>
+                  {HALF_DAY_LABELS[req.halfDayPeriod]}
+                </Badge>
+              )}
               {!req.paid && <Badge variant="outline" className="text-[10px] text-gray-500">무급</Badge>}
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {showRequester && <>{req.requesterName} · </>}
-              {req.startDate} ~ {req.endDate}
+              {req.startDate}{req.endDate !== req.startDate ? ` ~ ${req.endDate}` : ''}
               {req.approvedByName && <> · 승인: {req.approvedByName}</>}
             </p>
           </div>
@@ -264,7 +269,7 @@ function LeaveCard({ req, isApprover, isOwner, showRequester, onStatus, onDelete
 function LeaveFormDialog({ onClose, onSubmit, pending }: {
   onClose: () => void
   onSubmit: (p: {
-    leaveType: LeaveType; eventType?: string; startDate: string; endDate: string; days: number; paid: boolean; reason?: string
+    leaveType: LeaveType; eventType?: string; startDate: string; endDate: string; days: number; halfDayPeriod?: HalfDayPeriod; paid: boolean; reason?: string
   }) => void
   pending: boolean
 }) {
@@ -274,6 +279,11 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
   const [endDate, setEndDate] = useState('')
   const [reason, setReason] = useState('')
   const [paid, setPaid] = useState(true)
+  // 반차(0.5일) 신청 여부 + 오전/오후. 경조사는 일수가 고정이라 반차 불가.
+  const [halfDay, setHalfDay] = useState(false)
+  const [halfDayPeriod, setHalfDayPeriod] = useState<HalfDayPeriod>('morning')
+  const halfDayAllowed = leaveType !== 'family_event'
+  const useHalfDay = halfDay && halfDayAllowed
 
   // Auto-computed days
   const autoDays = useMemo(() => {
@@ -285,9 +295,11 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
   }, [leaveType, eventType, startDate, endDate])
 
   const [daysOverride, setDaysOverride] = useState<string>('')
-  const days = daysOverride !== '' ? Number(daysOverride) : autoDays
+  // 반차면 0.5일 고정, 종료일은 시작일과 동일(단일 날짜).
+  const effectiveEndDate = useHalfDay ? startDate : endDate
+  const days = useHalfDay ? 0.5 : (daysOverride !== '' ? Number(daysOverride) : autoDays)
 
-  const canSubmit = !!startDate && !!endDate && days > 0
+  const canSubmit = !!startDate && !!effectiveEndDate && days > 0
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
@@ -322,27 +334,63 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>시작일</Label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          {halfDayAllowed && (
+            <div className="rounded-md border p-2.5 space-y-2 bg-gray-50/50">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={halfDay} onChange={(e) => setHalfDay(e.target.checked)} className="size-4" />
+                <span className="text-sm font-medium">반차 (0.5일)</span>
+              </label>
+              {halfDay && (
+                <div className="flex gap-2">
+                  {(['morning', 'afternoon'] as HalfDayPeriod[]).map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setHalfDayPeriod(p)}
+                      className={`flex-1 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+                        halfDayPeriod === p
+                          ? (p === 'morning' ? 'bg-sky-500 text-white border-sky-500' : 'bg-amber-500 text-white border-amber-500')
+                          : 'bg-white text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {HALF_DAY_LABELS[p]}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div>
-              <Label>종료일</Label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-            </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>일수</Label>
-              <Input
-                type="number" min="0.5" step="0.5"
-                value={daysOverride !== '' ? daysOverride : String(autoDays)}
-                onChange={(e) => setDaysOverride(e.target.value)}
-              />
-              <p className="text-[11px] text-muted-foreground mt-1">자동 계산: {autoDays}일 (수정 가능)</p>
+              <Label>{useHalfDay ? '날짜' : '시작일'}</Label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </div>
+            {!useHalfDay && (
+              <div>
+                <Label>종료일</Label>
+                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {useHalfDay ? (
+              <div>
+                <Label>일수</Label>
+                <div className="h-9 flex items-center text-sm font-medium">0.5일 · {HALF_DAY_LABELS[halfDayPeriod]}</div>
+              </div>
+            ) : (
+              <div>
+                <Label>일수</Label>
+                <Input
+                  type="number" min="0.5" step="0.5"
+                  value={daysOverride !== '' ? daysOverride : String(autoDays)}
+                  onChange={(e) => setDaysOverride(e.target.value)}
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">자동 계산: {autoDays}일 (수정 가능)</p>
+              </div>
+            )}
             {(leaveType === 'other' || leaveType === 'sick') && (
               <div>
                 <Label>유급 여부</Label>
@@ -369,7 +417,8 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
               onClick={() => onSubmit({
                 leaveType,
                 eventType: leaveType === 'family_event' ? eventType : undefined,
-                startDate, endDate, days,
+                startDate, endDate: effectiveEndDate, days,
+                halfDayPeriod: useHalfDay ? halfDayPeriod : undefined,
                 paid: (leaveType === 'other' || leaveType === 'sick') ? paid : true,
                 reason: reason.trim() || undefined,
               })}
@@ -437,6 +486,9 @@ function LeaveCalendar({ approved }: { approved: LeaveRequest[] }) {
             {Object.entries({ annual: '연차', paid_special: '유급휴가', sick: '병가', family_event: '경조사', other: '기타' }).map(([k, label]) => (
               <span key={k} className={`px-1.5 py-0.5 rounded ${TYPE_COLOR[k]}`}>{label}</span>
             ))}
+            <span className="w-px h-3 bg-gray-200" />
+            <span className="px-1 py-0.5 rounded bg-sky-500 text-white">오전 반차</span>
+            <span className="px-1 py-0.5 rounded bg-amber-500 text-white">오후 반차</span>
           </div>
         </div>
 
@@ -456,8 +508,13 @@ function LeaveCalendar({ approved }: { approved: LeaveRequest[] }) {
               <div key={ds} className={`min-h-[76px] rounded-md border p-1 flex flex-col gap-0.5 ${weekend ? 'bg-red-50/30' : 'bg-white'} ${ds === todayStr ? 'ring-2 ring-blue-400' : ''}`}>
                 <div className={`text-[11px] font-medium ${weekend ? 'text-red-500' : 'text-gray-600'}`}>{dnum}</div>
                 {items.map(r => (
-                  <div key={r.id} className={`text-[10px] rounded px-1 py-0.5 truncate ${TYPE_COLOR[r.leaveType] || TYPE_COLOR.other}`} title={`${r.requesterName || ''} · ${LEAVE_TYPE_LABELS[r.leaveType]}`}>
-                    {r.requesterName || '?'}
+                  <div key={r.id} className={`text-[10px] rounded px-1 py-0.5 truncate flex items-center gap-1 ${TYPE_COLOR[r.leaveType] || TYPE_COLOR.other}`} title={`${r.requesterName || ''} · ${LEAVE_TYPE_LABELS[r.leaveType]}${r.halfDayPeriod ? ` · ${HALF_DAY_LABELS[r.halfDayPeriod]}` : ''}`}>
+                    {r.halfDayPeriod && (
+                      <span className={`shrink-0 rounded px-1 text-white text-[9px] leading-tight ${r.halfDayPeriod === 'morning' ? 'bg-sky-500' : 'bg-amber-500'}`}>
+                        {r.halfDayPeriod === 'morning' ? '오전' : '오후'}
+                      </span>
+                    )}
+                    <span className="truncate">{r.requesterName || '?'}</span>
                   </div>
                 ))}
               </div>

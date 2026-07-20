@@ -22,6 +22,14 @@ export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
   other: '기타',
 }
 
+/** 반차(0.5일) 구분: 오전 / 오후 */
+export type HalfDayPeriod = 'morning' | 'afternoon'
+
+export const HALF_DAY_LABELS: Record<HalfDayPeriod, string> = {
+  morning: '오전 반차',
+  afternoon: '오후 반차',
+}
+
 export interface FamilyEvent {
   key: string
   label: string
