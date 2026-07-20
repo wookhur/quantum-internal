@@ -333,13 +333,13 @@ export function getEffectiveRoutes(
   let routes: string[]
   const custom = featureAccessRecords.find(r => r.userId === user.id)
   if (custom) {
-    // If per-route overrides exist, merge with module-expanded routes to avoid stale gaps
-    const moduleRoutes = expandModulesToRoutes(custom.enabledModules)
+    // enabledRoutes(있으면)는 게시판별로 명시 저장된 권위 있는 목록이다.
+    // 모듈 확장과 병합하면 '없음'으로 끈 게시판이 모듈 확장으로 되살아나므로(뷰어로 복원되는 버그)
+    // 병합하지 않고 enabledRoutes를 그대로 사용한다. (없을 때만 모듈 확장으로 폴백)
     if (custom.enabledRoutes.length > 0) {
-      const merged = new Set([...moduleRoutes, ...custom.enabledRoutes])
-      routes = [...merged]
+      routes = custom.enabledRoutes
     } else {
-      routes = moduleRoutes
+      routes = expandModulesToRoutes(custom.enabledModules)
     }
   } else {
     // Role defaults
