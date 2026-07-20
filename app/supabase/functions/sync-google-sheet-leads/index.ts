@@ -165,13 +165,19 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    // Fetch existing phone numbers from leads to avoid duplicates
+    // 기존 리드의 전화 + 이메일을 모아 중복 판정 (둘 중 하나라도 겹치면 같은 사람 → 스킵).
+    // 전화 단독 판정이면 전화가 비었거나 형식이 다른 경우 같은 사람을 새로 삽입해 대량 중복이 생김.
     const { data: existingLeads } = await supabase
       .from('leads')
-      .select('phone')
-    const existingPhones = new Set(
-      (existingLeads || []).map((l: { phone: string }) => normalizePhone(l.phone)),
-    )
+      .select('phone, email')
+    const existingPhones = new Set<string>()
+    const existingEmails = new Set<string>()
+    for (const l of (existingLeads || []) as { phone: string | null; email: string | null }[]) {
+      const p = normalizePhone(l.phone || '')
+      if (p) existingPhones.add(p)
+      const e = (l.email || '').trim().toLowerCase()
+      if (e) existingEmails.add(e)
+    }
 
     let totalFetched = 0
     let inserted = 0
@@ -182,7 +188,16 @@ Deno.serve(async (req) => {
       try {
         const rows = await fetchSheetTab(tab)
         totalFetched += rows.length
-        const newRows = rows.filter(r => !existingPhones.has(r.phone))
+        // 전화 OR 이메일이 이미 있으면 스킵. 이번 실행에서 잡은 사람도 즉시 등록해
+        // 탭 간(같은 사람이 여러 캠페인 탭에 있는 경우) 중복 삽입을 막는다.
+        const newRows = rows.filter(r => {
+          const e = (r.email || '').trim().toLowerCase()
+          if (r.phone && existingPhones.has(r.phone)) return false
+          if (e && existingEmails.has(e)) return false
+          if (r.phone) existingPhones.add(r.phone)
+          if (e) existingEmails.add(e)
+          return true
+        })
 
         if (newRows.length > 0) {
           const inserts = newRows.map(r => ({
@@ -209,7 +224,7 @@ Deno.serve(async (req) => {
             errors.push(`${tab}: ${insertErr.message}`)
           } else {
             inserted += newRows.length
-            newRows.forEach(r => existingPhones.add(r.phone))
+            // 중복 판정 세트는 위 filter에서 이미 갱신됨(전화+이메일)
           }
         }
 
