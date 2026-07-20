@@ -1,6 +1,6 @@
 // Supabase Edge Function: sync-google-sheet-leads
 // Reads all tabs from the Survey Response DB Google Sheet (public, no API key needed)
-// and inserts new leads into the leads table, deduplicating by phone number.
+// and inserts new leads into the leads table, deduplicating by phone OR email.
 // The sheet tab name becomes the source_channel for each lead.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
