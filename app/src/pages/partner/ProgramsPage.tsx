@@ -16,6 +16,8 @@ import {
   MessageSquare, Image as ImageIcon, Save, ChevronRight, Pencil,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useLeads, useCreateLead, useUpdateLead } from '@/hooks/useLeads'
 import { leadLevelConfig } from '@/lib/leadLevels'
@@ -65,7 +67,7 @@ async function downloadBrochure(url: string, baseName: string) {
 }
 
 // ── Communication log per entry ─────────────────────────────────
-function EntryComments({ entry }: { entry: ProgramEntry }) {
+function EntryComments({ entry, canEdit }: { entry: ProgramEntry; canEdit: boolean }) {
   const { language: lang } = useLanguage()
   const { data: comments = [], isLoading } = useProgramComments(entry.id)
   const addComment = useAddProgramComment()
@@ -74,6 +76,7 @@ function EntryComments({ entry }: { entry: ProgramEntry }) {
   const [content, setContent] = useState('')
 
   const submit = () => {
+    if (!canEdit) return
     if (!content.trim()) return
     addComment.mutate(
       { entryId: entry.id, method, content: content.trim() },
@@ -83,6 +86,7 @@ function EntryComments({ entry }: { entry: ProgramEntry }) {
 
   return (
     <div className="mt-2 rounded-lg bg-muted/40 p-3 space-y-2">
+      {canEdit && (
       <div className="flex gap-2">
         <select
           value={method}
@@ -104,6 +108,7 @@ function EntryComments({ entry }: { entry: ProgramEntry }) {
           {addComment.isPending ? <Loader2 className="size-3.5 animate-spin" /> : (lang === 'en' ? 'Add' : '기록')}
         </Button>
       </div>
+      )}
       {isLoading ? (
         <Loader2 className="size-4 animate-spin mx-auto my-2 text-muted-foreground" />
       ) : comments.length === 0 ? (
@@ -124,12 +129,14 @@ function EntryComments({ entry }: { entry: ProgramEntry }) {
                     {c.createdByName && ` · ${c.createdByName}`}
                   </p>
                 </div>
+                {canEdit && (
                 <button
                   className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0"
                   onClick={() => delComment.mutate({ id: c.id, entryId: entry.id })}
                 >
                   <Trash2 className="size-3" />
                 </button>
+                )}
               </div>
             )
           })}
@@ -140,7 +147,7 @@ function EntryComments({ entry }: { entry: ProgramEntry }) {
 }
 
 // ── One linked-lead row ─────────────────────────────────────────
-function EntryRow({ entry }: { entry: ProgramEntry }) {
+function EntryRow({ entry, canEdit }: { entry: ProgramEntry; canEdit: boolean }) {
   const { language: lang } = useLanguage()
   const updateEntry = useUpdateProgramEntry()
   const removeEntry = useRemoveProgramEntry()
@@ -155,6 +162,7 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
   })
 
   const startEdit = () => {
+    if (!canEdit) return
     setForm({
       studentName: entry.studentName || '', parentName: entry.parentName || '',
       currentSchool: entry.currentSchool || '', grade: entry.grade || '',
@@ -164,6 +172,7 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
   }
 
   const saveEdit = async () => {
+    if (!canEdit) return
     await updateLead.mutateAsync({
       id: entry.leadId,
       data: {
@@ -207,24 +216,29 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
           <select
             value={entry.stage}
             onChange={(e) => updateEntry.mutate({ id: entry.id, programId: entry.programId, stage: e.target.value as ProgramStage })}
+            disabled={!canEdit}
             className="h-7 w-[110px] rounded-lg border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {PROGRAM_STAGES.map((s) => (
               <option key={s.key} value={s.key}>{lang === 'en' ? s.en : s.ko}</option>
             ))}
           </select>
-          <Button variant="ghost" size="icon" className="size-7" onClick={startEdit} title={lang === 'en' ? 'Edit' : '수정'}>
-            <Pencil className="size-3.5" />
-          </Button>
+          {canEdit && (
+            <Button variant="ghost" size="icon" className="size-7" onClick={startEdit} title={lang === 'en' ? 'Edit' : '수정'}>
+              <Pencil className="size-3.5" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="size-7" onClick={() => setShowComments((v) => !v)} title={lang === 'en' ? 'Logs' : '소통 기록'}>
             <MessageSquare className="size-3.5" />
           </Button>
-          <Button
-            variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-destructive"
-            onClick={() => removeEntry.mutate({ id: entry.id, programId: entry.programId })}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
+          {canEdit && (
+            <Button
+              variant="ghost" size="icon" className="size-7 text-muted-foreground hover:text-destructive"
+              onClick={() => removeEntry.mutate({ id: entry.id, programId: entry.programId })}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -249,7 +263,7 @@ function EntryRow({ entry }: { entry: ProgramEntry }) {
         </div>
       )}
 
-      {showComments && <EntryComments entry={entry} />}
+      {showComments && <EntryComments entry={entry} canEdit={canEdit} />}
     </div>
   )
 }
@@ -384,7 +398,7 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
 }
 
 // ── Program detail ──────────────────────────────────────────────
-function ProgramDetail({ program }: { program: PartnerProgram }) {
+function ProgramDetail({ program, canEdit }: { program: PartnerProgram; canEdit: boolean }) {
   const { language: lang } = useLanguage()
   const { data: entries = [], isLoading } = useProgramEntries(program.id)
   const partnerOptions = usePartnerOptions()
@@ -407,6 +421,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
 
   // Run the AI vision summary on a base64 brochure image → fill the guide.
   const runExtract = async (b64: string, showError: boolean) => {
+    if (!canEdit) return
     setExtractErr(null)
     setExtracting(true)
     try {
@@ -429,6 +444,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
 
   // Upload a brochure (image or PDF), then try AI auto-summary (best-effort).
   const handleFile = async (file: File) => {
+    if (!canEdit) return
     setUploadErr(null)
     try {
       await uploadBrochure.mutateAsync({ programId: program.id, file })
@@ -444,6 +460,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
 
   // Explicit "generate from brochure" — re-reads the already-uploaded file.
   const generateFromBrochure = async () => {
+    if (!canEdit) return
     if (!program.brochureUrl) return
     setExtractErr(null)
     setExtracting(true)
@@ -466,6 +483,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
   }
 
   const saveGuide = () => {
+    if (!canEdit) return
     updateProgram.mutate({ id: program.id, guide }, { onSuccess: () => setGuideDirty(false) })
   }
 
@@ -477,6 +495,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
         <select
           value={program.partnerName || ''}
           onChange={(e) => updateProgram.mutate({ id: program.id, partnerName: e.target.value || null })}
+          disabled={!canEdit}
           className="h-8 w-[240px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <option value="">{lang === 'en' ? 'No partner' : '파트너사 미지정'}</option>
@@ -512,10 +531,12 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = '' }}
             />
             <div className="flex gap-2 flex-wrap">
+              {canEdit && (
               <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => fileRef.current?.click()} disabled={uploadBrochure.isPending || extracting}>
                 {uploadBrochure.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
                 {lang === 'en' ? 'Upload (image / PDF)' : '업로드 (이미지/PDF)'}
               </Button>
+              )}
               {program.brochureUrl && (
                 <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => downloadBrochure(program.brochureUrl!, program.name)}>
                   <Download className="size-3.5" /> {lang === 'en' ? 'Download' : '다운로드'}
@@ -536,7 +557,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
             <CardTitle className="text-sm flex items-center justify-between gap-2">
               <span>{lang === 'en' ? 'Program Guide' : '프로그램 안내'}</span>
               <div className="flex items-center gap-1.5">
-                {program.brochureUrl && (
+                {canEdit && program.brochureUrl && (
                   <Button
                     size="sm" variant="outline" className="h-7 text-xs gap-1"
                     onClick={generateFromBrochure} disabled={extracting}
@@ -545,7 +566,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
                     {lang === 'en' ? 'Generate from brochure' : '브로셔에서 자동 생성'}
                   </Button>
                 )}
-                {guideDirty && (
+                {canEdit && guideDirty && (
                   <Button size="sm" className="h-7 text-xs gap-1" onClick={saveGuide} disabled={updateProgram.isPending}>
                     <Save className="size-3" /> {lang === 'en' ? 'Save' : '저장'}
                   </Button>
@@ -562,6 +583,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
             <Textarea
               value={guide}
               onChange={(e) => { setGuide(e.target.value); setGuideDirty(true) }}
+              readOnly={!canEdit}
               rows={16}
               className="text-sm resize-none"
               placeholder={lang === 'en'
@@ -578,7 +600,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
           <CardTitle className="text-sm">{lang === 'en' ? 'Leads' : '리드 관리'} ({entries.length})</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <AddLeadBox programId={program.id} existingLeadIds={existingLeadIds} />
+          {canEdit && <AddLeadBox programId={program.id} existingLeadIds={existingLeadIds} />}
           {isLoading ? (
             <Loader2 className="size-5 animate-spin mx-auto my-6 text-muted-foreground" />
           ) : entries.length === 0 ? (
@@ -597,7 +619,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
                       <span className="text-xs text-muted-foreground">{list.length}</span>
                     </div>
                     <div className="space-y-2">
-                      {list.map((e) => <EntryRow key={e.id} entry={e} />)}
+                      {list.map((e) => <EntryRow key={e.id} entry={e} canEdit={canEdit} />)}
                     </div>
                   </div>
                 )
@@ -613,6 +635,7 @@ function ProgramDetail({ program }: { program: PartnerProgram }) {
 // ── Page ────────────────────────────────────────────────────────
 export function ProgramsPage() {
   const { language: lang } = useLanguage()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { data: programs = [], isLoading } = usePartnerPrograms()
   const partnerOptions = usePartnerOptions()
   const createProgram = useCreateProgram()
@@ -630,6 +653,7 @@ export function ProgramsPage() {
   const selected = programs.find((p) => p.id === selectedId) || filtered[0] || null
 
   const handleCreate = async () => {
+    if (!canEdit) return
     if (!form.name.trim()) return
     const created = await createProgram.mutateAsync({
       name: form.name.trim(),
@@ -651,9 +675,11 @@ export function ProgramsPage() {
               : '파트너사 프로그램을 문의 → 관심 → 신청 → 참여완료 단계로 관리합니다.'}
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setShowCreate(true)}>
-          <Plus className="size-4" /> {lang === 'en' ? 'New Program' : '새 프로그램'}
-        </Button>
+        {canEdit && (
+          <Button className="gap-2" onClick={() => setShowCreate(true)}>
+            <Plus className="size-4" /> {lang === 'en' ? 'New Program' : '새 프로그램'}
+          </Button>
+        )}
       </div>
 
       {/* Company filter */}
@@ -708,19 +734,21 @@ export function ProgramsPage() {
                     <h2 className="text-lg font-bold">{selected.name}</h2>
                     <p className="text-xs text-muted-foreground">{selected.partnerName || (lang === 'en' ? 'No partner assigned' : '파트너사 미지정')}</p>
                   </div>
-                  <Button
-                    variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5"
-                    onClick={() => {
-                      if (confirm(lang === 'en' ? 'Delete this program?' : '이 프로그램을 삭제하시겠습니까?')) {
-                        deleteProgram.mutate(selected.id)
-                        setSelectedId(null)
-                      }
-                    }}
-                  >
-                    <Trash2 className="size-3.5" /> {lang === 'en' ? 'Delete' : '삭제'}
-                  </Button>
+                  {canEdit && (
+                    <Button
+                      variant="ghost" size="sm" className="text-destructive hover:text-destructive gap-1.5"
+                      onClick={() => {
+                        if (confirm(lang === 'en' ? 'Delete this program?' : '이 프로그램을 삭제하시겠습니까?')) {
+                          deleteProgram.mutate(selected.id)
+                          setSelectedId(null)
+                        }
+                      }}
+                    >
+                      <Trash2 className="size-3.5" /> {lang === 'en' ? 'Delete' : '삭제'}
+                    </Button>
+                  )}
                 </div>
-                <ProgramDetail program={selected} />
+                <ProgramDetail program={selected} canEdit={canEdit} />
               </div>
             ) : (
               <Card><CardContent className="py-16 text-center text-sm text-muted-foreground">

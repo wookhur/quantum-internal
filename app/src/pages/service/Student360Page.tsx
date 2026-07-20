@@ -18,9 +18,10 @@ import {
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
 } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
@@ -179,6 +180,7 @@ const DIARY_FIELDS = [
 export function Student360Page() {
   const t = useT()
   const { user } = useAuth()
+  const canEdit = useCanEdit(useLocation().pathname)
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [consultantFilter, setConsultantFilter] = useState('')
@@ -253,11 +255,14 @@ export function Student360Page() {
             {t('nav.student360')}{' '}
             <span className="text-muted-foreground font-normal">({filtered.length})</span>
           </h1>
-          <StudentDialog
-            trigger={<Button size="sm"><Plus className="size-4 mr-1" />{t('student360.newStudent')}</Button>}
-            onSaved={(s) => setSelectedId(s.id)}
-            createdBy={user?.id}
-          />
+          {canEdit && (
+            <StudentDialog
+              trigger={<Button size="sm"><Plus className="size-4 mr-1" />{t('student360.newStudent')}</Button>}
+              onSaved={(s) => setSelectedId(s.id)}
+              createdBy={user?.id}
+              canEdit={canEdit}
+            />
+          )}
         </div>
         <div className="relative mb-2">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -367,16 +372,16 @@ export function Student360Page() {
           </div>
         ) : (
           <div className="space-y-4">
-            <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} />
-            <ECServicesSection studentId={selected.id} createdBy={user?.id} />
-            <AcademicSupportSection studentId={selected.id} createdBy={user?.id} />
-            <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} />
-            <MeetingsSection studentId={selected.id} createdBy={user?.id} authorName={user?.name} />
+            <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} canEdit={canEdit} />
+            <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
+            <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
+            <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} canEdit={canEdit} />
+            <MeetingsSection studentId={selected.id} createdBy={user?.id} authorName={user?.name} canEdit={canEdit} />
             {selected.essayEditor && (
-              <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} />
+              <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} canEdit={canEdit} />
             )}
-            <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} />
-            <ArchiveSection studentId={selected.id} createdBy={user?.id} />
+            <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} canEdit={canEdit} />
+            <ArchiveSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
           </div>
         )}
       </div>
@@ -385,10 +390,11 @@ export function Student360Page() {
 }
 
 // ────────────────────────── Profile ──────────────────────────
-function ProfileSection({ student, onDeleted, createdBy }: {
+function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
   student: ServiceStudent
   onDeleted: () => void
   createdBy?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const consultantName = useConsultantName()
@@ -418,6 +424,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
   const [editAddServices, setEditAddServices] = useState('')
 
   const openContractEdit = () => {
+    if (!canEdit) return
     setEditAppCount(applicationCount ? String(applicationCount) : '')
     setEditAddServices(additionalServices || '')
     setEditingContract(true)
@@ -455,23 +462,27 @@ function ProfileSection({ student, onDeleted, createdBy }: {
           {student.koreanName && <span className="text-muted-foreground font-normal">· {student.koreanName}</span>}
           {student.status && <Badge variant="outline" className={isArchivedStatus(student.status) ? (student.status === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}>{statusLabelFor(t, student.status)}</Badge>}
         </CardTitle>
-        <div className="flex gap-2">
-          <StudentDialog
-            student={student}
-            createdBy={createdBy}
-            trigger={<Button variant="outline" size="sm"><Pencil className="size-4 mr-1" />{t('common.edit')}</Button>}
-          />
-          <Button
-            variant="outline" size="sm"
-            onClick={() => {
-              if (confirm(t('student360.confirmDeleteStudent'))) {
-                del.mutate(student.id, { onSuccess: onDeleted })
-              }
-            }}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-2">
+            <StudentDialog
+              student={student}
+              createdBy={createdBy}
+              canEdit={canEdit}
+              trigger={<Button variant="outline" size="sm"><Pencil className="size-4 mr-1" />{t('common.edit')}</Button>}
+            />
+            <Button
+              variant="outline" size="sm"
+              onClick={() => {
+                if (!canEdit) return
+                if (confirm(t('student360.confirmDeleteStudent'))) {
+                  del.mutate(student.id, { onSuccess: onDeleted })
+                }
+              }}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         <Field icon={<Mail className="size-4" />} label={t('student360.email')} value={student.email} />
@@ -489,9 +500,11 @@ function ProfileSection({ student, onDeleted, createdBy }: {
         <div className="col-span-2 rounded-md border border-dashed p-3 grid grid-cols-2 gap-x-6 gap-y-2">
           <div className="col-span-2 flex items-center justify-between">
             <p className="text-xs font-medium text-muted-foreground">{t('contracts.applicationCount')} / {t('contracts.additionalServices')}</p>
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={openContractEdit}>
-              <Pencil className="size-3 mr-1" />{t('common.edit')}
-            </Button>
+            {canEdit && (
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={openContractEdit}>
+                <Pencil className="size-3 mr-1" />{t('common.edit')}
+              </Button>
+            )}
           </div>
           <Field label={t('contracts.applicationCount')} value={applicationCount ? `${applicationCount}개` : undefined} />
           <Field label={t('contracts.additionalServices')} value={additionalServices ?? undefined} />
@@ -513,7 +526,7 @@ function ProfileSection({ student, onDeleted, createdBy }: {
             </div>
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setEditingContract(false)}>{t('common.cancel')}</Button>
-              <Button size="sm" onClick={() => saveContract.mutate()} disabled={saveContract.isPending}>
+              <Button size="sm" onClick={() => { if (!canEdit) return; saveContract.mutate() }} disabled={saveContract.isPending}>
                 {saveContract.isPending ? <Loader2 className="size-4 animate-spin" /> : t('common.save')}
               </Button>
             </DialogFooter>
@@ -551,7 +564,7 @@ function Field({ icon, label, value }: { icon?: ReactNode; label: string; value?
 }
 
 // ────────────────────────── EC Services ──────────────────────────
-function ECServicesSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
+function ECServicesSection({ studentId, createdBy, canEdit }: { studentId: string; createdBy?: string; canEdit: boolean }) {
   const { data: activities = [] } = useECActivities(studentId)
   const del = useDeleteECActivity()
   const t = useT()
@@ -564,11 +577,14 @@ function ECServicesSection({ studentId, createdBy }: { studentId: string; create
           {t('student360.ecService')}
           <span className="text-muted-foreground font-normal">({activities.length})</span>
         </CardTitle>
-        <ECActivityDialog
-          studentId={studentId}
-          createdBy={createdBy}
-          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
-        />
+        {canEdit && (
+          <ECActivityDialog
+            studentId={studentId}
+            createdBy={createdBy}
+            canEdit={canEdit}
+            trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
+          />
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         {activities.length === 0 && (
@@ -578,20 +594,23 @@ function ECServicesSection({ studentId, createdBy }: { studentId: string; create
           <div key={a.id} className="rounded-lg border p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-sm">{a.partner || '—'}</span>
-              <div className="flex gap-1">
-                <ECActivityDialog
-                  studentId={studentId}
-                  activity={a}
-                  createdBy={createdBy}
-                  trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
-                />
-                <Button
-                  size="sm" variant="ghost"
-                  onClick={() => { if (confirm(t('student360.confirmDeleteGeneric'))) del.mutate({ id: a.id, studentId }) }}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
+              {canEdit && (
+                <div className="flex gap-1">
+                  <ECActivityDialog
+                    studentId={studentId}
+                    activity={a}
+                    createdBy={createdBy}
+                    canEdit={canEdit}
+                    trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
+                  />
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => { if (!canEdit) return; if (confirm(t('student360.confirmDeleteGeneric'))) del.mutate({ id: a.id, studentId }) }}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-sm">
               <div>
@@ -620,11 +639,12 @@ function ECServicesSection({ studentId, createdBy }: { studentId: string; create
   )
 }
 
-function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
+function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: {
   studentId: string
   activity?: ECActivity
   trigger: ReactNode
   createdBy?: string
+  canEdit: boolean
 }) {
   const [open, setOpen] = useState(false)
   const create = useCreateECActivity()
@@ -647,6 +667,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
   const submit = () => {
+    if (!canEdit) return
     const payload = {
       studentId,
       partner: form.partner || undefined,
@@ -770,7 +791,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy }: {
 }
 
 // ────────────────────────── Academic Support ──────────────────────────
-function AcademicSupportSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
+function AcademicSupportSection({ studentId, createdBy, canEdit }: { studentId: string; createdBy?: string; canEdit: boolean }) {
   const { data: items = [] } = useAcademicSupport(studentId)
   const del = useDeleteAcademicSupport()
   const t = useT()
@@ -783,11 +804,14 @@ function AcademicSupportSection({ studentId, createdBy }: { studentId: string; c
           {t('student360.academicSupport')}
           <span className="text-muted-foreground font-normal">({items.length})</span>
         </CardTitle>
-        <AcademicSupportDialog
-          studentId={studentId}
-          createdBy={createdBy}
-          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
-        />
+        {canEdit && (
+          <AcademicSupportDialog
+            studentId={studentId}
+            createdBy={createdBy}
+            canEdit={canEdit}
+            trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
+          />
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         {items.length === 0 && (
@@ -797,20 +821,23 @@ function AcademicSupportSection({ studentId, createdBy }: { studentId: string; c
           <div key={item.id} className="rounded-lg border p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-sm">{item.academyName || '—'}</span>
-              <div className="flex gap-1">
-                <AcademicSupportDialog
-                  studentId={studentId}
-                  item={item}
-                  createdBy={createdBy}
-                  trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
-                />
-                <Button
-                  size="sm" variant="ghost"
-                  onClick={() => { if (confirm(t('student360.confirmDeleteGeneric'))) del.mutate({ id: item.id, studentId }) }}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
+              {canEdit && (
+                <div className="flex gap-1">
+                  <AcademicSupportDialog
+                    studentId={studentId}
+                    item={item}
+                    createdBy={createdBy}
+                    canEdit={canEdit}
+                    trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
+                  />
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => { if (!canEdit) return; if (confirm(t('student360.confirmDeleteGeneric'))) del.mutate({ id: item.id, studentId }) }}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-sm">
               <div>
@@ -848,11 +875,12 @@ function AcademicSupportSection({ studentId, createdBy }: { studentId: string; c
   )
 }
 
-function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
+function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }: {
   studentId: string
   item?: AcademicSupportItem
   trigger: ReactNode
   createdBy?: string
+  canEdit: boolean
 }) {
   const consultantPool = useConsultantPool()
   const [open, setOpen] = useState(false)
@@ -879,6 +907,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
   const submit = () => {
+    if (!canEdit) return
     const resolvedAcademy = form.academySelect === '직접입력'
       ? (form.academyCustom.trim() || undefined)
       : (form.academySelect || undefined)
@@ -1019,10 +1048,11 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy }: {
 }
 
 // ────────────────────────── Portal Links ──────────────────────────
-function PortalLinksSection({ studentId, studentName, createdBy }: {
+function PortalLinksSection({ studentId, studentName, createdBy, canEdit }: {
   studentId: string
   studentName: string
   createdBy?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const { data: tokens = [], isLoading } = usePortalTokens(studentId)
@@ -1034,6 +1064,7 @@ function PortalLinksSection({ studentId, studentName, createdBy }: {
   const baseUrl = window.location.origin
 
   const handleCreate = () => {
+    if (!canEdit) return
     createToken.mutate({
       studentId,
       label: `${studentName} ${t('portal.parentLink')}`,
@@ -1055,14 +1086,16 @@ function PortalLinksSection({ studentId, studentName, createdBy }: {
           {t('portal.clientLinks')}
           <span className="text-muted-foreground font-normal">({tokens.length})</span>
         </CardTitle>
-        <Button
-          size="sm" variant="outline"
-          onClick={handleCreate}
-          disabled={createToken.isPending}
-        >
-          <Plus className="size-4 mr-1" />
-          {t('portal.generateLink')}
-        </Button>
+        {canEdit && (
+          <Button
+            size="sm" variant="outline"
+            onClick={handleCreate}
+            disabled={createToken.isPending}
+          >
+            <Plus className="size-4 mr-1" />
+            {t('portal.generateLink')}
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="space-y-2">
         {isLoading && <p className="text-sm text-muted-foreground">{t('common.loading')}</p>}
@@ -1112,23 +1145,28 @@ function PortalLinksSection({ studentId, studentName, createdBy }: {
                   >
                     <ExternalLink className="size-4 text-muted-foreground" />
                   </a>
-                  <Button
-                    size="sm" variant="ghost"
-                    onClick={() => toggleToken.mutate({ id: tk.id, studentId, isActive: !tk.isActive })}
-                    title={tk.isActive ? t('portal.deactivate') : t('portal.activate')}
-                  >
-                    <Power className={`size-4 ${tk.isActive ? 'text-emerald-500' : 'text-gray-400'}`} />
-                  </Button>
-                  <Button
-                    size="sm" variant="ghost"
-                    onClick={() => {
-                      if (confirm(t('portal.confirmDelete'))) {
-                        deleteToken.mutate({ id: tk.id, studentId })
-                      }
-                    }}
-                  >
-                    <Trash2 className="size-4 text-red-400" />
-                  </Button>
+                  {canEdit && (
+                    <Button
+                      size="sm" variant="ghost"
+                      onClick={() => { if (!canEdit) return; toggleToken.mutate({ id: tk.id, studentId, isActive: !tk.isActive }) }}
+                      title={tk.isActive ? t('portal.deactivate') : t('portal.activate')}
+                    >
+                      <Power className={`size-4 ${tk.isActive ? 'text-emerald-500' : 'text-gray-400'}`} />
+                    </Button>
+                  )}
+                  {canEdit && (
+                    <Button
+                      size="sm" variant="ghost"
+                      onClick={() => {
+                        if (!canEdit) return
+                        if (confirm(t('portal.confirmDelete'))) {
+                          deleteToken.mutate({ id: tk.id, studentId })
+                        }
+                      }}
+                    >
+                      <Trash2 className="size-4 text-red-400" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1140,11 +1178,12 @@ function PortalLinksSection({ studentId, studentName, createdBy }: {
 }
 
 // ────────────────────────── Student create/edit dialog ──────────────────────────
-function StudentDialog({ student, trigger, onSaved, createdBy }: {
+function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
   student?: ServiceStudent
   trigger: ReactNode
   onSaved?: (s: ServiceStudent) => void
   createdBy?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const consultantPool = useConsultantPool()
@@ -1190,6 +1229,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy }: {
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
   const submit = () => {
+    if (!canEdit) return
     if (!form.name.trim()) return
     const payload = {
       name: form.name.trim(),
@@ -1373,10 +1413,11 @@ function LabeledInput({ label, value, onChange, type }: { label: string; value: 
 }
 
 // ────────────────────────── Meetings ──────────────────────────
-function MeetingsSection({ studentId, createdBy, authorName }: {
+function MeetingsSection({ studentId, createdBy, authorName, canEdit }: {
   studentId: string
   createdBy?: string
   authorName?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const consultantName = useConsultantName()
@@ -1390,10 +1431,12 @@ function MeetingsSection({ studentId, createdBy, authorName }: {
           <CalendarDays className="size-5 text-primary" />
           {t('student360.meetings')} <span className="text-muted-foreground font-normal">({meetings.length})</span>
         </CardTitle>
-        <MeetingDialog
-          studentId={studentId} createdBy={createdBy}
-          trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
-        />
+        {canEdit && (
+          <MeetingDialog
+            studentId={studentId} createdBy={createdBy} canEdit={canEdit}
+            trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
+          />
+        )}
       </CardHeader>
       <CardContent className="space-y-2">
         {meetings.length === 0 && <p className="text-sm text-muted-foreground">{t('student360.noMeetings')}</p>}
@@ -1414,22 +1457,29 @@ function MeetingsSection({ studentId, createdBy, authorName }: {
                 <Badge className={REPORT_META[m.reportStatus].className}>
                   <FileText className="size-3 mr-1" />{t(REPORT_META[m.reportStatus].labelKey)}
                 </Badge>
-                <AutoDiaryButton
-                  studentId={studentId}
-                  meeting={m}
-                  createdBy={createdBy}
-                  authorName={authorName}
-                />
-                <MeetingDialog
-                  studentId={studentId} meeting={m} createdBy={createdBy}
-                  trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
-                />
-                <Button
-                  size="sm" variant="ghost"
-                  onClick={() => { if (confirm(t('student360.confirmDelete'))) del.mutate({ id: m.id, studentId }) }}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
+                {canEdit && (
+                  <AutoDiaryButton
+                    studentId={studentId}
+                    meeting={m}
+                    createdBy={createdBy}
+                    authorName={authorName}
+                    canEdit={canEdit}
+                  />
+                )}
+                {canEdit && (
+                  <MeetingDialog
+                    studentId={studentId} meeting={m} createdBy={createdBy} canEdit={canEdit}
+                    trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
+                  />
+                )}
+                {canEdit && (
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => { if (!canEdit) return; if (confirm(t('student360.confirmDelete'))) del.mutate({ id: m.id, studentId }) }}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                )}
               </div>
             </div>
             {m.summary && <p className="text-sm mt-2 whitespace-pre-wrap">{m.summary}</p>}
@@ -1455,7 +1505,7 @@ function MeetingsSection({ studentId, createdBy, authorName }: {
 }
 
 // ─── Essay-editor meetings (simple memo, separate from consultant meetings) ───
-function EditorMeetingsSection({ studentId, createdBy, defaultEditor }: { studentId: string; createdBy?: string; defaultEditor?: string }) {
+function EditorMeetingsSection({ studentId, createdBy, defaultEditor, canEdit }: { studentId: string; createdBy?: string; defaultEditor?: string; canEdit: boolean }) {
   const { data: items = [] } = useEditorMeetings(studentId)
   const create = useCreateEditorMeeting()
   const update = useUpdateEditorMeeting()
@@ -1466,11 +1516,13 @@ function EditorMeetingsSection({ studentId, createdBy, defaultEditor }: { studen
   const reset = () => { setEditingId(null); setForm({ meetingDate: '', editor: defaultEditor || '', content: '' }) }
 
   const startEdit = (m: EditorMeeting) => {
+    if (!canEdit) return
     setEditingId(m.id)
     setForm({ meetingDate: m.meetingDate || '', editor: m.editor || '', content: m.content || '' })
   }
 
   const save = () => {
+    if (!canEdit) return
     if (!form.content.trim() && !form.meetingDate) return
     const payload = { studentId, meetingDate: form.meetingDate || undefined, editor: form.editor || undefined, content: form.content || undefined }
     if (editingId) {
@@ -1497,42 +1549,47 @@ function EditorMeetingsSection({ studentId, createdBy, defaultEditor }: { studen
                 <span>{m.meetingDate || '—'}</span>
                 {m.editor && <Badge variant="outline" className="border-teal-300 text-teal-700">{m.editor}</Badge>}
               </div>
-              <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => startEdit(m)}><Pencil className="size-3.5" /></Button>
-                <Button size="sm" variant="ghost" onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: m.id, studentId }) }}><Trash2 className="size-3.5" /></Button>
-              </div>
+              {canEdit && (
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => startEdit(m)}><Pencil className="size-3.5" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => { if (!canEdit) return; if (confirm('삭제하시겠습니까?')) del.mutate({ id: m.id, studentId }) }}><Trash2 className="size-3.5" /></Button>
+                </div>
+              )}
             </div>
             {m.content && <p className="text-sm mt-2 whitespace-pre-wrap">{m.content}</p>}
           </div>
         ))}
 
-        <div className="rounded-lg border border-dashed p-3 space-y-2">
-          <div className="text-xs font-medium text-muted-foreground">{editingId ? '미팅 수정' : '미팅 추가'}</div>
-          <div className="flex gap-2">
-            <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} className="h-8 text-sm w-40" />
-            <Select value={form.editor} onValueChange={v => setForm(f => ({ ...f, editor: v ?? '' }))}>
-              <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="에디터 선택" /></SelectTrigger>
-              <SelectContent>{ESSAY_EDITORS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-            </Select>
+        {canEdit && (
+          <div className="rounded-lg border border-dashed p-3 space-y-2">
+            <div className="text-xs font-medium text-muted-foreground">{editingId ? '미팅 수정' : '미팅 추가'}</div>
+            <div className="flex gap-2">
+              <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} className="h-8 text-sm w-40" />
+              <Select value={form.editor} onValueChange={v => setForm(f => ({ ...f, editor: v ?? '' }))}>
+                <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="에디터 선택" /></SelectTrigger>
+                <SelectContent>{ESSAY_EDITORS.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <Textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="미팅 내용 메모..." rows={2} className="text-sm" />
+            <div className="flex justify-end gap-2">
+              {editingId && <Button size="sm" variant="outline" onClick={reset}>취소</Button>}
+              <Button size="sm" onClick={save} disabled={create.isPending || update.isPending || (!form.content.trim() && !form.meetingDate)}>
+                <Plus className="size-3.5 mr-1" />{editingId ? '저장' : '추가'}
+              </Button>
+            </div>
           </div>
-          <Textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="미팅 내용 메모..." rows={2} className="text-sm" />
-          <div className="flex justify-end gap-2">
-            {editingId && <Button size="sm" variant="outline" onClick={reset}>취소</Button>}
-            <Button size="sm" onClick={save} disabled={create.isPending || update.isPending || (!form.content.trim() && !form.meetingDate)}>
-              <Plus className="size-3.5 mr-1" />{editingId ? '저장' : '추가'}
-            </Button>
-          </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   )
 }
 
-function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
+function MeetingDialog({ studentId, meeting, trigger, createdBy, canEdit }: {
   studentId: string
   meeting?: ServiceMeeting
   trigger: ReactNode
   createdBy?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const consultantPool = useConsultantPool()
@@ -1556,6 +1613,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
   const submit = () => {
+    if (!canEdit) return
     // A report link implies the report is submitted — auto-promote from 'none'.
     const effectiveReportStatus = (form.reportUrl && form.reportStatus === 'none')
       ? 'submitted'
@@ -1656,10 +1714,11 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy }: {
 }
 
 // ────────────────────────── Diary ──────────────────────────
-function DiarySection({ studentId, authorName, createdBy }: {
+function DiarySection({ studentId, authorName, createdBy, canEdit }: {
   studentId: string
   authorName?: string
   createdBy?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const { data: entries = [] } = useServiceDiary(studentId)
@@ -1701,10 +1760,12 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 : <><ChevronUp className="size-4 mr-1" />{t('student360.collapseAll')}</>}
             </Button>
           )}
-          <DiaryDialog
-            studentId={studentId} authorName={authorName} createdBy={createdBy}
-            trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
-          />
+          {canEdit && (
+            <DiaryDialog
+              studentId={studentId} authorName={authorName} createdBy={createdBy} canEdit={canEdit}
+              trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
+            />
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
@@ -1738,16 +1799,20 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 >
                   {isCollapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
                 </Button>
-                <DiaryDialog
-                  studentId={studentId} entry={d} authorName={authorName} createdBy={createdBy}
-                  trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
-                />
-                <Button
-                  size="sm" variant="ghost"
-                  onClick={() => { if (confirm(t('student360.confirmDelete'))) del.mutate({ id: d.id, studentId }) }}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
+                {canEdit && (
+                  <DiaryDialog
+                    studentId={studentId} entry={d} authorName={authorName} createdBy={createdBy} canEdit={canEdit}
+                    trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
+                  />
+                )}
+                {canEdit && (
+                  <Button
+                    size="sm" variant="ghost"
+                    onClick={() => { if (!canEdit) return; if (confirm(t('student360.confirmDelete'))) del.mutate({ id: d.id, studentId }) }}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                )}
               </div>
             </div>
             {!isCollapsed && (<>
@@ -1785,6 +1850,7 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 labelKey="student360.followUpCommitments"
                 fallbackText={d.followUpCommitments}
                 createdBy={createdBy}
+                canEdit={canEdit}
               />
               <FollowupChecklist
                 studentId={studentId}
@@ -1794,6 +1860,7 @@ function DiarySection({ studentId, authorName, createdBy }: {
                 fallbackText={d.assignments}
                 createdBy={createdBy}
                 showToggle={false}
+                canEdit={canEdit}
               />
             </div>
             </>)}
@@ -1805,12 +1872,13 @@ function DiarySection({ studentId, authorName, createdBy }: {
   )
 }
 
-function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
+function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit }: {
   studentId: string
   entry?: ServiceDiaryEntry
   trigger: ReactNode
   authorName?: string
   createdBy?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const [open, setOpen] = useState(false)
@@ -1836,6 +1904,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy }: {
   const setField = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const submit = () => {
+    if (!canEdit) return
     const payload = {
       entryDate: form.entryDate || undefined,
       prepUrl: form.prepUrl || undefined,
@@ -1910,7 +1979,7 @@ const ARCHIVE_PER_GRADE: { key: PerGradeCategory; labelKey: string }[] = [
   { key: 'grade_analysis',  labelKey: 'archive.gradeAnalysis' },
 ]
 
-function ArchiveSection({ studentId, createdBy }: { studentId: string; createdBy?: string }) {
+function ArchiveSection({ studentId, createdBy, canEdit }: { studentId: string; createdBy?: string; canEdit: boolean }) {
   const t = useT()
   const { data: reports = [] } = useServiceReports(studentId)
 
@@ -1930,6 +1999,7 @@ function ArchiveSection({ studentId, createdBy }: { studentId: string; createdBy
             key={g.key}
             studentId={studentId}
             createdBy={createdBy}
+            canEdit={canEdit}
             category={g.key}
             title={t(g.labelKey)}
             rows={byCategory(g.key)}
@@ -1938,6 +2008,7 @@ function ArchiveSection({ studentId, createdBy }: { studentId: string; createdBy
         <OtherArchiveBlock
           studentId={studentId}
           createdBy={createdBy}
+          canEdit={canEdit}
           rows={byCategory('other')}
         />
       </CardContent>
@@ -1946,13 +2017,14 @@ function ArchiveSection({ studentId, createdBy }: { studentId: string; createdBy
 }
 
 function PerGradeArchiveBlock({
-  studentId, createdBy, category, title, rows,
+  studentId, createdBy, category, title, rows, canEdit,
 }: {
   studentId: string
   createdBy?: string
   category: PerGradeCategory
   title: string
   rows: { id: string; grade?: string; url: string }[]
+  canEdit: boolean
 }) {
   const t = useT()
   const create = useCreateServiceReport()
@@ -1962,6 +2034,7 @@ function PerGradeArchiveBlock({
   const [url, setUrl] = useState('')
 
   const save = () => {
+    if (!canEdit) return
     if (!url.trim()) return
     create.mutate(
       { studentId, category, grade: grade || undefined, url: url.trim(), createdBy },
@@ -1976,9 +2049,11 @@ function PerGradeArchiveBlock({
     <div className="rounded-lg border p-3">
       <div className="flex items-center justify-between mb-2">
         <p className="font-medium text-sm">{title}</p>
-        <Button size="sm" variant="ghost" onClick={() => setAdding(v => !v)}>
-          <Plus className="size-4" />
-        </Button>
+        {canEdit && (
+          <Button size="sm" variant="ghost" onClick={() => setAdding(v => !v)}>
+            <Plus className="size-4" />
+          </Button>
+        )}
       </div>
       {rows.length === 0 && !adding && (
         <p className="text-xs text-muted-foreground">{t('archive.empty')}</p>
@@ -1990,12 +2065,14 @@ function PerGradeArchiveBlock({
             <a href={r.url} target="_blank" rel="noreferrer" className="text-primary underline truncate flex-1">
               {r.url}
             </a>
-            <Button
-              size="sm" variant="ghost"
-              onClick={() => { if (confirm(t('student360.confirmDelete'))) del.mutate({ id: r.id, studentId }) }}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
+            {canEdit && (
+              <Button
+                size="sm" variant="ghost"
+                onClick={() => { if (!canEdit) return; if (confirm(t('student360.confirmDelete'))) del.mutate({ id: r.id, studentId }) }}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            )}
           </div>
         ))}
       </div>
@@ -2011,11 +2088,12 @@ function PerGradeArchiveBlock({
 }
 
 function OtherArchiveBlock({
-  studentId, createdBy, rows,
+  studentId, createdBy, rows, canEdit,
 }: {
   studentId: string
   createdBy?: string
   rows: { id: string; label?: string; url: string }[]
+  canEdit: boolean
 }) {
   const t = useT()
   const create = useCreateServiceReport()
@@ -2025,6 +2103,7 @@ function OtherArchiveBlock({
   const [url, setUrl] = useState('')
 
   const save = () => {
+    if (!canEdit) return
     if (!url.trim()) return
     create.mutate(
       { studentId, category: 'other', label: label || undefined, url: url.trim(), createdBy },
@@ -2036,9 +2115,11 @@ function OtherArchiveBlock({
     <div className="rounded-lg border p-3">
       <div className="flex items-center justify-between mb-2">
         <p className="font-medium text-sm">{t('archive.other')}</p>
-        <Button size="sm" variant="ghost" onClick={() => setAdding(v => !v)}>
-          <Plus className="size-4" />
-        </Button>
+        {canEdit && (
+          <Button size="sm" variant="ghost" onClick={() => setAdding(v => !v)}>
+            <Plus className="size-4" />
+          </Button>
+        )}
       </div>
       {rows.length === 0 && !adding && (
         <p className="text-xs text-muted-foreground">{t('archive.empty')}</p>
@@ -2050,12 +2131,14 @@ function OtherArchiveBlock({
             <a href={r.url} target="_blank" rel="noreferrer" className="text-primary underline truncate flex-1">
               {r.url}
             </a>
-            <Button
-              size="sm" variant="ghost"
-              onClick={() => { if (confirm(t('student360.confirmDelete'))) del.mutate({ id: r.id, studentId }) }}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
+            {canEdit && (
+              <Button
+                size="sm" variant="ghost"
+                onClick={() => { if (!canEdit) return; if (confirm(t('student360.confirmDelete'))) del.mutate({ id: r.id, studentId }) }}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            )}
           </div>
         ))}
       </div>
@@ -2071,11 +2154,12 @@ function OtherArchiveBlock({
 }
 
 // ────────────────────────── Auto-Diary (AI) ──────────────────────────
-function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
+function AutoDiaryButton({ studentId, meeting, createdBy, authorName, canEdit }: {
   studentId: string
   meeting: ServiceMeeting
   createdBy?: string
   authorName?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const create = useCreateServiceDiary()
@@ -2096,6 +2180,7 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
   }, [open, meeting.reportUrl])
 
   const run = async () => {
+    if (!canEdit) return
     setLoading(true)
     setError(null)
     try {
@@ -2232,7 +2317,7 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName }: {
 }
 
 // ────────────────────────── Follow-up Checklist ──────────────────────────
-function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, category = 'followup', labelKey = 'student360.followUpCommitments', showToggle = true }: {
+function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, category = 'followup', labelKey = 'student360.followUpCommitments', showToggle = true, canEdit }: {
   studentId: string
   diaryId: string
   fallbackText?: string
@@ -2240,6 +2325,7 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
   category?: string
   labelKey?: string
   showToggle?: boolean
+  canEdit: boolean
 }) {
   const t = useT()
   const { data: all = [] } = useServiceFollowups(studentId)
@@ -2256,8 +2342,9 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
 
-  const startEdit = (id: string, text: string) => { setEditingId(id); setEditDraft(text) }
+  const startEdit = (id: string, text: string) => { if (!canEdit) return; setEditingId(id); setEditDraft(text) }
   const saveEdit = () => {
+    if (!canEdit) return
     const v = editDraft.trim()
     if (!editingId || !v) { setEditingId(null); return }
     update.mutate({ id: editingId, studentId, text: v }, { onSuccess: () => setEditingId(null), onError: reportSaveError })
@@ -2269,15 +2356,18 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
       <div>
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium text-muted-foreground">{t(labelKey)}</p>
-          <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
-            <Plus className="size-3.5" />
-          </Button>
+          {canEdit && (
+            <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
+              <Plus className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
     )
   }
 
   const save = () => {
+    if (!canEdit) return
     const v = draft.trim()
     if (!v) { setAdding(false); return }
     create.mutate(
@@ -2299,9 +2389,11 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
             </span>
           )}
         </p>
-        <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
-          <Plus className="size-3.5" />
-        </Button>
+        {canEdit && (
+          <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
+            <Plus className="size-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* If no structured items yet but there is raw text, show it (one-time fallback) */}
@@ -2315,7 +2407,8 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
             {showToggle && editingId !== f.id && (
               <Switch
                 checked={f.done}
-                onCheckedChange={(v) => toggle.mutate({ id: f.id, studentId, done: !!v })}
+                disabled={!canEdit}
+                onCheckedChange={(v) => { if (!canEdit) return; toggle.mutate({ id: f.id, studentId, done: !!v }) }}
                 className="data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-red-500"
               />
             )}
@@ -2339,12 +2432,16 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
                 <span className={`flex-1 ${showToggle && f.done ? 'line-through text-muted-foreground' : ''}`}>
                   {f.text}
                 </span>
-                <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-primary" onClick={() => startEdit(f.id, f.text)}>
-                  <Pencil className="size-3.5" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => del.mutate({ id: f.id, studentId })}>
-                  <Trash2 className="size-3.5" />
-                </Button>
+                {canEdit && (
+                  <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-primary" onClick={() => startEdit(f.id, f.text)}>
+                    <Pencil className="size-3.5" />
+                  </Button>
+                )}
+                {canEdit && (
+                  <Button size="sm" variant="ghost" onClick={() => { if (!canEdit) return; del.mutate({ id: f.id, studentId }) }}>
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                )}
               </>
             )}
           </li>

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,7 @@ import { currentMonthStrKST } from '@/lib/date'
 import { extractTextFromPdf, renderPdfPagesToImages } from '@/lib/pdf-extract'
 import { extractMeetingFields, extractMeetingFieldsFromImages } from '@/lib/extract-meeting-ai'
 import { useT } from '@/i18n/LanguageContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 // MeetingPdfUploadDialog no longer used — PDF upload integrated into create flow
 
 function getMeetingBadge(num: number, t: (key: string, params?: Record<string, string | number>) => string) {
@@ -51,7 +52,7 @@ const INITIAL_MEETING_FORM = {
   memo: '',
 }
 
-function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdfUpload, onPdfDelete, pdfUploading, deleting, t }: {
+function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdfUpload, onPdfDelete, pdfUploading, deleting, canEdit, t }: {
   meeting: Meeting
   onEdit: (m: Meeting) => void
   onClose: () => void
@@ -61,6 +62,7 @@ function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdf
   onPdfDelete: (meetingId: string, pdfUrl: string) => void
   pdfUploading: boolean
   deleting: boolean
+  canEdit: boolean
   t: (key: string, params?: Record<string, string | number>) => string
 }) {
   const pdfInputRef = useRef<HTMLInputElement>(null)
@@ -87,18 +89,22 @@ function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdf
             )}
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(meeting)}>
-              <Pencil className="size-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive hover:text-destructive"
-              onClick={() => { if (confirm(t('meetings.deleteConfirm'))) onDelete(meeting.id) }}
-              disabled={deleting}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
+            {canEdit && (
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(meeting)}>
+                <Pencil className="size-3.5" />
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-destructive hover:text-destructive"
+                onClick={() => { if (confirm(t('meetings.deleteConfirm'))) onDelete(meeting.id) }}
+                disabled={deleting}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            )}
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
               <X className="size-3.5" />
             </Button>
@@ -167,16 +173,18 @@ function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdf
                 <ExternalLink className="size-3" />
                 {t('meetings.viewPdf')}
               </a>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 text-destructive hover:text-destructive"
-                onClick={() => onPdfDelete(meeting.id, meeting.notePdfUrl!)}
-              >
-                <Trash2 className="size-3" />
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 text-destructive hover:text-destructive"
+                  onClick={() => onPdfDelete(meeting.id, meeting.notePdfUrl!)}
+                >
+                  <Trash2 className="size-3" />
+                </Button>
+              )}
             </div>
-          ) : (
+          ) : canEdit ? (
             <>
               <Button
                 variant="outline"
@@ -200,6 +208,8 @@ function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdf
                 }}
               />
             </>
+          ) : (
+            <span className="text-xs text-muted-foreground">-</span>
           )}
         </div>
 
@@ -209,8 +219,9 @@ function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdf
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground">{t('meetings.col.note')}</span>
               <button
-                onClick={() => onNoteToggle(meeting.id, meeting.noteDelivered)}
-                className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
+                onClick={() => { if (canEdit) onNoteToggle(meeting.id, meeting.noteDelivered) }}
+                disabled={!canEdit}
+                className={`inline-flex items-center justify-center size-5 rounded border transition-colors disabled:cursor-default ${
                   meeting.noteDelivered
                     ? 'bg-primary border-primary text-primary-foreground'
                     : 'border-input hover:border-primary'
@@ -244,6 +255,7 @@ function MeetingDetail({ meeting, onEdit, onClose, onDelete, onNoteToggle, onPdf
 
 export function MeetingsPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const [dateFrom, setDateFrom] = useState<string>('')
   const [dateTo, setDateTo] = useState<string>('')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -266,6 +278,7 @@ export function MeetingsPage() {
   const deletePdf = useDeleteMeetingPdf()
 
   const handlePdfSelected = async (file: File) => {
+    if (!canEdit) return
     setPdfFile(file)
     setCreateStep('extracting')
     try {
@@ -313,6 +326,7 @@ export function MeetingsPage() {
   }
 
   const handleCreateMeeting = () => {
+    if (!canEdit) return
     const pendingPdf = pdfFile
     createMeeting.mutate(
       {
@@ -346,6 +360,7 @@ export function MeetingsPage() {
   }
 
   const openEditDialog = (m: Meeting) => {
+    if (!canEdit) return
     setEditForm({
       id: m.id,
       meetingDate: m.meetingDate || '',
@@ -367,6 +382,7 @@ export function MeetingsPage() {
   }
 
   const handleEditMeeting = () => {
+    if (!canEdit) return
     if (!editForm.id || !editForm.parentName || !editForm.meetingDate) return
     updateMeeting.mutate({
       id: editForm.id,
@@ -401,6 +417,7 @@ export function MeetingsPage() {
   const updateNoteDelivered = useUpdateNoteDelivered()
 
   const handleNoteToggle = (id: string, current: boolean) => {
+    if (!canEdit) return
     updateNoteDelivered.mutate({ id, noteDelivered: !current })
   }
 
@@ -429,9 +446,11 @@ export function MeetingsPage() {
           </p>
         </div>
         <div className="flex gap-1.5 shrink-0">
-          <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
-            <Plus className="size-4" /> {t('meetings.addMeeting')}
-          </Button>
+          {canEdit && (
+            <Button size="sm" className="gap-1" onClick={() => setDialogOpen(true)}>
+              <Plus className="size-4" /> {t('meetings.addMeeting')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -487,6 +506,7 @@ export function MeetingsPage() {
           onPdfDelete={(meetingId, pdfUrl) => deletePdf.mutate({ meetingId, pdfUrl })}
           pdfUploading={uploadPdf.isPending}
           deleting={deleteMeeting.isPending}
+          canEdit={canEdit}
           t={t}
         />
       )}
@@ -566,8 +586,9 @@ export function MeetingsPage() {
                         <td className="py-2 px-0 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-0.5">
                             <button
-                              onClick={() => handleNoteToggle(meeting.id, meeting.noteDelivered)}
-                              className={`inline-flex items-center justify-center size-5 rounded border transition-colors ${
+                              onClick={() => { if (canEdit) handleNoteToggle(meeting.id, meeting.noteDelivered) }}
+                              disabled={!canEdit}
+                              className={`inline-flex items-center justify-center size-5 rounded border transition-colors disabled:cursor-default ${
                                 meeting.noteDelivered
                                   ? 'bg-primary border-primary text-primary-foreground'
                                   : 'border-input hover:border-primary'
@@ -585,14 +606,16 @@ export function MeetingsPage() {
                           </div>
                         </td>
                         <td className="py-2 px-0 text-center" onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                            onClick={() => openEditDialog(meeting)}
-                          >
-                            <Pencil className="size-3" />
-                          </Button>
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                              onClick={() => openEditDialog(meeting)}
+                            >
+                              <Pencil className="size-3" />
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     )

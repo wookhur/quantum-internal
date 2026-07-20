@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useT } from '@/i18n/LanguageContext'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 import {
   DndContext,
   DragOverlay,
@@ -111,6 +112,7 @@ interface LeadCardProps {
   stageColor: string
   onClick: () => void
   isDragOverlay?: boolean
+  canEdit?: boolean
   t: ReturnType<typeof useT>
 }
 
@@ -184,7 +186,7 @@ function LeadCardContent({ lead, stageColor, onClick, isDragOverlay, t }: LeadCa
   )
 }
 
-function SortableLeadCard({ lead, stageColor, onClick, t }: LeadCardProps) {
+function SortableLeadCard({ lead, stageColor, onClick, canEdit, t }: LeadCardProps) {
   const {
     attributes,
     listeners,
@@ -192,7 +194,7 @@ function SortableLeadCard({ lead, stageColor, onClick, t }: LeadCardProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: lead.id, data: { lead } })
+  } = useSortable({ id: lead.id, data: { lead }, disabled: !canEdit })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -215,10 +217,11 @@ interface KanbanColumnProps {
   stage: (typeof PIPELINE_STAGES)[number]
   leads: Lead[]
   onCardClick: (id: string) => void
+  canEdit: boolean
   t: ReturnType<typeof useT>
 }
 
-function KanbanColumn({ stage, leads, onCardClick, t }: KanbanColumnProps) {
+function KanbanColumn({ stage, leads, onCardClick, canEdit, t }: KanbanColumnProps) {
   const stageColor = STAGE_COLOR_MAP[stage.key] || '#C4C4C4'
 
   return (
@@ -254,6 +257,7 @@ function KanbanColumn({ stage, leads, onCardClick, t }: KanbanColumnProps) {
               lead={lead}
               stageColor={stageColor}
               onClick={() => onCardClick(lead.id)}
+              canEdit={canEdit}
               t={t}
             />
           ))}
@@ -377,10 +381,11 @@ function InactiveDropZones({ isDragging, t }: { isDragging: boolean; t: ReturnTy
 interface InactiveSectionProps {
   leads: Lead[]
   onReactivate: (lead: Lead) => void
+  canEdit: boolean
   t: ReturnType<typeof useT>
 }
 
-function InactiveLeadsSection({ leads, onReactivate, t }: InactiveSectionProps) {
+function InactiveLeadsSection({ leads, onReactivate, canEdit, t }: InactiveSectionProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   if (leads.length === 0) return null
@@ -454,15 +459,17 @@ function InactiveLeadsSection({ leads, onReactivate, t }: InactiveSectionProps) 
                       {timeAgo(lead.updatedAt, t)}
                     </td>
                     <td>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs gap-1 text-primary hover:text-primary"
-                        onClick={() => onReactivate(lead)}
-                      >
-                        <RotateCcw className="size-3" />
-                        {t('pipeline.reactivate')}
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs gap-1 text-primary hover:text-primary"
+                          onClick={() => onReactivate(lead)}
+                        >
+                          <RotateCcw className="size-3" />
+                          {t('pipeline.reactivate')}
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 )
@@ -482,6 +489,7 @@ function InactiveLeadsSection({ leads, onReactivate, t }: InactiveSectionProps) 
 export function PipelinePage() {
   const t = useT()
   const navigate = useNavigate()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { data: leads = [], isLoading } = useLeads()
   const updateLead = useUpdateLead()
 
@@ -538,6 +546,8 @@ export function PipelinePage() {
     (event: DragEndEvent) => {
       setActiveId(null)
 
+      if (!canEdit) return
+
       const { active, over } = event
       if (!over) return
 
@@ -591,7 +601,7 @@ export function PipelinePage() {
         },
       )
     },
-    [leads, updateLead, navigate],
+    [leads, updateLead, navigate, canEdit],
   )
 
   const handleDragOver = useCallback((_event: DragOverEvent) => {
@@ -607,13 +617,14 @@ export function PipelinePage() {
 
   const handleReactivate = useCallback(
     (lead: Lead) => {
+      if (!canEdit) return
       updateLead.mutate({
         id: lead.id,
         data: { pipelineStage: 'new_lead' },
         previousStage: lead.pipelineStage,
       })
     },
-    [updateLead],
+    [updateLead, canEdit],
   )
 
   // ---- Render ----
@@ -672,6 +683,7 @@ export function PipelinePage() {
               stage={stage}
               leads={columnLeads}
               onCardClick={handleCardClick}
+              canEdit={canEdit}
               t={t}
             />
           ))}
@@ -702,6 +714,7 @@ export function PipelinePage() {
       <InactiveLeadsSection
         leads={inactiveLeads}
         onReactivate={handleReactivate}
+        canEdit={canEdit}
         t={t}
       />
     </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +30,7 @@ import {
   usePartnerInstructors, useUpsertPartnerInstructor, useDeletePartnerInstructor,
   type PartnerInstructor,
 } from '@/hooks/usePartnerInstructors'
+import { useCanEdit } from '@/hooks/usePermissions'
 
 /** Selectable internal boards, grouped by section — excludes admin-only routes. */
 const SELECTABLE_SECTIONS = FEATURE_MODULES
@@ -48,6 +50,8 @@ export function PartnerInstructorsPage() {
   const t = useT()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const canEditPerm = useCanEdit(useLocation().pathname)
+  const canEdit = isAdmin && canEditPerm
 
   const { data: instructors = [], isLoading } = usePartnerInstructors()
   const { data: fees = [] } = useAllServiceProgramFees()
@@ -82,7 +86,7 @@ export function PartnerInstructorsPage() {
             외부 파트너사 강사 계정을 이메일로 등록하고 <b>소속학원 · 담당과목 · 특이사항 · 접근가능권한</b>을 설정합니다.
           </p>
         </div>
-        <Button onClick={() => setAddOpen(true)}><Plus className="size-4 mr-1" /> 강사 추가</Button>
+        {canEdit && <Button onClick={() => setAddOpen(true)}><Plus className="size-4 mr-1" /> 강사 추가</Button>}
       </div>
 
       <Card>
@@ -130,13 +134,17 @@ export function PartnerInstructorsPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-0.5">
-                          <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-purple-600" title="수정" onClick={() => setEditing(ins)}>
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" title="삭제"
-                            onClick={() => { if (confirm(`'${ins.email}' 강사를 삭제할까요?`)) del.mutate(ins.id) }}>
-                            <Trash2 className="size-4" />
-                          </Button>
+                          {canEdit && (
+                            <>
+                              <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-purple-600" title="수정" onClick={() => setEditing(ins)}>
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" title="삭제"
+                                onClick={() => { if (confirm(`'${ins.email}' 강사를 삭제할까요?`)) del.mutate(ins.id) }}>
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -152,6 +160,7 @@ export function PartnerInstructorsPage() {
         <InstructorDialog
           instructor={editing}
           academyOptions={academyOptions}
+          canEdit={canEdit}
           onClose={() => { setAddOpen(false); setEditing(null) }}
         />
       )}
@@ -159,9 +168,10 @@ export function PartnerInstructorsPage() {
   )
 }
 
-function InstructorDialog({ instructor, academyOptions, onClose }: {
+function InstructorDialog({ instructor, academyOptions, canEdit, onClose }: {
   instructor: PartnerInstructor | null
   academyOptions: string[]
+  canEdit: boolean
   onClose: () => void
 }) {
   const t = useT()
@@ -189,9 +199,10 @@ function InstructorDialog({ instructor, academyOptions, onClose }: {
   const removeStudent = (id: string) => setStudentIds(prev => prev.filter(x => x !== id))
 
   const emailValid = /.+@.+\..+/.test(email.trim())
-  const canSave = emailValid && !upsert.isPending
+  const canSave = canEdit && emailValid && !upsert.isPending
 
   const handleSave = () => {
+    if (!canEdit) return
     if (!canSave) return
     upsert.mutate(
       { id: instructor?.id, email: email.trim(), academy: academy || undefined, subject, notes, studentIds, enabledRoutes: routes },

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useT } from '@/i18n/LanguageContext'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -145,6 +146,7 @@ export function LeadsPage() {
 
 function LeadsTableView() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   // -- Filter state
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<string>('all')
@@ -244,6 +246,7 @@ function LeadsTableView() {
   }
 
   const handleCreateLead = () => {
+    if (!canEdit) return
     if (!form.parentName.trim() || !form.phone.trim() || !form.sourceChannel) return
     createLead.mutate(
       {
@@ -292,28 +295,30 @@ function LeadsTableView() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="gap-1.5"
-            onClick={() => syncSheet.mutate(undefined, {
-              onSuccess: (data) => {
-                alert(`동기화 완료: ${data?.inserted ?? 0}건의 새 리드가 추가되었습니다.`)
-              },
-              onError: () => {
-                alert('동기화 실패: Google API 키 설정을 확인해주세요.')
-              },
-            })}
-            disabled={syncSheet.isPending}
-          >
-            <RefreshCw className={`size-4 ${syncSheet.isPending ? 'animate-spin' : ''}`} />
-            {syncSheet.isPending ? '동기화 중...' : '시트 동기화'}
-          </Button>
-          <Button className="gap-1.5" onClick={() => setDialogOpen(true)}>
-            <Plus className="size-4" />
-            {t('leads.newLead')}
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => syncSheet.mutate(undefined, {
+                onSuccess: (data) => {
+                  alert(`동기화 완료: ${data?.inserted ?? 0}건의 새 리드가 추가되었습니다.`)
+                },
+                onError: () => {
+                  alert('동기화 실패: Google API 키 설정을 확인해주세요.')
+                },
+              })}
+              disabled={syncSheet.isPending}
+            >
+              <RefreshCw className={`size-4 ${syncSheet.isPending ? 'animate-spin' : ''}`} />
+              {syncSheet.isPending ? '동기화 중...' : '시트 동기화'}
+            </Button>
+            <Button className="gap-1.5" onClick={() => setDialogOpen(true)}>
+              <Plus className="size-4" />
+              {t('leads.newLead')}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* ---- Filter Bar ---- */}
@@ -471,7 +476,7 @@ function LeadsTableView() {
                   : t('leads.noLeadsEmpty')}
               </p>
             </div>
-            {activeFilterCount === 0 && (
+            {activeFilterCount === 0 && canEdit && (
               <Button size="sm" className="gap-1.5 mt-1" onClick={() => setDialogOpen(true)}>
                 <Plus className="size-3.5" />
                 {t('leads.addNewLead')}
@@ -565,16 +570,18 @@ function LeadsTableView() {
                       </span>
                     </td>
                     <td>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Link to={`/sales/leads/${lead.id}`}>
+                      {canEdit && (
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Link to={`/sales/leads/${lead.id}`}>
+                            <Button variant="ghost" size="icon-xs">
+                              <Pencil className="size-3.5" />
+                            </Button>
+                          </Link>
                           <Button variant="ghost" size="icon-xs">
-                            <Pencil className="size-3.5" />
+                            <MoreHorizontal className="size-3.5" />
                           </Button>
-                        </Link>
-                        <Button variant="ghost" size="icon-xs">
-                          <MoreHorizontal className="size-3.5" />
-                        </Button>
-                      </div>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

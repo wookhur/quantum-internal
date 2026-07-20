@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -93,7 +95,7 @@ function detectColumns(header: string[]): Record<string, number> {
   }
 }
 
-function CsvImportDialog() {
+function CsvImportDialog({ canEdit }: { canEdit: boolean }) {
   const { data: seminars = [] } = useSeminars()
   const createSeminar = useCreateSeminar()
   const bulkImport = useBulkImportRegistrations()
@@ -148,6 +150,7 @@ function CsvImportDialog() {
   }
 
   const doImport = async () => {
+    if (!canEdit) return
     setBusy(true); setErr(null)
     try {
       let seminarId = target
@@ -168,6 +171,8 @@ function CsvImportDialog() {
   }
 
   const attendedCount = rows.filter(r => r.attended).length
+
+  if (!canEdit) return null
 
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset() }}>
@@ -244,16 +249,26 @@ function formatSeminarDate(raw: string): string {
 function SessionsEditor({
   sessions,
   onChange,
+  canEdit,
 }: {
   sessions: SeminarSession[]
   onChange: (next: SeminarSession[]) => void
+  canEdit: boolean
 }) {
   const update = (idx: number, patch: Partial<SeminarSession>) => {
+    if (!canEdit) return
     onChange(sessions.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
   }
-  const add = () => onChange([...sessions, { label: '', datetime: '' }])
-  const remove = (idx: number) => onChange(sessions.filter((_, i) => i !== idx))
+  const add = () => {
+    if (!canEdit) return
+    onChange([...sessions, { label: '', datetime: '' }])
+  }
+  const remove = (idx: number) => {
+    if (!canEdit) return
+    onChange(sessions.filter((_, i) => i !== idx))
+  }
   const move = (idx: number, dir: -1 | 1) => {
+    if (!canEdit) return
     const j = idx + dir
     if (j < 0 || j >= sessions.length) return
     const next = [...sessions]
@@ -261,22 +276,27 @@ function SessionsEditor({
     onChange(next)
   }
   // 날짜·시간순 정렬 (datetime 우선, 없으면 라벨의 M/D를 읽어 정렬).
-  const sortByTime = () => onChange(sortSeminarSessions(sessions))
+  const sortByTime = () => {
+    if (!canEdit) return
+    onChange(sortSeminarSessions(sessions))
+  }
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label>세션 일정 (여러 개 등록 가능)</Label>
-        <div className="flex gap-1.5">
-          {sessions.length > 1 && (
-            <Button type="button" variant="outline" size="sm" onClick={sortByTime}>
-              <ArrowDownUp className="size-3 mr-1" /> 날짜·시간순 정렬
+        {canEdit && (
+          <div className="flex gap-1.5">
+            {sessions.length > 1 && (
+              <Button type="button" variant="outline" size="sm" onClick={sortByTime}>
+                <ArrowDownUp className="size-3 mr-1" /> 날짜·시간순 정렬
+              </Button>
+            )}
+            <Button type="button" variant="outline" size="sm" onClick={add}>
+              <Plus className="size-3 mr-1" /> 세션 추가
             </Button>
-          )}
-          <Button type="button" variant="outline" size="sm" onClick={add}>
-            <Plus className="size-3 mr-1" /> 세션 추가
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
       {sessions.length === 0 ? (
         <p className="text-xs text-muted-foreground py-2">
@@ -287,10 +307,10 @@ function SessionsEditor({
           {sessions.map((s, i) => (
             <div key={i} className="flex items-start gap-2">
               <div className="flex flex-col pt-1">
-                <Button type="button" variant="ghost" size="icon" className="size-6" onClick={() => move(i, -1)} disabled={i === 0} aria-label="위로">
+                <Button type="button" variant="ghost" size="icon" className="size-6" onClick={() => move(i, -1)} disabled={!canEdit || i === 0} aria-label="위로">
                   <ChevronUp className="size-4 text-muted-foreground" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" className="size-6" onClick={() => move(i, 1)} disabled={i === sessions.length - 1} aria-label="아래로">
+                <Button type="button" variant="ghost" size="icon" className="size-6" onClick={() => move(i, 1)} disabled={!canEdit || i === sessions.length - 1} aria-label="아래로">
                   <ChevronDown className="size-4 text-muted-foreground" />
                 </Button>
               </div>
@@ -299,23 +319,27 @@ function SessionsEditor({
                   value={s.label}
                   onChange={e => update(i, { label: e.target.value })}
                   placeholder="예: 7/18 (토) Natural Science: Bio, Chem, Physics 등"
+                  disabled={!canEdit}
                 />
                 <input
                   type="datetime-local"
                   className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   value={s.datetime || ''}
                   onChange={e => update(i, { datetime: e.target.value })}
+                  disabled={!canEdit}
                 />
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => remove(i)}
-                aria-label="세션 삭제"
-              >
-                <X className="size-4 text-muted-foreground" />
-              </Button>
+              {canEdit && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => remove(i)}
+                  aria-label="세션 삭제"
+                >
+                  <X className="size-4 text-muted-foreground" />
+                </Button>
+              )}
             </div>
           ))}
         </div>
@@ -343,7 +367,7 @@ function CopyLinkButton({ seminarId }: { seminarId: string }) {
   )
 }
 
-function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
+function RegistrationsPanel({ seminar, canEdit }: { seminar: Seminar; canEdit: boolean }) {
   const { data: regs = [], isLoading } = useSeminarRegistrations(seminar.id)
   const { data: allLeads = [] } = useLeads()
   const { data: leadAttendance = [] } = useAllLeadAttendance()
@@ -379,14 +403,16 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
   const [editId, setEditId] = useState<string | null>(null)
   const [editLabels, setEditLabels] = useState<string[]>([])
 
-  const startEdit = (id: string, labels: string[]) => { setEditId(id); setEditLabels(labels) }
+  const startEdit = (id: string, labels: string[]) => { if (!canEdit) return; setEditId(id); setEditLabels(labels) }
   const toggleEditLabel = (label: string) =>
     setEditLabels(prev => prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label])
-  const saveEdit = (id: string) =>
+  const saveEdit = (id: string) => {
+    if (!canEdit) return
     updateSessions.mutate(
       { id, sessionLabels: editLabels },
       { onSuccess: () => setEditId(null), onError: (e) => alert((e as Error).message) },
     )
+  }
 
   const hasSessions = seminar.sessions.length > 1
 
@@ -494,9 +520,10 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
                       const fromCold = attended && !r.attended
                       return (
                         <button
-                          onClick={() => updateAttended.mutate({ id: r.id, attended: !r.attended })}
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full border ${attended ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}
-                          title={fromCold ? '콜드콜에서 참석완료로 표시됨' : '참석 여부 토글'}
+                          onClick={() => { if (!canEdit) return; updateAttended.mutate({ id: r.id, attended: !r.attended }) }}
+                          disabled={!canEdit}
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full border ${attended ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-400 border-gray-200'} ${canEdit ? '' : 'cursor-default'}`}
+                          title={fromCold ? '콜드콜에서 참석완료로 표시됨' : (canEdit ? '참석 여부 토글' : '참석 여부')}
                         >
                           {attended ? (fromCold ? '참석(콜드콜)' : '참석') : '미참석'}
                         </button>
@@ -554,7 +581,7 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
                         </Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditId(null)}>취소</Button>
                       </div>
-                    ) : (
+                    ) : canEdit ? (
                       <div className="flex items-center gap-0.5">
                         {hasSessions && (
                           <Button variant="ghost" size="icon" onClick={() => startEdit(r.id, r.sessionLabels)} aria-label="세션 수정">
@@ -565,13 +592,14 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
                           variant="ghost"
                           size="icon"
                           onClick={() => {
+                            if (!canEdit) return
                             if (confirm('이 신청을 삭제하시겠습니까?')) deleteMut.mutate(r.id)
                           }}
                         >
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
                       </div>
-                    )}
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}
@@ -585,6 +613,7 @@ function RegistrationsPanel({ seminar }: { seminar: Seminar }) {
 
 export function SeminarsPage() {
   const { t } = useLanguage()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { data: seminars = [], isLoading } = useSeminars()
   const { data: attendance = [] } = useAllLeadAttendance()
   const { data: seminarsLite = [] } = useSeminarsWithRegistrations()
@@ -622,6 +651,7 @@ export function SeminarsPage() {
   })
 
   const openEdit = (s: Seminar) => {
+    if (!canEdit) return
     const [d, tm] = (s.date || ' ').split(' ')
     setEditing(s)
     setForm({
@@ -637,6 +667,7 @@ export function SeminarsPage() {
   }
 
   const handleCreate = async () => {
+    if (!canEdit) return
     if (!form.title.trim()) return
     setError(null)
     try {
@@ -659,6 +690,7 @@ export function SeminarsPage() {
   }
 
   const handleUpdate = async () => {
+    if (!canEdit) return
     if (!editing || !form.title.trim()) return
     setError(null)
     try {
@@ -686,10 +718,12 @@ export function SeminarsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t('nav.seminars')}</h1>
         <div className="flex items-center gap-2">
-          <CsvImportDialog />
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="size-4 mr-2" /> 새 세미나
-          </Button>
+          <CsvImportDialog canEdit={canEdit} />
+          {canEdit && (
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="size-4 mr-2" /> 새 세미나
+            </Button>
+          )}
         </div>
       </div>
 
@@ -727,26 +761,31 @@ export function SeminarsPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <CopyLinkButton seminarId={s.id} />
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(s)}>
-                      <Pencil className="size-4 mr-1" /> 수정
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => updateMut.mutate({ id: s.id, active: !s.active })}
-                    >
-                      {s.active ? <EyeOff className="size-4 mr-1" /> : <Eye className="size-4 mr-1" />}
-                      {s.active ? '마감' : '열기'}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        if (confirm('이 세미나를 삭제하시겠습니까?')) deleteMut.mutate(s.id)
-                      }}
-                    >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
+                    {canEdit && (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(s)}>
+                          <Pencil className="size-4 mr-1" /> 수정
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => { if (!canEdit) return; updateMut.mutate({ id: s.id, active: !s.active }) }}
+                        >
+                          {s.active ? <EyeOff className="size-4 mr-1" /> : <Eye className="size-4 mr-1" />}
+                          {s.active ? '마감' : '열기'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (!canEdit) return
+                            if (confirm('이 세미나를 삭제하시겠습니까?')) deleteMut.mutate(s.id)
+                          }}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
                 {s.description && (
@@ -798,7 +837,7 @@ export function SeminarsPage() {
                     <><ChevronDown className="size-4 mr-1" /> 신청자 보기</>
                   )}
                 </Button>
-                {expandedId === s.id && <RegistrationsPanel seminar={s} />}
+                {expandedId === s.id && <RegistrationsPanel seminar={s} canEdit={canEdit} />}
               </CardContent>
             </Card>
           ))}
@@ -869,6 +908,7 @@ export function SeminarsPage() {
             <SessionsEditor
               sessions={form.sessions}
               onChange={sessions => setForm({ ...form, sessions })}
+              canEdit={canEdit}
             />
           </div>
           {error && (
@@ -876,7 +916,7 @@ export function SeminarsPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { resetForm(); setShowCreate(false) }}>취소</Button>
-            <Button onClick={handleCreate} disabled={createMut.isPending || !form.title.trim()}>
+            <Button onClick={handleCreate} disabled={!canEdit || createMut.isPending || !form.title.trim()}>
               {createMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
               만들기
             </Button>
@@ -944,6 +984,7 @@ export function SeminarsPage() {
             <SessionsEditor
               sessions={form.sessions}
               onChange={sessions => setForm({ ...form, sessions })}
+              canEdit={canEdit}
             />
           </div>
           {error && (
@@ -951,7 +992,7 @@ export function SeminarsPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditing(null); resetForm() }}>취소</Button>
-            <Button onClick={handleUpdate} disabled={updateMut.isPending || !form.title.trim()}>
+            <Button onClick={handleUpdate} disabled={!canEdit || updateMut.isPending || !form.title.trim()}>
               {updateMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
               저장
             </Button>

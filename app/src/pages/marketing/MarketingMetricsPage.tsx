@@ -16,6 +16,8 @@ import {
 import type { MarketingMetric } from '@/types'
 import { currentYearKST, currentMonthKST } from '@/lib/date'
 import { useT } from '@/i18n/LanguageContext'
+import { useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   AreaChart, Area,
@@ -51,6 +53,7 @@ function formatNum(n: number): string {
 
 export function MarketingMetricsPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const [year, setYear] = useState(currentYear)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingMetric, setEditingMetric] = useState<MarketingMetric | null>(null)
@@ -62,6 +65,7 @@ export function MarketingMetricsPage() {
   const syncMetrics = useSyncMarketingMetrics()
 
   const handleSubmitMetric = () => {
+    if (!canEdit) return
     const payload = {
       year: form.year,
       month: form.month,
@@ -83,6 +87,7 @@ export function MarketingMetricsPage() {
   }
 
   const openEditDialog = (m: MarketingMetric) => {
+    if (!canEdit) return
     setEditingMetric(m)
     setForm({
       year: m.year,
@@ -96,6 +101,7 @@ export function MarketingMetricsPage() {
   }
 
   const handleDelete = () => {
+    if (!canEdit) return
     if (!deleteTarget) return
     deleteMetric.mutate(deleteTarget.id, {
       onSuccess: () => setDeleteTarget(null),
@@ -206,20 +212,24 @@ export function MarketingMetricsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9"
-            disabled={syncMetrics.isPending}
-            onClick={() => syncMetrics.mutate()}
-          >
-            <RefreshCw className={`size-4 mr-1 ${syncMetrics.isPending ? 'animate-spin' : ''}`} />
-            {syncMetrics.isPending ? t('mktMetrics.syncing') : t('mktMetrics.apiSync')}
-          </Button>
-          <Button size="sm" className="h-9" onClick={() => { setEditingMetric(null); setForm(INITIAL_METRIC_FORM); setDialogOpen(true) }}>
-            <Plus className="size-4 mr-1" />
-            {t('mktMetrics.addMetric')}
-          </Button>
+          {canEdit && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9"
+              disabled={syncMetrics.isPending}
+              onClick={() => syncMetrics.mutate()}
+            >
+              <RefreshCw className={`size-4 mr-1 ${syncMetrics.isPending ? 'animate-spin' : ''}`} />
+              {syncMetrics.isPending ? t('mktMetrics.syncing') : t('mktMetrics.apiSync')}
+            </Button>
+          )}
+          {canEdit && (
+            <Button size="sm" className="h-9" onClick={() => { setEditingMetric(null); setForm(INITIAL_METRIC_FORM); setDialogOpen(true) }}>
+              <Plus className="size-4 mr-1" />
+              {t('mktMetrics.addMetric')}
+            </Button>
+          )}
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingMetric(null) }}>
             <DialogContent>
               <DialogHeader>
@@ -562,14 +572,16 @@ export function MarketingMetricsPage() {
                           <TableCell className="text-right text-sm tabular-nums font-medium">{m.value.toLocaleString()}</TableCell>
                           <TableCell className="text-right text-sm tabular-nums text-muted-foreground">{m.annualTarget ? m.annualTarget.toLocaleString() : '-'}</TableCell>
                           <TableCell>
-                            <div className="flex gap-1 justify-end">
-                              <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(m)}>
-                                <Pencil className="size-3.5" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(m)}>
-                                <Trash2 className="size-3.5" />
-                              </Button>
-                            </div>
+                            {canEdit && (
+                              <div className="flex gap-1 justify-end">
+                                <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(m)}>
+                                  <Pencil className="size-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(m)}>
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       )

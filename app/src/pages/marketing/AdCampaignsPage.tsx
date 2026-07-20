@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Loader2, DollarSign, MousePointerClick, BarChart3, Plus, Pencil, Trash2 } from 'lucide-react'
 import { useAdCampaigns, useCreateAdCampaign, useUpdateAdCampaign, useDeleteAdCampaign } from '@/hooks/useAdCampaigns'
 import { useT } from '@/i18n/LanguageContext'
+import { useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 import type { AdCampaign, AdPlatform } from '@/types'
 
 const PLATFORM_CONFIG: Record<string, { label: string; className: string }> = {
@@ -42,6 +44,7 @@ const INITIAL_CAMPAIGN_FORM = {
 
 export function AdCampaignsPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const [platformFilter, setPlatformFilter] = useState<string>('all')
   const [monthFilter, setMonthFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -53,6 +56,7 @@ export function AdCampaignsPage() {
   const deleteCampaign = useDeleteAdCampaign()
 
   const handleSubmitCampaign = () => {
+    if (!canEdit) return
     const ctr = form.impressions > 0 ? (form.clicks / form.impressions) * 100 : 0
     const cpc = form.clicks > 0 ? form.cost / form.clicks : 0
     const commentRate = form.impressions > 0 && form.comments > 0 ? (form.comments / form.impressions) * 100 : 0
@@ -86,6 +90,7 @@ export function AdCampaignsPage() {
   }
 
   const openEditDialog = (c: AdCampaign) => {
+    if (!canEdit) return
     setEditingCampaign(c)
     setForm({
       platform: c.platform,
@@ -103,6 +108,7 @@ export function AdCampaignsPage() {
   }
 
   const handleDelete = () => {
+    if (!canEdit) return
     if (!deleteTarget) return
     deleteCampaign.mutate(deleteTarget.id, {
       onSuccess: () => setDeleteTarget(null),
@@ -134,10 +140,12 @@ export function AdCampaignsPage() {
             {isLoading ? t('common.loading') : t('ads.totalCampaigns', { n: campaigns.length }) + (monthFilter !== 'all' ? ` · ${monthFilter.split('-')[0]}년 ${Number(monthFilter.split('-')[1])}월` : '')}
           </p>
         </div>
-        <Button size="sm" className="h-9" onClick={() => { setEditingCampaign(null); setForm(INITIAL_CAMPAIGN_FORM); setDialogOpen(true) }}>
-          <Plus className="size-4 mr-1" />
-          {t('ads.addCampaign')}
-        </Button>
+        {canEdit && (
+          <Button size="sm" className="h-9" onClick={() => { setEditingCampaign(null); setForm(INITIAL_CAMPAIGN_FORM); setDialogOpen(true) }}>
+            <Plus className="size-4 mr-1" />
+            {t('ads.addCampaign')}
+          </Button>
+        )}
         <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { setEditingCampaign(null); setForm(INITIAL_CAMPAIGN_FORM) } setDialogOpen(open) }}>
           <DialogContent>
             <DialogHeader>
@@ -400,14 +408,16 @@ export function AdCampaignsPage() {
                           {c.note || '-'}
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-1 justify-end">
-                            <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(c)}>
-                              <Pencil className="size-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(c)}>
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </div>
+                          {canEdit && (
+                            <div className="flex gap-1 justify-end">
+                              <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(c)}>
+                                <Pencil className="size-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(c)}>
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     )

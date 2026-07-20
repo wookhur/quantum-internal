@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,7 @@ import { useProfiles } from '@/hooks/useProfiles'
 import { useMyPartnerInstructor } from '@/hooks/usePartnerInstructors'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import { canonicalConsultantName } from '@/lib/consultants'
+import { useCanEdit } from '@/hooks/usePermissions'
 import {
   usePartnerStudentMeetings, useAllPartnerStudentMeetings, useCreatePartnerStudentMeeting,
   useUpdatePartnerStudentMeeting, useDeletePartnerStudentMeeting,
@@ -23,6 +25,7 @@ import {
 
 export function PartnerStudentsPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { user } = useAuth()
   const partnerId = user?.id
   const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
@@ -133,10 +136,12 @@ export function PartnerStudentsPage() {
   const [form, setForm] = useState({ meetingDate: '', program: '', content: '' })
   const reset = () => { setEditingId(null); setForm({ meetingDate: '', program: '', content: '' }) }
   const startEdit = (m: PartnerStudentMeeting) => {
+    if (!canEdit) return
     setEditingId(m.id)
     setForm({ meetingDate: m.meetingDate || '', program: m.program || '', content: m.content || '' })
   }
   const save = () => {
+    if (!canEdit) return
     if (!selected || (!form.content.trim() && !form.meetingDate)) return
     if (editingId) {
       update.mutate(
@@ -239,16 +244,19 @@ export function PartnerStudentsPage() {
                       <span>{m.meetingDate || '—'}</span>
                       {m.program && <Badge variant="outline">{m.program}</Badge>}
                     </div>
+                    {canEdit && (
                     <div className="flex items-center gap-1">
                       <Button size="sm" variant="ghost" onClick={() => startEdit(m)}><Pencil className="size-3.5" /></Button>
                       <Button size="sm" variant="ghost" onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: m.id, partnerId }) }}><Trash2 className="size-3.5" /></Button>
                     </div>
+                    )}
                   </div>
                   {m.content && <p className="text-sm mt-2 whitespace-pre-wrap">{m.content}</p>}
                 </div>
               ))}
 
               {/* Add / edit form */}
+              {canEdit && (
               <div className="rounded-lg border border-dashed p-3 space-y-2">
                 <div className="text-xs font-medium text-muted-foreground">{editingId ? '미팅 수정' : '미팅 추가'}</div>
                 <div className="flex gap-2 flex-wrap">
@@ -284,6 +292,7 @@ export function PartnerStudentsPage() {
                   </Button>
                 </div>
               </div>
+              )}
             </CardContent>
           </Card>
         </div>

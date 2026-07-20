@@ -18,6 +18,8 @@ import {
 } from '@/hooks/useMonthlyPerformance'
 import { formatCurrency } from '@/types'
 import type { MonthlyPerformance } from '@/types'
+import { useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 
 const INITIAL_FORM = {
   year: new Date().getFullYear(),
@@ -42,6 +44,7 @@ interface MergedRow {
 
 export function PlanningOverviewPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const [yearFilter, setYearFilter] = useState<string>('all')
   const [regionFilter, setRegionFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -165,12 +168,14 @@ export function PlanningOverviewPage() {
   const totalNewContracts = mergedRows.reduce((sum, p) => sum + p.newContracts, 0)
 
   const openCreateDialog = () => {
+    if (!canEdit) return
     setEditingItem(null)
     setForm(INITIAL_FORM)
     setDialogOpen(true)
   }
 
   const openEditDialog = (row: MergedRow) => {
+    if (!canEdit) return
     setEditingItem(row)
     setForm({
       year: row.year,
@@ -183,6 +188,7 @@ export function PlanningOverviewPage() {
   }
 
   const handleSubmit = () => {
+    if (!canEdit) return
     const payload = {
       year: form.year,
       month: form.month,
@@ -204,6 +210,7 @@ export function PlanningOverviewPage() {
   }
 
   const handleDelete = () => {
+    if (!canEdit) return
     if (!deleteTarget?.source) return
     deletePerf.mutate(deleteTarget.source.id, {
       onSuccess: () => setDeleteTarget(null),
@@ -234,9 +241,11 @@ export function PlanningOverviewPage() {
           <h1 className="text-2xl font-bold text-gray-900">{t('planning.overview')}</h1>
           <p className="text-sm text-gray-500 mt-1">{t('planOverview.subtitle')}</p>
         </div>
-        <Button className="gap-2" onClick={openCreateDialog}>
-          <Plus className="size-4" /> {t('planOverview.addTarget')}
-        </Button>
+        {canEdit && (
+          <Button className="gap-2" onClick={openCreateDialog}>
+            <Plus className="size-4" /> {t('planOverview.addTarget')}
+          </Button>
+        )}
       </div>
 
       {/* Auto-sync notice */}
@@ -387,16 +396,18 @@ export function PlanningOverviewPage() {
                     </TableCell>
                     <TableCell className="text-right">{row.newContracts || '-'}</TableCell>
                     <TableCell>
-                      <div className="flex gap-1 justify-end">
-                        <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(row)}>
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        {row.source && (
-                          <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(row)}>
-                            <Trash2 className="size-3.5" />
+                      {canEdit && (
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="ghost" size="icon" className="size-7" onClick={() => openEditDialog(row)}>
+                            <Pencil className="size-3.5" />
                           </Button>
-                        )}
-                      </div>
+                          {row.source && (
+                            <Button variant="ghost" size="icon" className="size-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(row)}>
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

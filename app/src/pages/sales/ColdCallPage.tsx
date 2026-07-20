@@ -60,9 +60,10 @@ import {
   type ColdCallOutcome,
 } from '@/hooks/useSeminarPerformance'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
 import { getStageConfig, GRADES, PIPELINE_STAGES } from '@/types'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 // ============ Priority scoring ============
 
@@ -320,6 +321,7 @@ export function ColdCallPage() {
 
 export function ColdCallView() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const [search, setSearch] = useState('')
   const [gradeGroup, setGradeGroup] = useState('all')
   const [selectedGrade, setSelectedGrade] = useState('all')
@@ -743,7 +745,7 @@ export function ColdCallView() {
       {/* Right Panel: Lead Detail or Dashboard */}
       <div className="flex-1 overflow-y-auto bg-muted/30 min-w-0">
         {selectedLead ? (
-          <ColdCallDetail lead={selectedLead} seminars={seminars} attendance={attendanceRows.filter(a => a.leadId === selectedLead.id)} onClose={() => setSelectedLeadId(null)} />
+          <ColdCallDetail lead={selectedLead} seminars={seminars} attendance={attendanceRows.filter(a => a.leadId === selectedLead.id)} onClose={() => setSelectedLeadId(null)} canEdit={canEdit} />
         ) : (
           <ColdCallDashboard
             eventLabel={selectedEvent !== 'all' ? selectedEvent : null}
@@ -892,11 +894,13 @@ function ColdCallDetail({
   seminars,
   attendance,
   onClose,
+  canEdit,
 }: {
   lead: Lead & { _priority: number }
   seminars: SeminarLite[]
   attendance: { seminarId: string; sessionLabel: string; status: AttendanceStatus }[]
   onClose: () => void
+  canEdit: boolean
 }) {
   const t = useT()
   const { user } = useAuth()
@@ -956,6 +960,7 @@ function ColdCallDetail({
   const statusLogs = activities.filter((a: LeadActivity) => !CONTACT_TYPES.includes(a.activityType))
 
   const handleLogCall = useCallback(() => {
+    if (!canEdit) return
     if (!callNote.trim() && !callResult) return
 
     // Build result label from config
@@ -1025,10 +1030,11 @@ function ColdCallDetail({
         },
       },
     )
-  }, [callNote, callResult, callDate, oneOnOneSuccess, contactMethod, methodConfig, lead, createActivity, updateLead, user, t])
+  }, [canEdit, callNote, callResult, callDate, oneOnOneSuccess, contactMethod, methodConfig, lead, createActivity, updateLead, user, t])
 
   const handleExclude = useCallback(
     (targetStage: PipelineStage) => {
+      if (!canEdit) return
       updateLead.mutate(
         {
           id: lead.id,
@@ -1043,11 +1049,12 @@ function ColdCallDetail({
         },
       )
     },
-    [lead, updateLead, onClose],
+    [canEdit, lead, updateLead, onClose],
   )
 
   const handleAdvanceStage = useCallback(
     (targetStage: PipelineStage) => {
+      if (!canEdit) return
       updateLead.mutate({
         id: lead.id,
         data: { pipelineStage: targetStage },
@@ -1056,20 +1063,25 @@ function ColdCallDetail({
         onSuccess: () => onClose(),
       })
     },
-    [lead, updateLead, onClose],
+    [canEdit, lead, updateLead, onClose],
   )
 
   const handleSaveMemo = useCallback(() => {
+    if (!canEdit) return
     updateLead.mutate(
       { id: lead.id, data: { memo: memoEdit }, previousStage: lead.pipelineStage },
       { onSuccess: () => setShowMemoEdit(false) },
     )
-  }, [lead, memoEdit, updateLead])
+  }, [canEdit, lead, memoEdit, updateLead])
 
-  const setLevel = (v: string | null) =>
+  const setLevel = (v: string | null) => {
+    if (!canEdit) return
     updateLead.mutate({ id: lead.id, data: { leadLevel: (v as LeadLevel) || undefined }, previousStage: lead.pipelineStage })
-  const saveLevelReason = () =>
+  }
+  const saveLevelReason = () => {
+    if (!canEdit) return
     updateLead.mutate({ id: lead.id, data: { leadLevelReason: levelReason }, previousStage: lead.pipelineStage })
+  }
 
   // One row in either the contact-log list or the status-change list.
   const renderActivity = (a: LeadActivity) => {
@@ -1104,7 +1116,7 @@ function ColdCallDetail({
             {a.createdByUser && ` · ${a.createdByUser.name}`}
           </p>
         </div>
-        {isDeleting ? (
+        {!canEdit ? null : isDeleting ? (
           <div className="flex items-center gap-1 shrink-0">
             <Button
               size="sm"
@@ -1222,8 +1234,8 @@ function ColdCallDetail({
         <CardContent className="p-4 space-y-2">
           <div className="flex items-center gap-3 flex-wrap">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">리드 레벨</h3>
-            <Select value={lead.leadLevel || ''} onValueChange={setLevel}>
-              <SelectTrigger className="h-8 text-sm w-52">
+            <Select value={lead.leadLevel || ''} onValueChange={setLevel} disabled={!canEdit}>
+              <SelectTrigger className="h-8 text-sm w-52" disabled={!canEdit}>
                 <SelectValue placeholder="리드 레벨 선택" />
               </SelectTrigger>
               <SelectContent>
@@ -1239,9 +1251,9 @@ function ColdCallDetail({
           <div className="flex items-end gap-2">
             <div className="flex-1 space-y-1">
               <label className="text-[11px] text-muted-foreground">선택 이유 (메모)</label>
-              <Textarea value={levelReason} onChange={e => setLevelReason(e.target.value)} rows={2} placeholder="예: 상담 반응 좋음, 계약 의사 있음 등" className="text-sm" />
+              <Textarea value={levelReason} onChange={e => setLevelReason(e.target.value)} rows={2} placeholder="예: 상담 반응 좋음, 계약 의사 있음 등" className="text-sm" disabled={!canEdit} />
             </div>
-            <Button size="sm" variant="outline" onClick={saveLevelReason} disabled={updateLead.isPending}>{t('common.save')}</Button>
+            <Button size="sm" variant="outline" onClick={saveLevelReason} disabled={!canEdit || updateLead.isPending}>{t('common.save')}</Button>
           </div>
         </CardContent>
       </Card>
@@ -1259,15 +1271,15 @@ function ColdCallDetail({
                   return (
                     <div key={session} className="flex items-center gap-2">
                       <span className="text-xs flex-1 truncate">{session || '(전체)'}</span>
-                      <Select value={st || ''} onValueChange={(v) => v && upsertAttendance.mutate({ leadId: lead.id, seminarId: seminar.id, sessionLabel: session, status: v as AttendanceStatus })}>
-                        <SelectTrigger className="h-7 text-xs w-32"><SelectValue placeholder="상태 선택" /></SelectTrigger>
+                      <Select value={st || ''} disabled={!canEdit} onValueChange={(v) => { if (!canEdit) return; v && upsertAttendance.mutate({ leadId: lead.id, seminarId: seminar.id, sessionLabel: session, status: v as AttendanceStatus }) }}>
+                        <SelectTrigger className="h-7 text-xs w-32" disabled={!canEdit}><SelectValue placeholder="상태 선택" /></SelectTrigger>
                         <SelectContent>
                           {ATTENDANCE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.ko}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      {st !== 'attended' && (
+                      {canEdit && st !== 'attended' && (
                         <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1"
-                          onClick={() => upsertAttendance.mutate({ leadId: lead.id, seminarId: seminar.id, sessionLabel: session, status: 'attended' })}>
+                          onClick={() => { if (!canEdit) return; upsertAttendance.mutate({ leadId: lead.id, seminarId: seminar.id, sessionLabel: session, status: 'attended' }) }}>
                           <CheckCircle2 className="size-3" /> 참석완료
                         </Button>
                       )}
@@ -1355,12 +1367,13 @@ function ColdCallDetail({
               <span className="text-xs text-muted-foreground">{t('coldCall.sourceChannel')}</span>
               <select
                 value={lead.sourceChannel || ''}
-                onChange={(e) => updateLead.mutate({
+                disabled={!canEdit}
+                onChange={(e) => { if (!canEdit) return; updateLead.mutate({
                   id: lead.id,
                   data: { sourceChannel: e.target.value } as Partial<Lead>,
                   previousStage: lead.pipelineStage,
-                })}
-                className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                }) }}
+                className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {!sourceOptions.some(o => o.value === (lead.sourceChannel || '')) && (
                   <option value={lead.sourceChannel || ''}>{lead.sourceChannel || '—'}</option>
@@ -1373,24 +1386,26 @@ function ColdCallDetail({
               <input
                 type="date"
                 value={lead.leadDate || ''}
-                onChange={(e) => updateLead.mutate({
+                disabled={!canEdit}
+                onChange={(e) => { if (!canEdit) return; updateLead.mutate({
                   id: lead.id,
                   data: { leadDate: e.target.value } as Partial<Lead>,
                   previousStage: lead.pipelineStage,
-                })}
-                className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                }) }}
+                className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </div>
             <div>
               <span className="text-xs text-muted-foreground">{t('coldCall.assignee')}</span>
               <select
                 value={lead.assignedTo || ''}
-                onChange={(e) => updateLead.mutate({
+                disabled={!canEdit}
+                onChange={(e) => { if (!canEdit) return; updateLead.mutate({
                   id: lead.id,
                   data: { assignedTo: (e.target.value || null) as unknown as string | undefined } as Partial<Lead>,
                   previousStage: lead.pipelineStage,
-                })}
-                className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                }) }}
+                className="mt-0.5 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm font-medium outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="">{t('common.unassigned')}</option>
                 {profiles.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1407,7 +1422,7 @@ function ColdCallDetail({
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               {t('coldCall.memoNotes')}
             </h3>
-            {!showMemoEdit && (
+            {!showMemoEdit && canEdit && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1431,7 +1446,7 @@ function ColdCallDetail({
                 placeholder={t('coldCall.memoPlaceholder')}
               />
               <div className="flex gap-2">
-                <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveMemo} disabled={updateLead.isPending}>
+                <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveMemo} disabled={!canEdit || updateLead.isPending}>
                   <Save className="size-3" /> {t('common.save')}
                 </Button>
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowMemoEdit(false)}>
@@ -1462,6 +1477,7 @@ function ColdCallDetail({
             {t('coldCall.contactLog')}
           </h3>
           <div className="space-y-3">
+            {canEdit && (<>
             {/* Contact method selector */}
             <div className="flex gap-1.5">
               {(Object.entries(CONTACT_METHODS) as [ContactMethod, ContactMethodConfig][]).map(([key, cfg]) => {
@@ -1549,6 +1565,7 @@ function ColdCallDetail({
               )}
               {t('coldCall.saveContactLog')}
             </Button>
+            </>)}
 
             {/* Contact-log history: accumulates right under the save button */}
             {contactLogs.length > 0 && (
@@ -1566,6 +1583,7 @@ function ColdCallDetail({
       </Card>
 
       {/* Stage Actions: Advance or Exclude */}
+      {canEdit && (
       <Card>
         <CardContent className="p-4 space-y-3">
           {/* Advance to next stage */}
@@ -1666,6 +1684,7 @@ function ColdCallDetail({
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Activity History — pipeline/status changes only */}
       <Card>

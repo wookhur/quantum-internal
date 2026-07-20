@@ -1,4 +1,5 @@
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -109,6 +110,7 @@ export function LeadDetailPage() {
   const t = useT()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const canEdit = useCanEdit(useLocation().pathname)
   const { id } = useParams()
   const { data: lead, isLoading, error } = useLead(id || '')
   const { data: activities } = useLeadActivities(id || '')
@@ -127,12 +129,14 @@ export function LeadDetailPage() {
   const [editContent, setEditContent] = useState('')
 
   const handleEditStart = (a: LeadActivity) => {
+    if (!canEdit) return
     setEditingId(a.id)
     setEditTitle(a.title)
     setEditContent(a.content || '')
   }
 
   const handleEditSave = () => {
+    if (!canEdit) return
     if (!editingId || !id) return
     updateActivity.mutate(
       { id: editingId, leadId: id, data: { title: editTitle, content: editContent || null } },
@@ -153,6 +157,7 @@ export function LeadDetailPage() {
   }
 
   const handleDelete = (activityId: string) => {
+    if (!canEdit) return
     if (!id || !confirm(t('leadDetail.deleteActivityConfirm'))) return
     deleteActivity.mutate({ id: activityId, leadId: id })
   }
@@ -181,6 +186,7 @@ export function LeadDetailPage() {
   const stage = getStageConfig(lead.pipelineStage)
 
   const handleAddNote = () => {
+    if (!canEdit) return
     if (!noteText.trim() || !id) return
     createActivity.mutate({
       leadId: id,
@@ -278,17 +284,19 @@ export function LeadDetailPage() {
         <Link to="/sales/leads" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="size-4" /> {t('leadDetail.leadList')}
         </Link>
-        <div className="flex gap-2">
-          <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setContractDialogOpen(true)}>
-            <FileText className="size-3.5" /> {t('leadDetail.createContract')}
-          </Button>
-          <Button size="sm" className="gap-1.5 bg-[#0073EA] hover:bg-[#0060C2]" onClick={() => setBookingOpen(true)}>
-            <CalendarPlus className="size-3.5" /> {t('leadDetail.bookConsultation')}
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
-            <Edit className="size-3.5" /> {t('common.edit')}
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-2">
+            <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setContractDialogOpen(true)}>
+              <FileText className="size-3.5" /> {t('leadDetail.createContract')}
+            </Button>
+            <Button size="sm" className="gap-1.5 bg-[#0073EA] hover:bg-[#0060C2]" onClick={() => setBookingOpen(true)}>
+              <CalendarPlus className="size-3.5" /> {t('leadDetail.bookConsultation')}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditOpen(true)}>
+              <Edit className="size-3.5" /> {t('common.edit')}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Header Card */}
@@ -470,17 +478,19 @@ export function LeadDetailPage() {
         </h3>
 
         {/* Add note */}
-        <div className="flex gap-2 mb-4">
-          <input
-            type="text"
-            placeholder={t('leadDetail.memoPlaceholder')}
-            value={noteText}
-            onChange={e => setNoteText(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddNote()}
-            className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0073EA]/20 focus:border-[#0073EA]"
-          />
-          <Button size="sm" onClick={handleAddNote} disabled={!noteText.trim()}>{t('common.add')}</Button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-2 mb-4">
+            <input
+              type="text"
+              placeholder={t('leadDetail.memoPlaceholder')}
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddNote()}
+              className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0073EA]/20 focus:border-[#0073EA]"
+            />
+            <Button size="sm" onClick={handleAddNote} disabled={!noteText.trim()}>{t('common.add')}</Button>
+          </div>
+        )}
 
         {/* Timeline list */}
         <div className="relative">
@@ -567,7 +577,7 @@ export function LeadDetailPage() {
                         </div>
 
                         {/* Edit/Delete buttons for activities only */}
-                        {isActivity && a && (
+                        {isActivity && a && canEdit && (
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                             <button
                               onClick={() => handleEditStart(a)}

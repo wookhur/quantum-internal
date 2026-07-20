@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,6 +13,7 @@ import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import {
   usePartnerCompanies, useCreatePartnerCompany, useUpdatePartnerCompany, useDeletePartnerCompany,
 } from '@/hooks/usePartnerCompanies'
+import { useCanEdit } from '@/hooks/usePermissions'
 
 const STUDENT_INFO_FIELDS = [
   { key: 'name', label: '이름' },
@@ -37,7 +39,8 @@ function studentLabel(name?: string, koreanName?: string) {
 
 export function PartnerCompaniesPage() {
   const { user } = useAuth()
-  const canEdit = user?.role === 'admin' || user?.role === 'c_level' || user?.role === 'service_manager'
+  const canEditPerm = useCanEdit(useLocation().pathname)
+  const canEdit = (user?.role === 'admin' || user?.role === 'c_level' || user?.role === 'service_manager') && canEditPerm
 
   const { data: companies = [] } = usePartnerCompanies()
   const { data: allStudents = [] } = useServiceStudents()
@@ -93,11 +96,12 @@ export function PartnerCompaniesPage() {
     [selected, form.name, studentPartnerNames, allStudents], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
-  const startCreate = () => { setCreating(true); setSelectedId(null); setForm(EMPTY_FORM) }
+  const startCreate = () => { if (!canEdit) return; setCreating(true); setSelectedId(null); setForm(EMPTY_FORM) }
   const showForm = creating || !!selected
   const saving = create.isPending || update.isPending
 
   const save = async () => {
+    if (!canEdit) return
     if (!form.name.trim()) { alert('업체명을 입력하세요.'); return }
     const payload = { ...form, name: form.name.trim() }
     try {
@@ -113,6 +117,7 @@ export function PartnerCompaniesPage() {
   }
 
   const remove = async () => {
+    if (!canEdit) return
     if (!selected) return
     if (!confirm(`'${selected.name}' 업체를 삭제할까요?`)) return
     await del.mutateAsync(selected.id)

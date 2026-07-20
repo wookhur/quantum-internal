@@ -24,6 +24,8 @@ import {
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,10 +63,12 @@ function ExpenseDialog({
   open,
   onOpenChange,
   expense,
+  canEdit,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   expense?: FixedExpense
+  canEdit: boolean
 }) {
   const t = useT()
   const { user } = useAuth()
@@ -109,6 +113,7 @@ function ExpenseDialog({
   })
 
   const handleSave = () => {
+    if (!canEdit) return
     if (!form.name.trim() || !form.amount) return
     const amt = Number(form.amount)
     if (amt <= 0) return
@@ -174,10 +179,12 @@ function ExpenseDialog({
           </div>
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-            <Button className="flex-1" onClick={handleSave} disabled={!form.name.trim() || !form.amount || isPending}>
-              {isPending && <Loader2 className="size-4 animate-spin mr-1" />}
-              {t('common.save')}
-            </Button>
+            {canEdit && (
+              <Button className="flex-1" onClick={handleSave} disabled={!form.name.trim() || !form.amount || isPending}>
+                {isPending && <Loader2 className="size-4 animate-spin mr-1" />}
+                {t('common.save')}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
@@ -191,6 +198,7 @@ function ExpenseDialog({
 
 export function CashflowPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const [currentMonth, setCurrentMonth] = useState(() => getMonthKey(new Date()))
   const isCurrentMonth = currentMonth === getMonthKey(new Date())
   const [year, month] = currentMonth.split('-').map(Number)
@@ -285,10 +293,12 @@ export function CashflowPage() {
   }, [activeExpenses])
 
   const openEdit = (exp: FixedExpense) => {
+    if (!canEdit) return
     setEditExpense(exp)
     setDialogOpen(true)
   }
   const openCreate = () => {
+    if (!canEdit) return
     setEditExpense(undefined)
     setDialogOpen(true)
   }
@@ -475,9 +485,11 @@ export function CashflowPage() {
               {t('cashflow.fixedExpenses')}
               <Badge variant="outline" className="text-xs">{activeExpenses.length}{t('common.count')}</Badge>
             </CardTitle>
-            <Button size="sm" className="h-7 text-xs gap-1" onClick={openCreate}>
-              <Plus className="size-3" />{t('cashflow.addExpense')}
-            </Button>
+            {canEdit && (
+              <Button size="sm" className="h-7 text-xs gap-1" onClick={openCreate}>
+                <Plus className="size-3" />{t('cashflow.addExpense')}
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             {activeExpenses.length === 0 ? (
@@ -513,21 +525,23 @@ export function CashflowPage() {
                             {formatCurrency(exp.amount, exp.currency)}
                           </TableCell>
                           <TableCell>
-                            <div className="flex gap-0.5">
-                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(exp)}>
-                                <Pencil className="size-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-muted-foreground hover:text-red-500"
-                                onClick={() => {
-                                  if (confirm(t('cashflow.confirmDelete'))) deleteExpense.mutate(exp.id)
-                                }}
-                              >
-                                <Trash2 className="size-3" />
-                              </Button>
-                            </div>
+                            {canEdit && (
+                              <div className="flex gap-0.5">
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(exp)}>
+                                  <Pencil className="size-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-red-500"
+                                  onClick={() => {
+                                    if (confirm(t('cashflow.confirmDelete'))) deleteExpense.mutate(exp.id)
+                                  }}
+                                >
+                                  <Trash2 className="size-3" />
+                                </Button>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       )
@@ -572,6 +586,7 @@ export function CashflowPage() {
                     <span className="font-mono">{formatCurrency(exp.amount, exp.currency)}</span>
                     <Switch
                       checked={false}
+                      disabled={!canEdit}
                       onCheckedChange={() => updateExpense.mutate({ id: exp.id, isActive: true })}
                       className="h-4 w-7"
                     />
@@ -584,7 +599,7 @@ export function CashflowPage() {
       </div>
 
       {/* Expense Dialog */}
-      <ExpenseDialog open={dialogOpen} onOpenChange={setDialogOpen} expense={editExpense} />
+      <ExpenseDialog open={dialogOpen} onOpenChange={setDialogOpen} expense={editExpense} canEdit={canEdit} />
     </div>
   )
 }

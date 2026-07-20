@@ -20,7 +20,7 @@ import {
   Users, Calendar, AlertCircle, FileText, CheckSquare,
   Loader2, Trash2, UserSearch, BarChart3, UserPlus, CheckCircle2, XCircle, Activity,
 } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   useServiceStudents, useServiceDiary,
   useUpdateServiceMeeting, useDeleteServiceMeeting,
@@ -41,6 +41,7 @@ import {
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { useT } from '@/i18n/LanguageContext'
 import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus, MeetingStatus, MeetingCancelledBy } from '@/types'
 
@@ -432,6 +433,7 @@ function MilestoneDialog({
   editing,
   defaultStudentId,
   defaultDate,
+  canEdit,
 }: {
   open: boolean
   onClose: () => void
@@ -439,6 +441,7 @@ function MilestoneDialog({
   editing: StudentMilestone | null
   defaultStudentId?: string
   defaultDate?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const { user } = useAuth()
@@ -487,6 +490,7 @@ function MilestoneDialog({
   const deleting = deleteMilestone.isPending
 
   async function handleSave() {
+    if (!canEdit) return
     if (!studentId || !title || !date) return
     try {
       if (editing) {
@@ -502,6 +506,7 @@ function MilestoneDialog({
   }
 
   async function handleDelete() {
+    if (!canEdit) return
     if (!editing) return
     if (!window.confirm(t('serviceDash.confirmDeleteMilestone'))) return
     try {
@@ -582,8 +587,8 @@ function MilestoneDialog({
             <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder={t('serviceDash.notesPlaceholder')} />
           </div>
         </div>
-        <DialogFooter className={editing ? 'sm:justify-between' : undefined}>
-          {editing && (
+        <DialogFooter className={editing && canEdit ? 'sm:justify-between' : undefined}>
+          {editing && canEdit && (
             <Button
               variant="outline"
               onClick={handleDelete}
@@ -596,10 +601,12 @@ function MilestoneDialog({
           )}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} disabled={deleting}>{t('serviceDash.cancel')}</Button>
-            <Button onClick={handleSave} disabled={saving || deleting || !studentId || !title || !date}>
-              {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
-              {editing ? t('serviceDash.save') : t('serviceDash.add')}
-            </Button>
+            {canEdit && (
+              <Button onClick={handleSave} disabled={saving || deleting || !studentId || !title || !date}>
+                {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                {editing ? t('serviceDash.save') : t('serviceDash.add')}
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
@@ -633,10 +640,12 @@ function MeetingDialog({
   open,
   onClose,
   meeting,
+  canEdit,
 }: {
   open: boolean
   onClose: () => void
   meeting: DashboardMeeting | null
+  canEdit: boolean
 }) {
   const t = useT()
   const consultantPool = useConsultantPool()
@@ -675,6 +684,7 @@ function MeetingDialog({
   const deleting = deleteMeeting.isPending
 
   async function handleSave() {
+    if (!canEdit) return
     if (!meeting || !date) return
     try {
       await updateMeeting.mutateAsync({
@@ -701,6 +711,7 @@ function MeetingDialog({
   }
 
   async function handleDelete() {
+    if (!canEdit) return
     if (!meeting) return
     if (!window.confirm(t('serviceDash.confirmDeleteMeeting'))) return
     try {
@@ -791,22 +802,26 @@ function MeetingDialog({
             <Input value={prepUrl} onChange={e => setPrepUrl(e.target.value)} placeholder="https://..." />
           </div>
         </div>
-        <DialogFooter className="sm:justify-between">
-          <Button
-            variant="outline"
-            onClick={handleDelete}
-            disabled={saving || deleting}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-          >
-            {deleting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
-            {t('serviceDash.delete')}
-          </Button>
+        <DialogFooter className={canEdit ? 'sm:justify-between' : undefined}>
+          {canEdit && (
+            <Button
+              variant="outline"
+              onClick={handleDelete}
+              disabled={saving || deleting}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+            >
+              {deleting ? <Loader2 size={14} className="animate-spin mr-1" /> : <Trash2 size={14} className="mr-1" />}
+              {t('serviceDash.delete')}
+            </Button>
+          )}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} disabled={deleting}>{t('serviceDash.cancel')}</Button>
-            <Button onClick={handleSave} disabled={saving || deleting || !date}>
-              {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
-              {t('serviceDash.save')}
-            </Button>
+            {canEdit && (
+              <Button onClick={handleSave} disabled={saving || deleting || !date}>
+                {saving ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                {t('serviceDash.save')}
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
@@ -827,6 +842,7 @@ function WeekCalendar({
   onEditMeeting,
   onAddMilestone,
   onEditMilestone,
+  canEdit,
 }: {
   days: Date[]
   meetings: DashboardMeeting[]
@@ -838,6 +854,7 @@ function WeekCalendar({
   onEditMeeting: (m: DashboardMeeting) => void
   onAddMilestone: (dateStr: string) => void
   onEditMilestone: (m: DashboardMilestone) => void
+  canEdit: boolean
 }) {
   const t = useT()
   const consultantName = useConsultantName()
@@ -939,7 +956,7 @@ function WeekCalendar({
                   🎂 {b.name}
                 </div>
               ))}
-              {dm.length === 0 && gm.length === 0 && mm.length === 0 && ff.length === 0 && (birthdaysByMmdd.get(dateStr.slice(5))?.length ?? 0) === 0 && (
+              {canEdit && dm.length === 0 && gm.length === 0 && mm.length === 0 && ff.length === 0 && (birthdaysByMmdd.get(dateStr.slice(5))?.length ?? 0) === 0 && (
                 <button
                   onClick={() => onAddMilestone(dateStr)}
                   className="w-full h-8 flex items-center justify-center text-gray-200 hover:text-gray-400 hover:bg-gray-50 rounded transition-colors"
@@ -1097,6 +1114,7 @@ function CycleOverview({
   cycleFilter,
   onAddMilestone,
   onEditMilestone,
+  canEdit,
 }: {
   students: { id: string; name: string; assignedConsultant?: string; status?: string }[]
   milestones: DashboardMilestone[]
@@ -1104,6 +1122,7 @@ function CycleOverview({
   cycleFilter: 'all' | 'at_risk'
   onAddMilestone: (studentId: string) => void
   onEditMilestone: (m: DashboardMilestone) => void
+  canEdit: boolean
 }) {
   const t = useT()
   const today = todayKST()
@@ -1216,11 +1235,13 @@ function CycleOverview({
                     <div key={key} className={`flex items-center justify-center py-2 px-1 ${isCurrentMonth ? 'bg-blue-50/30' : ''}`}>
                       <div className="flex flex-wrap gap-0.5 justify-center">
                         {monthMilestones.length === 0 ? (
-                          <button
-                            onClick={() => onAddMilestone(student.id)}
-                            className="w-5 h-5 rounded-full border-2 border-dashed border-gray-200 hover:border-gray-400 transition-colors"
-                            title={t('serviceDash.addMilestoneTooltip')}
-                          />
+                          canEdit ? (
+                            <button
+                              onClick={() => onAddMilestone(student.id)}
+                              className="w-5 h-5 rounded-full border-2 border-dashed border-gray-200 hover:border-gray-400 transition-colors"
+                              title={t('serviceDash.addMilestoneTooltip')}
+                            />
+                          ) : null
                         ) : (
                           monthMilestones.map(m => {
                             const cfg = milestoneConfig(m.type)
@@ -1657,6 +1678,7 @@ function ServiceMetricsSection() {
 
 export function ServiceDashboardPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const routerNav = useNavigate()
   const consultantPool = useConsultantPool()
   const consultantName = useConsultantName()
@@ -1680,6 +1702,7 @@ export function ServiceDashboardPage() {
 
   // Open the milestone dialog in edit mode for an existing milestone
   const openEditMilestone = (m: StudentMilestone) => {
+    if (!canEdit) return
     setDefaultMilestoneStudentId(undefined)
     setDefaultMilestoneDate(undefined)
     setEditingMilestone(m)
@@ -1868,9 +1891,11 @@ export function ServiceDashboardPage() {
             </div>
 
             {/* Add milestone */}
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => { setEditingMilestone(null); setDefaultMilestoneStudentId(undefined); setDefaultMilestoneDate(undefined); setShowAddMilestone(true) }}>
-              <Plus size={14} />{t('serviceDash.milestone')}
-            </Button>
+            {canEdit && (
+              <Button size="sm" className="h-8 gap-1.5" onClick={() => { setEditingMilestone(null); setDefaultMilestoneStudentId(undefined); setDefaultMilestoneDate(undefined); setShowAddMilestone(true) }}>
+                <Plus size={14} />{t('serviceDash.milestone')}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -2004,12 +2029,14 @@ export function ServiceDashboardPage() {
             birthdaysByMmdd={birthdaysByMmdd}
             onEditMeeting={openMeetingNote}
             onAddMilestone={dateStr => {
+              if (!canEdit) return
               setDefaultMilestoneStudentId(undefined)
               setDefaultMilestoneDate(dateStr)
               setEditingMilestone(null)
               setShowAddMilestone(true)
             }}
             onEditMilestone={openEditMilestone}
+            canEdit={canEdit}
           />
         )}
 
@@ -2108,8 +2135,9 @@ export function ServiceDashboardPage() {
             milestones={filteredMilestones}
             consultantFilter={consultantFilter}
             cycleFilter={cycleFilter}
-            onAddMilestone={studentId => { setDefaultMilestoneStudentId(studentId); setDefaultMilestoneDate(undefined); setEditingMilestone(null); setShowAddMilestone(true) }}
+            onAddMilestone={studentId => { if (!canEdit) return; setDefaultMilestoneStudentId(studentId); setDefaultMilestoneDate(undefined); setEditingMilestone(null); setShowAddMilestone(true) }}
             onEditMilestone={openEditMilestone}
+            canEdit={canEdit}
           />
         )}
 
@@ -2146,6 +2174,7 @@ export function ServiceDashboardPage() {
         editing={editingMilestone}
         defaultStudentId={defaultMilestoneStudentId}
         defaultDate={defaultMilestoneDate}
+        canEdit={canEdit}
       />
 
       {/* Edit Meeting Dialog (week view) */}
@@ -2153,6 +2182,7 @@ export function ServiceDashboardPage() {
         open={showEditMeeting}
         onClose={() => { setShowEditMeeting(false); setEditingMeeting(null) }}
         meeting={editingMeeting}
+        canEdit={canEdit}
       />
     </div>
   )

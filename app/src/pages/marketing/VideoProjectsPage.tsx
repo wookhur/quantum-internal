@@ -47,6 +47,8 @@ import {
 } from 'lucide-react'
 import { useVideoProjects, useCreateVideoProject, useUpdateVideoProject, useDeleteVideoProject } from '@/hooks/useVideoProjects'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useLocation } from 'react-router-dom'
+import { useCanEdit } from '@/hooks/usePermissions'
 import type { VideoStatus, VideoProject } from '@/types'
 
 function getStatusConfig(t: (key: string) => string): Record<VideoStatus, { label: string; color: string; icon: typeof Video }> {
@@ -100,6 +102,7 @@ const INITIAL_FORM: {
 
 export function VideoProjectsPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const STATUS_CONFIG = useMemo(() => getStatusConfig(t), [t])
   const DEFAULT_CHECKLIST = useMemo(() => getDefaultChecklist(t), [t])
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -122,12 +125,14 @@ export function VideoProjectsPage() {
   }, [profiles])
 
   const openCreate = () => {
+    if (!canEdit) return
     setEditingProject(null)
     setForm(INITIAL_FORM)
     setDialogOpen(true)
   }
 
   const openEdit = (p: VideoProject) => {
+    if (!canEdit) return
     setEditingProject(p)
     setForm({
       title: p.title,
@@ -142,6 +147,7 @@ export function VideoProjectsPage() {
   }
 
   const handleSave = () => {
+    if (!canEdit) return
     const payload = {
       title: form.title,
       category: form.category || undefined,
@@ -169,6 +175,7 @@ export function VideoProjectsPage() {
   }
 
   const toggleChecklist = (project: VideoProject, key: string) => {
+    if (!canEdit) return
     const current = project.checklist || {}
     updateProject.mutate({
       id: project.id,
@@ -212,10 +219,12 @@ export function VideoProjectsPage() {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" className="h-9" onClick={openCreate}>
-            <Plus className="size-4 mr-1" />
-            {t('video.addVideo')}
-          </Button>
+          {canEdit && (
+            <Button size="sm" className="h-9" onClick={openCreate}>
+              <Plus className="size-4 mr-1" />
+              {t('video.addVideo')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -287,24 +296,27 @@ export function VideoProjectsPage() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openEdit(project)}
-                          className="rounded p-1 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        >
-                          <Pencil className="size-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm(t('video.deleteConfirm'))) {
-                              deleteProject.mutate(project.id)
-                            }
-                          }}
-                          className="rounded p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openEdit(project)}
+                            className="rounded p-1 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!canEdit) return
+                              if (confirm(t('video.deleteConfirm'))) {
+                                deleteProject.mutate(project.id)
+                              }
+                            }}
+                            className="rounded p-1 text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -385,8 +397,11 @@ export function VideoProjectsPage() {
                             <button
                               key={key}
                               type="button"
+                              disabled={!canEdit}
                               onClick={() => toggleChecklist(project, key)}
-                              className={`flex items-center gap-1.5 text-[11px] rounded px-1.5 py-0.5 cursor-pointer transition-colors hover:bg-muted/50 ${
+                              className={`flex items-center gap-1.5 text-[11px] rounded px-1.5 py-0.5 transition-colors ${
+                                canEdit ? 'cursor-pointer hover:bg-muted/50' : 'cursor-default'
+                              } ${
                                 checked ? 'text-green-700 bg-green-50' : 'text-muted-foreground'
                               }`}
                             >
