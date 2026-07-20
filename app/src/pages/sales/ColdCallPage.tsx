@@ -53,6 +53,7 @@ import {
   useAllContactActivities,
   computeColdCallOutcome,
   leadMatchesSeminar,
+  leadMatchesSeminarLoose,
   seminarSessionsForLead,
   seminarsAttendedByLead,
   dedupeLeadsByPerson,
@@ -906,9 +907,12 @@ function ColdCallDetail({
   const { user } = useAuth()
   const upsertAttendance = useUpsertLeadAttendance()
   // Seminars this lead registered for, with the specific sessions they applied to
+  // 이 리드가 신청한 모든 세미나(선배초청 + 전공별웨비나 등)를, 세션 라벨이 없어도/이름만 매칭돼도 표시.
+  // 진행일 빠른 순으로 정렬해 최초 유입 세미나가 먼저 보이도록 한다.
   const appliedSeminars = useMemo(() => seminars
     .map(s => ({ seminar: s, sessions: seminarSessionsForLead(s, lead) }))
-    .filter(x => x.sessions.length > 0 || (x.seminar.sessions.length === 0 && leadMatchesSeminar(lead, x.seminar))),
+    .filter(x => x.sessions.length > 0 || leadMatchesSeminarLoose(x.seminar, lead))
+    .sort((a, b) => (a.seminar.date || '').localeCompare(b.seminar.date || '')),
     [seminars, lead])
   const statusOf = (seminarId: string, session: string): AttendanceStatus | '' =>
     attendance.find(a => a.seminarId === seminarId && a.sessionLabel === session)?.status || ''

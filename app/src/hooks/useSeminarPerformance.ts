@@ -443,6 +443,26 @@ export function leadMatchesSeminar(lead: Lead, seminar: SeminarLite): boolean {
   return false
 }
 
+/**
+ * Looser match used to list EVERY seminar a lead applied to (콜드콜 상세의 참석 연동).
+ * Unlike leadMatchesSeminar it also matches by registrant name key, so a person
+ * whose lead phone/email differs from their registration — or whose registration
+ * lacks session labels — still surfaces the seminar (with a "(전체)" attendance row).
+ */
+export function leadMatchesSeminarLoose(
+  seminar: SeminarLite,
+  lead: { phone?: string; email?: string; parentName?: string; studentName?: string; sourceChannel?: string },
+): boolean {
+  if (lead.sourceChannel && lead.sourceChannel === seminar.title) return true
+  const phone = normalizePhone(lead.phone)
+  if (isUsablePhone(phone) && seminar.phones.has(phone)) return true
+  const email = normalizeEmail(lead.email)
+  if (email && seminar.emails.has(email)) return true
+  const nameKey = normalizeName(lead.parentName) + '|' + normalizeName(lead.studentName)
+  if (nameKey !== '|' && seminar.names.has(nameKey)) return true
+  return false
+}
+
 /** Rank a pipeline stage so we can keep the most-progressed duplicate. */
 const STAGE_RANK: Record<string, number> = {
   contracted: 100,
