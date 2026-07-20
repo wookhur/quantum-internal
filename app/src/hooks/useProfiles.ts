@@ -128,29 +128,32 @@ export interface NavRouteDef {
   path: string
   labelKey: string
   module: FeatureModule
+  /** True = 라우트는 살아있지만 현재 사이드바 메뉴에는 없는 페이지(직접 링크/리다이렉트로만 접근).
+   *  접근 권한은 그대로 적용되지만 설정 UI에서는 '숨김'으로 구분 표시한다. */
+  hidden?: boolean
 }
 
 export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   // ── Common (dashboard package) ──
   { path: '/dashboard', labelKey: 'nav.dashboard', module: 'dashboard' },
-  { path: '/calendar', labelKey: 'nav.calendar', module: 'dashboard' },
+  { path: '/calendar', labelKey: 'nav.calendar', module: 'dashboard', hidden: true },
   { path: '/tasks', labelKey: 'nav.taskBoard', module: 'dashboard' },
   { path: '/my-todos', labelKey: 'nav.myTodo', module: 'dashboard' },
   { path: '/messages', labelKey: 'nav.messages', module: 'dashboard' },
-  { path: '/person', labelKey: 'nav.personProfile', module: 'dashboard' },
+  { path: '/person', labelKey: 'nav.personProfile', module: 'dashboard', hidden: true },
   { path: '/common/coupang-orders', labelKey: 'nav.coupangOrders', module: 'dashboard' },
   // ── Sales ──
   { path: '/sales/leads', labelKey: 'nav.leadManagement', module: 'sales' },
   { path: '/sales/cold-call', labelKey: 'nav.coldCall', module: 'sales' },
   { path: '/sales/pipeline', labelKey: 'nav.pipeline', module: 'sales' },
   { path: '/sales/meetings', labelKey: 'nav.meetingRecords', module: 'sales' },
-  { path: '/sales/funnel', labelKey: 'nav.salesFunnel', module: 'sales' },
+  { path: '/sales/funnel', labelKey: 'nav.salesFunnel', module: 'sales', hidden: true },
   { path: '/sales/performance', labelKey: 'nav.salesPerformance', module: 'sales' },
   // ── Marketing ──
   { path: '/marketing/metrics', labelKey: 'nav.marketingMetrics', module: 'marketing' },
   { path: '/marketing/ads', labelKey: 'nav.adPerformance', module: 'marketing' },
-  { path: '/marketing/events', labelKey: 'nav.eventManagement', module: 'marketing' },
-  { path: '/marketing/videos', labelKey: 'nav.videoContent', module: 'marketing' },
+  { path: '/marketing/events', labelKey: 'nav.eventManagement', module: 'marketing', hidden: true },
+  { path: '/marketing/videos', labelKey: 'nav.videoContent', module: 'marketing', hidden: true },
   { path: '/marketing/seminars', labelKey: 'nav.seminars', module: 'marketing' },
   // ── Service ──
   { path: '/service/dashboard', labelKey: 'nav.serviceDashboard', module: 'service' },
@@ -158,14 +161,14 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/service/weekly-report', labelKey: 'nav.weeklyReport', module: 'service' },
   { path: '/service/external-fees', labelKey: 'nav.externalFees', module: 'finance' },
   // ── Finance ──
-  { path: '/finance/dashboard', labelKey: 'nav.financeDashboard', module: 'finance' },
+  { path: '/finance/dashboard', labelKey: 'nav.financeDashboard', module: 'finance', hidden: true },
   { path: '/consulting/clients', labelKey: 'nav.contractManagement', module: 'finance' },
   { path: '/consulting/collections', labelKey: 'nav.monthlyCollection', module: 'finance' },
   { path: '/finance/invoices', labelKey: 'nav.invoices', module: 'finance' },
   { path: '/finance/receipts', labelKey: 'nav.receipts', module: 'finance' },
   { path: '/finance/wire-invoice', labelKey: 'nav.wireInvoice', module: 'finance' },
-  { path: '/finance/incentives/by-contract', labelKey: 'nav.incentives', module: 'finance' },
-  { path: '/finance/incentives/by-person', labelKey: 'nav.incentives', module: 'finance' },
+  { path: '/finance/incentives/by-contract', labelKey: 'nav.incentives', module: 'finance', hidden: true },
+  { path: '/finance/incentives/by-person', labelKey: 'nav.incentives', module: 'finance', hidden: true },
 
   { path: '/invoices/freelancer-individual', labelKey: 'nav.invoiceFreelancerIndividual', module: 'invoice' },
   { path: '/invoices/freelancer-business', labelKey: 'nav.invoiceFreelancerBusiness', module: 'invoice' },
@@ -175,7 +178,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   // ── Planning ──
   { path: '/planning/overview', labelKey: 'nav.overview', module: 'planning' },
   { path: '/planning/projection', labelKey: 'nav.revenueProjection', module: 'planning' },
-  { path: '/planning/employees', labelKey: 'nav.employeePerformance', module: 'planning' },
+  { path: '/planning/employees', labelKey: 'nav.employeePerformance', module: 'planning', hidden: true },
   { path: '/planning/cashflow', labelKey: 'nav.cashflow', module: 'planning' },
   // ── HR ──
   { path: '/hr/attendance', labelKey: 'nav.attendance', module: 'hr' },
@@ -189,7 +192,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/partner/companies', labelKey: 'nav.partnerCompanies', module: 'partner' },
   { path: '/partner/programs', labelKey: 'nav.partnerPrograms', module: 'partner' },
   { path: '/partner/contracts', labelKey: 'nav.partnerContracts', module: 'partner' },
-  { path: '/partner/calendar', labelKey: 'nav.calendar', module: 'partner' },
+  { path: '/partner/calendar', labelKey: 'nav.calendar', module: 'partner', hidden: true },
   // ── Game ──
   { path: '/game', labelKey: 'nav.trexRunner', module: 'game' },
 ]
@@ -252,6 +255,9 @@ export interface FeatureAccessRecord {
   enabledModules: FeatureModule[]
   /** Per-route overrides. If non-empty, used instead of module expansion. */
   enabledRoutes: string[]
+  /** 편집(수정) 가능 라우트. `undefined` = 레거시(설정된 적 없음) → 열람 가능한 모든 게시판 편집 허용.
+   *  배열이면 명시적 설정: 여기 포함된 게시판만 편집, 나머지는 뷰어(읽기전용). */
+  editRoutes?: string[]
   updatedAt: string
 }
 
@@ -272,6 +278,8 @@ export function useFeatureAccess() {
         userId: r.user_id as string,
         enabledModules: (r.enabled_modules as FeatureModule[]) || [],
         enabledRoutes: (r.enabled_routes as string[]) || [],
+        // null/컬럼없음 → undefined(레거시, 전체 편집 허용). 배열이면 명시적 설정.
+        editRoutes: (r.edit_routes as string[] | null) ?? undefined,
         updatedAt: r.updated_at as string,
       }))
     },
@@ -282,19 +290,22 @@ export function useFeatureAccess() {
 export function useUpdateFeatureAccess() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ userId, enabledModules, enabledRoutes }: {
+    mutationFn: async ({ userId, enabledModules, enabledRoutes, editRoutes }: {
       userId: string
       enabledModules: FeatureModule[]
       enabledRoutes: string[]
+      editRoutes?: string[]
     }) => {
+      const row: Record<string, unknown> = {
+        user_id: userId,
+        enabled_modules: enabledModules,
+        enabled_routes: enabledRoutes,
+        updated_at: new Date().toISOString(),
+      }
+      if (editRoutes !== undefined) row.edit_routes = editRoutes
       const { data, error } = await supabase
         .from('feature_access')
-        .upsert({
-          user_id: userId,
-          enabled_modules: enabledModules,
-          enabled_routes: enabledRoutes,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'user_id' })
+        .upsert(row, { onConflict: 'user_id' })
         .select()
         .single()
       if (error) throw error
@@ -348,6 +359,28 @@ export function getEffectiveRoutes(
     result = [...set]
   }
   return result
+}
+
+/**
+ * 편집(수정) 가능한 라우트 집합.
+ * - admin: 모든 라우트 편집 가능.
+ * - 커스텀 접근 기록의 editRoutes가 배열이면 그 목록만 편집(열람 가능 범위 내로 제한).
+ * - editRoutes가 없거나(레거시) 커스텀 기록이 없으면 → 열람 가능한 모든 라우트를 편집 허용
+ *   (기존 동작 보존: 보이는 게시판은 수정 가능).
+ */
+export function getEffectiveEditRoutes(
+  user: User,
+  featureAccessRecords: FeatureAccessRecord[],
+): string[] {
+  if (user.role === 'admin') return NAV_ROUTE_DEFS.map(r => r.path)
+  const viewable = getEffectiveRoutes(user, featureAccessRecords)
+  const custom = featureAccessRecords.find(r => r.userId === user.id)
+  if (custom && custom.editRoutes !== undefined) {
+    const editable = new Set(custom.editRoutes)
+    return viewable.filter(r => editable.has(r))
+  }
+  // 레거시/기본: 보이는 게시판 전부 편집 허용
+  return viewable
 }
 
 /**

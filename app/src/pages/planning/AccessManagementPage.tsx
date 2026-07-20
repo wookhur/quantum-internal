@@ -21,7 +21,7 @@ import {
   useProfiles, useUpdateProfile,
   useFeatureAccess, useUpdateFeatureAccess,
   FEATURE_MODULES, ROLE_DEFAULT_ACCESS,
-  NAV_ROUTE_DEFS, ADMIN_ONLY_ROUTES,
+  NAV_ROUTE_DEFS, ADMIN_ONLY_ROUTES, getEffectiveEditRoutes,
   getEffectiveModules, getEffectiveRoutes, getRoutesForModule,
   type FeatureModule, type FeatureAccessRecord,
 } from '@/hooks/useProfiles'
@@ -100,6 +100,7 @@ function UserEditDialog({
 
   const effectiveModules = getEffectiveModules(user, featureAccess)
   const effectiveRoutes = getEffectiveRoutes(user, featureAccess)
+  const effectiveEditRoutes = getEffectiveEditRoutes(user, featureAccess)
 
   const [displayName, setDisplayName] = useState<string>(user.name || '')
   const [role, setRole] = useState<UserRole>(user.role)
@@ -118,6 +119,8 @@ function UserEditDialog({
   const [canEditAttendance, setCanEditAttendance] = useState(user.canEditAttendance || false)
   const [enabledModules, setEnabledModules] = useState<FeatureModule[]>(effectiveModules)
   const [enabledRoutes, setEnabledRoutes] = useState<string[]>(effectiveRoutes)
+  // 편집(수정) 허용 라우트. 열람(enabledRoutes) 중 편집까지 가능한 게시판.
+  const [editRoutes, setEditRoutes] = useState<string[]>(effectiveEditRoutes)
   const [useCustomAccess, setUseCustomAccess] = useState(
     featureAccess.some(r => r.userId === user.id),
   )
@@ -134,6 +137,7 @@ function UserEditDialog({
       // Expand default modules to routes
       const defaultRoutes = NAV_ROUTE_DEFS.filter(r => defaultMods.includes(r.module)).map(r => r.path)
       setEnabledRoutes(defaultRoutes)
+      setEditRoutes(defaultRoutes) // 기본은 편집 허용
     }
   }
 
@@ -145,27 +149,31 @@ function UserEditDialog({
       // Remove module and all its routes
       setEnabledModules(prev => prev.filter(m => m !== mod))
       setEnabledRoutes(prev => prev.filter(r => !modRoutes.includes(r)))
+      setEditRoutes(prev => prev.filter(r => !modRoutes.includes(r)))
     } else {
-      // Add module and all its routes
+      // Add module and all its routes (기본 편집 허용)
       setEnabledModules(prev => [...prev, mod])
       setEnabledRoutes(prev => [...new Set([...prev, ...modRoutes])])
+      setEditRoutes(prev => [...new Set([...prev, ...modRoutes])])
     }
   }
 
-  const toggleRoute = (route: string, mod: FeatureModule) => {
-    const modRoutes = getRoutesForModule(mod)
-    const wasEnabled = enabledRoutes.includes(route)
-
-    let newRoutes: string[]
-    if (wasEnabled) {
-      newRoutes = enabledRoutes.filter(r => r !== route)
-    } else {
-      newRoutes = [...enabledRoutes, route]
+  /** 게시판별 3단계 권한: 없음(none) / 뷰어(view) / 편집(edit) */
+  const setRouteLevel = (route: string, mod: FeatureModule, level: 'none' | 'view' | 'edit') => {
+    let newRoutes = enabledRoutes.filter(r => r !== route)
+    let newEdit = editRoutes.filter(r => r !== route)
+    if (level === 'view') {
+      newRoutes = [...newRoutes, route]
+    } else if (level === 'edit') {
+      newRoutes = [...newRoutes, route]
+      newEdit = [...newEdit, route]
     }
     setEnabledRoutes(newRoutes)
+    setEditRoutes(newEdit)
 
-    // If all routes in this module are now disabled, disable the module too
+    const modRoutes = getRoutesForModule(mod)
     const remainingModRoutes = newRoutes.filter(r => modRoutes.includes(r))
+    // If all routes in this module are now disabled, disable the module too
     if (remainingModRoutes.length === 0 && enabledModules.includes(mod)) {
       setEnabledModules(prev => prev.filter(m => m !== mod))
     }
@@ -220,10 +228,13 @@ function UserEditDialog({
         const safeRoutes = role === 'admin'
           ? enabledRoutes
           : enabledRoutes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
+        // 편집 라우트는 열람 가능 라우트의 부분집합으로 제한
+        const safeEdit = editRoutes.filter(r => safeRoutes.includes(r))
         await updateFeatureAccess.mutateAsync({
           userId: user.id,
           enabledModules,
           enabledRoutes: safeRoutes,
+          editRoutes: safeEdit,
         })
       }
 
@@ -247,7 +258,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentTypes, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, canEditAttendance, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentTypes, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, canEditAttendance, useCustomAccess, enabledModules, enabledRoutes, editRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -415,12 +426,21 @@ function UserEditDialog({
               </div>
             )}
 
+            {useCustomAccess && (
+              <div className="text-[11px] text-muted-foreground bg-gray-50 rounded p-2 leading-relaxed">
+                게시판을 펼치면 <b className="text-gray-500">없음</b> · <b className="text-blue-600">뷰어</b>(열람만) · <b className="text-emerald-600">편집</b>(열람+수정) 을 게시판별로 지정할 수 있습니다.
+                <br />※ 편집 잠금은 중요 게시판부터 순차 적용 중입니다. 아직 적용되지 않은 게시판은 뷰어로 두어도 수정이 가능할 수 있습니다.
+              </div>
+            )}
+
             <div className="space-y-1.5">
               {FEATURE_MODULES.map(mod => {
                 const isModEnabled = enabledModules.includes(mod.key)
                 const isDefault = ROLE_DEFAULT_ACCESS[role]?.includes(mod.key)
                 const isExpanded = expandedModules.has(mod.key)
                 const modRoutes = NAV_ROUTE_DEFS.filter(r => r.module === mod.key)
+                  .slice()
+                  .sort((a, b) => (a.hidden ? 1 : 0) - (b.hidden ? 1 : 0)) // 숨김 라우트는 뒤로
                 const enabledCount = modRoutes.filter(r => enabledRoutes.includes(r.path)).length
 
                 return (
@@ -472,31 +492,55 @@ function UserEditDialog({
                     {isExpanded && useCustomAccess && (
                       <div className="border-t bg-gray-50/30 px-3 py-1.5 space-y-0.5">
                         {modRoutes.map(route => {
-                          const routeEnabled = enabledRoutes.includes(route.path)
                           const isAdminOnly = ADMIN_ONLY_ROUTES.includes(route.path)
                           const isTargetAdmin = role === 'admin'
                           const routeLocked = isAdminOnly && !isTargetAdmin
+                          const level: 'none' | 'view' | 'edit' = routeLocked
+                            ? 'none'
+                            : enabledRoutes.includes(route.path)
+                              ? (editRoutes.includes(route.path) ? 'edit' : 'view')
+                              : 'none'
+                          const levelOpts: { v: 'none' | 'view' | 'edit'; label: string; on: string }[] = [
+                            { v: 'none', label: '없음', on: 'bg-gray-400 text-white border-gray-400' },
+                            { v: 'view', label: '뷰어', on: 'bg-blue-500 text-white border-blue-500' },
+                            { v: 'edit', label: '편집', on: 'bg-emerald-500 text-white border-emerald-500' },
+                          ]
+                          const dotColor = level === 'edit' ? 'bg-emerald-400' : level === 'view' ? 'bg-blue-400' : 'bg-gray-300'
                           return (
                             <div
                               key={route.path}
                               className={`flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-100/60 ${routeLocked ? 'opacity-50' : ''}`}
                             >
-                              <div className="flex items-center gap-2">
-                                <div className={`w-1.5 h-1.5 rounded-full ${routeEnabled && !routeLocked ? 'bg-emerald-400' : 'bg-gray-300'}`} />
-                                <span className="text-xs">{t(route.labelKey)}</span>
-                                <span className="text-[10px] text-muted-foreground font-mono">{route.path}</span>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+                                <span className="text-xs truncate">{t(route.labelKey)}</span>
+                                <span className="text-[10px] text-muted-foreground font-mono truncate">{route.path}</span>
                                 {isAdminOnly && (
-                                  <Badge variant="outline" className="text-[9px] h-3.5 bg-red-50 text-red-600 border-red-200">
+                                  <Badge variant="outline" className="text-[9px] h-3.5 bg-red-50 text-red-600 border-red-200 shrink-0">
                                     Admin
                                   </Badge>
                                 )}
+                                {route.hidden && (
+                                  <Badge variant="outline" className="text-[9px] h-3.5 bg-gray-100 text-gray-500 border-gray-200 shrink-0" title="현재 사이드바 메뉴에는 없지만 직접 링크로 접근 가능한 페이지">
+                                    숨김
+                                  </Badge>
+                                )}
                               </div>
-                              <Switch
-                                checked={routeEnabled && !routeLocked}
-                                onCheckedChange={() => toggleRoute(route.path, mod.key)}
-                                className="scale-75"
-                                disabled={routeLocked}
-                              />
+                              <div className="inline-flex rounded-md border overflow-hidden shrink-0">
+                                {levelOpts.map(o => (
+                                  <button
+                                    key={o.v}
+                                    type="button"
+                                    disabled={routeLocked}
+                                    onClick={() => setRouteLevel(route.path, mod.key, o.v)}
+                                    className={`px-2 py-0.5 text-[11px] border-r last:border-r-0 transition-colors ${
+                                      level === o.v ? o.on : 'bg-white text-gray-500 hover:bg-gray-100'
+                                    } ${routeLocked ? 'cursor-not-allowed' : ''}`}
+                                  >
+                                    {o.label}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           )
                         })}
