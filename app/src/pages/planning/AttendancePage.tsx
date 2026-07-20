@@ -42,6 +42,7 @@ import {
   X,
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
+import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAttendances, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances } from '@/hooks/useAttendances'
 import { useKioskExcludedIds, useUpdateKioskExcludedIds } from '@/hooks/useKioskSettings'
@@ -266,6 +267,10 @@ interface AttendanceForm {
 
 export function AttendancePage() {
   const t = useT()
+  const { user } = useAuth()
+  // 근태 기록 편집(추가·수정·삭제·업로드)은 관리자 또는 '근태관리 수정' 특수 권한 보유자만 가능.
+  // HR 모듈 접근 권한이 있어도 이 권한이 없으면 조회만 가능.
+  const canEdit = user?.role === 'admin' || !!user?.canEditAttendance
   const { data: profiles = [] } = useProfiles()
   const [currentMonth, setCurrentMonth] = useState<string>(getCurrentMonth())
   const { data: attendances = [], isLoading } = useAttendances(currentMonth)
@@ -326,6 +331,7 @@ export function AttendancePage() {
 
   // Dialog
   const openCreate = (date?: string) => {
+    if (!canEdit) return
     setEditId(null)
     setForm({
       profileId: selectedProfile !== 'all' ? selectedProfile : (activeProfiles[0]?.id || ''),
@@ -338,6 +344,7 @@ export function AttendancePage() {
   }
 
   const openEdit = (id: string) => {
+    if (!canEdit) return
     const att = attendances.find(a => a.id === id)
     if (!att) return
     setEditId(id)
@@ -352,6 +359,7 @@ export function AttendancePage() {
   }
 
   const handleSave = () => {
+    if (!canEdit) return
     if (!form.profileId || !form.date) return
     upsertMut.mutate({
       profileId: form.profileId,
@@ -364,6 +372,7 @@ export function AttendancePage() {
   }
 
   const handleDelete = (id: string) => {
+    if (!canEdit) return
     if (!confirm(t('attendance.confirmDelete'))) return
     deleteMut.mutate(id)
   }
@@ -431,7 +440,7 @@ export function AttendancePage() {
   }
 
   // ─── Import handlers ───
-  const handleFilePick = () => fileInputRef.current?.click()
+  const handleFilePick = () => { if (canEdit) fileInputRef.current?.click() }
 
   const handleFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -464,6 +473,7 @@ export function AttendancePage() {
   const importErrorRows = useMemo(() => importRows.filter(r => r.error), [importRows])
 
   const handleImportConfirm = async () => {
+    if (!canEdit) return
     if (importValidRows.length === 0) return
     await bulkUpsertMut.mutateAsync(
       importValidRows.map(r => ({
@@ -603,42 +613,48 @@ export function AttendancePage() {
           </SelectContent>
         </Select>
 
-        <Button size="sm" className="h-8" onClick={() => openCreate()}>
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          {t('attendance.add')}
-        </Button>
+        {canEdit && (
+          <Button size="sm" className="h-8" onClick={() => openCreate()}>
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            {t('attendance.add')}
+          </Button>
+        )}
         <Button variant="outline" size="sm" className="h-8" onClick={handleExport}>
           <Download className="h-3.5 w-3.5 mr-1" />
           {t('attendance.export')}
         </Button>
-        <Button variant="outline" size="sm" className="h-8" onClick={handleFilePick}>
-          <Upload className="h-3.5 w-3.5 mr-1" />
-          {t('attendance.import.button')}
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          className="hidden"
-          onChange={handleFileChosen}
-        />
-        {importError && (
-          <span className="text-xs text-red-600 flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" />{importError}
-          </span>
+        {canEdit && (
+          <>
+            <Button variant="outline" size="sm" className="h-8" onClick={handleFilePick}>
+              <Upload className="h-3.5 w-3.5 mr-1" />
+              {t('attendance.import.button')}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleFileChosen}
+            />
+            {importError && (
+              <span className="text-xs text-red-600 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />{importError}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => {
+                setKioskExcludedDraft(new Set(kioskExcludedIds))
+                setKioskSettingsOpen(true)
+              }}
+            >
+              <Settings2 className="h-3.5 w-3.5 mr-1" />
+              {t('attendance.kioskSettings')}
+            </Button>
+          </>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8"
-          onClick={() => {
-            setKioskExcludedDraft(new Set(kioskExcludedIds))
-            setKioskSettingsOpen(true)
-          }}
-        >
-          <Settings2 className="h-3.5 w-3.5 mr-1" />
-          {t('attendance.kioskSettings')}
-        </Button>
       </div>
 
       {/* Summary */}
@@ -858,14 +874,18 @@ export function AttendancePage() {
                       <TableCell className="text-sm text-muted-foreground">{workHrs || '-'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{att.note || ''}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(att.id)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => handleDelete(att.id)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
+                        {canEdit ? (
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(att.id)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => handleDelete(att.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   )

@@ -115,6 +115,7 @@ function UserEditDialog({
   const [isPartner, setIsPartner] = useState(user.isPartner || false)
   const [canApproveOrders, setCanApproveOrders] = useState(user.canApproveOrders || false)
   const [canApproveLeave, setCanApproveLeave] = useState(user.canApproveLeave || false)
+  const [canEditAttendance, setCanEditAttendance] = useState(user.canEditAttendance || false)
   const [enabledModules, setEnabledModules] = useState<FeatureModule[]>(effectiveModules)
   const [enabledRoutes, setEnabledRoutes] = useState<string[]>(effectiveRoutes)
   const [useCustomAccess, setUseCustomAccess] = useState(
@@ -211,6 +212,7 @@ function UserEditDialog({
         isPartner,
         canApproveOrders,
         canApproveLeave,
+        canEditAttendance,
       })
 
       if (useCustomAccess) {
@@ -239,12 +241,13 @@ function UserEditDialog({
         `· enabled_routes → migration-feature-access-routes.sql\n` +
         `· can_approve_orders → migration-coupang-approval.sql\n` +
         `· can_approve_leave / leave_requests → migration-leave-management.sql\n` +
+        `· can_edit_attendance → migration-attendance-edit-permission.sql\n` +
         `· hire_date → migration-hire-date.sql)`
       )
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentTypes, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentTypes, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, canEditAttendance, useCustomAccess, enabledModules, enabledRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -534,6 +537,20 @@ function UserEditDialog({
                       </div>
                     </div>
                     <Switch checked={canApproveLeave} onCheckedChange={setCanApproveLeave} />
+                  </div>
+                </div>
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="flex items-center justify-between p-2.5 bg-white">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${canEditAttendance ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">근태관리 수정 권한</div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          HR 권한과 별개로, 지정된 사용자만 근태 기록을 추가·수정·삭제·업로드할 수 있습니다
+                        </div>
+                      </div>
+                    </div>
+                    <Switch checked={canEditAttendance} onCheckedChange={setCanEditAttendance} />
                   </div>
                 </div>
               </div>

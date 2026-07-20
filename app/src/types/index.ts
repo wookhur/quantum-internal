@@ -22,6 +22,7 @@ export interface User {
   partnerAcademy?: string  // 파트너 강사 소속학원명
   canApproveOrders?: boolean  // 쿠팡 주문 '주문승인' 권한
   canApproveLeave?: boolean   // '연차·휴가 승인' 권한
+  canEditAttendance?: boolean // '근태관리 수정' 권한 (지정된 사용자만)
   avatarUrl?: string
   createdAt: string
 }

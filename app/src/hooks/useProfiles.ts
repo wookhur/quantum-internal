@@ -24,6 +24,7 @@ function mapProfile(row: Record<string, unknown>): User {
     partnerAcademy: (row.partner_academy as string) || undefined,
     canApproveOrders: (row.can_approve_orders as boolean) || false,
     canApproveLeave: (row.can_approve_leave as boolean) || false,
+    canEditAttendance: (row.can_edit_attendance as boolean) || false,
     workerType: (row.worker_type as WorkerType) || undefined,
     avatarUrl: (row.avatar_url as string) || undefined,
     createdAt: row.created_at as string,
@@ -68,6 +69,7 @@ export function useUpdateProfile() {
       partnerAcademy?: string | null
       canApproveOrders?: boolean
       canApproveLeave?: boolean
+      canEditAttendance?: boolean
     }) => {
       const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (updates.role !== undefined) row.role = updates.role
@@ -89,6 +91,7 @@ export function useUpdateProfile() {
       if (updates.partnerAcademy !== undefined) row.partner_academy = updates.partnerAcademy
       if (updates.canApproveOrders !== undefined) row.can_approve_orders = updates.canApproveOrders
       if (updates.canApproveLeave !== undefined) row.can_approve_leave = updates.canApproveLeave
+      if (updates.canEditAttendance !== undefined) row.can_edit_attendance = updates.canEditAttendance
 
       const { data, error } = await supabase
         .from('profiles')
