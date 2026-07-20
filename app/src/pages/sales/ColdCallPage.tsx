@@ -457,17 +457,23 @@ export function ColdCallView() {
     // Score and sort
     const scored = leads.map((l) => ({ ...l, _priority: getLeadPriority(l) }))
 
+    // 유효하지 않은 날짜는 맨 뒤로(-Infinity). NaN이 아니라 실수를 반환해 정렬이 안정적.
+    const t = (s?: string) => { const n = s ? new Date(s).getTime() : NaN; return Number.isNaN(n) ? -Infinity : n }
+    // 모든 기준이 동점일 때 항상 같은 순서가 되도록 id로 최종 고정(결정적 정렬).
+    const byId = (a: typeof scored[number], b: typeof scored[number]) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)
+
     if (sortBy === 'level') {
-      scored.sort((a, b) => (leadLevelConfig(b.leadLevel)?.rank || 0) - (leadLevelConfig(a.leadLevel)?.rank || 0))
+      scored.sort((a, b) =>
+        ((leadLevelConfig(b.leadLevel)?.rank || 0) - (leadLevelConfig(a.leadLevel)?.rank || 0))
+        || (t(b.leadDate) - t(a.leadDate)) || byId(a, b))
     } else if (sortBy === 'date') {
-      // 최신순: 유입일 내림차순, 같은 날이면 등록 시각(createdAt)이 늦은 리드가 먼저
-      scored.sort((a, b) => {
-        const d = new Date(b.leadDate).getTime() - new Date(a.leadDate).getTime()
-        if (d !== 0) return d
-        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-      })
+      // 최신순: 유입일 내림차순 → 등록 시각 내림차순 → id (완전 결정적)
+      scored.sort((a, b) =>
+        (t(b.leadDate) - t(a.leadDate)) || (t(b.createdAt) - t(a.createdAt)) || byId(a, b))
     } else if (sortBy === 'grade') {
-      scored.sort((a, b) => (GRADE_PRIORITY[b.grade] || 0) - (GRADE_PRIORITY[a.grade] || 0))
+      scored.sort((a, b) =>
+        ((GRADE_PRIORITY[b.grade] || 0) - (GRADE_PRIORITY[a.grade] || 0))
+        || (t(b.leadDate) - t(a.leadDate)) || byId(a, b))
     }
 
     return scored
