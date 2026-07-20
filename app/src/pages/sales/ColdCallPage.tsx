@@ -48,6 +48,7 @@ import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead, useDelet
 import { useProfiles } from '@/hooks/useProfiles'
 import { LEAD_LEVELS, leadLevelConfig, type LeadLevel } from '@/lib/leadLevels'
 import { useAllLeadAttendance, useUpsertLeadAttendance, ATTENDANCE_OPTIONS, type AttendanceStatus } from '@/hooks/useLeadAttendance'
+import { sessionSortKey } from '@/hooks/useSeminars'
 import {
   useSeminarsWithRegistrations,
   useAllContactActivities,
@@ -908,11 +909,17 @@ function ColdCallDetail({
   const upsertAttendance = useUpsertLeadAttendance()
   // Seminars this lead registered for, with the specific sessions they applied to
   // 이 리드가 신청한 모든 세미나(선배초청 + 전공별웨비나 등)를, 세션 라벨이 없어도/이름만 매칭돼도 표시.
-  // 진행일 빠른 순으로 정렬해 최초 유입 세미나가 먼저 보이도록 한다.
+  // - 세미나 그룹: 최근 진행 순(내림차순)으로 정렬해 최신 세미나가 먼저 보이도록.
+  // - 각 세미나 내 세션: 날짜·시간 순(오름차순)으로 정렬(예: 8/1 2부 → 8/8).
   const appliedSeminars = useMemo(() => seminars
-    .map(s => ({ seminar: s, sessions: seminarSessionsForLead(s, lead) }))
+    .map(s => ({
+      seminar: s,
+      sessions: [...seminarSessionsForLead(s, lead)].sort(
+        (a, b) => sessionSortKey({ label: a }) - sessionSortKey({ label: b }),
+      ),
+    }))
     .filter(x => x.sessions.length > 0 || leadMatchesSeminarLoose(x.seminar, lead))
-    .sort((a, b) => (a.seminar.date || '').localeCompare(b.seminar.date || '')),
+    .sort((a, b) => (b.seminar.date || '').localeCompare(a.seminar.date || '')),
     [seminars, lead])
   const statusOf = (seminarId: string, session: string): AttendanceStatus | '' =>
     attendance.find(a => a.seminarId === seminarId && a.sessionLabel === session)?.status || ''
