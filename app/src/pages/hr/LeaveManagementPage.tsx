@@ -57,8 +57,10 @@ export function LeaveManagementPage() {
       .reduce((s, r) => s + r.days, 0),
     [requests, user?.id],
   )
-  const remaining = Math.max(0, annual.entitlement - myAnnualUsed)
-  const paidRemaining = Math.max(0, PAID_LEAVE_ANNUAL - myPaidUsed)
+  // 잔여는 음수 허용(초과 사용). 연차는 매월 1일씩 발생하므로 시간이 지나면 자동 회복된다.
+  const remaining = annual.entitlement - myAnnualUsed
+  const paidRemaining = PAID_LEAVE_ANNUAL - myPaidUsed
+  const totalRemaining = remaining + paidRemaining // 연차+유급 통합 잔여
 
   const mine = requests.filter(r => r.requesterId === user?.id)
   const pending = requests.filter(r => r.status === 'requested')
@@ -106,7 +108,7 @@ export function LeaveManagementPage() {
               </div>
               <div>
                 <div className="text-[11px] text-muted-foreground">잔여</div>
-                <div className="text-2xl font-bold text-emerald-600">{remaining}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+                <div className={`text-2xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{remaining}<span className="text-sm font-normal text-muted-foreground">일</span></div>
               </div>
             </div>
             <div className="flex items-start gap-1.5 text-[11px] text-muted-foreground mt-2">
@@ -129,13 +131,30 @@ export function LeaveManagementPage() {
               </div>
               <div>
                 <div className="text-[11px] text-muted-foreground">잔여</div>
-                <div className="text-2xl font-bold text-emerald-600">{paidRemaining}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+                <div className={`text-2xl font-bold ${paidRemaining < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{paidRemaining}<span className="text-sm font-normal text-muted-foreground">일</span></div>
               </div>
             </div>
             <div className="text-[11px] text-muted-foreground mt-2">연 {PAID_LEAVE_ANNUAL}일 · 경조사는 별도(잔여 차감 없음)</div>
           </CardContent>
         </Card>
       </div>
+
+      {/* 통합 잔여 (연차 + 유급) — 초과 사용 시 음수, 연차 월 발생으로 자동 회복 */}
+      <Card className={totalRemaining < 0 ? 'border-red-300 bg-red-50/40' : ''}>
+        <CardContent className="py-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">잔여 휴가 <span className="text-xs font-normal text-muted-foreground">(연차 + 유급)</span></div>
+            <div className={`text-2xl font-bold ${totalRemaining < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+              {totalRemaining}<span className="text-sm font-normal text-muted-foreground">일</span>
+            </div>
+          </div>
+          {totalRemaining < 0 && (
+            <div className="text-[11px] text-red-600 mt-1.5">
+              초과 사용 {-totalRemaining}일 · 연차가 매월 1일씩 발생하여 자동으로 회복됩니다.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Tabs */}
       <div className="flex gap-2 flex-wrap">
@@ -546,15 +565,18 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
         const ent = computeAnnualEntitlement(hire)
         const aUsed = usedAnnual.get(p.id) || 0
         const pUsed = usedPaid.get(p.id) || 0
+        const annualLeft = ent.entitlement - aUsed
+        const paidLeft = PAID_LEAVE_ANNUAL - pUsed
         return {
           id: p.id,
           name: p.name,
           hireDate: hire,
           annualEnt: ent.entitlement,
           annualUsed: aUsed,
-          annualLeft: Math.max(0, ent.entitlement - aUsed),
+          annualLeft, // 음수 허용
           paidUsed: pUsed,
-          paidLeft: Math.max(0, PAID_LEAVE_ANNUAL - pUsed),
+          paidLeft, // 음수 허용
+          totalLeft: annualLeft + paidLeft, // 연차+유급 통합 잔여
           noHire: !p.contractStartDate,
         }
       })
@@ -574,6 +596,7 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
               <th className="text-right font-medium px-3 py-2">연차 잔여</th>
               <th className="text-right font-medium px-3 py-2">유급 사용</th>
               <th className="text-right font-medium px-3 py-2">유급 잔여</th>
+              <th className="text-right font-medium px-3 py-2 whitespace-nowrap">총 잔여</th>
             </tr>
           </thead>
           <tbody>
@@ -585,13 +608,14 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
                 </td>
                 <td className="px-3 py-2 text-right">{r.annualEnt}</td>
                 <td className="px-3 py-2 text-right text-blue-600">{r.annualUsed}</td>
-                <td className="px-3 py-2 text-right font-semibold text-emerald-600">{r.annualLeft}</td>
+                <td className={`px-3 py-2 text-right font-semibold ${r.annualLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.annualLeft}</td>
                 <td className="px-3 py-2 text-right text-blue-600">{r.paidUsed}</td>
-                <td className="px-3 py-2 text-right font-semibold text-emerald-600">{r.paidLeft}</td>
+                <td className={`px-3 py-2 text-right font-semibold ${r.paidLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.paidLeft}</td>
+                <td className={`px-3 py-2 text-right font-bold ${r.totalLeft < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{r.totalLeft}</td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">표시할 직원이 없습니다.</td></tr>
+              <tr><td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">표시할 직원이 없습니다.</td></tr>
             )}
           </tbody>
         </table>
