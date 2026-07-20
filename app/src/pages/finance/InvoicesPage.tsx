@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import { FileText, Send, Plus, Trash2, Search, Mail, CheckCircle, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,10 +10,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { useInvoices, useCreateDocument, useSendDocument, useDeleteDocument } from '@/hooks/useInvoicesReceipts'
 import { useContractsWithInstallments } from '@/hooks/useContracts'
 import { useT } from '@/i18n/LanguageContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { formatCurrency } from '@/types'
 
 export function InvoicesPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { data: invoices = [], isLoading } = useInvoices()
   const { data: contracts = [] } = useContractsWithInstallments()
   const createDoc = useCreateDocument()
@@ -56,6 +59,7 @@ export function InvoicesPage() {
   }, [contracts])
 
   const handleCreate = useCallback(() => {
+    if (!canEdit) return
     if (!form.studentName || !form.contractorName || !form.amount) return
     createDoc.mutate({
       type: 'invoice',
@@ -74,16 +78,18 @@ export function InvoicesPage() {
         setForm({ contractId: '', studentName: '', contractorName: '', recipientEmail: '', amount: '', currency: 'KRW', description: '' })
       },
     })
-  }, [form, createDoc])
+  }, [form, createDoc, canEdit])
 
   const handleSend = useCallback((id: string) => {
+    if (!canEdit) return
     sendDoc.mutate(id)
-  }, [sendDoc])
+  }, [sendDoc, canEdit])
 
   const handleDelete = useCallback((id: string) => {
+    if (!canEdit) return
     if (!confirm(t('invoice.deleteConfirm'))) return
     deleteDoc.mutate(id)
-  }, [deleteDoc, t])
+  }, [deleteDoc, t, canEdit])
 
   const statusBadge = (status: string) => {
     switch (status) {
@@ -118,9 +124,11 @@ export function InvoicesPage() {
             <p className="text-xs text-gray-500">{t('invoice.subtitle')}</p>
           </div>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
-          <Plus className="size-4" /> {t('invoice.create')}
-        </Button>
+        {canEdit && (
+          <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
+            <Plus className="size-4" /> {t('invoice.create')}
+          </Button>
+        )}
       </div>
 
       {/* Search */}
@@ -164,7 +172,7 @@ export function InvoicesPage() {
                   <td className="px-4 py-3 text-center">{statusBadge(inv.status)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      {inv.status === 'draft' && inv.recipientEmail && (
+                      {canEdit && inv.status === 'draft' && inv.recipientEmail && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -176,15 +184,17 @@ export function InvoicesPage() {
                           <Send className="size-3.5" />
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-gray-400 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => handleDelete(inv.id)}
-                        title={t('common.delete')}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => handleDelete(inv.id)}
+                          title={t('common.delete')}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

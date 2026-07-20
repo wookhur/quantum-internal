@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,7 @@ import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } fro
 import { useRevenueSharesByInstallments, useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare } from '@/hooks/useRevenueShares'
 import { useContractIncentives, useCreateIncentive, useDeleteIncentive, useIncentiveRecipients, useCreateIncentiveRecipient, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
@@ -328,6 +329,7 @@ function ExtraIncentiveAddForm({
 function InstallmentCard({
   installment,
   currency,
+  canEdit,
   onMarkPaid,
   onRevertPaid,
   onEdit,
@@ -338,6 +340,7 @@ function InstallmentCard({
 }: {
   installment: PaymentInstallment
   currency: 'KRW' | 'USD'
+  canEdit: boolean
   onMarkPaid: (inst: PaymentInstallment) => void
   onRevertPaid: (inst: PaymentInstallment) => void
   onEdit: (inst: PaymentInstallment) => void
@@ -383,46 +386,48 @@ function InstallmentCard({
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              className="gap-1 text-muted-foreground hover:text-foreground"
-              onClick={() => onEdit(installment)}
-            >
-              <Pencil className="size-3.5" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="gap-1 text-muted-foreground hover:text-destructive"
-              onClick={() => onDelete(installment)}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
-            {(isPaid || isPartial) && (
+          {canEdit && (
+            <div className="flex gap-2">
               <Button
                 size="sm"
-                variant="outline"
-                className="gap-1.5 text-amber-600 border-amber-300 hover:bg-amber-50"
-                onClick={() => onRevertPaid(installment)}
+                variant="ghost"
+                className="gap-1 text-muted-foreground hover:text-foreground"
+                onClick={() => onEdit(installment)}
               >
-                <AlertTriangle className="size-3.5" />
-                {t('contracts.revertPaid')}
+                <Pencil className="size-3.5" />
               </Button>
-            )}
-            {!isPaid && (
               <Button
                 size="sm"
-                variant={isOverdue ? 'destructive' : 'outline'}
-                className="gap-1.5"
-                onClick={() => onMarkPaid(installment)}
+                variant="ghost"
+                className="gap-1 text-muted-foreground hover:text-destructive"
+                onClick={() => onDelete(installment)}
               >
-                <CreditCard className="size-3.5" />
-                {isPartial ? t('contracts.payRemaining') : t('contracts.markPaid')}
+                <Trash2 className="size-3.5" />
               </Button>
-            )}
-          </div>
+              {(isPaid || isPartial) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-amber-600 border-amber-300 hover:bg-amber-50"
+                  onClick={() => onRevertPaid(installment)}
+                >
+                  <AlertTriangle className="size-3.5" />
+                  {t('contracts.revertPaid')}
+                </Button>
+              )}
+              {!isPaid && (
+                <Button
+                  size="sm"
+                  variant={isOverdue ? 'destructive' : 'outline'}
+                  className="gap-1.5"
+                  onClick={() => onMarkPaid(installment)}
+                >
+                  <CreditCard className="size-3.5" />
+                  {isPartial ? t('contracts.payRemaining') : t('contracts.markPaid')}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Payment details */}
@@ -488,7 +493,7 @@ function InstallmentCard({
                       <Badge variant="outline" className="text-[10px] h-4 bg-emerald-50 text-emerald-700 border-emerald-200">
                         {t('contracts.status.fullyPaid')}
                       </Badge>
-                    ) : (
+                    ) : canEdit ? (
                       <button
                         type="button"
                         className="text-[10px] text-violet-600 hover:text-violet-800 font-medium"
@@ -496,8 +501,8 @@ function InstallmentCard({
                       >
                         {t('contracts.markPaid')}
                       </button>
-                    )}
-                    {onDeleteShare && (
+                    ) : null}
+                    {canEdit && onDeleteShare && (
                       <button
                         type="button"
                         className="text-gray-400 hover:text-red-500"
@@ -630,6 +635,7 @@ const CONSULTANTS: Record<string, string> = {
 export function ContractDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const canEdit = useCanEdit(useLocation().pathname)
   const t = useT()
   const { user } = useAuth()
   const pmLabel = usePaymentMethodLabel()
@@ -680,6 +686,7 @@ export function ContractDetailPage() {
   })
 
   const handleCancel = useCallback(() => {
+    if (!canEdit) return
     if (!id) return
     cancelContract.mutate({ contractId: id, reason: cancelReason || undefined }, {
       onSuccess: () => {
@@ -691,9 +698,10 @@ export function ContractDetailPage() {
         alert(`계약 취소 처리에 실패했습니다.\n${err?.message || ''}`)
       },
     })
-  }, [id, cancelReason, cancelContract])
+  }, [id, cancelReason, cancelContract, canEdit])
 
   const openPayDialog = useCallback((inst: PaymentInstallment) => {
+    if (!canEdit) return
     setSelectedInstallment(inst)
     setPayForm({
       paidAmount: String(inst.amount - inst.paidAmount),
@@ -702,9 +710,10 @@ export function ContractDetailPage() {
       notes: '',
     })
     setPayDialogOpen(true)
-  }, [])
+  }, [canEdit])
 
   const handleMarkPaid = useCallback(() => {
+    if (!canEdit) return
     if (!selectedInstallment || !contract) return
     const amount = Number(payForm.paidAmount) || 0
     if (amount <= 0) return
@@ -761,9 +770,10 @@ export function ContractDetailPage() {
         })
       },
     })
-  }, [selectedInstallment, payForm, updateInstallment, contract, user?.id])
+  }, [selectedInstallment, payForm, updateInstallment, contract, user?.id, canEdit])
 
   const handleRevertPaid = useCallback((inst: PaymentInstallment) => {
+    if (!canEdit) return
     if (!confirm(t('contracts.revertPaidConfirm').replace('{label}', inst.label))) return
     updateInstallment.mutate({
       id: inst.id,
@@ -783,14 +793,16 @@ export function ContractDetailPage() {
         if (error) console.error('Failed to delete receipt on revert:', error.message)
       },
     })
-  }, [updateInstallment, t])
+  }, [updateInstallment, t, canEdit])
 
   const handleDeleteInstallment = useCallback((inst: PaymentInstallment) => {
+    if (!canEdit) return
     if (!confirm(t('contracts.deleteInstallmentConfirm').replace('{label}', inst.label))) return
     deleteInstallment.mutate(inst.id)
-  }, [deleteInstallment, t])
+  }, [deleteInstallment, t, canEdit])
 
   const handleAddCharge = useCallback(() => {
+    if (!canEdit) return
     if (!id || !chargeForm.label.trim() || !chargeForm.amount) return
     const nextOrder = (contract?.installments?.length || 0) + 1
     const validShares = revenueShareRows.filter(r => r.name.trim() && Number(r.amount) > 0)
@@ -823,9 +835,10 @@ export function ContractDetailPage() {
         setRevenueShareRows([])
       },
     })
-  }, [id, chargeForm, revenueShareRows, contract, createInstallments, createRevenueShares])
+  }, [id, chargeForm, revenueShareRows, contract, createInstallments, createRevenueShares, canEdit])
 
   const handleAddBase = useCallback(() => {
+    if (!canEdit) return
     if (!id || !baseForm.label.trim() || !baseForm.amount || Number(baseForm.amount) <= 0) return
     const baseCount = (contract?.installments || []).filter(i => i.category !== 'extra').length
     createInstallments.mutate({
@@ -844,9 +857,10 @@ export function ContractDetailPage() {
         setBaseForm({ label: '', amount: '', dueDate: '' })
       },
     })
-  }, [id, baseForm, contract, createInstallments])
+  }, [id, baseForm, contract, createInstallments, canEdit])
 
   const openEditInstDialog = useCallback((inst: PaymentInstallment) => {
+    if (!canEdit) return
     const hasPaid = inst.status === 'paid' || inst.status === 'partial'
     setEditInstForm({
       id: inst.id,
@@ -860,9 +874,10 @@ export function ContractDetailPage() {
       isPaid: hasPaid,
     })
     setEditInstDialogOpen(true)
-  }, [])
+  }, [canEdit])
 
   const handleEditInstallment = useCallback(() => {
+    if (!canEdit) return
     if (!editInstForm.id || !editInstForm.label.trim() || !editInstForm.amount) return
     const payload: Parameters<typeof updateInstallment.mutate>[0] = {
       id: editInstForm.id,
@@ -882,7 +897,7 @@ export function ContractDetailPage() {
         setEditInstDialogOpen(false)
       },
     })
-  }, [editInstForm, updateInstallment])
+  }, [editInstForm, updateInstallment, canEdit])
 
   if (isLoading) {
     return (
@@ -931,7 +946,7 @@ export function ContractDetailPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {!isCancelled && (
+          {canEdit && !isCancelled && (
             <Button
               variant="outline"
               size="sm"
@@ -941,7 +956,7 @@ export function ContractDetailPage() {
               <Pencil className="size-3.5" /> {t('common.edit')}
             </Button>
           )}
-          {!isCancelled && contract.status !== 'terminated' && (
+          {canEdit && !isCancelled && contract.status !== 'terminated' && (
             <Button
               variant="outline"
               size="sm"
@@ -960,7 +975,7 @@ export function ContractDetailPage() {
               <Ban className="size-3.5" /> {t('contracts.terminated')}
             </Button>
           )}
-          {!isCancelled && (
+          {canEdit && !isCancelled && (
             <Button
               variant="outline"
               size="sm"
@@ -970,14 +985,16 @@ export function ContractDetailPage() {
               <Ban className="size-3.5" /> {t('contracts.cancelContract')}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
-            onClick={() => setDeleteDialogOpen(true)}
-          >
-            <Trash2 className="size-3.5" /> {t('contracts.deleteContract')}
-          </Button>
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="size-3.5" /> {t('contracts.deleteContract')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1064,7 +1081,7 @@ export function ContractDetailPage() {
             <DollarSign className="size-5" />
             {t('contracts.baseInstallments')} ({baseInstallments.length})
           </h2>
-          {!isCancelled && (
+          {canEdit && !isCancelled && (
             <Button
               size="sm"
               variant="outline"
@@ -1092,6 +1109,7 @@ export function ContractDetailPage() {
                 key={inst.id}
                 installment={inst}
                 currency={contract.currency}
+                canEdit={canEdit}
                 onMarkPaid={openPayDialog}
                 onRevertPaid={handleRevertPaid}
                 onEdit={openEditInstDialog}
@@ -1114,7 +1132,7 @@ export function ContractDetailPage() {
               </Badge>
             )}
           </h2>
-          {!isCancelled && (
+          {canEdit && !isCancelled && (
             <Button
               size="sm"
               variant="outline"
@@ -1143,6 +1161,7 @@ export function ContractDetailPage() {
                 key={inst.id}
                 installment={inst}
                 currency={contract.currency}
+                canEdit={canEdit}
                 onMarkPaid={openPayDialog}
                 onRevertPaid={handleRevertPaid}
                 onEdit={openEditInstDialog}
@@ -1195,9 +1214,9 @@ export function ContractDetailPage() {
                             <span className="text-sm font-medium">{inc.displayName}</span>
                             <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
                           </div>
-                          {!isCancelled && (
+                          {canEdit && !isCancelled && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                              onClick={() => { if (confirm(t('incentive.deleteConfirm'))) deleteIncentive.mutate(inc.id) }}>
+                              onClick={() => { if (!canEdit) return; if (confirm(t('incentive.deleteConfirm'))) deleteIncentive.mutate(inc.id) }}>
                               <Trash2 className="size-3.5" />
                             </Button>
                           )}
@@ -1232,7 +1251,7 @@ export function ContractDetailPage() {
             })()}
 
             {/* Add base incentive form */}
-            {!isCancelled && (
+            {canEdit && !isCancelled && (
               <div className="flex items-end gap-2 pt-2 border-t flex-wrap">
                 <div className="flex-1 min-w-[160px] space-y-1">
                   <label className="text-xs text-muted-foreground">{t('incentive.selectPerson')}</label>
@@ -1335,9 +1354,9 @@ export function ContractDetailPage() {
                                   <span className={`font-mono font-semibold ${isPaid ? 'text-green-700' : 'text-gray-400'}`}>
                                     {isPaid ? formatCurrency(extIncAmt) : t('incentive.unpaid')}
                                   </span>
-                                  {!isCancelled && (
+                                  {canEdit && !isCancelled && (
                                     <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500"
-                                      onClick={() => { if (confirm(t('incentive.deleteConfirm'))) deleteIncentive.mutate(inc.id) }}>
+                                      onClick={() => { if (!canEdit) return; if (confirm(t('incentive.deleteConfirm'))) deleteIncentive.mutate(inc.id) }}>
                                       <Trash2 className="size-3" />
                                     </Button>
                                   )}
@@ -1348,7 +1367,7 @@ export function ContractDetailPage() {
                         </div>
                       )}
                       {/* Add incentive for this extra installment */}
-                      {!isCancelled && (
+                      {canEdit && !isCancelled && (
                         <ExtraIncentiveAddForm
                           contractId={id!}
                           installmentId={extInst.id}

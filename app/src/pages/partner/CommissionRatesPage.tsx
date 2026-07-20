@@ -11,7 +11,9 @@ import {
 import { Loader2, Percent, Plus, Trash2, Pencil, X, Handshake, Briefcase } from 'lucide-react'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { EC_PARTNERS } from '@/lib/ecPartners'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { canManageServiceFinance } from '@/hooks/useProfiles'
 import {
   usePartnerRateList,
@@ -23,7 +25,8 @@ const RATE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 export function CommissionRatesPage() {
   const { user } = useAuth()
-  const canEdit = canManageServiceFinance(user)
+  const canEditRoute = useCanEdit(useLocation().pathname)
+  const canEdit = canManageServiceFinance(user) && canEditRoute
   const { list: partnerRates, isLoading } = usePartnerRateList()
   const { data: fees = [] } = useAllServiceProgramFees()
   const upsert = useUpsertCommissionRate()
@@ -43,9 +46,10 @@ export function CommissionRatesPage() {
 
   const editing = partnerRates.some(r => r.partner === partner.trim())
   const resetForm = () => { setPartner(''); setPSales('4'); setPService('3') }
-  const startEdit = (name: string, s: number, sv: number) => { setPartner(name); setPSales(String(s)); setPService(String(sv)) }
+  const startEdit = (name: string, s: number, sv: number) => { if (!canEdit) return; setPartner(name); setPSales(String(s)); setPService(String(sv)) }
 
   const handleAddPartner = () => {
+    if (!canEdit) return
     if (!partner.trim()) return
     upsert.mutate(
       { partner: partner.trim(), salesRate: Number(pSales), serviceRate: Number(pService) },

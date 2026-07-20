@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Receipt, Send, Plus, Trash2, Search, Mail, CheckCircle, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,10 +10,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { useReceipts, useCreateDocument, useSendDocument, useDeleteDocument } from '@/hooks/useInvoicesReceipts'
 import { useContractsWithInstallments } from '@/hooks/useContracts'
 import { useT } from '@/i18n/LanguageContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { formatCurrency } from '@/types'
 
 export function ReceiptsPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { data: receipts = [], isLoading } = useReceipts()
   const { data: contracts = [] } = useContractsWithInstallments()
   const createDoc = useCreateDocument()
@@ -58,6 +61,7 @@ export function ReceiptsPage() {
   }, [contracts])
 
   const handleCreate = useCallback(() => {
+    if (!canEdit) return
     if (!form.studentName || !form.contractorName || !form.amount) return
     createDoc.mutate({
       type: 'receipt',
@@ -78,16 +82,18 @@ export function ReceiptsPage() {
         setForm({ contractId: '', studentName: '', contractorName: '', recipientEmail: '', amount: '', currency: 'KRW', paymentMethod: 'bank_transfer', paidDate: new Date().toISOString().slice(0, 10), description: '' })
       },
     })
-  }, [form, createDoc])
+  }, [form, createDoc, canEdit])
 
   const handleSend = useCallback((id: string) => {
+    if (!canEdit) return
     sendDoc.mutate(id)
-  }, [sendDoc])
+  }, [sendDoc, canEdit])
 
   const handleDelete = useCallback((id: string) => {
+    if (!canEdit) return
     if (!confirm(t('receipt.deleteConfirm'))) return
     deleteDoc.mutate(id)
-  }, [deleteDoc, t])
+  }, [deleteDoc, t, canEdit])
 
   const statusBadge = (status: string) => {
     switch (status) {
@@ -131,9 +137,11 @@ export function ReceiptsPage() {
             <p className="text-xs text-gray-500">{t('receipt.subtitle')}</p>
           </div>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
-          <Plus className="size-4" /> {t('receipt.create')}
-        </Button>
+        {canEdit && (
+          <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
+            <Plus className="size-4" /> {t('receipt.create')}
+          </Button>
+        )}
       </div>
 
       {/* Search */}
@@ -179,7 +187,7 @@ export function ReceiptsPage() {
                   <td className="px-4 py-3 text-center">{statusBadge(r.status)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
-                      {r.status === 'draft' && r.recipientEmail && (
+                      {canEdit && r.status === 'draft' && r.recipientEmail && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -191,15 +199,17 @@ export function ReceiptsPage() {
                           <Send className="size-3.5" />
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-gray-400 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => handleDelete(r.id)}
-                        title={t('common.delete')}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => handleDelete(r.id)}
+                          title={t('common.delete')}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>

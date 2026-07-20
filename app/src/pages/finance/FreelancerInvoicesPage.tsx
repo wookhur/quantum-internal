@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -104,6 +106,7 @@ function InvoiceFormDialog({
   kind,
   allowAddItems,
   businessLabels,
+  canEdit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -114,6 +117,7 @@ function InvoiceFormDialog({
   kind?: string
   allowAddItems?: boolean
   businessLabels?: boolean
+  canEdit: boolean
 }) {
   const t = useT()
   const createInvoice = useCreateInvoice()
@@ -160,6 +164,7 @@ function InvoiceFormDialog({
   }, [])
 
   const handleSave = async () => {
+    if (!canEdit) return
     const validItems = items.filter(it => it.itemName.trim())
     if (validItems.length === 0) return
     setSaving(true)
@@ -294,7 +299,7 @@ function InvoiceFormDialog({
                         />
                       </TableCell>
                       <TableCell>
-                        {items.length > 1 && (
+                        {canEdit && items.length > 1 && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -315,7 +320,7 @@ function InvoiceFormDialog({
                 </TableBody>
               </Table>
             </div>
-            {allowAddItems && (
+            {canEdit && allowAddItems && (
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setItems(prev => [...prev, emptyItem()])}>
                 <Plus className="size-3.5" />항목 추가
               </Button>
@@ -337,10 +342,12 @@ function InvoiceFormDialog({
             </Button>
           )}
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving || !items.some(it => it.itemName.trim())} className="gap-1.5">
-            {saving && <Loader2 className="size-3.5 animate-spin" />}
-            {t('fInvoice.submit')}
-          </Button>
+          {canEdit && (
+            <Button onClick={handleSave} disabled={saving || !items.some(it => it.itemName.trim())} className="gap-1.5">
+              {saving && <Loader2 className="size-3.5 animate-spin" />}
+              {t('fInvoice.submit')}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -594,10 +601,12 @@ function InvoiceDetailDialog({
   open,
   onOpenChange,
   invoice,
+  canEdit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   invoice: FreelancerInvoice
+  canEdit: boolean
 }) {
   const t = useT()
   const { user } = useAuth()
@@ -684,12 +693,13 @@ function InvoiceDetailDialog({
               {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               엑셀 다운로드
             </Button>
-            {canDelete && (
+            {canEdit && canDelete && (
               <Button
                 variant="outline"
                 className="gap-1.5 text-red-600 hover:text-red-700"
                 disabled={deleteInvoice.isPending}
                 onClick={async () => {
+                  if (!canEdit) return
                   const isApproved = invoice.status === 'approved'
                   const confirmMsg = isApproved
                     ? t('fInvoice.deleteApprovedConfirm', {
@@ -707,12 +717,12 @@ function InvoiceDetailDialog({
                 {t('fInvoice.delete')}
               </Button>
             )}
-            {isAccounting && invoice.status === 'submitted' && (
+            {canEdit && isAccounting && invoice.status === 'submitted' && (
               <>
                 <Button
                   variant="outline"
                   className="gap-1.5 text-red-600 hover:text-red-700"
-                  onClick={async () => { await updateStatus.mutateAsync({ id: invoice.id, status: 'rejected' }); onOpenChange(false) }}
+                  onClick={async () => { if (!canEdit) return; await updateStatus.mutateAsync({ id: invoice.id, status: 'rejected' }); onOpenChange(false) }}
                   disabled={updateStatus.isPending}
                 >
                   <XCircle className="size-4" />
@@ -720,7 +730,7 @@ function InvoiceDetailDialog({
                 </Button>
                 <Button
                   className="gap-1.5"
-                  onClick={async () => { await updateStatus.mutateAsync({ id: invoice.id, status: 'approved' }); onOpenChange(false) }}
+                  onClick={async () => { if (!canEdit) return; await updateStatus.mutateAsync({ id: invoice.id, status: 'approved' }); onOpenChange(false) }}
                   disabled={updateStatus.isPending}
                 >
                   <CheckCircle2 className="size-4" />
@@ -877,6 +887,7 @@ export function FreelancerInvoicesPage(
   { kind = 'freelancer', business = false }: { kind?: 'freelancer' | 'sales_incentive' | 'partner'; business?: boolean } = {},
 ) {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { user } = useAuth()
   const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
   const isIncentive = kind === 'sales_incentive'
@@ -960,6 +971,7 @@ export function FreelancerInvoicesPage(
 
   // "인보이스 발행" — open the form pre-filled with this month's source lines.
   const openIssueInvoice = () => {
+    if (!canEdit) return
     const initial: ParsedInvoice = {
       invoiceDate: new Date().toISOString().slice(0, 10),
       residentNumber: '', phone: '', email: user?.email || '', bankAccount: '',
@@ -974,6 +986,7 @@ export function FreelancerInvoicesPage(
 
   // Partner 개인: open a blank manual form (add items freely)
   const openManualInvoice = () => {
+    if (!canEdit) return
     setEditInvoice(undefined)
     setUploadedData({
       invoiceDate: new Date().toISOString().slice(0, 10),
@@ -985,6 +998,7 @@ export function FreelancerInvoicesPage(
 
   // 엑셀 업로드 → 파싱 → 검토용 폼 열기 (사업자 / 프리랜서 개인 공용)
   const handleExcelUpload = async (file: File, parser: (f: File) => Promise<ParsedInvoice>) => {
+    if (!canEdit) return
     setUploadError(undefined)
     setUploading(true)
     try {
@@ -1096,24 +1110,25 @@ export function FreelancerInvoicesPage(
                           <Eye className="size-3.5" />
                         </Button>
                         {/* Edit: own invoice (any non-approved) or admin (non-approved only) */}
-                        {(inv.freelancerId === user?.id || isAccounting) && inv.status !== 'approved' && (
+                        {canEdit && (inv.freelancerId === user?.id || isAccounting) && inv.status !== 'approved' && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0"
-                            onClick={() => { setEditInvoice(inv); setFormOpen(true) }}
+                            onClick={() => { if (!canEdit) return; setEditInvoice(inv); setFormOpen(true) }}
                           >
                             <FileText className="size-3.5" />
                           </Button>
                         )}
                         {/* Delete: admin always, freelancer only if not approved */}
-                        {(isAccounting || (inv.freelancerId === user?.id && inv.status !== 'approved')) && (
+                        {canEdit && (isAccounting || (inv.freelancerId === user?.id && inv.status !== 'approved')) && (
                           <Button
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
                             disabled={deleteInvoice.isPending}
                             onClick={async () => {
+                              if (!canEdit) return
                               const isApproved = inv.status === 'approved'
                               const confirmMsg = isApproved
                                 ? t('fInvoice.deleteApprovedConfirm', {
@@ -1153,26 +1168,30 @@ export function FreelancerInvoicesPage(
           <Button variant="outline" className="gap-1.5" onClick={() => downloadBusinessTemplate().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
             <Download className="size-4" />샘플 양식 다운로드
           </Button>
-          <label>
-            <input
-              type="file"
-              accept=".xlsx"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseBusinessInvoice); e.target.value = '' }}
-            />
-            <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
-              {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}엑셀 업로드
-            </span>
-          </label>
+          {canEdit && (
+            <label>
+              <input
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseBusinessInvoice); e.target.value = '' }}
+              />
+              <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}엑셀 업로드
+              </span>
+            </label>
+          )}
         </div>
         {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
       </CardContent>
     </Card>
   ) : isPartner ? (
     <div className="flex items-center gap-3">
-      <Button className="gap-1.5" onClick={openManualInvoice}>
-        <Plus className="size-4" />인보이스 추가
-      </Button>
+      {canEdit && (
+        <Button className="gap-1.5" onClick={openManualInvoice}>
+          <Plus className="size-4" />인보이스 추가
+        </Button>
+      )}
       <p className="text-[12px] text-muted-foreground">품목을 직접 입력해 인보이스를 발행합니다.</p>
     </div>
   ) : (
@@ -1185,9 +1204,11 @@ export function FreelancerInvoicesPage(
             <SelectContent>{monthOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-        <Button className="gap-1.5" onClick={openIssueInvoice} disabled={issueItems.length === 0}>
-          <Plus className="size-4" />인보이스 발행
-        </Button>
+        {canEdit && (
+          <Button className="gap-1.5" onClick={openIssueInvoice} disabled={issueItems.length === 0}>
+            <Plus className="size-4" />인보이스 발행
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -1219,17 +1240,19 @@ export function FreelancerInvoicesPage(
               <Button variant="outline" className="gap-1.5" onClick={() => downloadFreelancerTemplate().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
                 <Download className="size-4" />양식 다운로드
               </Button>
-              <label>
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseFreelancerInvoice); e.target.value = '' }}
-                />
-                <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
-                  {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}엑셀 업로드
-                </span>
-              </label>
+              {canEdit && (
+                <label>
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseFreelancerInvoice); e.target.value = '' }}
+                  />
+                  <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                    {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}엑셀 업로드
+                  </span>
+                </label>
+              )}
             </div>
             {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
           </CardContent>
@@ -1269,7 +1292,7 @@ export function FreelancerInvoicesPage(
               <TabsTrigger value="missing">미제출 현황</TabsTrigger>
             </TabsList>
             <TabsContent value="list">{listView}</TabsContent>
-            <TabsContent value="missing"><MissingInvoices month={issueMonth} kind={kind} /></TabsContent>
+            <TabsContent value="missing"><MissingInvoices month={issueMonth} kind={kind} canEdit={canEdit} /></TabsContent>
           </Tabs>
         ) : listView
       ) : freelancerView}
@@ -1286,6 +1309,7 @@ export function FreelancerInvoicesPage(
           kind={storageKind}
           allowAddItems={business || isPartner}
           businessLabels={business}
+          canEdit={canEdit}
         />
       )}
 
@@ -1294,6 +1318,7 @@ export function FreelancerInvoicesPage(
           open={!!detailInvoice}
           onOpenChange={open => { if (!open) setDetailInvoice(undefined) }}
           invoice={detailInvoice}
+          canEdit={canEdit}
         />
       )}
     </div>
@@ -1302,7 +1327,7 @@ export function FreelancerInvoicesPage(
 
 // ─── Missing-invoice tracking (accounting) ─────────────────────────────────
 
-function MissingInvoices({ month, kind = 'freelancer' }: { month: string; kind?: string }) {
+function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: string; kind?: string; canEdit: boolean }) {
   const isIncentive = kind === 'sales_incentive'
   const { data: invoices = [] } = useFreelancerInvoices(month, kind)
   const { data: profiles = [] } = useProfiles()
@@ -1335,6 +1360,7 @@ function MissingInvoices({ month, kind = 'freelancer' }: { month: string; kind?:
   }, [isIncentive, byConsultant, linesByPerson, invoices, month])
 
   const request = async (name: string) => {
+    if (!canEdit) return
     const profile = profiles.find(p => canonicalConsultantName(p.name) === name)
     if (!profile) { alert(`'${name}' 직원 계정을 찾을 수 없습니다.`); return }
     setSending(name)
@@ -1380,7 +1406,7 @@ function MissingInvoices({ month, kind = 'freelancer' }: { month: string; kind?:
                     : <Badge className="bg-red-100 text-red-700">미제출</Badge>}
                 </TableCell>
                 <TableCell>
-                  {r.status !== 'approved' && (
+                  {canEdit && r.status !== 'approved' && (
                     <Button size="sm" variant="outline" disabled={sending === r.name} onClick={() => request(r.name)}>
                       {sending === r.name ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}요청
                     </Button>

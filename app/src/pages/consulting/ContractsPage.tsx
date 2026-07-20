@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import {
   FileText, PlayCircle, Flag,
 } from 'lucide-react'
 import { useContractsWithInstallments, useCreateContract } from '@/hooks/useContracts'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { useCreateInstallments } from '@/hooks/useInstallments'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAuth } from '@/contexts/AuthContext'
@@ -116,6 +117,7 @@ function getDefaultInstallments(t: (key: string) => string): InstallmentRow[] {
 
 export function ContractsPage() {
   const navigate = useNavigate()
+  const canEdit = useCanEdit(useLocation().pathname)
   const [searchParams, setSearchParams] = useSearchParams()
   const t = useT()
   const { user } = useAuth()
@@ -157,6 +159,7 @@ export function ContractsPage() {
   const leadInfoRef = useRef<{ leadId: string; phone: string } | null>(null)
 
   const handleCreateContract = () => {
+    if (!canEdit) return
     if (!form.contractorName.trim() || !form.studentName.trim()) return
     createContract.mutate(
       {
@@ -242,12 +245,16 @@ export function ContractsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPdfDialogOpen(true)}>
-            <Upload className="size-3.5" /> {t('contracts.pdfUpload')}
-          </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
-            <Plus className="size-3.5" /> {t('contracts.addContract')}
-          </Button>
+          {canEdit && (
+            <>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPdfDialogOpen(true)}>
+                <Upload className="size-3.5" /> {t('contracts.pdfUpload')}
+              </Button>
+              <Button size="sm" className="gap-1.5" onClick={() => setDialogOpen(true)}>
+                <Plus className="size-3.5" /> {t('contracts.addContract')}
+              </Button>
+            </>
+          )}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent>
               <DialogHeader>

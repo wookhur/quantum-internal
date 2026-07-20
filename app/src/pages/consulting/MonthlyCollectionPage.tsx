@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import { useProfiles } from '@/hooks/useProfiles'
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 import type { PaymentInstallment, InstallmentStatus } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -134,12 +135,14 @@ function OverdueActionRow({
   colSpan,
   salesRepName,
   serviceRepName,
+  canEdit,
 }: {
   installmentId: string
   actions: ReturnType<typeof useCollectionActions>['data']
   colSpan: number
   salesRepName?: string
   serviceRepName?: string
+  canEdit: boolean
 }) {
   const t = useT()
   const { user } = useAuth()
@@ -155,6 +158,7 @@ function OverdueActionRow({
   )
 
   const handleSubmit = useCallback(() => {
+    if (!canEdit) return
     if (!content.trim()) return
     create.mutate(
       { installmentId, actionType: selectedType, content: content.trim(), actedBy: user?.id },
@@ -165,7 +169,7 @@ function OverdueActionRow({
         },
       },
     )
-  }, [create, installmentId, selectedType, content, user?.id])
+  }, [canEdit, create, installmentId, selectedType, content, user?.id])
 
   return (
     <TableRow className="bg-red-50/30 border-l-[3px] border-l-red-400 hover:bg-red-50/50">
@@ -231,7 +235,7 @@ function OverdueActionRow({
           )}
 
           {/* Action input or add button */}
-          {inputOpen ? (
+          {canEdit && (inputOpen ? (
             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               {/* Action type selector */}
               <div className="flex gap-1">
@@ -290,7 +294,7 @@ function OverdueActionRow({
                 {t('collection.action.addAction')}
               </Button>
             </div>
-          )}
+          ))}
         </div>
       </TableCell>
     </TableRow>
@@ -304,6 +308,7 @@ function OverdueActionRow({
 export function MonthlyCollectionPage() {
   const t = useT()
   const navigate = useNavigate()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { data: installments = [], isLoading, error } = useInstallments()
   const { data: profiles = [] } = useProfiles()
   const [currentMonth, setCurrentMonth] = useState(() => getMonthKey(new Date()))
@@ -335,6 +340,7 @@ export function MonthlyCollectionPage() {
   }, [allIncentives])
 
   const notifyRecipients = useCallback(async (inst: PaymentInstallment) => {
+    if (!canEdit) return
     const recs = recipientsByContract.get(inst.contractId) || []
     const ids = recs
       .map(r => r.profileId || profiles.find(p => p.name === r.name)?.id)
@@ -350,7 +356,7 @@ export function MonthlyCollectionPage() {
       link: '/consulting/collections',
     })
     alert('담당자에게 수금 안내 알림을 보냈습니다.')
-  }, [recipientsByContract, profiles])
+  }, [canEdit, recipientsByContract, profiles])
 
   // Navigate months
   const goMonth = (delta: number) => {
@@ -597,7 +603,7 @@ export function MonthlyCollectionPage() {
                                   {recs.map(r => (
                                     <Badge key={r.name} variant="outline" className="text-[10px] h-4 bg-indigo-50 text-indigo-700 border-indigo-200">{r.name}</Badge>
                                   ))}
-                                  {inst.status !== 'paid' && (
+                                  {canEdit && inst.status !== 'paid' && (
                                     <Button
                                       variant="ghost" size="sm"
                                       className="h-6 w-6 p-0 text-amber-500 hover:text-amber-600"
@@ -651,6 +657,7 @@ export function MonthlyCollectionPage() {
                             colSpan={COL_COUNT}
                             salesRepName={profileName(inst.contract?.salesRep)}
                             serviceRepName={profileName(inst.contract?.serviceRep)}
+                            canEdit={canEdit}
                           />
                         )}
                       </OverdueRowGroup>

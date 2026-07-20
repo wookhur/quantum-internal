@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,7 @@ import {
 } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import type { User, Department } from '@/types'
 import {
@@ -174,9 +175,9 @@ function getEffectiveMetrics(
 // ---------------------------------------------------------------------------
 
 function MetricCard({
-  label, target, actual, unit, onEdit, isInverse,
+  label, target, actual, unit, onEdit, isInverse, canEdit,
 }: {
-  label: string; target: number; actual: number; unit?: string; onEdit: () => void; isInverse?: boolean
+  label: string; target: number; actual: number; unit?: string; onEdit: () => void; isInverse?: boolean; canEdit?: boolean
 }) {
   const pct = isInverse
     ? (target > 0 ? Math.max(0, Math.round(((target - actual) / target) * 100)) : 100)
@@ -184,10 +185,10 @@ function MetricCard({
   const achieved = isInverse ? actual <= target : pct >= 100
 
   return (
-    <div className="p-3 rounded-lg border bg-white hover:shadow-sm transition-shadow cursor-pointer group" onClick={onEdit}>
+    <div className={`p-3 rounded-lg border bg-white transition-shadow group ${canEdit ? 'hover:shadow-sm cursor-pointer' : ''}`} onClick={canEdit ? onEdit : undefined}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-gray-700">{label}</span>
-        <Pencil className="h-3 w-3 text-gray-300 group-hover:text-gray-500 transition-colors" />
+        {canEdit && <Pencil className="h-3 w-3 text-gray-300 group-hover:text-gray-500 transition-colors" />}
       </div>
       <div className="flex items-end gap-2 mb-2">
         <span className={`text-2xl font-bold ${achieved ? 'text-green-600' : 'text-gray-900'}`}>{actual}{unit}</span>
@@ -900,7 +901,7 @@ function AssignmentDialog({
 // ---------------------------------------------------------------------------
 
 function TargetKpiContent({
-  category, targetMap, assignments, activeProfiles, selectedProfile, t, openEdit,
+  category, targetMap, assignments, activeProfiles, selectedProfile, t, openEdit, canEdit,
 }: {
   category: Category
   targetMap: Map<string, KpiTarget>
@@ -909,6 +910,7 @@ function TargetKpiContent({
   selectedProfile: string
   t: (key: string) => string
   openEdit: (profileId: string, category: KpiTarget['category'], metricKey: string) => void
+  canEdit: boolean
 }) {
   // Filter to profiles that have this category assigned
   const relevantProfiles = useMemo(() => {
@@ -972,6 +974,7 @@ function TargetKpiContent({
                       unit={isInverse ? t('kpiTarget.unitTimes') : isRate ? '%' : undefined}
                       onEdit={() => openEdit(profile.id, category, metric.key)}
                       isInverse={isInverse}
+                      canEdit={canEdit}
                     />
                   )
                 })}
@@ -1006,7 +1009,7 @@ function avgAchievement(targetMap: Map<string, KpiTarget>, profileId: string, me
 }
 
 function AllKpiContent({
-  targetMap, assignments, activeProfiles, selectedProfile, t, openEdit,
+  targetMap, assignments, activeProfiles, selectedProfile, t, openEdit, canEdit,
 }: {
   targetMap: Map<string, KpiTarget>
   assignments: KpiAssignmentMap
@@ -1014,6 +1017,7 @@ function AllKpiContent({
   selectedProfile: string
   t: (key: string) => string
   openEdit: (profileId: string, category: KpiTarget['category'], metricKey: string) => void
+  canEdit: boolean
 }) {
   const displayProfiles = useMemo(() => {
     let filtered = activeProfiles.filter(p => {
@@ -1159,6 +1163,7 @@ function AllKpiContent({
                             unit={isInverse ? t('kpiTarget.unitTimes') : isRate ? '%' : undefined}
                             onEdit={() => openEdit(profile.id, cat, metric.key)}
                             isInverse={isInverse}
+                            canEdit={canEdit}
                           />
                         )
                       })}
@@ -1180,6 +1185,7 @@ function AllKpiContent({
 
 export function KpiTargetsPage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { data: profiles = [] } = useProfiles()
   const [currentMonth, setCurrentMonth] = useState(getCurrentMonth())
   const { data: targets = [], isLoading } = useKpiTargets(currentMonth)
@@ -1215,6 +1221,7 @@ export function KpiTargetsPage() {
   }, [targets])
 
   const openEdit = (profileId: string, category: KpiTarget['category'], metricKey: string) => {
+    if (!canEdit) return
     const existing = targetMap.get(`${profileId}:${metricKey}`)
     setEditForm({
       profileId,
@@ -1228,6 +1235,7 @@ export function KpiTargetsPage() {
   }
 
   const handleSave = () => {
+    if (!canEdit) return
     if (!editForm.profileId || !editForm.metricKey) return
     upsertMut.mutate({
       profileId: editForm.profileId,
@@ -1242,6 +1250,7 @@ export function KpiTargetsPage() {
   }
 
   const handleCopyPrevMonth = async () => {
+    if (!canEdit) return
     if (prevTargets.length === 0 || copying) return
     setCopying(true)
     try {
@@ -1283,19 +1292,21 @@ export function KpiTargetsPage() {
           <p className="text-muted-foreground text-sm">{t('kpiTarget.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
-          {targets.length === 0 && prevTargets.length > 0 && (
+          {canEdit && targets.length === 0 && prevTargets.length > 0 && (
             <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleCopyPrevMonth} disabled={copying}>
               {copying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
               {t('kpiTarget.copyPrevMonth')}
             </Button>
           )}
-          <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setAssignOpen(true)}>
-            <Settings2 className="h-3.5 w-3.5" />
-            {t('kpiTarget.assignSettings')}
-            <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
-              {assignedCount}/{activeProfiles.length}
-            </Badge>
-          </Button>
+          {canEdit && (
+            <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setAssignOpen(true)}>
+              <Settings2 className="h-3.5 w-3.5" />
+              {t('kpiTarget.assignSettings')}
+              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-1">
+                {assignedCount}/{activeProfiles.length}
+              </Badge>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1373,6 +1384,7 @@ export function KpiTargetsPage() {
               selectedProfile={selectedProfile}
               t={t}
               openEdit={openEdit}
+              canEdit={canEdit}
             />
           )}
         </TabsContent>
@@ -1391,6 +1403,7 @@ export function KpiTargetsPage() {
               selectedProfile={selectedProfile}
               t={t}
               openEdit={openEdit}
+              canEdit={canEdit}
             />
           )}
         </TabsContent>
@@ -1409,6 +1422,7 @@ export function KpiTargetsPage() {
               selectedProfile={selectedProfile}
               t={t}
               openEdit={openEdit}
+              canEdit={canEdit}
             />
           )}
         </TabsContent>
@@ -1431,6 +1445,7 @@ export function KpiTargetsPage() {
               selectedProfile={selectedProfile}
               t={t}
               openEdit={openEdit}
+              canEdit={canEdit}
             />
           )}
         </TabsContent>
@@ -1499,7 +1514,7 @@ export function KpiTargetsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>{t('common.cancel')}</Button>
-            <Button onClick={handleSave} disabled={upsertMut.isPending}>{t('common.save')}</Button>
+            <Button onClick={handleSave} disabled={upsertMut.isPending || !canEdit}>{t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1511,6 +1526,7 @@ export function KpiTargetsPage() {
         profiles={activeProfiles}
         currentAssignments={assignments}
         onSave={a => {
+          if (!canEdit) return
           updateAssignments.mutate(a)
           setAssignOpen(false)
         }}

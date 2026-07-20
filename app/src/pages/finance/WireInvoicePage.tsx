@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import { FileText, Send, Plus, Trash2, Search, Mail, CheckCircle, Clock, Download, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,9 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useInvoices, useCreateDocument, useSendDocument, useDeleteDocument, type InvoiceReceipt } from '@/hooks/useInvoicesReceipts'
 import { useContractsWithInstallments } from '@/hooks/useContracts'
 import { useT } from '@/i18n/LanguageContext'
+import { useCanEdit } from '@/hooks/usePermissions'
 
 export function WireInvoicePage() {
   const t = useT()
+  const canEdit = useCanEdit(useLocation().pathname)
   const { data: allInvoices = [], isLoading } = useInvoices()
   const { data: contracts = [] } = useContractsWithInstallments()
   const createDoc = useCreateDocument()
@@ -62,6 +65,7 @@ export function WireInvoicePage() {
   }, [contracts])
 
   const handleCreate = useCallback(() => {
+    if (!canEdit) return
     if (!form.issuedTo || !form.unitPrice) return
     const total = Number(form.unitPrice) * Number(form.qty || 1)
     const today = new Date().toISOString().slice(0, 10)
@@ -87,7 +91,7 @@ export function WireInvoicePage() {
         setForm({ contractId: '', issuedTo: '', address: '', email: '', description: 'U.S. College Admission Consulting Services', studentName: '', unitPrice: '', qty: '1', dueDate: '' })
       },
     })
-  }, [form, createDoc])
+  }, [form, createDoc, canEdit])
 
   const handlePreview = useCallback((doc: InvoiceReceipt) => {
     setPreviewDoc(doc)
@@ -136,9 +140,11 @@ export function WireInvoicePage() {
             <p className="text-xs text-gray-500">{t('wireInvoice.subtitle')}</p>
           </div>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
-          <Plus className="size-4" /> {t('wireInvoice.create')}
-        </Button>
+        {canEdit && (
+          <Button onClick={() => setCreateOpen(true)} className="gap-1.5">
+            <Plus className="size-4" /> {t('wireInvoice.create')}
+          </Button>
+        )}
       </div>
 
       {/* Search */}
@@ -191,27 +197,29 @@ export function WireInvoicePage() {
                       >
                         <Eye className="size-3.5" />
                       </Button>
-                      {inv.status === 'draft' && inv.recipientEmail && (
+                      {canEdit && inv.status === 'draft' && inv.recipientEmail && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-                          onClick={() => sendDoc.mutate(inv.id)}
+                          onClick={() => { if (!canEdit) return; sendDoc.mutate(inv.id) }}
                           disabled={sendDoc.isPending}
                           title="Send"
                         >
                           <Send className="size-3.5" />
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-gray-400 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => { if (confirm(t('invoice.deleteConfirm'))) deleteDoc.mutate(inv.id) }}
-                        title="Delete"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => { if (!canEdit) return; if (confirm(t('invoice.deleteConfirm'))) deleteDoc.mutate(inv.id) }}
+                          title="Delete"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
