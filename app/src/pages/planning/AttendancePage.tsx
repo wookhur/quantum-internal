@@ -44,7 +44,7 @@ import {
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
-import { useAttendances, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances } from '@/hooks/useAttendances'
+import { useAttendances, useAttendancesRange, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances } from '@/hooks/useAttendances'
 import { useKioskExcludedIds, useUpdateKioskExcludedIds } from '@/hooks/useKioskSettings'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
@@ -98,21 +98,39 @@ function formatTime(t: string | null | undefined): string {
   return t || ''
 }
 
-function getWeekLabel(dateStr: string): string {
-  const d = new Date(dateStr)
-  const mon = new Date(d)
-  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-  const sun = new Date(mon)
-  sun.setDate(mon.getDate() + 6)
-  const fmt = (dt: Date) => `${dt.getMonth() + 1}/${dt.getDate()}`
-  return `${fmt(mon)}~${fmt(sun)}`
+/** Local-time YYYY-MM-DD (avoids the UTC shift of toISOString in KST). */
+function toYmd(dt: Date): string {
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 }
 
-function getWeekKey(dateStr: string): string {
-  const d = new Date(dateStr)
-  const mon = new Date(d)
-  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-  return mon.toISOString().slice(0, 10)
+function parseYmd(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function todayYmd(): string {
+  return toYmd(new Date())
+}
+
+function addDays(dateStr: string, n: number): string {
+  const dt = parseYmd(dateStr)
+  dt.setDate(dt.getDate() + n)
+  return toYmd(dt)
+}
+
+/** Monday of the week containing dateStr. */
+function getWeekStart(dateStr: string): string {
+  const dt = parseYmd(dateStr)
+  dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7))
+  return toYmd(dt)
+}
+
+/** "7/13~7/19" for a Monday-start week. */
+function formatWeekRange(weekStart: string): string {
+  const mon = parseYmd(weekStart)
+  const sun = parseYmd(addDays(weekStart, 6))
+  const fmt = (dt: Date) => `${dt.getMonth() + 1}/${dt.getDate()}`
+  return `${fmt(mon)}~${fmt(sun)}`
 }
 
 // ---------------------------------------------------------------------------
@@ -274,6 +292,13 @@ export function AttendancePage() {
   const { data: profiles = [] } = useProfiles()
   const [currentMonth, setCurrentMonth] = useState<string>(getCurrentMonth())
   const { data: attendances = [], isLoading } = useAttendances(currentMonth)
+  // Weekly view navigates independently of the month, since a week can
+  // straddle two months.
+  const [weekStart, setWeekStart] = useState<string>(() => getWeekStart(todayYmd()))
+  const { data: weekAttendances = [], isLoading: weekLoading } = useAttendancesRange(
+    weekStart,
+    addDays(weekStart, 6),
+  )
   const upsertMut = useUpsertAttendance()
   const deleteMut = useDeleteAttendance()
   const bulkUpsertMut = useBulkUpsertAttendances()
@@ -545,43 +570,29 @@ export function AttendancePage() {
     return entries
   }, [totalHoursByProfile, profileName, selectedProfile])
 
-  // Weekly hours per employee — every week of the displayed month,
-  // newest week first, so past weeks stay visible
-  const weeklyHoursSummary = useMemo(() => {
-    const currentWeekKey = getWeekKey(new Date().toISOString().slice(0, 10))
-    // weekKey -> (profileId -> minutes)
-    const weeks = new Map<string, { label: string; profileMap: Map<string, number> }>()
-    for (const a of attendances) {
+  // Weekly hours per employee — the single week starting at weekStart
+  const isCurrentWeek = weekStart === getWeekStart(todayYmd())
+  const weekEntries = useMemo(() => {
+    const profileMap = new Map<string, number>()
+    for (const a of weekAttendances) {
       if (!a.clockIn || !a.clockOut) continue
-      const wk = getWeekKey(a.date)
-      if (!weeks.has(wk)) {
-        weeks.set(wk, { label: getWeekLabel(a.date), profileMap: new Map() })
-      }
       const [h1, m1] = a.clockIn.split(':').map(Number)
       const [h2, m2] = a.clockOut.split(':').map(Number)
       const mins = (h2 * 60 + m2) - (h1 * 60 + m1)
-      if (mins > 0) {
-        const pm = weeks.get(wk)!.profileMap
-        pm.set(a.profileId, (pm.get(a.profileId) || 0) + mins)
-      }
+      if (mins > 0) profileMap.set(a.profileId, (profileMap.get(a.profileId) || 0) + mins)
     }
-    return Array.from(weeks.entries())
-      .map(([weekKey, { label, profileMap }]) => {
-        const entries = Array.from(profileMap.entries())
-          .map(([pid, totalMins]) => ({
-            profileId: pid,
-            name: profileName(pid),
-            totalMins,
-            hours: Math.floor(totalMins / 60),
-            mins: totalMins % 60,
-          }))
-          .filter(e => selectedProfile === 'all' || e.profileId === selectedProfile)
-        entries.sort((a, b) => b.totalMins - a.totalMins)
-        return { weekKey, label, isCurrentWeek: weekKey === currentWeekKey, entries }
-      })
-      .filter(w => w.entries.length > 0)
-      .sort((a, b) => b.weekKey.localeCompare(a.weekKey))
-  }, [attendances, profileName, selectedProfile])
+    const entries = Array.from(profileMap.entries())
+      .map(([pid, totalMins]) => ({
+        profileId: pid,
+        name: profileName(pid),
+        totalMins,
+        hours: Math.floor(totalMins / 60),
+        mins: totalMins % 60,
+      }))
+      .filter(e => selectedProfile === 'all' || e.profileId === selectedProfile)
+    entries.sort((a, b) => b.totalMins - a.totalMins)
+    return entries
+  }, [weekAttendances, profileName, selectedProfile])
 
   return (
     <div className="space-y-4">
@@ -698,44 +709,75 @@ export function AttendancePage() {
         </Card>
       </div>
 
-      {/* Weekly hours per employee */}
-      {weeklyHoursSummary.length > 0 && (
-        <Card>
-          <CardContent className="py-3 px-4">
-            <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+      {/* Weekly hours per employee — one week at a time, arrows to navigate */}
+      <Card>
+        <CardContent className="py-3 px-4">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <h3 className="text-sm font-semibold flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-indigo-500" />
               {t('attendance.weeklyHours')}
             </h3>
-            <div className="space-y-2">
-              {weeklyHoursSummary.map(week => (
-                <div key={week.weekKey}>
-                  <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
-                    {week.label}
-                    {week.isCurrentWeek && (
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                        {t('attendance.thisWeek')}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                    {week.entries.map(entry => (
-                      <div
-                        key={entry.profileId}
-                        className="flex items-center justify-between bg-indigo-50/60 rounded-lg px-3 py-1.5"
-                      >
-                        <span className="text-sm font-medium truncate mr-2">{entry.name}</span>
-                        <span className={`text-sm font-mono font-bold whitespace-nowrap ${entry.totalMins > 52 * 60 ? 'text-red-600' : 'text-indigo-600'}`}>
-                          {entry.hours}h{entry.mins > 0 ? ` ${entry.mins}m` : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+            <div className="flex-1" />
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setWeekStart(w => addDays(w, -7))}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-xs font-medium min-w-[90px] text-center flex items-center justify-center gap-1.5">
+              {formatWeekRange(weekStart)}
+              {isCurrentWeek && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                  {t('attendance.thisWeek')}
+                </Badge>
+              )}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setWeekStart(w => addDays(w, 7))}
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+            {!isCurrentWeek && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setWeekStart(getWeekStart(todayYmd()))}
+              >
+                {t('attendance.thisWeek')}
+              </Button>
+            )}
+          </div>
+          {weekLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : weekEntries.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">
+              {t('attendance.noWeeklyRecords')}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+              {weekEntries.map(entry => (
+                <div
+                  key={entry.profileId}
+                  className="flex items-center justify-between bg-indigo-50/60 rounded-lg px-3 py-1.5"
+                >
+                  <span className="text-sm font-medium truncate mr-2">{entry.name}</span>
+                  <span className={`text-sm font-mono font-bold whitespace-nowrap ${entry.totalMins > 52 * 60 ? 'text-red-600' : 'text-indigo-600'}`}>
+                    {entry.hours}h{entry.mins > 0 ? ` ${entry.mins}m` : ''}
+                  </span>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       {/* Monthly total hours per employee */}
       {sortedHoursSummary.length > 0 && (

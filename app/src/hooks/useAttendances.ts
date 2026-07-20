@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+
 import { supabase } from '@/lib/supabase'
 
 export interface Attendance {
@@ -39,6 +40,29 @@ export function useAttendances(month: string) {
       const lastDay = new Date(y, m, 0).getDate()
       const endDate = `${month}-${String(lastDay).padStart(2, '0')}`
 
+      const { data, error } = await supabase
+        .from('attendances')
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true })
+        .order('profile_id', { ascending: true })
+
+      if (error) throw error
+      return (data || []).map((r) => mapAttendance(r as Record<string, unknown>))
+    },
+  })
+}
+
+/**
+ * Fetch attendances for an arbitrary date range (inclusive).
+ * Used by the weekly view, where a week can straddle two months.
+ */
+export function useAttendancesRange(startDate: string, endDate: string) {
+  return useQuery({
+    queryKey: ['attendances', 'range', startDate, endDate],
+    enabled: !!startDate && !!endDate,
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('attendances')
         .select('*')
