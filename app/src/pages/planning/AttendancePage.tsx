@@ -545,32 +545,42 @@ export function AttendancePage() {
     return entries
   }, [totalHoursByProfile, profileName, selectedProfile])
 
-  // Weekly hours per employee — current week only
+  // Weekly hours per employee — every week of the displayed month,
+  // newest week first, so past weeks stay visible
   const weeklyHoursSummary = useMemo(() => {
     const currentWeekKey = getWeekKey(new Date().toISOString().slice(0, 10))
-    const profileMap = new Map<string, number>()
-    let weekLabel = ''
+    // weekKey -> (profileId -> minutes)
+    const weeks = new Map<string, { label: string; profileMap: Map<string, number> }>()
     for (const a of attendances) {
       if (!a.clockIn || !a.clockOut) continue
-      if (getWeekKey(a.date) !== currentWeekKey) continue
-      if (!weekLabel) weekLabel = getWeekLabel(a.date)
+      const wk = getWeekKey(a.date)
+      if (!weeks.has(wk)) {
+        weeks.set(wk, { label: getWeekLabel(a.date), profileMap: new Map() })
+      }
       const [h1, m1] = a.clockIn.split(':').map(Number)
       const [h2, m2] = a.clockOut.split(':').map(Number)
       const mins = (h2 * 60 + m2) - (h1 * 60 + m1)
-      if (mins > 0) profileMap.set(a.profileId, (profileMap.get(a.profileId) || 0) + mins)
+      if (mins > 0) {
+        const pm = weeks.get(wk)!.profileMap
+        pm.set(a.profileId, (pm.get(a.profileId) || 0) + mins)
+      }
     }
-    if (profileMap.size === 0) return []
-    const entries = Array.from(profileMap.entries())
-      .map(([pid, totalMins]) => ({
-        profileId: pid,
-        name: profileName(pid),
-        totalMins,
-        hours: Math.floor(totalMins / 60),
-        mins: totalMins % 60,
-      }))
-      .filter(e => selectedProfile === 'all' || e.profileId === selectedProfile)
-    entries.sort((a, b) => b.totalMins - a.totalMins)
-    return entries.length > 0 ? [{ weekKey: currentWeekKey, label: weekLabel, entries }] : []
+    return Array.from(weeks.entries())
+      .map(([weekKey, { label, profileMap }]) => {
+        const entries = Array.from(profileMap.entries())
+          .map(([pid, totalMins]) => ({
+            profileId: pid,
+            name: profileName(pid),
+            totalMins,
+            hours: Math.floor(totalMins / 60),
+            mins: totalMins % 60,
+          }))
+          .filter(e => selectedProfile === 'all' || e.profileId === selectedProfile)
+        entries.sort((a, b) => b.totalMins - a.totalMins)
+        return { weekKey, label, isCurrentWeek: weekKey === currentWeekKey, entries }
+      })
+      .filter(w => w.entries.length > 0)
+      .sort((a, b) => b.weekKey.localeCompare(a.weekKey))
   }, [attendances, profileName, selectedProfile])
 
   return (
@@ -699,7 +709,14 @@ export function AttendancePage() {
             <div className="space-y-2">
               {weeklyHoursSummary.map(week => (
                 <div key={week.weekKey}>
-                  <div className="text-xs font-medium text-muted-foreground mb-1">{week.label}</div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1 flex items-center gap-1.5">
+                    {week.label}
+                    {week.isCurrentWeek && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                        {t('attendance.thisWeek')}
+                      </Badge>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
                     {week.entries.map(entry => (
                       <div

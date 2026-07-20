@@ -1849,6 +1849,7 @@ const koTranslations = {
 
   // ── Attendance extras ──
   'attendance.weeklyHours': '주별 근무시간',
+  'attendance.thisWeek': '이번 주',
   'attendance.monthlyHours': '월별 근무시간 합계',
   'attendance.dayMon': '월',
   'attendance.dayTue': '화',
@@ -4346,6 +4347,7 @@ const enTranslations: Record<string, string> = {
 
   // ── Attendance extras ──
   'attendance.weeklyHours': 'Weekly Work Hours',
+  'attendance.thisWeek': 'This week',
   'attendance.monthlyHours': 'Monthly Work Hours',
   'attendance.dayMon': 'Mon',
   'attendance.dayTue': 'Tue',
