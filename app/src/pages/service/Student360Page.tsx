@@ -2333,6 +2333,9 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
               </>
             ) : (
               <>
+                {showToggle && f.done && (
+                  <Badge variant="outline" className="shrink-0 text-[10px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200">완료됨</Badge>
+                )}
                 <span className={`flex-1 ${showToggle && f.done ? 'line-through text-muted-foreground' : ''}`}>
                   {f.text}
                 </span>
