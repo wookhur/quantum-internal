@@ -327,7 +327,7 @@ export function ColdCallView() {
   const [selectedEvent, setSelectedEvent] = useState('all')
   const [sessionFilter, setSessionFilter] = useState<string[]>([]) // 신청 웨비나(세션) 다중선택
   const [levelFilter, setLevelFilter] = useState<'all' | LeadLevel>('all')
-  const [sortBy, setSortBy] = useState<'level' | 'date' | 'grade'>('level')
+  const [sortBy, setSortBy] = useState<'level' | 'date' | 'grade'>('date')
   // 단계 필터: 'coldcall'(기본, 콜드콜 대상 3단계) 또는 특정 파이프라인 단계
   const [stageFilter, setStageFilter] = useState<'coldcall' | PipelineStage>('coldcall')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
@@ -456,7 +456,12 @@ export function ColdCallView() {
     if (sortBy === 'level') {
       scored.sort((a, b) => (leadLevelConfig(b.leadLevel)?.rank || 0) - (leadLevelConfig(a.leadLevel)?.rank || 0))
     } else if (sortBy === 'date') {
-      scored.sort((a, b) => new Date(b.leadDate).getTime() - new Date(a.leadDate).getTime())
+      // 최신순: 유입일 내림차순, 같은 날이면 등록 시각(createdAt)이 늦은 리드가 먼저
+      scored.sort((a, b) => {
+        const d = new Date(b.leadDate).getTime() - new Date(a.leadDate).getTime()
+        if (d !== 0) return d
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+      })
     } else if (sortBy === 'grade') {
       scored.sort((a, b) => (GRADE_PRIORITY[b.grade] || 0) - (GRADE_PRIORITY[a.grade] || 0))
     }
@@ -517,8 +522,8 @@ export function ColdCallView() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="level">리드 레벨순</SelectItem>
                   <SelectItem value="date">{t('coldCall.sortDate')}</SelectItem>
+                  <SelectItem value="level">리드 레벨순</SelectItem>
                   <SelectItem value="grade">{t('coldCall.sortGrade')}</SelectItem>
                 </SelectContent>
               </Select>
