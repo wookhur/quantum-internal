@@ -583,7 +583,17 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   }, [profiles, requests])
 
+  // 사용 숫자 클릭 시 해당 직원·종류의 실제 신청 내역을 보여준다.
+  const [detail, setDetail] = useState<{ name: string; typeLabel: string; items: LeaveRequest[] } | null>(null)
+  const openDetail = (id: string, name: string, type: LeaveType, typeLabel: string) => {
+    const items = requests
+      .filter(r => r.requesterId === id && r.leaveType === type && r.status !== 'rejected')
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+    if (items.length) setDetail({ name, typeLabel, items })
+  }
+
   return (
+    <>
     <Card>
       <CardContent className="p-0 overflow-x-auto">
         <table className="w-full text-sm">
@@ -607,9 +617,17 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
                   {r.hireDate || <span className="text-amber-600">미설정</span>}
                 </td>
                 <td className="px-3 py-2 text-right">{r.annualEnt}</td>
-                <td className="px-3 py-2 text-right text-blue-600">{r.annualUsed}</td>
+                <td className="px-3 py-2 text-right text-blue-600">
+                  {r.annualUsed > 0 ? (
+                    <button className="hover:underline font-medium" onClick={() => openDetail(r.id, r.name, 'annual', '연차')}>{r.annualUsed}</button>
+                  ) : r.annualUsed}
+                </td>
                 <td className={`px-3 py-2 text-right font-semibold ${r.annualLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.annualLeft}</td>
-                <td className="px-3 py-2 text-right text-blue-600">{r.paidUsed}</td>
+                <td className="px-3 py-2 text-right text-blue-600">
+                  {r.paidUsed > 0 ? (
+                    <button className="hover:underline font-medium" onClick={() => openDetail(r.id, r.name, 'paid_special', '유급휴가')}>{r.paidUsed}</button>
+                  ) : r.paidUsed}
+                </td>
                 <td className={`px-3 py-2 text-right font-semibold ${r.paidLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.paidLeft}</td>
                 <td className={`px-3 py-2 text-right font-bold ${r.totalLeft < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{r.totalLeft}</td>
               </tr>
@@ -621,5 +639,39 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
         </table>
       </CardContent>
     </Card>
+
+    <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null) }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{detail?.name} · {detail?.typeLabel} 사용 내역</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+          {detail?.items.map(it => (
+            <div key={it.id} className="rounded-lg border p-2.5 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">
+                  {it.startDate}{it.endDate !== it.startDate ? ` ~ ${it.endDate}` : ''}
+                  {it.halfDayPeriod && (
+                    <span className={`ml-1.5 text-[10px] text-white rounded px-1 ${it.halfDayPeriod === 'morning' ? 'bg-sky-500' : 'bg-amber-500'}`}>
+                      {HALF_DAY_LABELS[it.halfDayPeriod]}
+                    </span>
+                  )}
+                </div>
+                {it.reason && <div className="text-xs text-muted-foreground mt-0.5">{it.reason}</div>}
+                {it.approvedByName && <div className="text-[11px] text-muted-foreground mt-0.5">승인: {it.approvedByName}</div>}
+              </div>
+              <div className="text-right shrink-0">
+                <Badge variant="outline" className="text-[10px]">{it.days}일</Badge>
+                <div className={`text-[10px] mt-1 px-1.5 py-0.5 rounded ${STATUS_CFG[it.status].className}`}>{STATUS_CFG[it.status].label}</div>
+              </div>
+            </div>
+          ))}
+          <div className="text-xs text-muted-foreground text-right pt-1">
+            합계 {detail?.items.reduce((s, it) => s + it.days, 0)}일
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
