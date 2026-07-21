@@ -19,6 +19,9 @@ import {
   leadMatchesSeminar,
   seminarSessionsForLead,
   dedupeLeadsByPerson,
+  normalizePhone,
+  normalizeEmail,
+  normalizeName,
   type SeminarLite,
   type MeetingSlim,
 } from '@/hooks/useSeminarPerformance'
@@ -146,6 +149,25 @@ export function SalesPerformancePage() {
     if (label) list = list.filter(r => r.sessionLabels.includes(label))
     return list
   }, [dialogRegistrationsRaw, detailDialog])
+
+  // 등록자(신청서) → 리드 매칭 인덱스 (이메일 → 전화 → 이름). 리스트에서 리드로 바로 이동.
+  const leadIndex = useMemo(() => {
+    const byEmail = new Map<string, string>(), byPhone = new Map<string, string>(), byName = new Map<string, string>()
+    for (const l of allLeads) {
+      const e = normalizeEmail(l.email); if (e && !byEmail.has(e)) byEmail.set(e, l.id)
+      const p = normalizePhone(l.phone); if (p.length >= 9 && !byPhone.has(p)) byPhone.set(p, l.id)
+      const nk = normalizeName(l.parentName) + '|' + normalizeName(l.studentName)
+      if (nk !== '|' && !byName.has(nk)) byName.set(nk, l.id)
+    }
+    return { byEmail, byPhone, byName }
+  }, [allLeads])
+  const leadIdForReg = (r: { email?: string | null; phone?: string | null; parentName?: string; studentName?: string }): string | null => {
+    const e = normalizeEmail(r.email); if (e && leadIndex.byEmail.has(e)) return leadIndex.byEmail.get(e)!
+    const p = normalizePhone(r.phone); if (p.length >= 9 && leadIndex.byPhone.has(p)) return leadIndex.byPhone.get(p)!
+    const nk = normalizeName(r.parentName) + '|' + normalizeName(r.studentName)
+    if (nk !== '|' && leadIndex.byName.has(nk)) return leadIndex.byName.get(nk)!
+    return null
+  }
 
   // Merge manual sales_events with auto-aggregated seminars
   const rows = useMemo((): PerfRow[] => {
@@ -714,10 +736,13 @@ export function SalesPerformancePage() {
                     <TableHead>{t('leads.col.studentName')}</TableHead>
                     <TableHead>{t('leads.col.grade')}</TableHead>
                     <TableHead>{t('leads.col.school')}</TableHead>
+                    <TableHead className="w-[40px]" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dialogRegistrations.map((r) => (
+                  {dialogRegistrations.map((r) => {
+                    const leadId = leadIdForReg(r)
+                    return (
                     <TableRow key={r.id}>
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(r.createdAt).toLocaleDateString('ko-KR')}
@@ -728,8 +753,20 @@ export function SalesPerformancePage() {
                       <TableCell className="text-sm">{r.studentName || '-'}</TableCell>
                       <TableCell className="text-sm">{r.grade || '-'}</TableCell>
                       <TableCell className="text-sm">{r.school || '-'}</TableCell>
+                      <TableCell>
+                        {leadId ? (
+                          <Link to={`/sales/leads/${leadId}`}>
+                            <Button variant="ghost" size="icon" className="size-6" title="리드로 이동">
+                              <ChevronRight className="size-3.5" />
+                            </Button>
+                          </Link>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground" title="연결된 리드 없음">–</span>
+                        )}
+                      </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             )
