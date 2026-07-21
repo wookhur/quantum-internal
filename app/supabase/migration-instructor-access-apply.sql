@@ -34,10 +34,15 @@ BEGIN
     SET is_partner = true, partner_academy = v_academy, updated_at = now()
     WHERE id = auth.uid();
 
+  -- 강사 라우트는 feature_access 행이 아직 없을 때만 최초 provision 한다.
+  -- 기존 행이 있으면(= 관리자가 인사관리에서 저장한 커스텀 권한이 있으면) 절대 덮어쓰지 않는다.
+  -- 이전엔 DO UPDATE 로 매 로그인마다 덮어써서, 관리자가 저장한 권한이
+  -- 로그인할 때마다 강사 기본값으로 리셋되는 버그가 있었다(예: 남연서).
+  -- 강사 라우트 '변경'은 파트너강사 편집 시 applyToProfileIfExists 가 즉시 반영하므로
+  -- 로그인 시 재동기화가 필요 없다.
   INSERT INTO public.feature_access (user_id, enabled_modules, enabled_routes, updated_at)
     VALUES (auth.uid(), '{}', COALESCE(v_routes, '{}'), now())
-    ON CONFLICT (user_id) DO UPDATE
-      SET enabled_modules = '{}', enabled_routes = EXCLUDED.enabled_routes, updated_at = now();
+    ON CONFLICT (user_id) DO NOTHING;
 END;
 $$;
 

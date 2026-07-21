@@ -25,6 +25,9 @@ export function useAppNotifications() {
   const { data: prefs } = useNotificationPreferences()
   const disabledTypes = prefs?.disabledTypes || []
 
+  // 매니저급/임원은 모든 미제출 미팅 알림을 받고, 그 외(컨설턴트 등)는 본인 담당 미팅만.
+  const isManagerLevel = !!user && (['admin', 'c_level', 'service_manager'] as string[]).includes(user.role)
+
   // Birthday alerts are shown to admins (who can view employee info / 직원정보)
   // and to service managers.
   const { data: featureAccess = [] } = useFeatureAccess()
@@ -89,19 +92,22 @@ export function useAppNotifications() {
 
   // --- Service meetings with missing reports (last 24h) ---
   const { data: missingReportMeetings = [] } = useQuery({
-    queryKey: ['notifications-missing-reports', user?.id],
+    queryKey: ['notifications-missing-reports', user?.id, isManagerLevel],
     enabled: !!user?.id,
     refetchInterval: 5 * 60 * 1000,
     queryFn: async () => {
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
       const today = new Date().toISOString().slice(0, 10)
-      const { data, error } = await supabase
+      let q = supabase
         .from('service_meetings')
-        .select('id, meeting_date, report_status, service_students!inner(name)')
+        .select('id, meeting_date, report_status, consultant_id, service_students!inner(name)')
         .gte('meeting_date', yesterday)
         .lte('meeting_date', today)
         .neq('report_status', 'submitted')
         .limit(20)
+      // 담당 컨설턴트에게만: 매니저/임원이 아니면 본인이 담당한 미팅만
+      if (!isManagerLevel) q = q.eq('consultant_id', user!.id)
+      const { data, error } = await q
       if (error) return []
       return data || []
     },

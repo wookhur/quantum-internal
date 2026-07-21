@@ -730,10 +730,10 @@ export function SalesPerformancePage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('seminars.regDate')}</TableHead>
-                    <TableHead>{t('leads.col.parentName')}</TableHead>
+                    <TableHead>{t('leads.col.parent')}</TableHead>
                     <TableHead>{t('common.phone')}</TableHead>
                     <TableHead>{t('common.email')}</TableHead>
-                    <TableHead>{t('leads.col.studentName')}</TableHead>
+                    <TableHead>{t('leads.col.student')}</TableHead>
                     <TableHead>{t('leads.col.grade')}</TableHead>
                     <TableHead>{t('leads.col.school')}</TableHead>
                     <TableHead className="w-[40px]" />
@@ -785,8 +785,8 @@ export function SalesPerformancePage() {
                     <TableHead>{t('meetings.col.meetingDate')}</TableHead>
                     <TableHead>{t('meetings.col.method')}</TableHead>
                     <TableHead>{t('meetings.col.meetingNumber')}</TableHead>
-                    <TableHead>{t('leads.col.parentName')}</TableHead>
-                    <TableHead>{t('leads.col.studentName')}</TableHead>
+                    <TableHead>{t('leads.col.parent')}</TableHead>
+                    <TableHead>{t('leads.col.student')}</TableHead>
                     <TableHead>{t('common.phone')}</TableHead>
                     <TableHead className="w-[40px]" />
                   </TableRow>
@@ -833,8 +833,8 @@ export function SalesPerformancePage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t('leads.col.parentName')}</TableHead>
-                    <TableHead>{t('leads.col.studentName')}</TableHead>
+                    <TableHead>{t('leads.col.parent')}</TableHead>
+                    <TableHead>{t('leads.col.student')}</TableHead>
                     <TableHead>{t('leads.col.school')}</TableHead>
                     <TableHead>{t('leads.col.grade')}</TableHead>
                     <TableHead>{t('leads.sourceChannel')}</TableHead>
