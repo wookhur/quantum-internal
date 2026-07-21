@@ -318,12 +318,25 @@ export function SalesPerformancePage() {
   // Meetings matched to the clicked event row (optionally by method)
   const dialogMeetings = useMemo((): MeetingSlim[] => {
     if (!detailDialog || detailDialog.kind !== 'meetings') return []
+    // 수동 입력 이벤트는 팀이 직접 입력한 수치가 진실이고, 연락처 매칭 계산은
+    // 과다집계(웨비나 무관 상담 포함)로 셀과 안 맞으므로 목록을 계산하지 않는다.
+    if (!detailDialog.row.auto) return []
     let matched = meetingsForLeads(allMeetings, dialogLeads)
     if (detailDialog.method) {
       matched = matched.filter(m => m.meetingMethod === detailDialog.method)
     }
     return matched
   }, [detailDialog, allMeetings, dialogLeads])
+
+  // 수동 이벤트 미팅 셀은 팀 입력값을 그대로 보여준다(제목 카운트용).
+  const manualMeetingFigure = useMemo((): number | null => {
+    if (!detailDialog || detailDialog.kind !== 'meetings' || detailDialog.row.auto) return null
+    const r = detailDialog.row
+    if (detailDialog.method === 'phone') return r.phoneConsultations
+    if (detailDialog.method === 'zoom') return r.zoomBookings
+    if (detailDialog.method === 'in_person') return r.inPersonBookings
+    return r.totalMeetings
+  }, [detailDialog])
 
   // Summary calculations
   const totalApplicants = rows.reduce((sum, e) => sum + (e.applicants || 0), 0)
@@ -705,7 +718,7 @@ export function SalesPerformancePage() {
                     (detailDialog?.kind === 'registrants' || detailDialog?.kind === 'attendees')
                       ? dialogRegistrations.length
                       : detailDialog?.kind === 'meetings'
-                        ? dialogMeetings.length
+                        ? (manualMeetingFigure ?? dialogMeetings.length)
                         : detailDialog?.kind === 'planned'
                           ? dialogPlannedLeads.length
                           : dialogLeads.length,
@@ -774,7 +787,11 @@ export function SalesPerformancePage() {
 
           {/* Meetings list */}
           {detailDialog?.kind === 'meetings' && (
-            dialogMeetings.length === 0 ? (
+            !detailDialog.row.auto ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                {t('salesPerf.manualFigureNote')}
+              </p>
+            ) : dialogMeetings.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-10">
                 {t('salesPerf.noMatchingMeetings')}
               </p>
