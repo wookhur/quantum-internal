@@ -70,6 +70,8 @@ export interface Lead {
   leadDate: string
   parentName: string
   studentName: string
+  /** 다른 표기·형제 이름 등 별칭(중복 병합 시 보존). 검색 대상에 포함. */
+  nameAliases?: string
   email?: string
   phone: string
   currentSchool: string

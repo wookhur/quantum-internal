@@ -444,6 +444,7 @@ export function ColdCallView() {
         (l) =>
           l.parentName.toLowerCase().includes(s) ||
           l.studentName.toLowerCase().includes(s) ||
+          (l.nameAliases || '').toLowerCase().includes(s) ||
           l.phone.includes(s) ||
           l.currentSchool.toLowerCase().includes(s),
       )
@@ -695,6 +696,9 @@ export function ColdCallView() {
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {lead.parentName} ({t('coldCall.parent')})
                         </p>
+                      )}
+                      {lead.nameAliases && (
+                        <p className="text-[11px] text-muted-foreground/80 truncate">🔤 {lead.nameAliases}</p>
                       )}
                       {selectedSeminar && selectedSeminar.sessions.length > 0 && (() => {
                         const applied = seminarSessionsForLead(selectedSeminar, lead)
@@ -1232,6 +1236,9 @@ function ColdCallDetail({
           </div>
           {lead.studentName && (
             <p className="text-sm text-muted-foreground">{lead.parentName} ({t('coldCall.parent')})</p>
+          )}
+          {lead.nameAliases && (
+            <p className="text-xs text-muted-foreground mt-0.5">🔤 다른 표기: {lead.nameAliases}</p>
           )}
         </div>
         <div className="flex items-center gap-2">

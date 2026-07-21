@@ -56,6 +56,7 @@ function mapLead(row: Record<string, unknown>): Lead {
     leadDate: row.lead_date as string,
     parentName: row.parent_name as string,
     studentName: (row.student_name as string) || '',
+    nameAliases: (row.name_aliases as string) || undefined,
     email: row.email as string | undefined,
     phone: row.phone as string,
     currentSchool: (row.current_school as string) || '',
@@ -112,6 +113,7 @@ function leadToRow(lead: Partial<Lead>): Record<string, unknown> {
   if (lead.leadDate !== undefined) row.lead_date = lead.leadDate
   if (lead.parentName !== undefined) row.parent_name = lead.parentName
   if (lead.studentName !== undefined) row.student_name = lead.studentName
+  if (lead.nameAliases !== undefined) row.name_aliases = lead.nameAliases
   if (lead.email !== undefined) row.email = lead.email
   if (lead.phone !== undefined) row.phone = lead.phone
   if (lead.currentSchool !== undefined) row.current_school = lead.currentSchool
@@ -174,7 +176,7 @@ export function useLeads(
           const s = filters.search.trim()
           if (s) {
             query = query.or(
-              `parent_name.ilike.%${s}%,student_name.ilike.%${s}%,phone.ilike.%${s}%,current_school.ilike.%${s}%`,
+              `parent_name.ilike.%${s}%,student_name.ilike.%${s}%,name_aliases.ilike.%${s}%,phone.ilike.%${s}%,current_school.ilike.%${s}%`,
             )
           }
         }

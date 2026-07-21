@@ -520,6 +520,9 @@ function LeadsTableView() {
                       </Link>
                     </td>
                     <td className="text-sm">
+                      {lead.nameAliases && (
+                        <span className="block text-[11px] text-muted-foreground/80 truncate" title={lead.nameAliases}>🔤 {lead.nameAliases}</span>
+                      )}
                       <span className="inline-flex items-center gap-1.5">
                         {lead.studentName || '-'}
                         {(() => {
