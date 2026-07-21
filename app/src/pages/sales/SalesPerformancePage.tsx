@@ -178,12 +178,14 @@ export function SalesPerformancePage() {
       // 연결된 세미나 등록에 참석 표시(참석여부 반영)가 있으면 실제 참석수를 우선 사용.
       // 없으면(예: 예약만 있는 웨비나) 팀이 입력한 수치를 유지.
       const attendees = seminar && seminar.attendees > 0 ? seminar.attendees : e.attendees
+      // 세미나가 연결돼 있으면 신청자 셀도 실제 등록자 수를 써서 드릴다운(등록자 명단)과 일치시킨다.
+      const applicants = seminar ? seminar.applicants : e.applicants
       return {
         id: e.id,
         month: e.month,
         eventName: e.eventName,
         sessionLabel: null,
-        applicants: e.applicants,
+        applicants,
         plannedAttendees: 0,
         attendees,
         phoneConsultations: e.phoneConsultations,
@@ -567,12 +569,12 @@ export function SalesPerformancePage() {
                       >
                         {row.totalMeetings}
                       </TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">
+                      <TableCell className="text-right text-sm tabular-nums" onClick={(e) => e.stopPropagation()}>
                         <span className={row.contracts > 0 ? 'text-success font-medium' : ''}>
                           {row.contracts}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right text-sm tabular-nums">
+                      <TableCell className="text-right text-sm tabular-nums" onClick={(e) => e.stopPropagation()}>
                         <Badge
                           variant={row.contractRate >= 10 ? 'default' : 'outline'}
                           className={`text-xs ${row.contractRate >= 10 ? 'bg-success text-white' : ''}`}
