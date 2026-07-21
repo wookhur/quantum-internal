@@ -328,14 +328,19 @@ export function SalesPerformancePage() {
     return matched
   }, [detailDialog, allMeetings, dialogLeads])
 
-  // 수동 이벤트 미팅 셀은 팀 입력값을 그대로 보여준다(제목 카운트용).
-  const manualMeetingFigure = useMemo((): number | null => {
-    if (!detailDialog || detailDialog.kind !== 'meetings' || detailDialog.row.auto) return null
+  // 수동 이벤트는 팀 입력값을 진실로 보여준다(참석·미팅은 계산 목록과 불일치하므로 팀 수치 표시).
+  // 신청자(registrants)/리드는 실제 등록 리스트가 유용하므로 계산값 유지(null).
+  const manualFigure = useMemo((): number | null => {
+    if (!detailDialog || detailDialog.row.auto) return null
     const r = detailDialog.row
-    if (detailDialog.method === 'phone') return r.phoneConsultations
-    if (detailDialog.method === 'zoom') return r.zoomBookings
-    if (detailDialog.method === 'in_person') return r.inPersonBookings
-    return r.totalMeetings
+    if (detailDialog.kind === 'attendees') return r.attendees
+    if (detailDialog.kind === 'meetings') {
+      if (detailDialog.method === 'phone') return r.phoneConsultations
+      if (detailDialog.method === 'zoom') return r.zoomBookings
+      if (detailDialog.method === 'in_person') return r.inPersonBookings
+      return r.totalMeetings
+    }
+    return null
   }, [detailDialog])
 
   // Summary calculations
@@ -715,13 +720,15 @@ export function SalesPerformancePage() {
                 {t('salesPerf.leadsDialogCount').replace(
                   '{n}',
                   String(
-                    (detailDialog?.kind === 'registrants' || detailDialog?.kind === 'attendees')
-                      ? dialogRegistrations.length
-                      : detailDialog?.kind === 'meetings'
-                        ? (manualMeetingFigure ?? dialogMeetings.length)
-                        : detailDialog?.kind === 'planned'
-                          ? dialogPlannedLeads.length
-                          : dialogLeads.length,
+                    manualFigure ?? (
+                      (detailDialog?.kind === 'registrants' || detailDialog?.kind === 'attendees')
+                        ? dialogRegistrations.length
+                        : detailDialog?.kind === 'meetings'
+                          ? dialogMeetings.length
+                          : detailDialog?.kind === 'planned'
+                            ? dialogPlannedLeads.length
+                            : dialogLeads.length
+                    ),
                   ),
                 )}
               </span>
@@ -730,7 +737,11 @@ export function SalesPerformancePage() {
 
           {/* Registrants / attendees list */}
           {(detailDialog?.kind === 'registrants' || detailDialog?.kind === 'attendees') && (
-            regsLoading ? (
+            (detailDialog.kind === 'attendees' && !detailDialog.row.auto) ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                {t('salesPerf.manualFigureNote')}
+              </p>
+            ) : regsLoading ? (
               <div className="flex justify-center py-10">
                 <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
