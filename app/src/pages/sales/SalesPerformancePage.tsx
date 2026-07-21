@@ -173,24 +173,30 @@ export function SalesPerformancePage() {
   const rows = useMemo((): PerfRow[] => {
     const manualNames = new Set(events.map(e => e.eventName.trim()))
 
-    const manualRows: PerfRow[] = events.map(e => ({
-      id: e.id,
-      month: e.month,
-      eventName: e.eventName,
-      sessionLabel: null,
-      applicants: e.applicants,
-      plannedAttendees: 0,
-      attendees: e.attendees,
-      phoneConsultations: e.phoneConsultations,
-      zoomBookings: e.zoomBookings,
-      inPersonBookings: e.inPersonBookings,
-      totalMeetings: e.totalMeetings,
-      contracts: e.contracts,
-      contractRate: e.contractRate,
-      auto: false,
-      source: e,
-      seminar: seminars.find(s => s.title === e.eventName) ?? null,
-    }))
+    const manualRows: PerfRow[] = events.map(e => {
+      const seminar = seminars.find(s => s.title === e.eventName) ?? null
+      // 연결된 세미나 등록에 참석 표시(참석여부 반영)가 있으면 실제 참석수를 우선 사용.
+      // 없으면(예: 예약만 있는 웨비나) 팀이 입력한 수치를 유지.
+      const attendees = seminar && seminar.attendees > 0 ? seminar.attendees : e.attendees
+      return {
+        id: e.id,
+        month: e.month,
+        eventName: e.eventName,
+        sessionLabel: null,
+        applicants: e.applicants,
+        plannedAttendees: 0,
+        attendees,
+        phoneConsultations: e.phoneConsultations,
+        zoomBookings: e.zoomBookings,
+        inPersonBookings: e.inPersonBookings,
+        totalMeetings: e.totalMeetings,
+        contracts: e.contracts,
+        contractRate: e.contractRate,
+        auto: false,
+        source: e,
+        seminar,
+      }
+    })
 
     // Seminars from 세미나 관리 not manually recorded → auto rows.
     // Consultation counts come from actual meeting records (미팅 기록),
@@ -333,7 +339,8 @@ export function SalesPerformancePage() {
   const manualFigure = useMemo((): number | null => {
     if (!detailDialog || detailDialog.row.auto) return null
     const r = detailDialog.row
-    if (detailDialog.kind === 'attendees') return r.attendees
+    // 실제 참석 등록이 있으면 그 목록(dialogRegistrations)을 쓰고, 없으면 팀 수동값
+    if (detailDialog.kind === 'attendees') return (r.seminar && r.seminar.attendees > 0) ? null : r.attendees
     if (detailDialog.kind === 'meetings') {
       if (detailDialog.method === 'phone') return r.phoneConsultations
       if (detailDialog.method === 'zoom') return r.zoomBookings
@@ -737,7 +744,8 @@ export function SalesPerformancePage() {
 
           {/* Registrants / attendees list */}
           {(detailDialog?.kind === 'registrants' || detailDialog?.kind === 'attendees') && (
-            (detailDialog.kind === 'attendees' && !detailDialog.row.auto) ? (
+            (detailDialog.kind === 'attendees' && !detailDialog.row.auto
+              && !(detailDialog.row.seminar && detailDialog.row.seminar.attendees > 0)) ? (
               <p className="text-sm text-muted-foreground text-center py-10">
                 {t('salesPerf.manualFigureNote')}
               </p>
