@@ -367,6 +367,10 @@ export function ColdCallView() {
     const seminarDate = new Map<string, string>()
     for (const s of seminars) seminarDate.set(normKey(s.title), s.date || s.createdAt || '')
     const sortKeyFor = (title: string): string => {
+      const t = title.normalize('NFC')
+      // 명시적 배치: 전공별 웨비나(세션 7~8월)는 맨 위, 4월 미국 온라인 웨비나는 4월(제주와 서울 사이)
+      if (t.includes('전공별')) return '2026-08-08'
+      if (t.includes('미국 온라인 웨비나')) return '2026-04-18'
       const d = seminarDate.get(normKey(title))
       if (d) return d.slice(0, 10)
       const m = title.match(/^(\d{2})(\d{2})(\d{2})/)
