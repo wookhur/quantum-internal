@@ -359,13 +359,28 @@ export function ColdCallView() {
 
   // Build event filter options: seminars from 세미나 관리 + legacy source channels
   const eventFilterOptions = useMemo(() => {
-    const options: { label: string; value: string }[] = []
+    const options: { label: string; value: string; sortKey: string }[] = []
     const seen = new Set<string>()
+    // 제목을 NFC 정규화 + trim해서 중복 판정 (세미나 제목 vs 리드 소스 NFD 차이 방지)
+    const normKey = (s: string) => s.normalize('NFC').trim()
+    // 정렬 키(개최일): 세미나 date > 제목의 YYMMDD 접두 > 연도 > 없으면 맨 아래
+    const seminarDate = new Map<string, string>()
+    for (const s of seminars) seminarDate.set(normKey(s.title), s.date || s.createdAt || '')
+    const sortKeyFor = (title: string): string => {
+      const d = seminarDate.get(normKey(title))
+      if (d) return d.slice(0, 10)
+      const m = title.match(/^(\d{2})(\d{2})(\d{2})/)
+      if (m) return `20${m[1]}-${m[2]}-${m[3]}`
+      const y = title.match(/(\d{4})/)
+      if (y) return `${y[1]}-99-99` // 연도만 아는 경우(전공별 등)는 그 해 맨 뒤
+      return '0000-00-00'
+    }
     // 1. All seminars created in 세미나 관리
     for (const s of seminars) {
-      if (!seen.has(s.title)) {
-        seen.add(s.title)
-        options.push({ label: s.title, value: s.title })
+      const k = normKey(s.title)
+      if (!seen.has(k)) {
+        seen.add(k)
+        options.push({ label: s.title, value: s.title, sortKey: sortKeyFor(s.title) })
       }
     }
     // 2. Legacy seminar/webinar source channels not backed by a seminar record
@@ -380,16 +395,19 @@ export function ColdCallView() {
     const NOTE_WORDS = /직후|상담|신청|캔슬|취소|완료|컨택|통화|부재중/
     for (const sc of leadChannels) {
       const clean = sc.trim()
+      const k = normKey(sc)
       if (
-        !seen.has(sc) && !GENERIC_NAMES.has(sc) &&
+        !seen.has(k) && !GENERIC_NAMES.has(sc) &&
         (sc.includes('세미나') || sc.includes('웨비나')) &&
         clean.length <= 22 && !NOTE_WORDS.test(clean)
       ) {
-        seen.add(sc)
-        options.push({ label: sc, value: sc })
+        seen.add(k)
+        options.push({ label: sc, value: sc, sortKey: sortKeyFor(sc) })
       }
     }
-    return options
+    // 개최일 최신순(내림차순) 정렬 — 가장 최근 세미나가 맨 위
+    options.sort((a, b) => b.sortKey.localeCompare(a.sortKey))
+    return options.map(({ label, value }) => ({ label, value }))
   }, [allLeads, seminars])
 
   const selectedSeminar: SeminarLite | undefined = useMemo(
