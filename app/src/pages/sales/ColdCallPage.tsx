@@ -271,11 +271,13 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
     [committedCity, lead.currentSchool, lead.region, lead.phone],
   )
 
-  // 온라인 지오코딩 대상: 저장된 거주도시 우선, 없고 curated 학교 매칭도 없으면 학교명 그대로
+  // 온라인 지오코딩 대상: 저장된 거주도시 우선, 없고 curated 학교 매칭도 없으면 학교명 그대로.
+  // nonce를 키에 포함해 변환 버튼으로 강제 재조회 가능.
   const geoFromCity = !!committedCity
   const geoQuery = committedCity || (curatedSchool ? '' : (lead.currentSchool || '').trim())
-  const { data: geo } = useQuery({
-    queryKey: ['geocode', geoQuery],
+  const [nonce, setNonce] = useState(0)
+  const { data: geo, isFetching } = useQuery({
+    queryKey: ['geocode', geoQuery, nonce],
     queryFn: () => geocodePlace(geoQuery),
     enabled: !!geoQuery,
     staleTime: Infinity,
@@ -284,12 +286,12 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
   })
 
   // 학교명 자동 지오코딩이 전화/거주지역 국가와 충돌하면 오매칭으로 보고 신뢰하지 않음.
-  // (예: 미국(+1) 리드인데 학교명이 헝가리의 어떤 장소로 잘못 매칭되는 경우 → 사용자가 도시 직접 입력)
   const geoConflicts =
     !!geo && !geoFromCity && !!instant?.country && !!geo.country && geo.country !== instant.country
   const resolved = geoConflicts ? instant : geo || instant
 
-  // 국가·현지시각은 매번 계산해 표시(저장하지 않음 → 리졸버가 좋아지면 자동으로 개선됨)
+  const overseas = isOverseasPhone(lead.phone)
+  // 국가·현지시각은 매번 계산해 표시(저장하지 않음)
   const country = resolved?.country || lead.residenceCountry || ''
   const timezone = resolved?.timezone || null
   const localTime = useMemo(() => (timezone ? formatLocalTime(now, timezone) : null), [timezone, now])
@@ -301,43 +303,58 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolved?.city, lead.id])
 
-  // 위치를 전혀 못 잡았고 저장값도 없으면 숨김(국내 리드 등)
-  if (!resolved && !lead.residenceCity) return null
+  // 해외번호이거나 위치가 잡히거나 저장된 도시가 있으면 표시 (해외 리드는 항상 입력칸 노출)
+  if (!overseas && !resolved && !lead.residenceCity) return null
 
-  // 사용자가 직접 입력·수정했을 때만 거주도시를 저장(자동 추론값은 저장 안 함).
-  const saveCity = () => {
-    if (!canEdit || !touchedRef.current) return
+  // 변환 버튼(시계): 입력한 도시를 저장하고 시차를 재계산. 같은 값이면 강제 재조회.
+  const handleConvert = () => {
+    if (!canEdit) return
     const v = city.trim()
-    if (v !== (lead.residenceCity || '')) updateLead.mutate({ id: lead.id, data: { residenceCity: v } })
+    if (!v) return
+    touchedRef.current = true
+    if (v !== committedCity) updateLead.mutate({ id: lead.id, data: { residenceCity: v } })
+    else setNonce((n) => n + 1)
   }
 
   return (
     <>
       <div className="flex items-center gap-2 text-sm">
         <Globe className="size-4 text-muted-foreground shrink-0" />
-        <span>{country || '-'}</span>
+        <span>{country || (overseas ? t('coldCall.residenceUnknown') : '-')}</span>
       </div>
       <div className="flex items-center gap-2 text-sm">
         <MapPin className="size-4 text-muted-foreground shrink-0" />
         {canEdit ? (
-          <Input
-            value={city}
-            onChange={(e) => { touchedRef.current = true; setCity(e.target.value) }}
-            onBlur={saveCity}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}
-            placeholder={t('coldCall.residenceCityPlaceholder')}
-            className="h-7 text-sm"
-          />
+          <>
+            <Input
+              value={city}
+              onChange={(e) => { touchedRef.current = true; setCity(e.target.value) }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleConvert() } }}
+              placeholder={t('coldCall.residenceCityPlaceholder')}
+              className="h-7 text-sm"
+            />
+            <Button
+              type="button"
+              size="icon"
+              variant="outline"
+              className="h-7 w-7 shrink-0"
+              title={t('coldCall.convertTime')}
+              onClick={handleConvert}
+              disabled={isFetching || !city.trim()}
+            >
+              {isFetching ? <Loader2 className="size-3.5 animate-spin" /> : <Clock className="size-3.5" />}
+            </Button>
+          </>
         ) : (
           <span>{city || '-'}</span>
         )}
-        {localTime && (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
-            <Clock className="size-3" />
-            {localTime}
-          </span>
-        )}
       </div>
+      {localTime && (
+        <div className="flex items-center gap-1 pl-6 text-xs text-muted-foreground">
+          <Clock className="size-3" />
+          {t('coldCall.localTime')} {localTime}
+        </div>
+      )}
     </>
   )
 }

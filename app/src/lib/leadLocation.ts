@@ -381,7 +381,7 @@ const CC_TZ: Record<string, Tz | null> = {
 //  1) Open-Meteo: 도시명 → IANA 시간대를 '직접' 반환(주 매핑 불필요) → 도시 입력에 가장 정확.
 //  2) Photon(OSM): 학교 전체명·POI도 해석하고 주(state)를 돌려줌 → Open-Meteo가 못 잡을 때 폴백.
 //  (Nominatim은 CORS 헤더가 없어 브라우저에서 차단됨 → 사용 불가)
-const geoCache = new Map<string, ResolvedLocation | null>()
+//  캐싱은 호출부(react-query)에서 처리 — 여기서는 매 호출마다 실제 조회.
 
 interface OpenMeteoResult { name?: string; admin1?: string; timezone?: string; country?: string; country_code?: string }
 async function geoOpenMeteo(q: string): Promise<ResolvedLocation | null> {
@@ -421,7 +421,6 @@ async function geoPhoton(q: string): Promise<ResolvedLocation | null> {
 export async function geocodePlace(query: string | null | undefined): Promise<ResolvedLocation | null> {
   const q = (query || '').trim()
   if (!q || q.length < 2) return null
-  if (geoCache.has(q)) return geoCache.get(q)!
   let out: ResolvedLocation | null = null
   // 1) Open-Meteo (IANA 시간대 직접) — 실패/무결과면 2) Photon 폴백
   try { out = await geoOpenMeteo(q) } catch { /* try photon */ }
@@ -431,7 +430,6 @@ export async function geocodePlace(query: string | null | undefined): Promise<Re
       if (ph && (ph.timezone || !out)) out = ph
     } catch { /* keep out */ }
   }
-  geoCache.set(q, out)
   return out
 }
 
