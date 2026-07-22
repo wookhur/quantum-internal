@@ -28,7 +28,7 @@ export interface ResolvedLocation {
   timezone: Tz | null   // 시간대(다국시간대 국가를 도시 없이 판단 못하면 null)
   country: string       // 한글 국가명
   city?: string         // 표시용 도시/지역 라벨
-  source: 'city' | 'school' | 'phone'
+  source: 'city' | 'school' | 'region' | 'phone' | 'geocode'
 }
 
 interface Place { tz: Tz | null; country: string; label?: string; multiZone?: boolean }
@@ -317,21 +317,90 @@ export function resolveByPhone(phone: string | null | undefined): Place | null {
 }
 
 /**
- * 리드의 거주지/시간대를 한 번에 해석.
- * 우선순위: 수동 거주도시 입력 > 학교명 > 전화번호(국제표시).
+ * 오프라인 사전만으로 즉시 해석(네트워크 없음). 지오코딩 결과가 오기 전 폴백.
+ * 우선순위: 수동 거주도시 > 학교(curated) > 거주지역(국가) > 전화번호(국제표시).
  */
-export function resolveLeadLocation(input: {
+export function resolveInstant(input: {
   city?: string | null
   school?: string | null
+  region?: string | null
   phone?: string | null
 }): ResolvedLocation | null {
   const byCity = lookupText(input.city)
   if (byCity) return { timezone: byCity.tz, country: byCity.country, city: byCity.label, source: 'city' }
   const bySchool = resolveBySchool(input.school)
   if (bySchool) return { timezone: bySchool.tz, country: bySchool.country, city: bySchool.label, source: 'school' }
+  const byRegion = lookupText(input.region)
+  if (byRegion) return { timezone: byRegion.tz, country: byRegion.country, source: 'region' }
   const byPhone = resolveByPhone(input.phone)
-  if (byPhone) return { timezone: byPhone.tz, country: byPhone.country, city: byPhone.label, source: 'phone' }
+  if (byPhone) return { timezone: byPhone.tz, country: byPhone.country, source: 'phone' }
   return null
+}
+
+// ── 국가코드(ISO2) → 한글 국가명 ──
+const COUNTRY_KO: Record<string, string> = {
+  US: '미국', CA: '캐나다', GB: '영국', AU: '호주', NZ: '뉴질랜드', CN: '중국', HK: '홍콩',
+  JP: '일본', SG: '싱가포르', KR: '대한민국', IN: '인도', AE: '아랍에미리트', TH: '태국',
+  PH: '필리핀', MY: '말레이시아', ID: '인도네시아', VN: '베트남', FR: '프랑스', DE: '독일',
+  IT: '이탈리아', ES: '스페인', NL: '네덜란드', CH: '스위스', SE: '스웨덴', IE: '아일랜드',
+  PT: '포르투갈', TR: '튀르키예', RU: '러시아', MX: '멕시코', BR: '브라질', QA: '카타르',
+  SA: '사우디아라비아', IL: '이스라엘', TW: '대만', MO: '마카오', KH: '캄보디아', LK: '스리랑카',
+  BE: '벨기에', AT: '오스트리아', NO: '노르웨이', DK: '덴마크', FI: '핀란드', PL: '폴란드',
+}
+
+// 국가코드(ISO2) → 대표 시간대 (주 정보가 없거나 매칭 안 될 때의 폴백; 다국시간대는 null).
+const CC_TZ: Record<string, Tz | null> = {
+  US: null, CA: null, AU: null, CN: null, BR: null, RU: null, MX: null, ID: null,
+  GB: TZ.LON, KR: TZ.SEL, SG: TZ.SG, HK: TZ.HK, JP: TZ.TYO, IN: TZ.DEL, AE: TZ.DXB,
+  NZ: TZ.AKL, TH: TZ.BKK, PH: TZ.MNL, MY: TZ.KUL, VN: TZ.SGN, FR: TZ.PAR, DE: TZ.BER,
+  IT: TZ.ROM, ES: TZ.MAD, NL: TZ.AMS, CH: TZ.ZRH, SE: TZ.STO, IE: TZ.DUB, PT: TZ.LIS,
+  TR: TZ.IST, QA: TZ.DOH, SA: TZ.RUH, IL: TZ.TLV, TW: 'Asia/Taipei', MO: TZ.HK,
+}
+
+// ── 온라인 지오코딩 (Nominatim/OpenStreetMap, 무료·키 불필요·CORS 허용).
+//    학교명·도시·카운티 등 자유 텍스트를 해석하고, 반환된 주(state)를 REGIONS 사전으로
+//    시간대에 매핑한다. (Open-Meteo는 카운티/모호한 지명에서 오탐이 많아 사용하지 않음) ──
+const geoCache = new Map<string, ResolvedLocation | null>()
+
+interface NominatimAddr {
+  city?: string; town?: string; village?: string; hamlet?: string; municipality?: string
+  county?: string; state?: string; region?: string; province?: string
+  country?: string; country_code?: string
+}
+
+export async function geocodePlace(query: string | null | undefined): Promise<ResolvedLocation | null> {
+  const q = (query || '').trim()
+  if (!q || q.length < 2) return null
+  if (geoCache.has(q)) return geoCache.get(q)!
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=1&accept-language=en`
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('geocode http ' + res.status)
+    const arr = (await res.json()) as { address?: NominatimAddr; display_name?: string }[]
+    const r = arr?.[0]
+    if (!r || !r.address) {
+      geoCache.set(q, null)
+      return null
+    }
+    const a = r.address
+    const cc = (a.country_code || '').toUpperCase()
+    const country = COUNTRY_KO[cc] || a.country || ''
+    // 주/도(state) → 시간대 (미국 주·캐나다 주·호주 주 등은 REGIONS 사전에 있음)
+    const stateName = a.state || a.province || a.region || ''
+    let tz: Tz | null = REGIONS[norm(stateName)]?.tz || null
+    if (!tz) {
+      // 주 매칭 실패 → 국가 단위 폴백 (단일 시간대 국가만 확정)
+      const byCountry = COUNTRIES[norm(a.country || '')]
+      tz = (byCountry && !byCountry.multiZone ? byCountry.tz : null) || (cc in CC_TZ ? CC_TZ[cc] : null)
+    }
+    const cityLabel = a.city || a.town || a.village || a.municipality || a.hamlet || a.county || stateName || ''
+    const out: ResolvedLocation = { timezone: tz, country, city: cityLabel || undefined, source: 'geocode' }
+    geoCache.set(q, out)
+    return out
+  } catch {
+    geoCache.set(q, null)
+    return null
+  }
 }
 
 /** 주어진 시간대의 현지 시각을 "화 09:32" 형태로 포맷. 실패 시 null. */

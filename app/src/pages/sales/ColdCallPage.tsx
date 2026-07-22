@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useT } from '@/i18n/LanguageContext'
-import { resolveLeadLocation, resolveBySchool, formatLocalTime } from '@/lib/leadLocation'
+import { resolveInstant, resolveBySchool, geocodePlace, formatLocalTime } from '@/lib/leadLocation'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -242,9 +243,9 @@ const ONE_ON_ONE_PILL = 'bg-violet-100 text-violet-700 border border-violet-300'
 
 /**
  * 거주국가·거주도시·현지 시각 블록 (콜드콜 연락처 카드 하단).
- * 원스톱 자동: 학생정보의 학교명을 자동 인식해 거주도시·거주국가를 채우고 시차까지 계산.
- * 우선순위: 수동 입력 거주도시 > 학교명 > 전화번호(국제표시 +/00 있을 때만).
- * 전화번호만으로는 오탐(지역번호↔국가코드 충돌)이 잦아 보조 신호로만 사용.
+ * 원스톱 자동: 저장된 거주도시 또는 학생정보의 학교명에서 장소를 뽑아 온라인 지오코딩
+ * (Open-Meteo, 무료)으로 IANA 시간대를 직접 받아 국가·도시·현지 시각을 자동 계산.
+ * 오프라인 사전(도시/미국주/학교/거주지역/전화)은 지오코딩 전/실패 시 즉시 폴백.
  */
 function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) {
   const t = useT()
@@ -260,39 +261,44 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
     return () => clearInterval(iv)
   }, [])
 
-  // 학교명 기반(안정) 해석 — 원스톱 자동 채움에 사용
-  const schoolPlace = useMemo(() => resolveBySchool(lead.currentSchool), [lead.currentSchool])
-  // 현재 표시/시차 계산에 쓰는 최종 해석 (도시 입력 > 학교 > 전화)
-  const resolved = useMemo(
-    () => resolveLeadLocation({ city, school: lead.currentSchool, phone: lead.phone }),
-    [city, lead.currentSchool, lead.phone],
+  // 오프라인 즉시 해석(폴백) — 저장된 거주도시/학교/거주지역/전화
+  const committedCity = (lead.residenceCity || '').trim()
+  const curatedSchool = useMemo(() => resolveBySchool(lead.currentSchool), [lead.currentSchool])
+  const instant = useMemo(
+    () => resolveInstant({ city: committedCity, school: lead.currentSchool, region: lead.region, phone: lead.phone }),
+    [committedCity, lead.currentSchool, lead.region, lead.phone],
   )
 
+  // 온라인 지오코딩 대상: 저장된 거주도시 우선, 없고 curated 학교 매칭도 없으면 학교명 그대로
+  // (Nominatim은 학교 전체명도 해석해 주(state)를 돌려줌)
+  const geoQuery = committedCity || (curatedSchool ? '' : (lead.currentSchool || '').trim())
+  const { data: geo } = useQuery({
+    queryKey: ['geocode', geoQuery],
+    queryFn: () => geocodePlace(geoQuery),
+    enabled: !!geoQuery,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60,
+    retry: 1,
+  })
+
+  // 지오코딩이 되면 우선, 아니면 오프라인 폴백
+  const resolved = geo || instant
   const country = resolved?.country || lead.residenceCountry || ''
   const timezone = resolved?.timezone || null
   const localTime = useMemo(() => (timezone ? formatLocalTime(now, timezone) : null), [timezone, now])
 
-  // 원스톱 자동 채움: 거주도시가 비어 있고 학교로 위치를 알면 도시를 채워 저장
+  // 원스톱 자동 채움/교정: 도시가 비어 있으면 해석된 도시 라벨 채우고, 국가가 다르면 갱신
   useEffect(() => {
     if (!canEdit) return
     const patch: Partial<Lead> = {}
-    if (!lead.residenceCity && schoolPlace?.label) patch.residenceCity = schoolPlace.label
+    if (!lead.residenceCity && resolved?.city) patch.residenceCity = resolved.city
+    if (resolved?.country && resolved.country !== (lead.residenceCountry || '')) patch.residenceCountry = resolved.country
     if (Object.keys(patch).length) {
       if (patch.residenceCity) setCity(patch.residenceCity)
       updateLead.mutate({ id: lead.id, data: patch })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lead.id, schoolPlace])
-
-  // 거주국가 자동 기입/교정: 해석된 국가가 저장값과 다르면 갱신(잘못된 값 자가 치유)
-  useEffect(() => {
-    if (!canEdit) return
-    const c = resolved?.country
-    if (c && c !== (lead.residenceCountry || '')) {
-      updateLead.mutate({ id: lead.id, data: { residenceCountry: c } })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lead.id, resolved?.country])
+  }, [lead.id, resolved?.city, resolved?.country])
 
   // 위치를 전혀 못 잡았고 저장값도 없으면 숨김(국내 리드 등)
   if (!resolved && !lead.residenceCountry && !lead.residenceCity) return null
@@ -316,6 +322,7 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
             value={city}
             onChange={(e) => setCity(e.target.value)}
             onBlur={saveCity}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}
             placeholder={t('coldCall.residenceCityPlaceholder')}
             className="h-7 text-sm"
           />
