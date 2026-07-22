@@ -17,7 +17,7 @@ import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
-  Lock, Unlock, MessageSquare, Send,
+  Lock, Unlock, MessageSquare, Send, Flag,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -1216,7 +1216,7 @@ function IssueReportSection({ studentId, studentName, userId, userName, isAdmin,
       <CardHeader className="py-3 cursor-pointer select-none" onClick={() => setExpanded((v) => !v)}>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <AlertTriangle className="size-4 text-rose-500" />
+            <Flag className="size-4 text-rose-500" />
             Issue Report
             <span className="text-muted-foreground font-normal text-sm">({issues.length})</span>
             {hasPrivate && <Lock className="size-3.5 text-amber-500" />}
