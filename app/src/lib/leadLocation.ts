@@ -115,7 +115,7 @@ function addRegion(tz: Tz, country: string, names: string[]) {
   for (const n of names) REGIONS[norm(n)] = { tz, country, label: names[0] }
 }
 // 미국 주 (대표 시간대; 여러 시간대에 걸친 주는 주요 시간대 기준)
-addRegion(TZ.ET, US, ['Connecticut', 'CT', 'Delaware', 'DE', 'Florida', 'FL', 'Georgia', 'GA', 'Maine', 'ME', 'Maryland', 'MD', 'Massachusetts', 'MA', 'New Hampshire', 'NH', 'New Jersey', 'NJ', 'New York State', 'NY', 'North Carolina', 'NC', 'Ohio', 'OH', 'Pennsylvania', 'PA', 'Rhode Island', 'RI', 'South Carolina', 'SC', 'Vermont', 'VT', 'Virginia', 'VA', 'West Virginia', 'WV', 'Michigan', 'MI', 'Indiana', 'IN', 'Washington DC', 'District of Columbia'])
+addRegion(TZ.ET, US, ['Connecticut', 'CT', 'Delaware', 'DE', 'Florida', 'FL', 'Georgia', 'GA', 'Maine', 'ME', 'Maryland', 'MD', 'Massachusetts', 'MA', 'New Hampshire', 'NH', 'New Jersey', 'NJ', 'New York', 'New York State', 'NY', 'North Carolina', 'NC', 'Ohio', 'OH', 'Pennsylvania', 'PA', 'Rhode Island', 'RI', 'South Carolina', 'SC', 'Vermont', 'VT', 'Virginia', 'VA', 'West Virginia', 'WV', 'Michigan', 'MI', 'Indiana', 'IN', 'Washington DC', 'District of Columbia'])
 addRegion(TZ.CT, US, ['Alabama', 'AL', 'Arkansas', 'AR', 'Illinois', 'IL', 'Iowa', 'IA', 'Kansas', 'KS', 'Louisiana', 'LA State', 'Minnesota', 'MN', 'Mississippi', 'MS', 'Missouri', 'MO', 'Nebraska', 'NE', 'North Dakota', 'ND', 'Oklahoma', 'OK', 'South Dakota', 'SD', 'Tennessee', 'TN', 'Texas', 'TX', 'Wisconsin', 'WI'])
 addRegion(TZ.MT, US, ['Colorado', 'CO', 'Idaho', 'ID', 'Montana', 'MT', 'New Mexico', 'NM', 'Utah', 'UT', 'Wyoming', 'WY'])
 addRegion(TZ.AZ, US, ['Arizona', 'AZ'])
@@ -377,48 +377,62 @@ const CC_TZ: Record<string, Tz | null> = {
   TR: TZ.IST, QA: TZ.DOH, SA: TZ.RUH, IL: TZ.TLV, TW: 'Asia/Taipei', MO: TZ.HK,
 }
 
-// ── 온라인 지오코딩 (Photon/komoot, OSM 기반, 무료·키 불필요·브라우저 CORS 허용).
-//    학교명·도시·카운티 등 자유 텍스트를 해석하고, 반환된 주(state)를 REGIONS 사전으로
-//    시간대에 매핑한다. (Nominatim은 CORS 헤더가 없어 브라우저에서 차단됨 → 사용 불가) ──
+// ── 온라인 지오코딩 (둘 다 무료·키 불필요·브라우저 CORS 허용) ──
+//  1) Open-Meteo: 도시명 → IANA 시간대를 '직접' 반환(주 매핑 불필요) → 도시 입력에 가장 정확.
+//  2) Photon(OSM): 학교 전체명·POI도 해석하고 주(state)를 돌려줌 → Open-Meteo가 못 잡을 때 폴백.
+//  (Nominatim은 CORS 헤더가 없어 브라우저에서 차단됨 → 사용 불가)
 const geoCache = new Map<string, ResolvedLocation | null>()
 
-interface PhotonProps {
-  name?: string; city?: string; county?: string; district?: string
-  state?: string; country?: string; countrycode?: string
+interface OpenMeteoResult { name?: string; admin1?: string; timezone?: string; country?: string; country_code?: string }
+async function geoOpenMeteo(q: string): Promise<ResolvedLocation | null> {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&format=json`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('open-meteo http ' + res.status)
+  const r = ((await res.json()) as { results?: OpenMeteoResult[] })?.results?.[0]
+  if (!r || !r.timezone) return null
+  const cc = (r.country_code || '').toUpperCase()
+  return {
+    timezone: r.timezone,
+    country: COUNTRY_KO[cc] || r.country || '',
+    city: r.name || undefined,
+    source: 'geocode',
+  }
+}
+
+interface PhotonProps { name?: string; city?: string; county?: string; district?: string; state?: string; country?: string; countrycode?: string }
+async function geoPhoton(q: string): Promise<ResolvedLocation | null> {
+  const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1&lang=en`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('photon http ' + res.status)
+  const p = ((await res.json()) as { features?: { properties?: PhotonProps }[] })?.features?.[0]?.properties
+  if (!p) return null
+  const cc = (p.countrycode || '').toUpperCase()
+  const country = COUNTRY_KO[cc] || p.country || ''
+  const stateName = p.state || ''
+  let tz: Tz | null = REGIONS[norm(stateName)]?.tz || null
+  if (!tz) {
+    const byCountry = COUNTRIES[norm(p.country || '')]
+    tz = (byCountry && !byCountry.multiZone ? byCountry.tz : null) || (cc in CC_TZ ? CC_TZ[cc] : null)
+  }
+  const cityLabel = p.city || p.county || p.district || p.name || stateName || ''
+  return { timezone: tz, country, city: cityLabel || undefined, source: 'geocode' }
 }
 
 export async function geocodePlace(query: string | null | undefined): Promise<ResolvedLocation | null> {
   const q = (query || '').trim()
   if (!q || q.length < 2) return null
   if (geoCache.has(q)) return geoCache.get(q)!
-  try {
-    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1&lang=en`
-    const res = await fetch(url)
-    if (!res.ok) throw new Error('geocode http ' + res.status)
-    const data = (await res.json()) as { features?: { properties?: PhotonProps }[] }
-    const p = data?.features?.[0]?.properties
-    if (!p) {
-      geoCache.set(q, null)
-      return null
-    }
-    const cc = (p.countrycode || '').toUpperCase()
-    const country = COUNTRY_KO[cc] || p.country || ''
-    // 주/도(state) → 시간대 (미국 주·캐나다 주·호주 주 등은 REGIONS 사전에 있음)
-    const stateName = p.state || ''
-    let tz: Tz | null = REGIONS[norm(stateName)]?.tz || null
-    if (!tz) {
-      // 주 매칭 실패 → 국가 단위 폴백 (단일 시간대 국가만 확정)
-      const byCountry = COUNTRIES[norm(p.country || '')]
-      tz = (byCountry && !byCountry.multiZone ? byCountry.tz : null) || (cc in CC_TZ ? CC_TZ[cc] : null)
-    }
-    const cityLabel = p.city || p.county || p.district || p.name || stateName || ''
-    const out: ResolvedLocation = { timezone: tz, country, city: cityLabel || undefined, source: 'geocode' }
-    geoCache.set(q, out)
-    return out
-  } catch {
-    geoCache.set(q, null)
-    return null
+  let out: ResolvedLocation | null = null
+  // 1) Open-Meteo (IANA 시간대 직접) — 실패/무결과면 2) Photon 폴백
+  try { out = await geoOpenMeteo(q) } catch { /* try photon */ }
+  if (!out || !out.timezone) {
+    try {
+      const ph = await geoPhoton(q)
+      if (ph && (ph.timezone || !out)) out = ph
+    } catch { /* keep out */ }
   }
+  geoCache.set(q, out)
+  return out
 }
 
 /** 주어진 시간대의 현지 시각을 "화 09:32" 형태로 포맷. 실패 시 null. */
