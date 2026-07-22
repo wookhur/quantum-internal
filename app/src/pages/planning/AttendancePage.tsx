@@ -427,7 +427,77 @@ export function AttendancePage() {
     deleteMut.mutate(id)
   }
 
-  // ─── Export in Shiftee format ───
+  // ─── Readable report (default download) ───
+  const handleExportReadable = () => {
+    const targetAttendances = selectedProfile === 'all'
+      ? attendances
+      : attendances.filter(a => a.profileId === selectedProfile)
+
+    const sorted = [...targetAttendances].sort((a, b) => {
+      const nameA = profileName(a.profileId)
+      const nameB = profileName(b.profileId)
+      if (nameA !== nameB) return nameA.localeCompare(nameB)
+      return a.date.localeCompare(b.date)
+    })
+
+    const fmtMins = (mins: number | null) =>
+      mins === null ? '' : `${Math.floor(mins / 60)}h${mins % 60 > 0 ? ` ${mins % 60}m` : ''}`
+
+    // Sheet 1: 근태 기록 (one row per record)
+    const recHeader = ['이름', '날짜', '요일', '출근', '퇴근', '근무시간', '지각', '메모']
+    const recRows: (string | number)[][] = [recHeader]
+    for (const att of sorted) {
+      const mins = getWorkedMinutes(att.clockIn, att.clockOut)
+      const late = isLate(att.clockIn, att.date)
+      recRows.push([
+        profileName(att.profileId),
+        att.date,
+        t(getDayOfWeekKey(att.date)),
+        att.clockIn || '',
+        att.clockOut || '',
+        fmtMins(mins),
+        late ? '지각' : '',
+        att.note || '',
+      ])
+    }
+
+    // Sheet 2: 요약 (per-person totals)
+    const summaryMap = new Map<string, { days: number; mins: number; late: number }>()
+    for (const att of sorted) {
+      const name = profileName(att.profileId)
+      const cur = summaryMap.get(name) || { days: 0, mins: 0, late: 0 }
+      if (att.clockIn) cur.days += 1
+      const m = getWorkedMinutes(att.clockIn, att.clockOut)
+      if (m !== null) cur.mins += m
+      if (isLate(att.clockIn, att.date)) cur.late += 1
+      summaryMap.set(name, cur)
+    }
+    const sumHeader = ['이름', '근무일수', '총 근무시간', '지각 횟수']
+    const sumRows: (string | number)[][] = [sumHeader]
+    for (const [name, s] of Array.from(summaryMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+      sumRows.push([name, s.days, fmtMins(s.mins), s.late])
+    }
+
+    const wb = XLSX.utils.book_new()
+
+    const wsRec = XLSX.utils.aoa_to_sheet(recRows)
+    wsRec['!cols'] = [
+      { wch: 10 }, { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 8 }, { wch: 12 }, { wch: 6 }, { wch: 30 },
+    ]
+    wsRec['!freeze'] = { xSplit: 0, ySplit: 1 }
+    XLSX.utils.book_append_sheet(wb, wsRec, `${year}년 ${month}월`)
+
+    const wsSum = XLSX.utils.aoa_to_sheet(sumRows)
+    wsSum['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 }]
+    XLSX.utils.book_append_sheet(wb, wsSum, '요약')
+
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const who = selectedProfile === 'all' ? '' : `-${profileName(selectedProfile)}`
+    saveAs(blob, `근태기록-${currentMonth}${who}.xlsx`)
+  }
+
+  // ─── Export in Shiftee upload format (for re-import into Shiftee) ───
   const handleExport = () => {
     const wsData: (string | number | null)[][] = []
 
@@ -658,9 +728,13 @@ export function AttendancePage() {
             {t('attendance.add')}
           </Button>
         )}
-        <Button variant="outline" size="sm" className="h-8" onClick={handleExport}>
+        <Button variant="outline" size="sm" className="h-8" onClick={handleExportReadable}>
           <Download className="h-3.5 w-3.5 mr-1" />
           {t('attendance.export')}
+        </Button>
+        <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" onClick={handleExport}>
+          <Download className="h-3.5 w-3.5 mr-1" />
+          {t('attendance.exportShiftee')}
         </Button>
         {canEdit && (
           <>
