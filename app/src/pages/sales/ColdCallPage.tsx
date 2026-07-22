@@ -686,18 +686,16 @@ export function ColdCallView() {
       <div className="flex flex-col w-full md:w-[460px] md:min-w-[340px] border-b md:border-b-0 md:border-r bg-background max-h-[45vh] md:max-h-none">
         {/* Header */}
         <div className="p-4 border-b space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2.5 mb-1">
-                <h1 className="text-lg font-bold tracking-tight">{t('nav.coldCall')}</h1>
-              </div>
-              <p className="text-xs text-muted-foreground">
+          <div className="space-y-3">
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <h1 className="text-lg font-bold tracking-tight whitespace-nowrap">{t('nav.coldCall')}</h1>
+              <p className="text-xs text-muted-foreground whitespace-nowrap">
                 {isLoading ? t('common.loading') : t('coldCall.countSummary', { filtered: filteredCount, total: totalColdCallable })}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Select value={stageFilter} onValueChange={(v) => setStageFilter((v as 'coldcall' | PipelineStage) || 'coldcall')}>
-                <SelectTrigger className="w-[150px] h-8 text-xs">
+                <SelectTrigger className="flex-1 min-w-[104px] h-8 text-xs">
                   <Filter className="size-3 mr-1" />
                   <SelectValue />
                 </SelectTrigger>
@@ -709,7 +707,7 @@ export function ColdCallView() {
                 </SelectContent>
               </Select>
               <Select value={phoneFilter} onValueChange={(v) => setPhoneFilter((v as 'all' | 'domestic' | 'overseas') || 'all')}>
-                <SelectTrigger className="w-[130px] h-8 text-xs">
+                <SelectTrigger className="flex-1 min-w-[104px] h-8 text-xs">
                   <Phone className="size-3 mr-1" />
                   <SelectValue />
                 </SelectTrigger>
@@ -720,7 +718,7 @@ export function ColdCallView() {
                 </SelectContent>
               </Select>
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-                <SelectTrigger className="w-[130px] h-8 text-xs">
+                <SelectTrigger className="flex-1 min-w-[104px] h-8 text-xs">
                   <ArrowUpDown className="size-3 mr-1" />
                   <SelectValue />
                 </SelectTrigger>
