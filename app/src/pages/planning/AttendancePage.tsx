@@ -25,6 +25,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   ChevronLeft,
   ChevronRight,
@@ -44,7 +45,7 @@ import {
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
-import { useAttendances, useAttendancesRange, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances } from '@/hooks/useAttendances'
+import { useAttendances, useAttendancesRange, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances, useSetLateExempt } from '@/hooks/useAttendances'
 import { useKioskExcludedIds, useUpdateKioskExcludedIds } from '@/hooks/useKioskSettings'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
@@ -88,9 +89,9 @@ function isWeekend(dateStr: string): boolean {
   return d.getDay() === 0 || d.getDay() === 6
 }
 
-/** 10:00 이후 출근 = 지각 (주말 제외) */
-function isLate(clockIn: string | null, dateStr: string): boolean {
-  if (!clockIn || isWeekend(dateStr)) return false
+/** 10:00 이후 출근 = 지각 (주말·지각 면제 처리 제외) */
+function isLate(clockIn: string | null, dateStr: string, lateExempt = false): boolean {
+  if (lateExempt || !clockIn || isWeekend(dateStr)) return false
   return clockIn > '10:00'
 }
 
@@ -306,6 +307,7 @@ interface AttendanceForm {
   clockIn: string
   clockOut: string
   note: string
+  lateExempt: boolean
 }
 
 export function AttendancePage() {
@@ -326,6 +328,7 @@ export function AttendancePage() {
   )
   const upsertMut = useUpsertAttendance()
   const deleteMut = useDeleteAttendance()
+  const setLateExemptMut = useSetLateExempt()
   const bulkUpsertMut = useBulkUpsertAttendances()
   const { data: kioskExcludedIds = [] } = useKioskExcludedIds()
   const updateKioskExcluded = useUpdateKioskExcludedIds()
@@ -333,7 +336,7 @@ export function AttendancePage() {
   const [selectedProfile, setSelectedProfile] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [form, setForm] = useState<AttendanceForm>({ profileId: '', date: '', clockIn: '', clockOut: '', note: '' })
+  const [form, setForm] = useState<AttendanceForm>({ profileId: '', date: '', clockIn: '', clockOut: '', note: '', lateExempt: false })
   const [kioskSettingsOpen, setKioskSettingsOpen] = useState(false)
   const [kioskExcludedDraft, setKioskExcludedDraft] = useState<Set<string>>(new Set())
   const [dayDetail, setDayDetail] = useState<{ date: string; mode: 'work' | 'late' } | null>(null)
@@ -375,7 +378,7 @@ export function AttendancePage() {
     const target = selectedProfile === 'all' ? attendances : filteredAttendances
     const totalDays = target.length
     const clockedIn = target.filter(a => a.clockIn).length
-    const lateCount = target.filter(a => isLate(a.clockIn, a.date)).length
+    const lateCount = target.filter(a => isLate(a.clockIn, a.date, a.lateExempt)).length
     return { totalDays, clockedIn, lateCount }
   }, [attendances, filteredAttendances, selectedProfile])
 
@@ -389,6 +392,7 @@ export function AttendancePage() {
       clockIn: '10:00',
       clockOut: '19:00',
       note: '',
+      lateExempt: false,
     })
     setDialogOpen(true)
   }
@@ -404,6 +408,7 @@ export function AttendancePage() {
       clockIn: att.clockIn || '',
       clockOut: att.clockOut || '',
       note: att.note || '',
+      lateExempt: att.lateExempt,
     })
     setDialogOpen(true)
   }
@@ -411,13 +416,23 @@ export function AttendancePage() {
   const handleSave = () => {
     if (!canEdit) return
     if (!form.profileId || !form.date) return
-    upsertMut.mutate({
-      profileId: form.profileId,
-      date: form.date,
-      clockIn: form.clockIn || null,
-      clockOut: form.clockOut || null,
-      note: form.note || null,
-    })
+    upsertMut.mutate(
+      {
+        profileId: form.profileId,
+        date: form.date,
+        clockIn: form.clockIn || null,
+        clockOut: form.clockOut || null,
+        note: form.note || null,
+      },
+      {
+        // 지각 면제 플래그는 별도 컬럼이라 upsert 후 대상 레코드에 반영한다.
+        onSuccess: (saved) => {
+          if (saved && saved.lateExempt !== form.lateExempt) {
+            setLateExemptMut.mutate({ id: saved.id, lateExempt: form.lateExempt })
+          }
+        },
+      },
+    )
     setDialogOpen(false)
   }
 
@@ -448,7 +463,7 @@ export function AttendancePage() {
     const recRows: (string | number)[][] = [recHeader]
     for (const att of sorted) {
       const mins = getWorkedMinutes(att.clockIn, att.clockOut)
-      const late = isLate(att.clockIn, att.date)
+      const late = isLate(att.clockIn, att.date, att.lateExempt)
       recRows.push([
         profileName(att.profileId),
         att.date,
@@ -469,7 +484,7 @@ export function AttendancePage() {
       if (att.clockIn) cur.days += 1
       const m = getWorkedMinutes(att.clockIn, att.clockOut)
       if (m !== null) cur.mins += m
-      if (isLate(att.clockIn, att.date)) cur.late += 1
+      if (isLate(att.clockIn, att.date, att.lateExempt)) cur.late += 1
       summaryMap.set(name, cur)
     }
     const sumHeader = ['이름', '근무일수', '총 근무시간', '지각 횟수']
@@ -917,7 +932,7 @@ export function AttendancePage() {
                 {days.map(day => {
                   const recs = attendancesByDate.get(day) || []
                   const present = recs.filter(r => r.clockIn).length
-                  const late = recs.filter(r => isLate(r.clockIn, r.date)).length
+                  const late = recs.filter(r => isLate(r.clockIn, r.date, r.lateExempt)).length
                   const dnum = parseInt(day.split('-')[2])
                   const weekend = isWeekend(day)
                   const today = day === todayStr
@@ -992,7 +1007,7 @@ export function AttendancePage() {
                     workHrs = `${hrs}h${rm > 0 ? ` ${rm}m` : ''}`
                   }
                   const weekend = isWeekend(att.date)
-                  const late = isLate(att.clockIn, att.date)
+                  const late = isLate(att.clockIn, att.date, att.lateExempt)
                   return (
                     <TableRow key={att.id} className={`${weekend ? 'bg-red-50/30' : ''} ${late ? 'bg-red-50/40' : ''}`}>
                       <TableCell className="font-medium">{profileName(att.profileId)}</TableCell>
@@ -1054,7 +1069,7 @@ export function AttendancePage() {
           {(() => {
             const all = dayDetail ? attendancesByDate.get(dayDetail.date) || [] : []
             const recs = all
-              .filter(r => dayDetail?.mode === 'late' ? isLate(r.clockIn, r.date) : (r.clockIn || r.clockOut))
+              .filter(r => dayDetail?.mode === 'late' ? isLate(r.clockIn, r.date, r.lateExempt) : (r.clockIn || r.clockOut))
               .sort((a, b) => (a.clockIn || '').localeCompare(b.clockIn || ''))
             if (recs.length === 0) {
               return <p className="text-sm text-muted-foreground py-6 text-center">
@@ -1064,7 +1079,7 @@ export function AttendancePage() {
             return (
               <div className="divide-y max-h-[60vh] overflow-y-auto">
                 {recs.map(r => {
-                  const late = isLate(r.clockIn, r.date)
+                  const late = isLate(r.clockIn, r.date, r.lateExempt)
                   return (
                     <div
                       key={r.id}
@@ -1097,7 +1112,7 @@ export function AttendancePage() {
           </DialogHeader>
           {(() => {
             const target = selectedProfile === 'all' ? attendances : filteredAttendances
-            const lateRecs = target.filter(a => isLate(a.clockIn, a.date))
+            const lateRecs = target.filter(a => isLate(a.clockIn, a.date, a.lateExempt))
             if (lateRecs.length === 0) {
               return <p className="text-sm text-muted-foreground py-6 text-center">지각 내역이 없습니다.</p>
             }
@@ -1181,6 +1196,19 @@ export function AttendancePage() {
                 <Input type="time" value={form.clockOut} onChange={e => setForm(f => ({ ...f, clockOut: e.target.value }))} />
               </div>
             </div>
+            {/* 지각 면제: 10시 이후 출근이지만 공휴일 오후 근무 등 지각 처리를 해제할 때 */}
+            {(form.lateExempt || isLate(form.clockIn || null, form.date)) && (
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div className="space-y-0.5">
+                  <Label className="text-xs">{t('attendance.lateExempt')}</Label>
+                  <p className="text-[11px] text-muted-foreground">{t('attendance.lateExemptDesc')}</p>
+                </div>
+                <Switch
+                  checked={form.lateExempt}
+                  onCheckedChange={v => setForm(f => ({ ...f, lateExempt: v }))}
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">{t('attendance.note')}</Label>
               <Input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder={t('attendance.notePlaceholder')} />

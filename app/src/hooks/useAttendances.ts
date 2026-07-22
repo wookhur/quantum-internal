@@ -11,6 +11,7 @@ export interface Attendance {
   scheduleStart: string | null
   scheduleEnd: string | null
   note: string | null
+  lateExempt: boolean       // 지각 처리 수동 해제 (근무시간은 유지)
   createdAt: string
   updatedAt: string
 }
@@ -25,6 +26,7 @@ function mapAttendance(row: Record<string, unknown>): Attendance {
     scheduleStart: row.schedule_start as string | null,
     scheduleEnd: row.schedule_end as string | null,
     note: row.note as string | null,
+    lateExempt: !!row.late_exempt,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -140,6 +142,21 @@ export function useBulkUpsertAttendances() {
       const { error } = await supabase
         .from('attendances')
         .upsert(rows, { onConflict: 'profile_id,date' })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['attendances'] }),
+  })
+}
+
+/** Toggle the manual 지각 면제(late-exempt) flag on one record (keeps clock times). */
+export function useSetLateExempt() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: { id: string; lateExempt: boolean }) => {
+      const { error } = await supabase
+        .from('attendances')
+        .update({ late_exempt: params.lateExempt, updated_at: new Date().toISOString() })
+        .eq('id', params.id)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['attendances'] }),
