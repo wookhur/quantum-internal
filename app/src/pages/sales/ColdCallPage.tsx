@@ -1,5 +1,6 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useT } from '@/i18n/LanguageContext'
+import { parsePhoneCountry, resolveTimezone, formatLocalTime } from '@/lib/phoneGeo'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -21,6 +22,7 @@ import {
   School,
   GraduationCap,
   MapPin,
+  Globe,
   Calendar,
   MessageSquare,
   MessageCircle,
@@ -218,6 +220,100 @@ function coldStageLabel(
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
   return t(COLD_CALL_STAGE_LABEL_KEY[stage] || 'stage.' + stage)
+}
+
+/**
+ * 거주국가·거주도시·현지 시각 블록 (콜드콜 연락처 카드 하단).
+ * - 해외 전화번호면 국가를 자동 인식해 거주국가를 자동 기입(비어 있을 때 1회 저장)
+ * - 거주도시를 입력하면 시차를 계산해 현지 시각을 옆에 자동 표시
+ */
+function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) {
+  const t = useT()
+  const updateLead = useUpdateLead()
+  const detected = useMemo(() => parsePhoneCountry(lead.phone), [lead.phone])
+  const overseas = !!detected && detected.iso !== 'KR'
+
+  const [country, setCountry] = useState(lead.residenceCountry || '')
+  const [city, setCity] = useState(lead.residenceCity || '')
+
+  // 리드 전환 시 입력값 동기화
+  useEffect(() => {
+    setCountry(lead.residenceCountry || '')
+    setCity(lead.residenceCity || '')
+  }, [lead.id, lead.residenceCountry, lead.residenceCity])
+
+  // 해외번호인데 거주국가가 비어 있으면 자동 인식값으로 1회 채우고 저장
+  useEffect(() => {
+    if (!canEdit || !overseas || !detected) return
+    if (!lead.residenceCountry) {
+      setCountry(detected.nameKo)
+      updateLead.mutate({ id: lead.id, data: { residenceCountry: detected.nameKo } })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id, overseas])
+
+  // 현지 시각 라이브 갱신(1분 간격)
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const iv = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(iv)
+  }, [])
+
+  const timezone = useMemo(() => resolveTimezone(city, detected), [city, detected])
+  const localTime = useMemo(() => (timezone ? formatLocalTime(now, timezone) : null), [timezone, now])
+
+  // 해외 리드가 아니고 저장된 값도 없으면 블록을 숨긴다(국내 리드에는 불필요)
+  if (!overseas && !lead.residenceCountry && !lead.residenceCity) return null
+
+  const saveCountry = () => {
+    if (canEdit && country.trim() !== (lead.residenceCountry || '')) {
+      updateLead.mutate({ id: lead.id, data: { residenceCountry: country.trim() } })
+    }
+  }
+  const saveCity = () => {
+    if (canEdit && city.trim() !== (lead.residenceCity || '')) {
+      updateLead.mutate({ id: lead.id, data: { residenceCity: city.trim() } })
+    }
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-2 text-sm">
+        <Globe className="size-4 text-muted-foreground shrink-0" />
+        {canEdit ? (
+          <Input
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            onBlur={saveCountry}
+            placeholder={t('coldCall.residenceCountry')}
+            className="h-7 text-sm"
+          />
+        ) : (
+          <span>{country || '-'}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-2 text-sm">
+        <MapPin className="size-4 text-muted-foreground shrink-0" />
+        {canEdit ? (
+          <Input
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            onBlur={saveCity}
+            placeholder={t('coldCall.residenceCity')}
+            className="h-7 text-sm"
+          />
+        ) : (
+          <span>{city || '-'}</span>
+        )}
+        {localTime && (
+          <span className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
+            <Clock className="size-3" />
+            {localTime}
+          </span>
+        )}
+      </div>
+    </>
+  )
 }
 
 /** Activity types that are contact logs (vs. stage/status changes). */
@@ -1399,6 +1495,7 @@ function ColdCallDetail({
                   <span>{lead.region}</span>
                 </div>
               )}
+              <LeadResidenceInfo lead={lead} canEdit={canEdit} />
             </div>
           </CardContent>
         </Card>

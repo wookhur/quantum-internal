@@ -62,6 +62,8 @@ function mapLead(row: Record<string, unknown>): Lead {
     currentSchool: (row.current_school as string) || '',
     grade: (row.grade as string) || '',
     region: (row.region as string) || '',
+    residenceCountry: (row.residence_country as string) || undefined,
+    residenceCity: (row.residence_city as string) || undefined,
     interestArea: (row.interest_area as string) || '',
     sourceChannel: row.source_channel as string,
     memo: (row.memo as string) || '',
@@ -119,6 +121,8 @@ function leadToRow(lead: Partial<Lead>): Record<string, unknown> {
   if (lead.currentSchool !== undefined) row.current_school = lead.currentSchool
   if (lead.grade !== undefined) row.grade = lead.grade
   if (lead.region !== undefined) row.region = lead.region
+  if (lead.residenceCountry !== undefined) row.residence_country = lead.residenceCountry || null
+  if (lead.residenceCity !== undefined) row.residence_city = lead.residenceCity || null
   if (lead.interestArea !== undefined) row.interest_area = lead.interestArea
   if (lead.sourceChannel !== undefined) row.source_channel = lead.sourceChannel
   if (lead.memo !== undefined) row.memo = lead.memo

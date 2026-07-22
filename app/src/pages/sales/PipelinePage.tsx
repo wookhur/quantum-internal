@@ -36,7 +36,8 @@ import { Button } from '@/components/ui/button'
 // ---------------------------------------------------------------------------
 
 const ACTIVE_STAGES = PIPELINE_STAGES.filter(
-  (s) => s.group === 'active' || s.group === 'won',
+  // 부재중(no_response)은 콜드콜에서만 관리 — 파이프라인 보드에는 컬럼으로 노출하지 않음
+  (s) => (s.group === 'active' || s.group === 'won') && s.key !== 'no_response',
 )
 const INACTIVE_STAGES = PIPELINE_STAGES.filter((s) => s.group === 'inactive')
 

@@ -78,6 +78,10 @@ export interface Lead {
   currentSchool: string
   grade: string
   region: string
+  /** 거주국가 (해외 리드는 전화번호 국가코드에서 자동 인식) */
+  residenceCountry?: string
+  /** 거주도시 (수동 입력, 현지 시각 계산에 사용) */
+  residenceCity?: string
   interestArea: string
   sourceChannel: string
   memo: string
