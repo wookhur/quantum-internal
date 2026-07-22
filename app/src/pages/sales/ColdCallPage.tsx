@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useT } from '@/i18n/LanguageContext'
 import { resolveInstant, resolveBySchool, geocodePlace, formatLocalTime } from '@/lib/leadLocation'
 import { useQuery } from '@tanstack/react-query'
@@ -243,16 +243,18 @@ const ONE_ON_ONE_PILL = 'bg-violet-100 text-violet-700 border border-violet-300'
 
 /**
  * 거주국가·거주도시·현지 시각 블록 (콜드콜 연락처 카드 하단).
- * 원스톱 자동: 저장된 거주도시 또는 학생정보의 학교명에서 장소를 뽑아 온라인 지오코딩
- * (Open-Meteo, 무료)으로 IANA 시간대를 직접 받아 국가·도시·현지 시각을 자동 계산.
- * 오프라인 사전(도시/미국주/학교/거주지역/전화)은 지오코딩 전/실패 시 즉시 폴백.
+ * 원스톱 자동: 저장된 거주도시 또는 학교명을 온라인 지오코딩(Photon/OSM)해 국가·도시·현지
+ * 시각을 계산해 표시. 국가/현지시각은 저장하지 않고 매번 계산. 거주도시는 사용자가 직접
+ * 입력·수정했을 때만 저장(수동 override). 오프라인 사전은 지오코딩 전/실패 시 즉시 폴백.
  */
 function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) {
   const t = useT()
   const updateLead = useUpdateLead()
 
+  // 입력 상태는 리드가 바뀔 때만 초기화(원격 갱신이 타이핑 중 값을 덮어쓰지 않도록).
   const [city, setCity] = useState(lead.residenceCity || '')
-  useEffect(() => { setCity(lead.residenceCity || '') }, [lead.id, lead.residenceCity])
+  const touchedRef = useRef(false)
+  useEffect(() => { setCity(lead.residenceCity || ''); touchedRef.current = false }, [lead.id])
 
   // 현지 시각 라이브 갱신(1분 간격)
   const [now, setNow] = useState(() => new Date())
@@ -270,7 +272,7 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
   )
 
   // 온라인 지오코딩 대상: 저장된 거주도시 우선, 없고 curated 학교 매칭도 없으면 학교명 그대로
-  // (Nominatim은 학교 전체명도 해석해 주(state)를 돌려줌)
+  const geoFromCity = !!committedCity
   const geoQuery = committedCity || (curatedSchool ? '' : (lead.currentSchool || '').trim())
   const { data: geo } = useQuery({
     queryKey: ['geocode', geoQuery],
@@ -281,32 +283,32 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
     retry: 1,
   })
 
-  // 지오코딩이 되면 우선, 아니면 오프라인 폴백
-  const resolved = geo || instant
+  // 학교명 자동 지오코딩이 전화/거주지역 국가와 충돌하면 오매칭으로 보고 신뢰하지 않음.
+  // (예: 미국(+1) 리드인데 학교명이 헝가리의 어떤 장소로 잘못 매칭되는 경우 → 사용자가 도시 직접 입력)
+  const geoConflicts =
+    !!geo && !geoFromCity && !!instant?.country && !!geo.country && geo.country !== instant.country
+  const resolved = geoConflicts ? instant : geo || instant
+
+  // 국가·현지시각은 매번 계산해 표시(저장하지 않음 → 리졸버가 좋아지면 자동으로 개선됨)
   const country = resolved?.country || lead.residenceCountry || ''
   const timezone = resolved?.timezone || null
   const localTime = useMemo(() => (timezone ? formatLocalTime(now, timezone) : null), [timezone, now])
 
-  // 원스톱 자동 채움/교정: 도시가 비어 있으면 해석된 도시 라벨 채우고, 국가가 다르면 갱신
+  // 자동 추론된 도시를 입력창에 표시만 함(저장하지 않음). 저장된 값 없고 사용자가 손대지 않았을 때.
   useEffect(() => {
-    if (!canEdit) return
-    const patch: Partial<Lead> = {}
-    if (!lead.residenceCity && resolved?.city) patch.residenceCity = resolved.city
-    if (resolved?.country && resolved.country !== (lead.residenceCountry || '')) patch.residenceCountry = resolved.country
-    if (Object.keys(patch).length) {
-      if (patch.residenceCity) setCity(patch.residenceCity)
-      updateLead.mutate({ id: lead.id, data: patch })
-    }
+    if (touchedRef.current) return
+    if (!lead.residenceCity && resolved?.city && city !== resolved.city) setCity(resolved.city)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lead.id, resolved?.city, resolved?.country])
+  }, [resolved?.city, lead.id])
 
   // 위치를 전혀 못 잡았고 저장값도 없으면 숨김(국내 리드 등)
-  if (!resolved && !lead.residenceCountry && !lead.residenceCity) return null
+  if (!resolved && !lead.residenceCity) return null
 
+  // 사용자가 직접 입력·수정했을 때만 거주도시를 저장(자동 추론값은 저장 안 함).
   const saveCity = () => {
-    if (canEdit && city.trim() !== (lead.residenceCity || '')) {
-      updateLead.mutate({ id: lead.id, data: { residenceCity: city.trim() } })
-    }
+    if (!canEdit || !touchedRef.current) return
+    const v = city.trim()
+    if (v !== (lead.residenceCity || '')) updateLead.mutate({ id: lead.id, data: { residenceCity: v } })
   }
 
   return (
@@ -320,7 +322,7 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
         {canEdit ? (
           <Input
             value={city}
-            onChange={(e) => setCity(e.target.value)}
+            onChange={(e) => { touchedRef.current = true; setCity(e.target.value) }}
             onBlur={saveCity}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLInputElement).blur() } }}
             placeholder={t('coldCall.residenceCityPlaceholder')}

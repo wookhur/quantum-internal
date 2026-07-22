@@ -298,7 +298,7 @@ const DIAL: { code: string; country: string; tz: Tz | null; multiZone?: boolean 
   { code: '1', country: US, tz: null, multiZone: true },
 ]
 
-/** 전화번호 → 국가. 국제표시(+/00)가 없으면 판단하지 않음(오탐 방지). */
+/** 전화번호 → 국가. 국제표시(+/00)가 있거나, 미국/캐나다 국가코드 형식(1+10자리)일 때만 판단. */
 export function resolveByPhone(phone: string | null | undefined): Place | null {
   const raw = (phone || '').trim()
   if (!raw) return null
@@ -306,7 +306,11 @@ export function resolveByPhone(phone: string | null | undefined): Place | null {
   let d = raw.replace(/[^\d]/g, '')
   const hasIntl = hasPlus || d.startsWith('00')
   if (d.startsWith('00')) d = d.slice(2)
-  // 명시적 국제표시가 없으면 국가 판단 불가 (국내/지역번호 오탐 방지)
+  // 명시적 국제표시가 없어도, 1로 시작하는 11자리는 미국/캐나다 국가코드 형식 (지역번호 오탐 없음)
+  if (!hasIntl && d.length === 11 && d.startsWith('1')) {
+    return { tz: null, country: US, multiZone: true }
+  }
+  // 그 외 국제표시가 없으면 국가 판단 불가 (국내/지역번호 오탐 방지)
   if (!hasIntl) return null
   for (const c of DIAL) {
     if (d.startsWith(c.code)) {
