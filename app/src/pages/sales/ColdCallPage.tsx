@@ -36,9 +36,7 @@ import {
   Video,
   Save,
   XCircle,
-  UserX,
   UserCheck,
-  Pause,
   CalendarCheck,
   Trash2,
   Users2,
@@ -64,7 +62,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
-import { getStageConfig, GRADES, PIPELINE_STAGES } from '@/types'
+import { getStageConfig, GRADES } from '@/types'
 import { Link, useLocation } from 'react-router-dom'
 
 // ============ Priority scoring ============
@@ -188,13 +186,39 @@ function getSchoolTierScore(school: string): number {
   return 0
 }
 
-/** Stages eligible for cold calling (보류 포함 — 콜드콜에서 계속 관리) */
+/** Stages eligible for cold calling (콜백요청(on_hold)·부재중 포함 — 콜드콜에서 계속 관리) */
 const COLD_CALL_STAGES: PipelineStage[] = [
   'new_lead',
   'contact_attempted',
   'no_response',
   'on_hold',
 ]
+
+/**
+ * 콜드콜 드롭다운 필터 순서. 콜백요청/상담완료는 콜드콜 전용 라벨을 쓰지만
+ * 파이프라인 단계 자체는 기존 것을 그대로 재사용한다(on_hold=콜백요청, first_consultation=상담완료).
+ */
+const COLD_CALL_FILTER_STAGES: PipelineStage[] = [
+  'new_lead',
+  'contact_attempted',
+  'no_response',
+  'on_hold',
+  'consultation_scheduled',
+  'first_consultation',
+]
+
+/** 콜드콜 화면 전용 단계 라벨 오버라이드 (전역 파이프라인 라벨은 건드리지 않음). */
+const COLD_CALL_STAGE_LABEL_KEY: Partial<Record<PipelineStage, string>> = {
+  on_hold: 'coldCall.callbackRequested',
+  first_consultation: 'coldCall.firstConsultation',
+}
+
+function coldStageLabel(
+  stage: PipelineStage,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  return t(COLD_CALL_STAGE_LABEL_KEY[stage] || 'stage.' + stage)
+}
 
 /** Activity types that are contact logs (vs. stage/status changes). */
 const CONTACT_TYPES = ['call', 'sms', 'katalk', 'email']
@@ -544,8 +568,8 @@ export function ColdCallView() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="coldcall">{t('coldCall.stageFilterColdCall')}</SelectItem>
-                  {PIPELINE_STAGES.map((s) => (
-                    <SelectItem key={s.key} value={s.key}>{t('stage.' + s.key)}</SelectItem>
+                  {COLD_CALL_FILTER_STAGES.map((s) => (
+                    <SelectItem key={s} value={s}>{coldStageLabel(s, t)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -762,7 +786,7 @@ export function ColdCallView() {
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                         getStageConfig(lead.pipelineStage).color.replace('stage-', 'status-pill--')
                       }`}>
-                        {getStageConfig(lead.pipelineStage).label}
+                        {coldStageLabel(lead.pipelineStage, t)}
                       </span>
                       <p className="text-[10px] text-muted-foreground mt-1">
                         {lead.leadDate}
@@ -1050,9 +1074,14 @@ function ColdCallDetail({
           // - 그 외 결과(통화 성공 등) → 신규 리드면 '컨택 완료'로 이동
           const noResponse = callResult === 'no_answer' || callResult === 'no_reply'
           if (noResponse) {
-            // 보류는 수동으로 지정한 상태이므로 부재중이어도 유지
+            // 콜백요청(on_hold)은 부재중이어도 유지 (수동/콜백 상태 우선)
             if (lead.pipelineStage === 'new_lead' || lead.pipelineStage === 'contact_attempted') {
               updateData.pipelineStage = 'no_response'
+            }
+          } else if (callResult === 'callback') {
+            // 콜백요청 결과 → on_hold(콜드콜 드롭다운의 '콜백요청')로 표시. 상담 진행 리드는 되돌리지 않음.
+            if (COLD_CALL_STAGES.includes(lead.pipelineStage)) {
+              updateData.pipelineStage = 'on_hold'
             }
           } else if (lead.pipelineStage === 'new_lead') {
             updateData.pipelineStage = 'contact_attempted'
@@ -1230,7 +1259,7 @@ function ColdCallDetail({
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h2 className="text-xl font-bold">{lead.studentName || lead.parentName}</h2>
             <span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>
-              {stage.label}
+              {coldStageLabel(lead.pipelineStage, t)}
             </span>
             {(() => {
               const lvl = leadLevelConfig(lead.leadLevel)
@@ -1698,6 +1727,7 @@ function ColdCallDetail({
               </div>
             ) : (
               <div className="flex gap-2">
+                {/* 거절만 파이프라인 '거절'로 제외. 부재중/콜백요청은 콜드콜에 남겨 드롭다운으로 관리. */}
                 <Button
                   size="sm"
                   variant="outline"
@@ -1706,24 +1736,6 @@ function ColdCallDetail({
                 >
                   <XCircle className="size-3.5" />
                   {t('stage.rejected')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs gap-1.5 flex-1 border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-700"
-                  onClick={() => setExcludeConfirm('lost')}
-                >
-                  <UserX className="size-3.5" />
-                  {t('stage.lost')}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs gap-1.5 flex-1 border-amber-200 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
-                  onClick={() => setExcludeConfirm('on_hold')}
-                >
-                  <Pause className="size-3.5" />
-                  {t('stage.on_hold')}
                 </Button>
               </div>
             )}
