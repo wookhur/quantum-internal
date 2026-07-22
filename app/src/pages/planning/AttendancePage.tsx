@@ -805,7 +805,7 @@ export function AttendancePage() {
         >
           <CardContent className="py-2.5 flex items-center justify-between">
             <span className="text-sm text-muted-foreground flex items-center gap-1">
-              <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+              <span className={`inline-block h-2 w-2 rounded-full ${summaryStats.lateCount > 0 ? 'bg-red-500' : 'bg-muted-foreground/30'}`} />
               {t('attendance.lateCount')}
               {summaryStats.lateCount > 0 && <span className="text-[10px] text-muted-foreground/70">(클릭)</span>}
             </span>
@@ -1024,7 +1024,6 @@ export function AttendancePage() {
                             className={`font-mono text-xs ${late ? 'bg-red-100 text-red-700 border-red-300' : ''}`}
                           >
                             {att.clockIn}
-                            {late && <AlertTriangle className="h-3 w-3 ml-1 inline" />}
                           </Badge>
                         ) : '-'}
                       </TableCell>
