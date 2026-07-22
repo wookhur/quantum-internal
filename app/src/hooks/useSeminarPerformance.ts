@@ -297,6 +297,8 @@ export interface ContactActivitySlim {
   leadId: string
   activityType: string
   callResult: string | null
+  /** 1:1 상담유도 성공 표시 (metadata.oneOnOneConsult) */
+  oneOnOneConsult: boolean
   createdAt: string
 }
 
@@ -326,6 +328,8 @@ export function useAllContactActivities() {
             activityType: r.activity_type as string,
             callResult:
               ((r.metadata as Record<string, unknown> | null)?.callResult as string | undefined) ?? null,
+            oneOnOneConsult:
+              ((r.metadata as Record<string, unknown> | null)?.oneOnOneConsult as boolean | undefined) === true,
             createdAt: r.created_at as string,
           })),
         )

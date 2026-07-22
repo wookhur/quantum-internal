@@ -223,6 +223,24 @@ function coldStageLabel(
 }
 
 /**
+ * 콜드콜 단계 뱃지(라벨 + 색). 상담예약 단계이면서 1:1 상담유도 성공 이력이 있으면
+ * '상담 예약' 대신 '1:1 상담' 뱃지(보라색)를 보여준다. (필터는 여전히 상담예약으로 잡힘)
+ */
+function coldStageBadge(
+  stage: PipelineStage,
+  isOneOnOne: boolean,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): { label: string; oneOnOne: boolean } {
+  if (isOneOnOne && stage === 'consultation_scheduled') {
+    return { label: t('coldCall.oneOnOneBadge'), oneOnOne: true }
+  }
+  return { label: coldStageLabel(stage, t), oneOnOne: false }
+}
+
+/** 1:1 상담 뱃지 전용 색상 클래스 (보라색, 토글 색과 통일) */
+const ONE_ON_ONE_PILL = 'bg-violet-100 text-violet-700 border border-violet-300'
+
+/**
  * 거주국가·거주도시·현지 시각 블록 (콜드콜 연락처 카드 하단).
  * 원스톱 자동: 학생정보의 학교명을 자동 인식해 거주도시·거주국가를 채우고 시차까지 계산.
  * 우선순위: 수동 입력 거주도시 > 학교명 > 전화번호(국제표시 +/00 있을 때만).
@@ -475,6 +493,11 @@ export function ColdCallView() {
     return out
   }, [attendanceRows, seminarTitleById])
   const { data: contactActivities = [] } = useAllContactActivities()
+  // 1:1 상담유도 성공 이력이 있는 리드 집합 (상담예약 단계에서 '1:1 상담' 뱃지 표시용)
+  const oneOnOneLeadIds = useMemo(
+    () => new Set(contactActivities.filter((a) => a.oneOnOneConsult).map((a) => a.leadId)),
+    [contactActivities],
+  )
 
   // Build event filter options: seminars from 세미나 관리 + legacy source channels
   const eventFilterOptions = useMemo(() => {
@@ -878,11 +901,16 @@ export function ColdCallView() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                        getStageConfig(lead.pipelineStage).color.replace('stage-', 'status-pill--')
-                      }`}>
-                        {coldStageLabel(lead.pipelineStage, t)}
-                      </span>
+                      {(() => {
+                        const b = coldStageBadge(lead.pipelineStage, oneOnOneLeadIds.has(lead.id), t)
+                        return (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            b.oneOnOne ? ONE_ON_ONE_PILL : getStageConfig(lead.pipelineStage).color.replace('stage-', 'status-pill--')
+                          }`}>
+                            {b.label}
+                          </span>
+                        )
+                      })()}
                       <p className="text-[10px] text-muted-foreground mt-1">
                         {lead.leadDate}
                       </p>
@@ -1114,6 +1142,12 @@ function ColdCallDetail({
   const methodConfig = CONTACT_METHODS[contactMethod]
 
   const stage = getStageConfig(lead.pipelineStage)
+  // 이 리드에 1:1 상담유도 성공 이력이 있는지 (상담예약 단계에서 '1:1 상담' 뱃지 표시용)
+  const hasOneOnOne = useMemo(
+    () => activities.some((a: LeadActivity) => a.metadata?.oneOnOneConsult === true),
+    [activities],
+  )
+  const headerBadge = coldStageBadge(lead.pipelineStage, hasOneOnOne, t)
 
   // Split the activity feed: contact logs (calls / messages) show inside the
   // contact-log card; everything else (pipeline stage / status changes) shows
@@ -1170,11 +1204,16 @@ function ColdCallDetail({
           // - 콜백요청 → on_hold
           const noResponse = callResult === 'no_answer' || callResult === 'no_reply'
           const positiveContact =
-            oneOnOneSuccess ||
             callResult === 'connected' ||
             callResult === 'replied' ||
             callResult === 'read'
-          if (positiveContact) {
+          if (oneOnOneSuccess) {
+            // 1:1 상담유도 성공 → 상담예약 단계로 (상담예약 필터에 잡히고 '1:1 상담' 뱃지 표시).
+            // 이미 상담예약 이후로 진행된 리드는 되돌리지 않음.
+            if (COLD_CALL_STAGES.includes(lead.pipelineStage)) {
+              updateData.pipelineStage = 'consultation_scheduled'
+            }
+          } else if (positiveContact) {
             if (
               COLD_CALL_STAGES.includes(lead.pipelineStage) &&
               lead.pipelineStage !== 'contact_attempted'
@@ -1366,8 +1405,14 @@ function ColdCallDetail({
         <div>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h2 className="text-xl font-bold">{lead.studentName || lead.parentName}</h2>
-            <span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>
-              {coldStageLabel(lead.pipelineStage, t)}
+            <span
+              className={
+                headerBadge.oneOnOne
+                  ? `text-xs px-2 py-0.5 rounded-full font-medium ${ONE_ON_ONE_PILL}`
+                  : `status-pill status-pill--${stage.color.replace('stage-', '')}`
+              }
+            >
+              {headerBadge.label}
             </span>
             {(() => {
               const lvl = leadLevelConfig(lead.leadLevel)
