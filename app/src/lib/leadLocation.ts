@@ -357,15 +357,14 @@ const CC_TZ: Record<string, Tz | null> = {
   TR: TZ.IST, QA: TZ.DOH, SA: TZ.RUH, IL: TZ.TLV, TW: 'Asia/Taipei', MO: TZ.HK,
 }
 
-// ── 온라인 지오코딩 (Nominatim/OpenStreetMap, 무료·키 불필요·CORS 허용).
+// ── 온라인 지오코딩 (Photon/komoot, OSM 기반, 무료·키 불필요·브라우저 CORS 허용).
 //    학교명·도시·카운티 등 자유 텍스트를 해석하고, 반환된 주(state)를 REGIONS 사전으로
-//    시간대에 매핑한다. (Open-Meteo는 카운티/모호한 지명에서 오탐이 많아 사용하지 않음) ──
+//    시간대에 매핑한다. (Nominatim은 CORS 헤더가 없어 브라우저에서 차단됨 → 사용 불가) ──
 const geoCache = new Map<string, ResolvedLocation | null>()
 
-interface NominatimAddr {
-  city?: string; town?: string; village?: string; hamlet?: string; municipality?: string
-  county?: string; state?: string; region?: string; province?: string
-  country?: string; country_code?: string
+interface PhotonProps {
+  name?: string; city?: string; county?: string; district?: string
+  state?: string; country?: string; countrycode?: string
 }
 
 export async function geocodePlace(query: string | null | undefined): Promise<ResolvedLocation | null> {
@@ -373,27 +372,26 @@ export async function geocodePlace(query: string | null | undefined): Promise<Re
   if (!q || q.length < 2) return null
   if (geoCache.has(q)) return geoCache.get(q)!
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=1&accept-language=en`
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=1&lang=en`
     const res = await fetch(url)
     if (!res.ok) throw new Error('geocode http ' + res.status)
-    const arr = (await res.json()) as { address?: NominatimAddr; display_name?: string }[]
-    const r = arr?.[0]
-    if (!r || !r.address) {
+    const data = (await res.json()) as { features?: { properties?: PhotonProps }[] }
+    const p = data?.features?.[0]?.properties
+    if (!p) {
       geoCache.set(q, null)
       return null
     }
-    const a = r.address
-    const cc = (a.country_code || '').toUpperCase()
-    const country = COUNTRY_KO[cc] || a.country || ''
+    const cc = (p.countrycode || '').toUpperCase()
+    const country = COUNTRY_KO[cc] || p.country || ''
     // 주/도(state) → 시간대 (미국 주·캐나다 주·호주 주 등은 REGIONS 사전에 있음)
-    const stateName = a.state || a.province || a.region || ''
+    const stateName = p.state || ''
     let tz: Tz | null = REGIONS[norm(stateName)]?.tz || null
     if (!tz) {
       // 주 매칭 실패 → 국가 단위 폴백 (단일 시간대 국가만 확정)
-      const byCountry = COUNTRIES[norm(a.country || '')]
+      const byCountry = COUNTRIES[norm(p.country || '')]
       tz = (byCountry && !byCountry.multiZone ? byCountry.tz : null) || (cc in CC_TZ ? CC_TZ[cc] : null)
     }
-    const cityLabel = a.city || a.town || a.village || a.municipality || a.hamlet || a.county || stateName || ''
+    const cityLabel = p.city || p.county || p.district || p.name || stateName || ''
     const out: ResolvedLocation = { timezone: tz, country, city: cityLabel || undefined, source: 'geocode' }
     geoCache.set(q, out)
     return out
