@@ -1165,11 +1165,24 @@ function ColdCallDetail({
           const updateData: Record<string, unknown> = {}
 
           // Stage auto-advance from a contact log:
-          // - 부재중/무응답(no_answer/no_reply) → 항상 '부재중'(no_response)으로 통일
-          //   (단, 상담 예약 이후로 진행된 리드는 되돌리지 않음)
-          // - 그 외 결과(통화 성공 등) → 신규 리드면 '컨택 완료'로 이동
+          // - 긍정 접촉(1:1 상담유도 성공/통화연결/응답/읽음) → 콜드콜 단계면 최소 '컨택 완료'로 끌어올림
+          //   (부재중이던 리드가 실제로 접촉·상담유도된 경우 '부재중' 뱃지가 남지 않도록)
+          // - 부재중/무응답(no_answer/no_reply) → '부재중'(no_response)으로
+          // - 콜백요청 → on_hold
           const noResponse = callResult === 'no_answer' || callResult === 'no_reply'
-          if (noResponse) {
+          const positiveContact =
+            oneOnOneSuccess ||
+            callResult === 'connected' ||
+            callResult === 'replied' ||
+            callResult === 'read'
+          if (positiveContact) {
+            if (
+              COLD_CALL_STAGES.includes(lead.pipelineStage) &&
+              lead.pipelineStage !== 'contact_attempted'
+            ) {
+              updateData.pipelineStage = 'contact_attempted'
+            }
+          } else if (noResponse) {
             // 콜백요청(on_hold)은 부재중이어도 유지 (수동/콜백 상태 우선)
             if (lead.pipelineStage === 'new_lead' || lead.pipelineStage === 'contact_attempted') {
               updateData.pipelineStage = 'no_response'
