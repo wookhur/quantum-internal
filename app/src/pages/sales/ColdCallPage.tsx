@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useT } from '@/i18n/LanguageContext'
-import { resolveInstant, resolveBySchool, geocodePlace, formatLocalTime } from '@/lib/leadLocation'
+import { resolveInstant, resolveBySchool, geocodePlace, formatLocalTime, isOverseasPhone } from '@/lib/leadLocation'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -480,6 +480,7 @@ export function ColdCallView() {
   const [sortBy, setSortBy] = useState<'level' | 'date' | 'grade'>('date')
   // 단계 필터: 'coldcall'(기본, 콜드콜 대상 3단계) 또는 특정 파이프라인 단계
   const [stageFilter, setStageFilter] = useState<'coldcall' | PipelineStage>('coldcall')
+  const [phoneFilter, setPhoneFilter] = useState<'all' | 'domestic' | 'overseas'>('all')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
 
   // Fetch leads in cold-callable stages
@@ -628,6 +629,13 @@ export function ColdCallView() {
       leads = leads.filter((l) => l.leadLevel === levelFilter)
     }
 
+    // 전화번호 국내/해외 필터 (010 시작 = 국내, 그 외 = 해외)
+    if (phoneFilter === 'overseas') {
+      leads = leads.filter((l) => isOverseasPhone(l.phone))
+    } else if (phoneFilter === 'domestic') {
+      leads = leads.filter((l) => !isOverseasPhone(l.phone))
+    }
+
     // Score and sort
     const scored = leads.map((l) => ({ ...l, _priority: getLeadPriority(l) }))
 
@@ -651,7 +659,7 @@ export function ColdCallView() {
     }
 
     return scored
-  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy, levelFilter, sessionFilter, stageFilter])
+  }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy, levelFilter, sessionFilter, stageFilter, phoneFilter])
 
   const selectedLead = coldCallLeads.find((l) => l.id === selectedLeadId)
 
@@ -698,6 +706,17 @@ export function ColdCallView() {
                   {COLD_CALL_FILTER_STAGES.map((s) => (
                     <SelectItem key={s} value={s}>{coldStageLabel(s, t)}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+              <Select value={phoneFilter} onValueChange={(v) => setPhoneFilter((v as 'all' | 'domestic' | 'overseas') || 'all')}>
+                <SelectTrigger className="w-[130px] h-8 text-xs">
+                  <Phone className="size-3 mr-1" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('coldCall.phoneFilterAll')}</SelectItem>
+                  <SelectItem value="overseas">{t('coldCall.phoneFilterOverseas')}</SelectItem>
+                  <SelectItem value="domestic">{t('coldCall.phoneFilterDomestic')}</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>

@@ -298,6 +298,22 @@ const DIAL: { code: string; country: string; tz: Tz | null; multiZone?: boolean 
   { code: '1', country: US, tz: null, multiZone: true },
 ]
 
+/**
+ * 전화번호가 해외 번호인지 판정.
+ * 규칙: 010(또는 +82 10 / 82 010)로 시작하면 국내(대한민국), 그 외 형식은 해외로 간주.
+ * 빈 번호는 판정 불가(false).
+ */
+export function isOverseasPhone(phone: string | null | undefined): boolean {
+  const raw = (phone || '').trim()
+  if (!raw) return false
+  let d = raw.replace(/[^\d]/g, '')
+  if (!d) return false
+  if (d.startsWith('00')) d = d.slice(2)
+  // 국내 휴대폰: 010… / +82 10 → 8210… / 82 010 → 82010…
+  if (d.startsWith('010') || d.startsWith('8210') || d.startsWith('82010')) return false
+  return true
+}
+
 /** 전화번호 → 국가. 국제표시(+/00)가 있거나, 미국/캐나다 국가코드 형식(1+10자리)일 때만 판단. */
 export function resolveByPhone(phone: string | null | undefined): Place | null {
   const raw = (phone || '').trim()
