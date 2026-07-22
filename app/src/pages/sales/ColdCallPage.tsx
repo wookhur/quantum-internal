@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useT } from '@/i18n/LanguageContext'
-import { resolveInstant, resolveBySchool, geocodePlace, formatLocalTime, isOverseasPhone } from '@/lib/leadLocation'
+import { resolveInstant, geocodePlace, formatLocalTime, isOverseasPhone } from '@/lib/leadLocation'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -263,18 +263,16 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
     return () => clearInterval(iv)
   }, [])
 
-  // 오프라인 즉시 해석(폴백) — 저장된 거주도시/학교/거주지역/전화
+  // 오프라인 즉시 해석 — 전화번호(국가코드+지역번호)로 시간대 확정을 우선. 학교/거주지역은 폴백.
   const committedCity = (lead.residenceCity || '').trim()
-  const curatedSchool = useMemo(() => resolveBySchool(lead.currentSchool), [lead.currentSchool])
   const instant = useMemo(
     () => resolveInstant({ city: committedCity, school: lead.currentSchool, region: lead.region, phone: lead.phone }),
     [committedCity, lead.currentSchool, lead.region, lead.phone],
   )
 
-  // 온라인 지오코딩 대상: 저장된 거주도시 우선, 없고 curated 학교 매칭도 없으면 학교명 그대로.
+  // 온라인 지오코딩은 '사용자가 입력한 거주도시'에만 적용(학교명 자동 지오코딩은 오류가 많아 제거).
   // nonce를 키에 포함해 변환 버튼으로 강제 재조회 가능.
-  const geoFromCity = !!committedCity
-  const geoQuery = committedCity || (curatedSchool ? '' : (lead.currentSchool || '').trim())
+  const geoQuery = committedCity
   const [nonce, setNonce] = useState(0)
   const { data: geo, isFetching } = useQuery({
     queryKey: ['geocode', geoQuery, nonce],
@@ -285,10 +283,8 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
     retry: 1,
   })
 
-  // 학교명 자동 지오코딩이 전화/거주지역 국가와 충돌하면 오매칭으로 보고 신뢰하지 않음.
-  const geoConflicts =
-    !!geo && !geoFromCity && !!instant?.country && !!geo.country && geo.country !== instant.country
-  const resolved = geoConflicts ? instant : geo || instant
+  // 사용자가 입력한 도시가 있으면 그 지오코딩 결과, 아니면 전화 기반 오프라인 해석
+  const resolved = (committedCity && geo) ? geo : instant
 
   const overseas = isOverseasPhone(lead.phone)
   // 국가·현지시각은 매번 계산해 표시(저장하지 않음)

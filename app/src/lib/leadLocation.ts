@@ -9,7 +9,7 @@ const TZ = {
   ET: 'America/New_York', CT: 'America/Chicago', MT: 'America/Denver', AZ: 'America/Phoenix',
   PT: 'America/Los_Angeles', AK: 'America/Anchorage', HI: 'Pacific/Honolulu',
   TOR: 'America/Toronto', VAN: 'America/Vancouver', EDM: 'America/Edmonton',
-  WPG: 'America/Winnipeg', HAL: 'America/Halifax',
+  WPG: 'America/Winnipeg', HAL: 'America/Halifax', STJ: 'America/St_Johns',
   LON: 'Europe/London', DUB: 'Europe/Dublin', PAR: 'Europe/Paris', BER: 'Europe/Berlin',
   MAD: 'Europe/Madrid', ROM: 'Europe/Rome', AMS: 'Europe/Amsterdam', ZRH: 'Europe/Zurich',
   STO: 'Europe/Stockholm', IST: 'Europe/Istanbul', MOW: 'Europe/Moscow', LIS: 'Europe/Lisbon',
@@ -285,12 +285,12 @@ export function resolveBySchool(school: string | null | undefined): Place | null
 const DIAL: { code: string; country: string; tz: Tz | null; multiZone?: boolean }[] = [
   { code: '852', country: '홍콩', tz: TZ.HK }, { code: '971', country: '아랍에미리트', tz: TZ.DXB },
   { code: '353', country: '아일랜드', tz: TZ.DUB }, { code: '82', country: '대한민국', tz: TZ.SEL },
-  { code: '86', country: '중국', tz: null, multiZone: true }, { code: '81', country: '일본', tz: TZ.TYO },
+  { code: '86', country: '중국', tz: TZ.SHA }, { code: '81', country: '일본', tz: TZ.TYO },
   { code: '65', country: '싱가포르', tz: TZ.SG }, { code: '60', country: '말레이시아', tz: TZ.KUL },
   { code: '62', country: '인도네시아', tz: null, multiZone: true }, { code: '63', country: '필리핀', tz: TZ.MNL },
   { code: '66', country: '태국', tz: TZ.BKK }, { code: '84', country: '베트남', tz: TZ.SGN },
   { code: '91', country: '인도', tz: TZ.DEL }, { code: '44', country: GB, tz: TZ.LON },
-  { code: '61', country: AU, tz: null, multiZone: true }, { code: '64', country: NZ, tz: TZ.AKL },
+  { code: '61', country: AU, tz: TZ.SYD }, { code: '64', country: NZ, tz: TZ.AKL },
   { code: '49', country: '독일', tz: TZ.BER }, { code: '33', country: '프랑스', tz: TZ.PAR },
   { code: '39', country: '이탈리아', tz: TZ.ROM }, { code: '34', country: '스페인', tz: TZ.MAD },
   { code: '31', country: '네덜란드', tz: TZ.AMS }, { code: '41', country: '스위스', tz: TZ.ZRH },
@@ -314,31 +314,128 @@ export function isOverseasPhone(phone: string | null | undefined): boolean {
   return true
 }
 
-/** 전화번호 → 국가. 국제표시(+/00)가 있거나, 미국/캐나다 국가코드 형식(1+10자리)일 때만 판단. */
-export function resolveByPhone(phone: string | null | undefined): Place | null {
+// ── NANP(북미) 지역번호 → 시간대 (미국 주/캐나다 주 기준, 결정적). ──
+// 시간대 경계에 걸친 일부 지역번호는 주요 시간대로 배정.
+const NANP_AREA: Record<string, { tz: Tz; country: string; label: string }> = {}
+function addNanp(tz: Tz, country: string, label: string, codes: string[]) {
+  for (const c of codes) NANP_AREA[c] = { tz, country, label }
+}
+// 미국 동부(ET)
+addNanp(TZ.ET, US, 'New York', ['212', '315', '332', '347', '516', '518', '585', '607', '631', '646', '680', '716', '718', '838', '845', '914', '917', '929', '934'])
+addNanp(TZ.ET, US, 'New Jersey', ['201', '551', '609', '640', '732', '848', '856', '862', '908', '973'])
+addNanp(TZ.ET, US, 'Pennsylvania', ['215', '223', '267', '272', '412', '445', '484', '570', '582', '610', '717', '724', '814', '835', '878'])
+addNanp(TZ.ET, US, 'Delaware', ['302'])
+addNanp(TZ.ET, US, 'Maryland', ['227', '240', '301', '410', '443', '667'])
+addNanp(TZ.ET, US, 'Washington DC', ['202'])
+addNanp(TZ.ET, US, 'Virginia', ['276', '434', '540', '571', '703', '757', '804', '826', '948'])
+addNanp(TZ.ET, US, 'West Virginia', ['304', '681'])
+addNanp(TZ.ET, US, 'North Carolina', ['252', '336', '704', '743', '828', '910', '919', '980', '984'])
+addNanp(TZ.ET, US, 'South Carolina', ['803', '839', '843', '854', '864'])
+addNanp(TZ.ET, US, 'Georgia', ['229', '404', '470', '478', '678', '706', '762', '770', '912', '943'])
+addNanp(TZ.ET, US, 'Florida', ['239', '305', '321', '352', '386', '407', '561', '689', '727', '754', '772', '786', '813', '904', '941', '954'])
+addNanp(TZ.ET, US, 'Ohio', ['216', '220', '234', '326', '330', '380', '419', '440', '513', '567', '614', '740', '937'])
+addNanp(TZ.ET, US, 'Michigan', ['231', '248', '269', '313', '517', '586', '616', '679', '734', '810', '906', '947', '989'])
+addNanp(TZ.ET, US, 'Maine', ['207'])
+addNanp(TZ.ET, US, 'New Hampshire', ['603'])
+addNanp(TZ.ET, US, 'Vermont', ['802'])
+addNanp(TZ.ET, US, 'Massachusetts', ['339', '351', '413', '508', '617', '774', '781', '857', '978'])
+addNanp(TZ.ET, US, 'Rhode Island', ['401'])
+addNanp(TZ.ET, US, 'Connecticut', ['203', '475', '860', '959'])
+addNanp(TZ.ET, US, 'Indiana', ['317', '463', '260', '574', '765', '812', '930'])
+addNanp(TZ.ET, US, 'Kentucky', ['502', '606', '859'])
+addNanp(TZ.ET, US, 'Tennessee', ['423', '865'])
+// 미국 중부(CT)
+addNanp(TZ.CT, US, 'Illinois', ['217', '224', '309', '312', '331', '447', '464', '618', '630', '708', '730', '773', '779', '815', '861', '872'])
+addNanp(TZ.CT, US, 'Iowa', ['319', '515', '563', '641', '712'])
+addNanp(TZ.CT, US, 'Kansas', ['316', '620', '785', '913'])
+addNanp(TZ.CT, US, 'Minnesota', ['218', '320', '507', '612', '651', '763', '952'])
+addNanp(TZ.CT, US, 'Missouri', ['314', '417', '557', '573', '636', '660', '816', '975'])
+addNanp(TZ.CT, US, 'Mississippi', ['228', '601', '662', '769'])
+addNanp(TZ.CT, US, 'Alabama', ['205', '251', '256', '334', '483', '659', '938'])
+addNanp(TZ.CT, US, 'Arkansas', ['327', '479', '501', '870'])
+addNanp(TZ.CT, US, 'Louisiana', ['225', '318', '337', '504', '985'])
+addNanp(TZ.CT, US, 'Oklahoma', ['405', '539', '572', '580', '918'])
+addNanp(TZ.CT, US, 'South Dakota', ['605'])
+addNanp(TZ.CT, US, 'North Dakota', ['701'])
+addNanp(TZ.CT, US, 'Nebraska', ['402', '531'])
+addNanp(TZ.CT, US, 'Wisconsin', ['262', '274', '414', '534', '608', '715', '920'])
+addNanp(TZ.CT, US, 'Texas', ['210', '214', '254', '281', '325', '346', '361', '409', '430', '432', '469', '512', '682', '713', '726', '737', '806', '817', '830', '832', '903', '936', '940', '945', '956', '972', '979'])
+addNanp(TZ.CT, US, 'Kentucky', ['270', '364'])
+addNanp(TZ.CT, US, 'Tennessee', ['615', '629', '731', '901', '931'])
+addNanp(TZ.CT, US, 'Indiana', ['219'])
+addNanp(TZ.CT, US, 'Florida', ['850'])
+// 미국 산악(MT) / 애리조나(AZ, DST 없음)
+addNanp(TZ.MT, US, 'Colorado', ['303', '719', '720', '970', '983'])
+addNanp(TZ.MT, US, 'Montana', ['406'])
+addNanp(TZ.MT, US, 'Wyoming', ['307'])
+addNanp(TZ.MT, US, 'New Mexico', ['505', '575'])
+addNanp(TZ.MT, US, 'Utah', ['385', '435', '801'])
+addNanp(TZ.MT, US, 'Idaho', ['208', '986'])
+addNanp(TZ.MT, US, 'Texas (El Paso)', ['915'])
+addNanp(TZ.MT, US, 'Nebraska (west)', ['308'])
+addNanp(TZ.AZ, US, 'Arizona', ['480', '520', '602', '623', '928'])
+// 미국 태평양(PT) / 알래스카 / 하와이
+addNanp(TZ.PT, US, 'California', ['209', '213', '279', '310', '323', '341', '408', '415', '424', '442', '510', '530', '559', '562', '619', '626', '628', '650', '657', '661', '669', '707', '714', '747', '760', '805', '818', '820', '831', '840', '858', '909', '916', '925', '949', '951'])
+addNanp(TZ.PT, US, 'Washington', ['206', '253', '360', '425', '509', '564'])
+addNanp(TZ.PT, US, 'Oregon', ['458', '503', '541', '971'])
+addNanp(TZ.PT, US, 'Nevada', ['702', '725', '775'])
+addNanp(TZ.AK, US, 'Alaska', ['907'])
+addNanp(TZ.HI, US, 'Hawaii', ['808'])
+// 캐나다
+addNanp(TZ.TOR, CA_, 'Ontario', ['226', '249', '289', '343', '365', '382', '416', '437', '519', '548', '613', '647', '705', '742', '905'])
+addNanp(TZ.TOR, CA_, 'Quebec', ['263', '354', '367', '418', '438', '450', '468', '514', '579', '581', '819', '873'])
+addNanp(TZ.HAL, CA_, 'Nova Scotia', ['782', '902'])
+addNanp(TZ.HAL, CA_, 'New Brunswick', ['428', '506'])
+addNanp(TZ.STJ, CA_, 'Newfoundland', ['709'])
+addNanp(TZ.WPG, CA_, 'Manitoba', ['204', '431', '584'])
+addNanp(TZ.WPG, CA_, 'Saskatchewan', ['306', '474', '639'])
+addNanp(TZ.WPG, CA_, 'Ontario (NW)', ['807'])
+addNanp(TZ.EDM, CA_, 'Alberta', ['368', '403', '587', '780', '825'])
+addNanp(TZ.EDM, CA_, 'Canada (North)', ['867'])
+addNanp(TZ.VAN, CA_, 'British Columbia', ['236', '250', '257', '604', '672', '778'])
+
+/**
+ * 전화번호 → 거주지/시간대. 국가코드 + (미국/캐나다는) 지역번호까지 인식해 시간대를 확정.
+ * - 010/+82 10 → 국내(대한민국)
+ * - +1 / 11자리(1…) / 10자리 지역번호 → NANP 지역번호로 미국·캐나다 시간대 확정
+ * - 그 외 국가코드(국제표시 필요) → 국가 대표 시간대
+ */
+export function resolveByPhoneDetailed(phone: string | null | undefined): ResolvedLocation | null {
   const raw = (phone || '').trim()
   if (!raw) return null
   const hasPlus = raw.startsWith('+')
-  let d = raw.replace(/[^\d]/g, '')
-  const hasIntl = hasPlus || d.startsWith('00')
-  if (d.startsWith('00')) d = d.slice(2)
-  // 명시적 국제표시가 없어도, 1로 시작하는 11자리는 미국/캐나다 국가코드 형식 (지역번호 오탐 없음)
-  if (!hasIntl && d.length === 11 && d.startsWith('1')) {
-    return { tz: null, country: US, multiZone: true }
+  const digitsRaw = raw.replace(/[^\d]/g, '')
+  if (!digitsRaw) return null
+  const had00 = digitsRaw.startsWith('00')
+  const d = had00 ? digitsRaw.slice(2) : digitsRaw
+  const hasIntl = hasPlus || had00
+  // 국내(대한민국)
+  if (d.startsWith('010') || d.startsWith('8210') || d.startsWith('82010')) {
+    return { timezone: TZ.SEL, country: '대한민국', source: 'phone' }
   }
-  // 그 외 국제표시가 없으면 국가 판단 불가 (국내/지역번호 오탐 방지)
+  // NANP 지역번호 추출
+  let area: string | null = null
+  if (d.startsWith('1') && d.length === 11) area = d.slice(1, 4)
+  else if (hasPlus && d.startsWith('1') && d.length >= 4) area = d.slice(1, 4)
+  else if (!hasIntl && d.length === 10 && !/^[01]/.test(d)) area = d.slice(0, 3)
+  if (area && NANP_AREA[area]) {
+    const a = NANP_AREA[area]
+    return { timezone: a.tz, country: a.country, city: a.label, source: 'phone' }
+  }
+  // 그 외 국가코드 (국제표시가 있을 때만)
   if (!hasIntl) return null
   for (const c of DIAL) {
     if (d.startsWith(c.code)) {
-      return { tz: c.tz, country: c.country, multiZone: c.multiZone }
+      return { timezone: c.tz, country: c.country, source: 'phone' }
     }
   }
   return null
 }
 
 /**
- * 오프라인 사전만으로 즉시 해석(네트워크 없음). 지오코딩 결과가 오기 전 폴백.
- * 우선순위: 수동 거주도시 > 학교(curated) > 거주지역(국가) > 전화번호(국제표시).
+ * 오프라인 사전만으로 즉시 해석(네트워크 없음).
+ * 우선순위: 수동 거주도시 > 전화(국가코드+지역번호로 시간대 확정) > 학교(curated) > 거주지역 > 전화(국가만).
+ * 전화번호 기반을 앞세워, 오류 많던 학교명 자동 인식 의존도를 낮춘다.
  */
 export function resolveInstant(input: {
   city?: string | null
@@ -348,12 +445,13 @@ export function resolveInstant(input: {
 }): ResolvedLocation | null {
   const byCity = lookupText(input.city)
   if (byCity) return { timezone: byCity.tz, country: byCity.country, city: byCity.label, source: 'city' }
+  const byPhone = resolveByPhoneDetailed(input.phone)
+  if (byPhone && byPhone.timezone) return byPhone // 시간대까지 확정되면 최우선
   const bySchool = resolveBySchool(input.school)
   if (bySchool) return { timezone: bySchool.tz, country: bySchool.country, city: bySchool.label, source: 'school' }
   const byRegion = lookupText(input.region)
   if (byRegion) return { timezone: byRegion.tz, country: byRegion.country, source: 'region' }
-  const byPhone = resolveByPhone(input.phone)
-  if (byPhone) return { timezone: byPhone.tz, country: byPhone.country, source: 'phone' }
+  if (byPhone) return byPhone // 국가만 나온 경우(시간대 미확정)
   return null
 }
 
