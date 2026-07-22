@@ -17,6 +17,7 @@ import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
+  Lock, Unlock, MessageSquare, Send,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -50,6 +51,10 @@ import {
   useAcademicSupport, useCreateAcademicSupport, useUpdateAcademicSupport, useDeleteAcademicSupport,
   type AcademicSupportItem,
 } from '@/hooks/useAcademicSupport'
+import {
+  useIssueReports, useCreateIssueReport, useUpdateIssueReport, useDeleteIssueReport,
+  useCreateIssueComment, useDeleteIssueComment, type IssueReport,
+} from '@/hooks/useIssueReports'
 import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
   ServiceReportCategory,
@@ -376,6 +381,7 @@ export function Student360Page() {
             <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} canEdit={canEdit} />
+            <IssueReportSection studentId={selected.id} studentName={selected.name} userId={user?.id} userName={user?.name} isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit} />
             <MeetingsSection studentId={selected.id} createdBy={user?.id} authorName={user?.name} canEdit={canEdit} />
             {selected.essayEditor && (
               <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} canEdit={canEdit} />
@@ -1174,6 +1180,177 @@ function PortalLinksSection({ studentId, studentName, createdBy, canEdit }: {
         })}
       </CardContent>
     </Card>
+  )
+}
+
+// ────────────────────────── Issue Report ──────────────────────────
+function IssueReportSection({ studentId, studentName, userId, userName, isAdmin, canEdit }: {
+  studentId: string
+  studentName: string
+  userId?: string
+  userName?: string
+  isAdmin: boolean
+  canEdit: boolean
+}) {
+  const { data: issues = [] } = useIssueReports(studentId)
+  const createIssue = useCreateIssueReport()
+  const updateIssue = useUpdateIssueReport()
+  const deleteIssue = useDeleteIssueReport()
+  const [expanded, setExpanded] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const today = new Date().toISOString().slice(0, 10)
+  const [form, setForm] = useState({ date: today, content: '', isPrivate: false })
+
+  const hasPrivate = issues.some((i) => i.isPrivate)
+
+  const submit = () => {
+    if (!form.content.trim()) return
+    createIssue.mutate(
+      { studentId, studentName, reportDate: form.date, content: form.content.trim(), isPrivate: form.isPrivate, createdBy: userId, authorName: userName },
+      { onSuccess: () => { setForm({ date: today, content: '', isPrivate: false }); setShowForm(false) } },
+    )
+  }
+
+  return (
+    <Card className="border-rose-200">
+      <CardHeader className="py-3 cursor-pointer select-none" onClick={() => setExpanded((v) => !v)}>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="size-4 text-rose-500" />
+            Issue Report
+            <span className="text-muted-foreground font-normal text-sm">({issues.length})</span>
+            {hasPrivate && <Lock className="size-3.5 text-amber-500" />}
+          </CardTitle>
+          <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v) }}>
+            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </Button>
+        </div>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="space-y-3 pt-0">
+          {canEdit && (showForm ? (
+            <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+              <div className="flex items-center gap-2">
+                <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="h-8 rounded-md border px-2 text-sm bg-background" />
+                <label className="flex items-center gap-1.5 text-sm ml-auto cursor-pointer">
+                  {form.isPrivate ? <Lock className="size-3.5 text-amber-500" /> : <Unlock className="size-3.5 text-muted-foreground" />}
+                  비공개
+                  <Switch checked={form.isPrivate} onCheckedChange={(v) => setForm((f) => ({ ...f, isPrivate: v }))} />
+                </label>
+              </div>
+              <Textarea value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} placeholder="이슈 내용을 입력하세요..." rows={3} className="text-sm" />
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>취소</Button>
+                <Button size="sm" onClick={submit} disabled={!form.content.trim() || createIssue.isPending}>등록</Button>
+              </div>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowForm(true)}>
+              <Plus className="size-3.5" /> 이슈 추가
+            </Button>
+          ))}
+
+          {issues.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">등록된 이슈가 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {issues.map((issue) => (
+                <IssueReportItem
+                  key={issue.id} issue={issue} studentId={studentId}
+                  userId={userId} userName={userName} isAdmin={isAdmin} canEdit={canEdit}
+                  onToggleLock={() => updateIssue.mutate({ id: issue.id, studentId, isPrivate: !issue.isPrivate })}
+                  onDelete={() => { if (confirm('이 이슈를 삭제할까요?')) deleteIssue.mutate({ id: issue.id, studentId }) }}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
+function IssueReportItem({ issue, studentId, userId, userName, isAdmin, canEdit, onToggleLock, onDelete }: {
+  issue: IssueReport
+  studentId: string
+  userId?: string
+  userName?: string
+  isAdmin: boolean
+  canEdit: boolean
+  onToggleLock: () => void
+  onDelete: () => void
+}) {
+  const createComment = useCreateIssueComment()
+  const deleteComment = useDeleteIssueComment()
+  const [comment, setComment] = useState('')
+  const canModify = isAdmin || issue.createdBy === userId
+
+  const submitComment = () => {
+    if (!comment.trim()) return
+    createComment.mutate(
+      { issueId: issue.id, studentId, content: comment.trim(), createdBy: userId, authorName: userName },
+      { onSuccess: () => setComment('') },
+    )
+  }
+
+  return (
+    <div className="rounded-md border p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+            <span>{issue.reportDate}</span>
+            {issue.authorName && <span>· {issue.authorName}</span>}
+            {issue.isPrivate && (
+              <span className="inline-flex items-center gap-0.5 text-amber-600"><Lock className="size-3" /> 비공개</span>
+            )}
+          </div>
+          <p className="text-sm whitespace-pre-wrap break-words">{issue.content}</p>
+        </div>
+        {canModify && (
+          <div className="flex items-center gap-0.5 shrink-0">
+            <Button size="sm" variant="ghost" className="size-6" title={issue.isPrivate ? '공개로 전환' : '비공개로 전환'} onClick={onToggleLock}>
+              {issue.isPrivate ? <Lock className="size-3.5 text-amber-500" /> : <Unlock className="size-3.5 text-muted-foreground" />}
+            </Button>
+            <Button size="sm" variant="ghost" className="size-6" onClick={onDelete}>
+              <Trash2 className="size-3.5 text-red-400" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {issue.comments.length > 0 && (
+        <div className="pl-3 border-l-2 border-muted space-y-1.5 mt-2">
+          {issue.comments.map((c) => (
+            <div key={c.id} className="flex items-start justify-between gap-2 group">
+              <div className="text-xs min-w-0">
+                <span className="font-medium">{c.authorName || '—'}</span>
+                <span className="text-muted-foreground ml-1.5">{new Date(c.createdAt).toLocaleDateString('ko-KR')}</span>
+                <p className="text-sm whitespace-pre-wrap break-words mt-0.5">{c.content}</p>
+              </div>
+              {(isAdmin || c.createdBy === userId) && (
+                <Button size="sm" variant="ghost" className="size-5 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => deleteComment.mutate({ id: c.id, studentId })}>
+                  <Trash2 className="size-3 text-red-400" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="flex items-center gap-1.5 pt-1">
+          <MessageSquare className="size-3.5 text-muted-foreground shrink-0" />
+          <Input
+            value={comment} onChange={(e) => setComment(e.target.value)} placeholder="피드백/솔루션 댓글..."
+            className="h-8 text-sm"
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment() } }}
+          />
+          <Button size="sm" variant="ghost" className="size-8 shrink-0" onClick={submitComment} disabled={!comment.trim() || createComment.isPending}>
+            <Send className="size-4" />
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
