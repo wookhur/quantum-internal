@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useT } from '@/i18n/LanguageContext'
-import { parsePhoneCountry, resolveTimezone, formatLocalTime } from '@/lib/phoneGeo'
+import { resolveLeadLocation, resolveBySchool, formatLocalTime } from '@/lib/leadLocation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -224,33 +224,16 @@ function coldStageLabel(
 
 /**
  * 거주국가·거주도시·현지 시각 블록 (콜드콜 연락처 카드 하단).
- * - 해외 전화번호면 국가를 자동 인식해 거주국가를 자동 기입(비어 있을 때 1회 저장)
- * - 거주도시를 입력하면 시차를 계산해 현지 시각을 옆에 자동 표시
+ * 원스톱 자동: 학생정보의 학교명을 자동 인식해 거주도시·거주국가를 채우고 시차까지 계산.
+ * 우선순위: 수동 입력 거주도시 > 학교명 > 전화번호(국제표시 +/00 있을 때만).
+ * 전화번호만으로는 오탐(지역번호↔국가코드 충돌)이 잦아 보조 신호로만 사용.
  */
 function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) {
   const t = useT()
   const updateLead = useUpdateLead()
-  const detected = useMemo(() => parsePhoneCountry(lead.phone), [lead.phone])
-  const overseas = !!detected && detected.iso !== 'KR'
 
-  const [country, setCountry] = useState(lead.residenceCountry || '')
   const [city, setCity] = useState(lead.residenceCity || '')
-
-  // 리드 전환 시 입력값 동기화
-  useEffect(() => {
-    setCountry(lead.residenceCountry || '')
-    setCity(lead.residenceCity || '')
-  }, [lead.id, lead.residenceCountry, lead.residenceCity])
-
-  // 해외번호인데 거주국가가 비어 있으면 자동 인식값으로 1회 채우고 저장
-  useEffect(() => {
-    if (!canEdit || !overseas || !detected) return
-    if (!lead.residenceCountry) {
-      setCountry(detected.nameKo)
-      updateLead.mutate({ id: lead.id, data: { residenceCountry: detected.nameKo } })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lead.id, overseas])
+  useEffect(() => { setCity(lead.residenceCity || '') }, [lead.id, lead.residenceCity])
 
   // 현지 시각 라이브 갱신(1분 간격)
   const [now, setNow] = useState(() => new Date())
@@ -259,17 +242,43 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
     return () => clearInterval(iv)
   }, [])
 
-  const timezone = useMemo(() => resolveTimezone(city, detected), [city, detected])
+  // 학교명 기반(안정) 해석 — 원스톱 자동 채움에 사용
+  const schoolPlace = useMemo(() => resolveBySchool(lead.currentSchool), [lead.currentSchool])
+  // 현재 표시/시차 계산에 쓰는 최종 해석 (도시 입력 > 학교 > 전화)
+  const resolved = useMemo(
+    () => resolveLeadLocation({ city, school: lead.currentSchool, phone: lead.phone }),
+    [city, lead.currentSchool, lead.phone],
+  )
+
+  const country = resolved?.country || lead.residenceCountry || ''
+  const timezone = resolved?.timezone || null
   const localTime = useMemo(() => (timezone ? formatLocalTime(now, timezone) : null), [timezone, now])
 
-  // 해외 리드가 아니고 저장된 값도 없으면 블록을 숨긴다(국내 리드에는 불필요)
-  if (!overseas && !lead.residenceCountry && !lead.residenceCity) return null
-
-  const saveCountry = () => {
-    if (canEdit && country.trim() !== (lead.residenceCountry || '')) {
-      updateLead.mutate({ id: lead.id, data: { residenceCountry: country.trim() } })
+  // 원스톱 자동 채움: 거주도시가 비어 있고 학교로 위치를 알면 도시를 채워 저장
+  useEffect(() => {
+    if (!canEdit) return
+    const patch: Partial<Lead> = {}
+    if (!lead.residenceCity && schoolPlace?.label) patch.residenceCity = schoolPlace.label
+    if (Object.keys(patch).length) {
+      if (patch.residenceCity) setCity(patch.residenceCity)
+      updateLead.mutate({ id: lead.id, data: patch })
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id, schoolPlace])
+
+  // 거주국가 자동 기입/교정: 해석된 국가가 저장값과 다르면 갱신(잘못된 값 자가 치유)
+  useEffect(() => {
+    if (!canEdit) return
+    const c = resolved?.country
+    if (c && c !== (lead.residenceCountry || '')) {
+      updateLead.mutate({ id: lead.id, data: { residenceCountry: c } })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lead.id, resolved?.country])
+
+  // 위치를 전혀 못 잡았고 저장값도 없으면 숨김(국내 리드 등)
+  if (!resolved && !lead.residenceCountry && !lead.residenceCity) return null
+
   const saveCity = () => {
     if (canEdit && city.trim() !== (lead.residenceCity || '')) {
       updateLead.mutate({ id: lead.id, data: { residenceCity: city.trim() } })
@@ -280,17 +289,7 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
     <>
       <div className="flex items-center gap-2 text-sm">
         <Globe className="size-4 text-muted-foreground shrink-0" />
-        {canEdit ? (
-          <Input
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            onBlur={saveCountry}
-            placeholder={t('coldCall.residenceCountry')}
-            className="h-7 text-sm"
-          />
-        ) : (
-          <span>{country || '-'}</span>
-        )}
+        <span>{country || '-'}</span>
       </div>
       <div className="flex items-center gap-2 text-sm">
         <MapPin className="size-4 text-muted-foreground shrink-0" />
@@ -299,7 +298,7 @@ function LeadResidenceInfo({ lead, canEdit }: { lead: Lead; canEdit: boolean }) 
             value={city}
             onChange={(e) => setCity(e.target.value)}
             onBlur={saveCity}
-            placeholder={t('coldCall.residenceCity')}
+            placeholder={t('coldCall.residenceCityPlaceholder')}
             className="h-7 text-sm"
           />
         ) : (
