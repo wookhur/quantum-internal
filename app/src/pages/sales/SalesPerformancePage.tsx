@@ -368,6 +368,19 @@ export function SalesPerformancePage() {
       if (!map.has(month)) map.set(month, [])
       map.get(month)!.push(row)
     }
+    // 월 안에서는 세미나 날짜(YYMMDD) 오름차순, 같은 날짜면 이름순 (예: 260411 1부 → 2부 → 260424 제주)
+    const dateKey = (r: PerfRow): string => {
+      if (r.seminar?.date) return r.seminar.date
+      const m = r.eventName.match(/(\d{6})/)
+      if (m) return `20${m[1].slice(0, 2)}-${m[1].slice(2, 4)}-${m[1].slice(4, 6)}`
+      return '9999-99-99'
+    }
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        const ka = dateKey(a), kb = dateKey(b)
+        return ka !== kb ? ka.localeCompare(kb) : a.eventName.localeCompare(b.eventName)
+      })
+    }
     return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]))
   }, [rows, t])
 
