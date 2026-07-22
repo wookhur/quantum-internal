@@ -82,7 +82,8 @@ async function notifyAdminsOfIssue(studentName: string, issueId: string, student
     type: 'issue_report',
     title: '이슈 리포트 등록',
     message: `${studentName || '학생'}에 이슈가 보고되었습니다`,
-    link: '/service/students',
+    // 자세히 보기 → 해당 학생의 Student360 카드로 이동
+    link: `/service/student-360?student=${studentId}`,
     metadata: { issueId, studentId },
   })
 }

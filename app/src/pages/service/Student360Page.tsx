@@ -202,6 +202,14 @@ export function Student360Page() {
     }, { replace: true })
   }, [selectedId, setSearchParams])
 
+  // Reverse sync: when the URL's ?student= changes (e.g. a notification's "자세히 보기"
+  // navigates here while the page is already mounted), open that student's card.
+  const studentParam = searchParams.get('student')
+  useEffect(() => {
+    if (studentParam && studentParam !== selectedId) setSelectedId(studentParam)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentParam])
+
   const { data: students = [], isLoading } = useServiceStudents()
   const { data: studentKpis = {} } = useStudentKpis()
   const statusFlags = useStudentStatusFlags()
