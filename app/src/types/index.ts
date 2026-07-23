@@ -470,6 +470,8 @@ export interface ServiceStudent {
   partners?: string
   majors?: string
   contractType?: string
+  /** 담당 컨설턴트 변경 이력 (from→to, 변경일). 현재 담당자는 assignedConsultant 유지. */
+  consultantHistory?: { from?: string; to: string; date: string }[]
   applicationCount?: number
   additionalServices?: string
   contractDetails?: ContractDetails

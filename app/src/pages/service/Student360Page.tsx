@@ -423,7 +423,6 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
   canEdit: boolean
 }) {
   const t = useT()
-  const consultantName = useConsultantName()
   const del = useDeleteServiceStudent()
 
   return (
@@ -466,7 +465,7 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
         <Field label={t('student360.region')} value={student.region} />
         <Field label={t('student360.grade')} value={student.grade} />
         <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
-        <Field label={t('student360.consultant')} value={consultantName(student.assignedConsultant)} />
+        <ConsultantField student={student} canEdit={canEdit} />
         <Field label={t('student360.essayEditor')} value={student.essayEditor} />
         <Field label={t('student360.majors')} value={student.majors} />
         <Field label={t('student360.status')} value={statusLabelFor(t, student.status)} />
@@ -496,6 +495,75 @@ function Field({ icon, label, value }: { icon?: ReactNode; label: string; value?
     <div>
       <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">{icon}{label}</p>
       <p>{value || '—'}</p>
+    </div>
+  )
+}
+
+// 담당 컨설턴트 + 변경 이력. 현재 담당자는 assignedConsultant(그대로), 변경은 이력에 from→to·날짜로 기록.
+function ConsultantField({ student, canEdit }: { student: ServiceStudent; canEdit: boolean }) {
+  const t = useT()
+  const consultantName = useConsultantName()
+  const consultantPool = useConsultantPool()
+  const update = useUpdateServiceStudent()
+  const today = new Date().toISOString().slice(0, 10)
+  const [adding, setAdding] = useState(false)
+  const [newC, setNewC] = useState('')
+  const [date, setDate] = useState(today)
+  const history = student.consultantHistory || []
+
+  const saveChange = () => {
+    if (!canEdit || !newC) return
+    const entry = { from: student.assignedConsultant || undefined, to: newC, date: date || today }
+    update.mutate({ id: student.id, assignedConsultant: newC, consultantHistory: [...history, entry] })
+    setAdding(false); setNewC(''); setDate(today)
+  }
+  // 이력 삭제(정정용): 가장 최근 변경을 지우면 현재 담당자를 그 전 값으로 되돌린다.
+  const removeEntry = (i: number) => {
+    const entry = history[i]
+    const next = history.filter((_, idx) => idx !== i)
+    const data: { id: string; consultantHistory: typeof next; assignedConsultant?: string } = { id: student.id, consultantHistory: next }
+    if (i === history.length - 1) data.assignedConsultant = entry.from || undefined
+    update.mutate(data)
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-0.5">{t('student360.consultant')}</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span>{consultantName(student.assignedConsultant) || '—'}</span>
+        {canEdit && !adding && (
+          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs gap-0.5" onClick={() => setAdding(true)}>
+            <Plus className="size-3" />{t('student360.consultantChange')}
+          </Button>
+        )}
+      </div>
+
+      {history.length > 0 && (
+        <div className="mt-1 space-y-0.5">
+          {history.map((h, i) => (
+            <div key={i} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <span className="tabular-nums">{h.date}</span>
+              <span>·</span>
+              <span>{consultantName(h.from) || '—'} → {consultantName(h.to)}</span>
+              {canEdit && (
+                <button className="ml-0.5 text-red-400 hover:text-red-600" title={t('common.delete')} onClick={() => removeEntry(i)}>×</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+          <select value={newC} onChange={e => setNewC(e.target.value)} className="h-7 rounded border px-1 text-xs bg-background">
+            <option value="">{t('common.select')}</option>
+            {consultantPool.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-7 rounded border px-1 text-xs bg-background" />
+          <Button size="sm" className="h-7 text-xs" onClick={saveChange} disabled={!newC}>{t('common.save')}</Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAdding(false); setNewC('') }}>{t('common.cancel')}</Button>
+        </div>
+      )}
     </div>
   )
 }
