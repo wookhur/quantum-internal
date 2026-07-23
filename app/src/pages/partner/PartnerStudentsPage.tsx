@@ -90,19 +90,22 @@ export function PartnerStudentsPage() {
   const students = useMemo(() => {
     const myAcademyKey = nrm(myInstructor?.academy)
     const myStudentIds = new Set(myInstructor?.studentIds || [])
+    // 우리 학원(또는 본인)이 코멘트를 남긴 학생 — EC 라벨/담당지정이 없어도 목록에 보이도록.
+    const meetingStudentNames = new Set(meetings.map(m => m.studentName))
     return allStudents
       .filter(s => {
         const entry = studentPartners.get(s.id)
         const assigned = myStudentIds.has(s.id)
-        if (!entry && !assigned) return false
+        const hasMeeting = meetingStudentNames.has(s.name)
+        if (!entry && !assigned && !hasMeeting) return false
         if (!isAdmin) {
           if (myInstructor) {
-            // 소속학원 라벨 매칭 또는 담당학생 지정
+            // 소속학원 라벨 매칭 · 담당학생 지정 · 우리 학원 코멘트가 있는 학생
             const byAcademy = !!myAcademyKey && !!entry && Array.from(entry.display).some(d => nrm(d) === myAcademyKey || nrm(d).includes(myAcademyKey))
-            if (!byAcademy && !assigned) return false
+            if (!byAcademy && !assigned && !hasMeeting) return false
           } else {
-            // 강사 레지스트리가 없으면 기존 이름 기반 폴백
-            if (!(entry && !!partnerKey && Array.from(entry.names).some(n => n.includes(partnerKey)))) return false
+            // 강사 레지스트리가 없으면 기존 이름 기반 폴백 + 본인 코멘트가 있는 학생
+            if (!(entry && !!partnerKey && Array.from(entry.names).some(n => n.includes(partnerKey))) && !hasMeeting) return false
           }
         }
         // 파트너 필터: 그 파트너가 지정된 학생만
@@ -114,7 +117,7 @@ export function PartnerStudentsPage() {
         partners: Array.from(studentPartners.get(s.id)?.display || []).join(', '),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [allStudents, studentPartners, partnerKey, isAdmin, partnerFilter, myInstructor])
+  }, [allStudents, studentPartners, partnerKey, isAdmin, partnerFilter, myInstructor, meetings])
 
   const [selected, setSelected] = useState('')
   useEffect(() => {
