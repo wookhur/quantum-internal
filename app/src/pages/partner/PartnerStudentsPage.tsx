@@ -40,7 +40,6 @@ export function PartnerStudentsPage() {
   const { data: myMeetings = [] } = usePartnerStudentMeetings(isAdmin ? undefined : partnerId)
   const { data: allMeetings = [] } = useAllPartnerStudentMeetings(isAdmin)
   const meetings = isAdmin ? allMeetings : myMeetings
-  const partnerName = (id?: string) => profiles.find(p => p.id === id)?.name
 
   const [partnerFilter, setPartnerFilter] = useState('all')
   const partnerOptions = useMemo(() => {
@@ -124,10 +123,12 @@ export function PartnerStudentsPage() {
       if (m.studentName !== selected) return false
       if (partnerFilter === 'all') return true
       const fb = nrm(partnerFilter)
-      // 1) 코멘트에 지정된 프로그램이 그 파트너사와 일치, 또는 2) 작성 계정 이름이 매칭
+      // 파트너 매칭: 1) 코멘트의 프로그램 라벨, 2) 작성자 소속학원(partner_academy), 3) 작성 계정 이름
+      // (KYN 강사는 개인 이름으로 로그인 → 이름만으로는 매칭 실패)
       if (nrm(m.program) === fb) return true
-      const pn = nrm(partnerName(m.partnerId))
-      return !!pn && (pn.includes(fb) || fb.includes(pn))
+      const author = profiles.find(p => p.id === m.partnerId)
+      const cands = [author?.partnerAcademy, author?.name].map(nrm).filter(Boolean)
+      return cands.some(c => c.includes(fb) || fb.includes(c))
     }),
     [meetings, selected, partnerFilter, profiles], // eslint-disable-line react-hooks/exhaustive-deps
   )

@@ -166,9 +166,15 @@ export function ECProgramsPage() {
                       const comments = programFilter === 'all'
                         ? allComments
                         : allComments.filter(m => {
-                            const pn = norm(partnerName(m.partnerId) || '')
-                            const fb = norm(programFilter)
-                            return !!pn && (pn.includes(fb) || fb.includes(pn))
+                            // 파트너 매칭: 작성자의 소속학원(partner_academy)을 우선으로,
+                            // 계정 이름·코멘트의 프로그램 라벨도 함께 대소문자 무시 비교.
+                            // (KYN 강사는 개인 이름으로 로그인해 이름만으로는 매칭 실패했음)
+                            const author = profiles.find(p => p.id === m.partnerId)
+                            const fb = norm(programFilter).toLowerCase()
+                            const cands = [author?.partnerAcademy, author?.name, m.program]
+                              .map(x => norm(x || '').toLowerCase())
+                              .filter(Boolean)
+                            return cands.some(c => c.includes(fb) || fb.includes(c))
                           })
                       return (
                         <>
