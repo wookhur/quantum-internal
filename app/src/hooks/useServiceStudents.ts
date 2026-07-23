@@ -31,6 +31,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     contractType: (row.contract_type as string) || undefined,
     applicationCount: (row.application_count as number) || undefined,
     additionalServices: (row.additional_services as string) || undefined,
+    contractDetails: (row.contract_details as ServiceStudent['contractDetails']) || undefined,
     communicationPlatform: (row.communication_platform as string) || undefined,
     preferredLanguage: (row.preferred_language as string) || undefined,
     birthDate: (row.birth_date as string) || undefined,
@@ -201,6 +202,7 @@ export function useUpdateServiceStudent() {
       contractType?: string
       applicationCount?: number
       additionalServices?: string
+      contractDetails?: ServiceStudent['contractDetails']
       communicationPlatform?: string
       preferredLanguage?: string
       birthDate?: string | null
@@ -231,6 +233,7 @@ export function useUpdateServiceStudent() {
       if (rest.contractType !== undefined) update.contract_type = rest.contractType
       if (rest.applicationCount !== undefined) update.application_count = rest.applicationCount || null
       if (rest.additionalServices !== undefined) update.additional_services = rest.additionalServices || null
+      if (rest.contractDetails !== undefined) update.contract_details = rest.contractDetails || null
       if (rest.communicationPlatform !== undefined) update.communication_platform = rest.communicationPlatform
       if (rest.preferredLanguage !== undefined) update.preferred_language = rest.preferredLanguage
       if (rest.birthDate !== undefined) update.birth_date = rest.birthDate || null

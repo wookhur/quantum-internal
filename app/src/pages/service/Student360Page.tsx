@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, type ReactNode } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -57,7 +56,7 @@ import {
 } from '@/hooks/useIssueReports'
 import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
-  ServiceReportCategory,
+  ServiceReportCategory, ContractDetails,
 } from '@/types'
 
 // Consultant pool + helpers (shared with KPI page)
@@ -386,6 +385,7 @@ export function Student360Page() {
         ) : (
           <div className="space-y-4">
             <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} canEdit={canEdit} />
+            <ContractSection student={selected} canEdit={canEdit} />
             <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} canEdit={canEdit} />
@@ -413,59 +413,6 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
   const t = useT()
   const consultantName = useConsultantName()
   const del = useDeleteServiceStudent()
-
-  const queryClient = useQueryClient()
-  const contractQuery = useQuery({
-    queryKey: ['contract-for-student', student.id],
-    queryFn: async () => {
-      const names = [student.name, student.koreanName].filter(Boolean)
-      if (names.length === 0) return null
-      const { data } = await supabase
-        .from('contracts')
-        .select('id, application_count, additional_services')
-        .in('student_name', names)
-        .limit(1)
-      return data?.[0] ?? null
-    },
-  })
-  const contractData = contractQuery.data
-
-  const applicationCount = contractData?.application_count ?? student.applicationCount
-  const additionalServices = contractData?.additional_services ?? student.additionalServices
-
-  const [editingContract, setEditingContract] = useState(false)
-  const [editAppCount, setEditAppCount] = useState('')
-  const [editAddServices, setEditAddServices] = useState('')
-
-  const openContractEdit = () => {
-    if (!canEdit) return
-    setEditAppCount(applicationCount ? String(applicationCount) : '')
-    setEditAddServices(additionalServices || '')
-    setEditingContract(true)
-  }
-
-  const saveContract = useMutation({
-    mutationFn: async () => {
-      const appCount = editAppCount ? Number(editAppCount) : null
-      const addSvc = editAddServices.trim() || null
-      if (contractData?.id) {
-        await supabase.from('contracts').update({
-          application_count: appCount,
-          additional_services: addSvc,
-        }).eq('id', contractData.id)
-      } else {
-        await supabase.from('service_students').update({
-          application_count: appCount,
-          additional_services: addSvc,
-        }).eq('id', student.id)
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contract-for-student', student.id] })
-      queryClient.invalidateQueries({ queryKey: ['service-students'] })
-      setEditingContract(false)
-    },
-  })
 
   return (
     <Card>
@@ -510,42 +457,6 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
         <Field label={t('student360.consultant')} value={consultantName(student.assignedConsultant)} />
         <Field label={t('student360.essayEditor')} value={student.essayEditor} />
         <Field label={t('student360.majors')} value={student.majors} />
-        <Field label={t('student360.contractType')} value={student.contractType} />
-        <div className="col-span-2 rounded-md border border-dashed p-3 grid grid-cols-2 gap-x-6 gap-y-2">
-          <div className="col-span-2 flex items-center justify-between">
-            <p className="text-xs font-medium text-muted-foreground">{t('contracts.applicationCount')} / {t('contracts.additionalServices')}</p>
-            {canEdit && (
-              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={openContractEdit}>
-                <Pencil className="size-3 mr-1" />{t('common.edit')}
-              </Button>
-            )}
-          </div>
-          <Field label={t('contracts.applicationCount')} value={applicationCount ? `${applicationCount}개` : undefined} />
-          <Field label={t('contracts.additionalServices')} value={additionalServices ?? undefined} />
-        </div>
-        <Dialog open={editingContract} onOpenChange={setEditingContract}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{t('contracts.applicationCount')} / {t('contracts.additionalServices')}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs">{t('contracts.applicationCount')}</Label>
-                <Input type="number" value={editAppCount} onChange={e => setEditAppCount(e.target.value)} placeholder={t('student360.placeholderAppCount')} />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">{t('contracts.additionalServices')}</Label>
-                <Input value={editAddServices} onChange={e => setEditAddServices(e.target.value)} placeholder={t('student360.placeholderAddServices')} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setEditingContract(false)}>{t('common.cancel')}</Button>
-              <Button size="sm" onClick={() => { if (!canEdit) return; saveContract.mutate() }} disabled={saveContract.isPending}>
-                {saveContract.isPending ? <Loader2 className="size-4 animate-spin" /> : t('common.save')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
         <Field label={t('student360.status')} value={statusLabelFor(t, student.status)} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
         <Field label={t('student360.commPlatform')} value={student.communicationPlatform} />
@@ -574,6 +485,175 @@ function Field({ icon, label, value }: { icon?: ReactNode; label: string; value?
       <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">{icon}{label}</p>
       <p>{value || '—'}</p>
     </div>
+  )
+}
+
+// ────────────────────────── Contract (계약사항) ──────────────────────────
+// 별첨1 형식: 서비스 티어(하나 선택) + 세부 서비스 체크리스트(수량 기재)
+const CONTRACT_TIERS: { id: string; label: string }[] = [
+  { id: 'vip', label: 'VIP' },
+  { id: 'platinum', label: '플래티넘 (Platinum)' },
+  { id: 'transfer', label: '편입 (Transfer)' },
+  { id: 'boarding', label: '보딩스쿨 (Boarding School)' },
+  { id: 'premed', label: '의대 · 치대 (Pre-Med / Pre-Dental)' },
+]
+const CONTRACT_SERVICES: { id: string; label: string; unit?: string; totalPrefix?: boolean }[] = [
+  { id: 'us_univ', label: '미국 대학교 진학 컨설팅', unit: '개 학교' },
+  { id: 'uk_univ', label: '영국 대학교 진학 컨설팅 (UCAS 지원)', unit: '개 학교' },
+  { id: 'other_univ', label: '기타 국가 대학교 진학 컨설팅' },
+  { id: 'us_boarding', label: '미국 보딩스쿨 진학 컨설팅', unit: '개 학교' },
+  { id: 'uk_boarding', label: '영국 보딩스쿨 진학 컨설팅', unit: '개 학교' },
+  { id: 'internship', label: '인턴십 프로그램 매칭 서비스', unit: '개' },
+  { id: 'research', label: '리서치 서비스', unit: '개' },
+  { id: 'capstone', label: '전공 캡스톤 프로젝트', unit: '개' },
+  { id: 'interview', label: '면접 트레이닝', unit: '시간', totalPrefix: true },
+  { id: 'test_prep', label: 'TOEFL/IELTS/SAT 시험 전략 컨설팅' },
+  { id: 'scholarship', label: '장학금 지원 컨설팅' },
+  { id: 'admissions_review', label: '전입학사정관 리뷰 서비스', unit: '회' },
+]
+
+function ContractSection({ student, canEdit }: { student: ServiceStudent; canEdit: boolean }) {
+  const t = useT()
+  const update = useUpdateServiceStudent()
+  const [expanded, setExpanded] = useState(false)
+
+  // 편집 중 원격 갱신이 입력값을 덮어쓰지 않도록 학생이 바뀔 때만 초기화
+  const [local, setLocal] = useState<ContractDetails>(() => student.contractDetails || {})
+  const [appCount, setAppCount] = useState(student.applicationCount ? String(student.applicationCount) : '')
+  const [addSvc, setAddSvc] = useState(student.additionalServices || '')
+  const [contractType, setContractType] = useState(student.contractType || '')
+  useEffect(() => {
+    setLocal(student.contractDetails || {})
+    setAppCount(student.applicationCount ? String(student.applicationCount) : '')
+    setAddSvc(student.additionalServices || '')
+    setContractType(student.contractType || '')
+  }, [student.id, student.contractDetails, student.applicationCount, student.additionalServices, student.contractType])
+
+  const persistDetails = (next: ContractDetails) => {
+    setLocal(next)
+    if (canEdit) update.mutate({ id: student.id, contractDetails: next })
+  }
+  const setTier = (id: string) => persistDetails({ ...local, tier: local.tier === id ? null : id })
+  const toggleSvc = (id: string) => {
+    const s = local.services?.[id] || {}
+    persistDetails({ ...local, services: { ...(local.services || {}), [id]: { ...s, checked: !s.checked } } })
+  }
+  const setQty = (id: string, qty: string) => {
+    const s = local.services?.[id] || {}
+    const n = qty === '' ? null : Number(qty)
+    setLocal({ ...local, services: { ...(local.services || {}), [id]: { ...s, qty: n } } })
+  }
+  const saveQty = () => { if (canEdit) update.mutate({ id: student.id, contractDetails: local }) }
+  const saveAppServices = () => {
+    if (!canEdit) return
+    update.mutate({
+      id: student.id,
+      applicationCount: appCount ? Number(appCount) : undefined,
+      additionalServices: addSvc || undefined,
+    })
+  }
+  const saveContractType = () => {
+    if (canEdit && contractType !== (student.contractType || '')) update.mutate({ id: student.id, contractType })
+  }
+
+  const rowCls = 'flex items-center justify-between gap-2 border-t px-3 py-2'
+  const boxCls = 'size-4 shrink-0 accent-slate-700 cursor-pointer disabled:cursor-default'
+  const headerCls = 'bg-slate-700 text-white font-semibold px-3 py-2 text-sm'
+
+  return (
+    <Card>
+      <CardHeader className="py-3 cursor-pointer select-none" onClick={() => setExpanded((v) => !v)}>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="size-4 text-primary" />
+            {t('student360.contractSection')}
+            {student.contractType && <Badge variant="outline">{t('student360.contractType')} {student.contractType}</Badge>}
+          </CardTitle>
+          <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v) }}>
+            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </Button>
+        </div>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="space-y-4 pt-0">
+          {/* 계약 유형 + 원서지원수 + 추가서비스 */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">{t('student360.contractType')}</Label>
+              <Input value={contractType} onChange={(e) => setContractType(e.target.value)} onBlur={saveContractType} disabled={!canEdit} className="h-8" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t('contracts.applicationCount')}</Label>
+              <Input type="number" value={appCount} onChange={(e) => setAppCount(e.target.value)} onBlur={saveAppServices} disabled={!canEdit} className="h-8" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t('contracts.additionalServices')}</Label>
+              <Input value={addSvc} onChange={(e) => setAddSvc(e.target.value)} onBlur={saveAppServices} disabled={!canEdit} className="h-8" />
+            </div>
+          </div>
+
+          {/* 별첨1 체크리스트 */}
+          <div className="rounded-md border overflow-hidden">
+            <div className={headerCls}>서비스 티어 및 트랙 선택 <span className="font-normal opacity-80">(하나 선택)</span></div>
+            {CONTRACT_TIERS.map((tier) => (
+              <label key={tier.id} className={`${rowCls} cursor-pointer`}>
+                <span className="font-medium text-sm">{tier.label}</span>
+                <input type="checkbox" className={boxCls} checked={local.tier === tier.id} disabled={!canEdit} onChange={() => setTier(tier.id)} />
+              </label>
+            ))}
+
+            <div className={headerCls}>세부 서비스 <span className="font-normal opacity-80">(선택한 티어에 포함되는 항목에 체크하고 수량을 기재)</span></div>
+            {CONTRACT_SERVICES.map((svc) => {
+              const s = local.services?.[svc.id] || {}
+              return (
+                <div key={svc.id} className={rowCls}>
+                  <div className="flex items-center gap-1.5 flex-wrap text-sm">
+                    <span>{svc.label}</span>
+                    {svc.unit && (
+                      <span className="inline-flex items-center gap-1 text-muted-foreground">
+                        ( {svc.totalPrefix ? '총' : ''}
+                        <input
+                          type="number"
+                          className="w-14 h-6 rounded border px-1 text-center text-sm bg-background disabled:opacity-70"
+                          value={s.qty ?? ''}
+                          disabled={!canEdit}
+                          onChange={(e) => setQty(svc.id, e.target.value)}
+                          onBlur={saveQty}
+                        />
+                        {svc.unit} )
+                      </span>
+                    )}
+                  </div>
+                  <input type="checkbox" className={boxCls} checked={!!s.checked} disabled={!canEdit} onChange={() => toggleSvc(svc.id)} />
+                </div>
+              )
+            })}
+
+            {/* 기타 */}
+            <div className={rowCls}>
+              <div className="flex items-center gap-2 flex-1 text-sm">
+                <span className="whitespace-nowrap">기타 :</span>
+                <input
+                  type="text"
+                  className="flex-1 h-6 border-b bg-transparent text-sm px-1 disabled:opacity-70"
+                  value={local.otherText || ''}
+                  disabled={!canEdit}
+                  onChange={(e) => setLocal({ ...local, otherText: e.target.value })}
+                  onBlur={() => { if (canEdit) update.mutate({ id: student.id, contractDetails: local }) }}
+                />
+              </div>
+              <input
+                type="checkbox"
+                className={boxCls}
+                checked={!!local.otherChecked}
+                disabled={!canEdit}
+                onChange={() => persistDetails({ ...local, otherChecked: !local.otherChecked })}
+              />
+            </div>
+          </div>
+        </CardContent>
+      )}
+    </Card>
   )
 }
 

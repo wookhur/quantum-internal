@@ -445,6 +445,14 @@ export interface NavItem {
 // ============ STUDENT 360 (SERVICE) ============
 export type ServiceReportStatus = 'none' | 'pending' | 'submitted'
 
+/** 계약사항 체크리스트 (별첨1 형식): 서비스 티어 + 세부 서비스 체크/수량 */
+export interface ContractDetails {
+  tier?: string | null                                     // 선택된 티어 id (하나)
+  services?: Record<string, { checked?: boolean; qty?: number | null }>
+  otherChecked?: boolean
+  otherText?: string
+}
+
 export interface ServiceStudent {
   id: string
   name: string                 // Student Name (English/roman)
@@ -464,6 +472,7 @@ export interface ServiceStudent {
   contractType?: string
   applicationCount?: number
   additionalServices?: string
+  contractDetails?: ContractDetails
   communicationPlatform?: string
   preferredLanguage?: string
   birthDate?: string
