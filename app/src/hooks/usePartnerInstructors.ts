@@ -56,10 +56,20 @@ async function applyToProfileIfExists(email: string, academy: string | undefined
   const profileId = (prof as { id?: string } | null)?.id
   if (!profileId) return
   await supabase.from('profiles').update({ is_partner: true, partner_academy: academy || null, updated_at: new Date().toISOString() }).eq('id', profileId)
+  // 기존 권한(모듈·라우트)을 보존하고 강사 라우트만 합집합으로 추가한다.
+  // (남연서처럼 내부 계정 + 파트너 강사를 겸하는 사용자의 수동 권한이 지워지지 않도록)
+  const { data: existing } = await supabase
+    .from('feature_access')
+    .select('enabled_modules, enabled_routes')
+    .eq('user_id', profileId)
+    .maybeSingle()
+  const prevModules = ((existing as { enabled_modules?: string[] } | null)?.enabled_modules) || []
+  const prevRoutes = ((existing as { enabled_routes?: string[] } | null)?.enabled_routes) || []
+  const mergedRoutes = Array.from(new Set([...prevRoutes, ...enabledRoutes]))
   await supabase.from('feature_access').upsert({
     user_id: profileId,
-    enabled_modules: [],
-    enabled_routes: enabledRoutes,
+    enabled_modules: prevModules,
+    enabled_routes: mergedRoutes,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id' })
 }
