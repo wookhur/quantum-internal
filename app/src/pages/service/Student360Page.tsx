@@ -110,12 +110,24 @@ const STUDENT_STATUS_OPTIONS = [
   { value: 'canceled', labelKey: 'student360.statusCanceled' },
 ] as const
 
+/** 상태값 표기 편차(active/Active/진행중, finished/완료, canceled/취소 …)를 표준값으로 정규화.
+ *  → 언어설정에 따라 진행중/Active 처럼 일관되게 표시되도록 한다. */
+export function normalizeStatus(status?: string): string {
+  const s = (status || '').trim().toLowerCase()
+  if (!s) return ''
+  if (['active', '진행중', '진행 중', 'in progress', 'ongoing'].includes(s)) return 'active'
+  if (['finished', 'done', 'completed', 'complete', '완료', '서비스 완료', '종료'].includes(s)) return 'finished'
+  if (['canceled', 'cancelled', '취소', '서비스 취소', '해지'].includes(s)) return 'canceled'
+  return s
+}
+
 export function isArchivedStatus(status?: string): boolean {
-  return status === 'finished' || status === 'canceled'
+  const s = normalizeStatus(status)
+  return s === 'finished' || s === 'canceled'
 }
 
 function statusLabelFor(t: (k: string) => string, status?: string): string {
-  const o = STUDENT_STATUS_OPTIONS.find(x => x.value === status)
+  const o = STUDENT_STATUS_OPTIONS.find(x => x.value === normalizeStatus(status))
   return o ? t(o.labelKey) : (status || '')
 }
 
@@ -254,7 +266,7 @@ export function Student360Page() {
 
   const selected = students.find(s => s.id === selectedId) || null
   const statusLabel = (status?: string) => {
-    const o = STUDENT_STATUS_OPTIONS.find(x => x.value === status)
+    const o = STUDENT_STATUS_OPTIONS.find(x => x.value === normalizeStatus(status))
     return o ? t(o.labelKey) : (status || '')
   }
 
@@ -365,7 +377,7 @@ export function Student360Page() {
                   />
                 </div>
                 {s.status && (
-                  <Badge variant="outline" className={`text-[10px] shrink-0 ${isArchivedStatus(s.status) ? (s.status === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}`}>{statusLabel(s.status)}</Badge>
+                  <Badge variant="outline" className={`text-[10px] shrink-0 ${isArchivedStatus(s.status) ? (normalizeStatus(s.status) === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}`}>{statusLabel(s.status)}</Badge>
                 )}
               </div>
               <div className="text-xs text-muted-foreground mt-1 truncate">
@@ -421,7 +433,7 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
           <UserIcon className="size-5 text-primary" />
           {student.name}
           {student.koreanName && <span className="text-muted-foreground font-normal">· {student.koreanName}</span>}
-          {student.status && <Badge variant="outline" className={isArchivedStatus(student.status) ? (student.status === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}>{statusLabelFor(t, student.status)}</Badge>}
+          {student.status && <Badge variant="outline" className={isArchivedStatus(student.status) ? (normalizeStatus(student.status) === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}>{statusLabelFor(t, student.status)}</Badge>}
         </CardTitle>
         {canEdit && (
           <div className="flex gap-2">
