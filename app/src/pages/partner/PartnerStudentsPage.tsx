@@ -157,7 +157,7 @@ export function PartnerStudentsPage() {
       )
     } else {
       create.mutate(
-        { partnerId, partnerAcademy: myAcademy, studentName: selected, schoolName: selectedSchool, meetingDate: form.meetingDate || undefined, program: form.program || undefined, content: form.content || undefined, createdBy: partnerId },
+        { partnerId, partnerAcademy: myAcademy, authorName: myInstructor?.name || user?.name, studentName: selected, schoolName: selectedSchool, meetingDate: form.meetingDate || undefined, program: form.program || undefined, content: form.content || undefined, createdBy: partnerId },
         { onSuccess: () => { notifyAssignedConsultant(); reset() } },
       )
     }
@@ -247,8 +247,9 @@ export function PartnerStudentsPage() {
               {studentMeetings.map(m => (
                 <div key={m.id} className="rounded-lg border p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-sm font-medium">
+                    <div className="flex items-center gap-2 text-sm font-medium flex-wrap">
                       <span>{m.meetingDate || '—'}</span>
+                      {m.authorName && <span className="text-muted-foreground font-normal">· {m.authorName}</span>}
                       {m.program && <Badge variant="outline">{m.program}</Badge>}
                     </div>
                     {/* 같은 학원 동료 코멘트는 조회만 가능 — 수정·삭제는 작성자 본인 또는 관리자만 */}

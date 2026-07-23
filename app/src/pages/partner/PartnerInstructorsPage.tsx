@@ -99,6 +99,7 @@ export function PartnerInstructorsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-28">이름</TableHead>
                   <TableHead>이메일주소</TableHead>
                   <TableHead className="w-40">소속학원</TableHead>
                   <TableHead className="w-32">담당과목</TableHead>
@@ -114,10 +115,11 @@ export function PartnerInstructorsPage() {
                     .filter(Boolean) as string[]
                   return (
                     <TableRow key={ins.id}>
+                      <TableCell className="text-sm font-medium">{ins.name || <span className="text-muted-foreground">-</span>}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <GraduationCap className="size-4 text-purple-500 shrink-0" />
-                          <span className="text-sm font-medium">{ins.email}</span>
+                          <span className="text-sm">{ins.email}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">{ins.academy || <span className="text-muted-foreground">-</span>}</TableCell>
@@ -178,6 +180,7 @@ function InstructorDialog({ instructor, academyOptions, canEdit, onClose }: {
   const upsert = useUpsertPartnerInstructor()
   const { data: students = [] } = useServiceStudents()
 
+  const [name, setName] = useState(instructor?.name || '')
   const [email, setEmail] = useState(instructor?.email || '')
   const [academy, setAcademy] = useState(instructor?.academy || '')
   const [subject, setSubject] = useState(instructor?.subject || '')
@@ -205,7 +208,7 @@ function InstructorDialog({ instructor, academyOptions, canEdit, onClose }: {
     if (!canEdit) return
     if (!canSave) return
     upsert.mutate(
-      { id: instructor?.id, email: email.trim(), academy: academy || undefined, subject, notes, studentIds, enabledRoutes: routes },
+      { id: instructor?.id, name: name.trim() || undefined, email: email.trim(), academy: academy || undefined, subject, notes, studentIds, enabledRoutes: routes },
       {
         onSuccess: onClose,
         onError: (e: unknown) => {
@@ -221,6 +224,11 @@ function InstructorDialog({ instructor, academyOptions, canEdit, onClose }: {
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{instructor ? '강사 수정' : '강사 추가'}</DialogTitle></DialogHeader>
         <div className="space-y-4">
+          {/* 0. 이름 */}
+          <div className="space-y-1">
+            <Label className="text-xs">이름</Label>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="강사 이름 (코멘트에 표시됩니다)" />
+          </div>
           {/* 1. 이메일주소 */}
           <div className="space-y-1">
             <Label className="text-xs">이메일주소 <span className="text-red-500">*</span></Label>

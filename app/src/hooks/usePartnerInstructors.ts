@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 
 export interface PartnerInstructor {
   id: string
+  name?: string           // 강사 이름
   email: string
   academy?: string
   subject?: string        // 담당과목
@@ -18,6 +19,7 @@ export interface PartnerInstructor {
 function mapRow(row: Record<string, unknown>): PartnerInstructor {
   return {
     id: row.id as string,
+    name: (row.name as string) || undefined,
     email: (row.email as string) || '',
     academy: (row.academy as string) || undefined,
     subject: (row.subject as string) || undefined,
@@ -106,8 +108,9 @@ export function useUpsertPartnerInstructor() {
   const qc = useQueryClient()
   const { user } = useAuth()
   return useMutation({
-    mutationFn: async (input: { id?: string; email: string; academy?: string; subject?: string; notes?: string; studentIds: string[]; enabledRoutes: string[] }) => {
+    mutationFn: async (input: { id?: string; name?: string; email: string; academy?: string; subject?: string; notes?: string; studentIds: string[]; enabledRoutes: string[] }) => {
       const row = {
+        name: input.name?.trim() || null,
         email: input.email.trim(),
         academy: input.academy?.trim() || null,
         subject: input.subject?.trim() || null,

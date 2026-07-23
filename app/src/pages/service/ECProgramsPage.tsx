@@ -211,7 +211,7 @@ export function ECProgramsPage() {
                                   <div key={m.id} className="text-sm border-l-2 border-indigo-200 pl-2.5">
                                     <div className="text-[11px] text-muted-foreground">
                                       {m.meetingDate || '날짜 미정'}
-                                      {partnerName(m.partnerId) && ` · ${partnerName(m.partnerId)}`}
+                                      {(m.authorName || partnerName(m.partnerId)) && ` · ${m.authorName || partnerName(m.partnerId)}`}
                                       {m.program && ` · ${m.program}`}
                                     </div>
                                     <div className="text-gray-700 whitespace-pre-wrap">{m.content || '—'}</div>

@@ -5,6 +5,7 @@ export interface PartnerStudentMeeting {
   id: string
   partnerId?: string
   partnerAcademy?: string
+  authorName?: string
   studentName: string
   schoolName?: string
   meetingDate?: string
@@ -20,6 +21,7 @@ function mapRow(row: Record<string, unknown>): PartnerStudentMeeting {
     id: row.id as string,
     partnerId: (row.partner_id as string) || undefined,
     partnerAcademy: (row.partner_academy as string) || undefined,
+    authorName: (row.author_name as string) || undefined,
     studentName: row.student_name as string,
     schoolName: (row.school_name as string) || undefined,
     meetingDate: (row.meeting_date as string) || undefined,
@@ -91,6 +93,7 @@ export function useCreatePartnerStudentMeeting() {
     mutationFn: async (m: {
       partnerId?: string
       partnerAcademy?: string
+      authorName?: string
       studentName: string
       schoolName?: string
       meetingDate?: string
@@ -101,6 +104,7 @@ export function useCreatePartnerStudentMeeting() {
       const { data, error } = await supabase.from('partner_student_meetings').insert({
         partner_id: m.partnerId || null,
         partner_academy: m.partnerAcademy || null,
+        author_name: m.authorName || null,
         student_name: m.studentName,
         school_name: m.schoolName || null,
         meeting_date: m.meetingDate || null,
