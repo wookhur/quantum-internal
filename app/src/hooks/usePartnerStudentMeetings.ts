@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 export interface PartnerStudentMeeting {
   id: string
   partnerId?: string
+  partnerAcademy?: string
   studentName: string
   schoolName?: string
   meetingDate?: string
@@ -18,6 +19,7 @@ function mapRow(row: Record<string, unknown>): PartnerStudentMeeting {
   return {
     id: row.id as string,
     partnerId: (row.partner_id as string) || undefined,
+    partnerAcademy: (row.partner_academy as string) || undefined,
     studentName: row.student_name as string,
     schoolName: (row.school_name as string) || undefined,
     meetingDate: (row.meeting_date as string) || undefined,
@@ -45,6 +47,28 @@ export function usePartnerStudentMeetings(partnerId?: string) {
   })
 }
 
+/**
+ * 같은 학원(academy) 소속 강사들이 서로의 코멘트를 볼 수 있도록,
+ * partner_academy가 일치하거나(대소문자 무시) 본인이 작성한(partner_id) 미팅을 조회.
+ */
+export function usePartnerStudentMeetingsForAcademy(academy?: string, partnerId?: string) {
+  return useQuery({
+    queryKey: ['partner_student_meetings', 'academy', academy || '', partnerId || ''],
+    enabled: !!(academy || partnerId),
+    queryFn: async () => {
+      const ors: string[] = []
+      // 값에 공백/콤마가 있어도 안전하도록 큰따옴표로 감쌈 (ilike 정확 일치 = 대소문자 무시)
+      if (academy) ors.push(`partner_academy.ilike."${academy}"`)
+      if (partnerId) ors.push(`partner_id.eq.${partnerId}`)
+      let q = supabase.from('partner_student_meetings').select('*')
+      if (ors.length) q = q.or(ors.join(','))
+      const { data, error } = await q.order('meeting_date', { ascending: false, nullsFirst: false })
+      if (error) throw error
+      return (data || []).map(mapRow)
+    },
+  })
+}
+
 /** All partner meetings (admin/oversight). */
 export function useAllPartnerStudentMeetings(enabled = true) {
   return useQuery({
@@ -66,6 +90,7 @@ export function useCreatePartnerStudentMeeting() {
   return useMutation({
     mutationFn: async (m: {
       partnerId?: string
+      partnerAcademy?: string
       studentName: string
       schoolName?: string
       meetingDate?: string
@@ -75,6 +100,7 @@ export function useCreatePartnerStudentMeeting() {
     }) => {
       const { data, error } = await supabase.from('partner_student_meetings').insert({
         partner_id: m.partnerId || null,
+        partner_academy: m.partnerAcademy || null,
         student_name: m.studentName,
         school_name: m.schoolName || null,
         meeting_date: m.meetingDate || null,

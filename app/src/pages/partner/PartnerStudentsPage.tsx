@@ -18,7 +18,7 @@ import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import { canonicalConsultantName } from '@/lib/consultants'
 import { useCanEdit } from '@/hooks/usePermissions'
 import {
-  usePartnerStudentMeetings, useAllPartnerStudentMeetings, useCreatePartnerStudentMeeting,
+  usePartnerStudentMeetingsForAcademy, useAllPartnerStudentMeetings, useCreatePartnerStudentMeeting,
   useUpdatePartnerStudentMeeting, useDeletePartnerStudentMeeting,
   type PartnerStudentMeeting,
 } from '@/hooks/usePartnerStudentMeetings'
@@ -37,9 +37,15 @@ export function PartnerStudentsPage() {
   const { data: myInstructor } = useMyPartnerInstructor()
   // 파트너사(외부 강사) 로그인: 학생의 다른 수업/프로그램 정보는 감추고 이름·학교만 노출
   const isPartnerViewer = !isAdmin && (!!myInstructor || !!user?.isPartner)
-  const { data: myMeetings = [] } = usePartnerStudentMeetings(isAdmin ? undefined : partnerId)
+  // 소속학원명 — 같은 학원 강사끼리 코멘트를 공유하는 기준
+  const myAcademy = myInstructor?.academy || user?.partnerAcademy
+  // 관리자는 전체, 파트너 강사는 '같은 학원(academy) + 본인 작성' 코멘트를 조회
+  const { data: academyMeetings = [] } = usePartnerStudentMeetingsForAcademy(
+    isAdmin ? undefined : myAcademy,
+    isAdmin ? undefined : partnerId,
+  )
   const { data: allMeetings = [] } = useAllPartnerStudentMeetings(isAdmin)
-  const meetings = isAdmin ? allMeetings : myMeetings
+  const meetings = isAdmin ? allMeetings : academyMeetings
 
   const [partnerFilter, setPartnerFilter] = useState('all')
   const partnerOptions = useMemo(() => {
@@ -151,7 +157,7 @@ export function PartnerStudentsPage() {
       )
     } else {
       create.mutate(
-        { partnerId, studentName: selected, schoolName: selectedSchool, meetingDate: form.meetingDate || undefined, program: form.program || undefined, content: form.content || undefined, createdBy: partnerId },
+        { partnerId, partnerAcademy: myAcademy, studentName: selected, schoolName: selectedSchool, meetingDate: form.meetingDate || undefined, program: form.program || undefined, content: form.content || undefined, createdBy: partnerId },
         { onSuccess: () => { notifyAssignedConsultant(); reset() } },
       )
     }
@@ -245,7 +251,8 @@ export function PartnerStudentsPage() {
                       <span>{m.meetingDate || '—'}</span>
                       {m.program && <Badge variant="outline">{m.program}</Badge>}
                     </div>
-                    {canEdit && (
+                    {/* 같은 학원 동료 코멘트는 조회만 가능 — 수정·삭제는 작성자 본인 또는 관리자만 */}
+                    {canEdit && (isAdmin || m.partnerId === partnerId) && (
                     <div className="flex items-center gap-1">
                       <Button size="sm" variant="ghost" onClick={() => startEdit(m)}><Pencil className="size-3.5" /></Button>
                       <Button size="sm" variant="ghost" onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: m.id, partnerId }) }}><Trash2 className="size-3.5" /></Button>
