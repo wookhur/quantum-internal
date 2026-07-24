@@ -451,6 +451,8 @@ export interface ContractDetails {
   services?: Record<string, { checked?: boolean; qty?: number | null }>
   otherChecked?: boolean
   otherText?: string
+  /** 연간 미팅 목표 횟수(기본 26). 학생별로 다를 때만 지정. */
+  annualMeetingTarget?: number
 }
 
 export interface ServiceStudent {

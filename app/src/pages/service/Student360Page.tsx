@@ -23,6 +23,8 @@ import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
+import { todayKST } from '@/lib/date'
+import { contractYearOf, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
 import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
   type EditorMeeting,
@@ -402,7 +404,7 @@ export function Student360Page() {
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} canEdit={canEdit} />
             <IssueReportSection studentId={selected.id} studentName={selected.name} userId={user?.id} userName={user?.name} isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit} />
-            <MeetingsSection studentId={selected.id} createdBy={user?.id} authorName={user?.name} canEdit={canEdit} />
+            <MeetingsSection student={selected} createdBy={user?.id} authorName={user?.name} canEdit={canEdit} />
             {selected.essayEditor && (
               <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} canEdit={canEdit} />
             )}
@@ -411,6 +413,61 @@ export function Student360Page() {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ───────────────────── Meeting progress (미팅 진행률) ─────────────────────
+
+interface MeetingYearGroup {
+  year: number
+  meetings: ServiceMeeting[]   // 해당 연차의 모든 미팅(상태 무관), 최신순
+  completed: number            // 완료(held) 미팅 수
+  target: number
+  isCurrent: boolean
+}
+
+/** 계약 시작일 기준으로 미팅을 연차별로 묶고, 연차별 완료 수를 집계한다. */
+function groupMeetingsByYear(
+  student: ServiceStudent,
+  meetings: ServiceMeeting[],
+  todayISO: string,
+): { years: MeetingYearGroup[]; currentYear: number; target: number } {
+  const target = student.contractDetails?.annualMeetingTarget || DEFAULT_ANNUAL_MEETING_TARGET
+  const start = student.startDate
+  const currentYear = contractYearOf(start, todayISO)
+  const map = new Map<number, ServiceMeeting[]>()
+  for (const m of meetings) {
+    const y = contractYearOf(start, m.meetingDate || m.createdAt)
+    if (!map.has(y)) map.set(y, [])
+    map.get(y)!.push(m)
+  }
+  if (!map.has(currentYear)) map.set(currentYear, [])
+  const maxYear = Math.max(currentYear, ...map.keys())
+  const years: MeetingYearGroup[] = []
+  for (let y = 1; y <= maxYear; y++) {
+    const ms = map.get(y) || []
+    years.push({
+      year: y,
+      meetings: ms,
+      completed: ms.filter(m => m.status === 'held').length,
+      target,
+      isCurrent: y === currentYear,
+    })
+  }
+  return { years, currentYear, target }
+}
+
+/** 총 target칸의 초록색 가로 막대. 완료 1회당 한 칸씩 채워진다. */
+function MeetingProgressBar({ completed, target }: { completed: number; target: number }) {
+  const filled = Math.min(completed, target)
+  const over = Math.max(0, completed - target)
+  return (
+    <div className="flex items-center gap-0.5 w-full" role="img" aria-label={`${completed} / ${target}`}>
+      {Array.from({ length: target }).map((_, i) => (
+        <div key={i} className={`flex-1 h-2.5 rounded-sm transition-colors ${i < filled ? 'bg-emerald-500' : 'bg-muted'}`} />
+      ))}
+      {over > 0 && <span className="text-[10px] text-emerald-600 font-semibold ml-1 shrink-0">+{over}</span>}
     </div>
   )
 }
@@ -424,6 +481,13 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
 }) {
   const t = useT()
   const del = useDeleteServiceStudent()
+  const { data: meetings = [] } = useServiceMeetings(student.id)
+  const { years, currentYear, target } = useMemo(
+    () => groupMeetingsByYear(student, meetings, todayKST()),
+    [student, meetings],
+  )
+  const cur = years.find(y => y.year === currentYear)
+  const curCompleted = cur?.completed ?? 0
 
   return (
     <Card>
@@ -457,6 +521,19 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
         )}
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+        {/* 미팅 진행률: 현재 연차 기준 완료 횟수를 초록 막대로 표시 */}
+        <div className="col-span-2 rounded-lg border bg-muted/20 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <CalendarDays className="size-3.5" /> {t('student360.meetingProgress')}
+              {years.length > 1 && <Badge variant="outline" className="text-[10px]">{t('student360.contractYear', { n: currentYear })}</Badge>}
+            </span>
+            <span className="text-sm font-semibold whitespace-nowrap">
+              {curCompleted} / {target} <span className="text-xs font-normal text-muted-foreground">{t('student360.meetingsCompleted')}</span>
+            </span>
+          </div>
+          <MeetingProgressBar completed={curCompleted} target={target} />
+        </div>
         <Field icon={<Mail className="size-4" />} label={t('student360.email')} value={student.email} />
         <Field icon={<Mail className="size-4" />} label={t('student360.parentEmail')} value={student.parentEmail} />
         <Field icon={<Phone className="size-4" />} label={t('student360.contact')} value={student.contact} />
@@ -669,6 +746,18 @@ function ContractSection({ student, canEdit }: { student: ServiceStudent; canEdi
             <div className="space-y-1">
               <Label className="text-xs">{t('contracts.additionalServices')}</Label>
               <Input value={addSvc} onChange={(e) => setAddSvc(e.target.value)} onBlur={saveAppServices} disabled={!canEdit} className="h-8" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">{t('student360.annualMeetingTarget')}</Label>
+              <Input
+                type="number" min={1}
+                value={local.annualMeetingTarget ?? ''}
+                placeholder={String(DEFAULT_ANNUAL_MEETING_TARGET)}
+                onChange={(e) => setLocal((l) => ({ ...l, annualMeetingTarget: e.target.value ? Number(e.target.value) : undefined }))}
+                onBlur={() => { if (canEdit) update.mutate({ id: student.id, contractDetails: local }) }}
+                disabled={!canEdit}
+                className="h-8"
+              />
             </div>
           </div>
 
@@ -1758,16 +1847,80 @@ function LabeledInput({ label, value, onChange, type }: { label: string; value: 
 }
 
 // ────────────────────────── Meetings ──────────────────────────
-function MeetingsSection({ studentId, createdBy, authorName, canEdit }: {
-  studentId: string
+function MeetingsSection({ student, createdBy, authorName, canEdit }: {
+  student: ServiceStudent
   createdBy?: string
   authorName?: string
   canEdit: boolean
 }) {
+  const studentId = student.id
   const t = useT()
   const consultantName = useConsultantName()
   const { data: meetings = [] } = useServiceMeetings(studentId)
   const del = useDeleteServiceMeeting()
+
+  const { years } = useMemo(
+    () => groupMeetingsByYear(student, meetings, todayKST()),
+    [student, meetings],
+  )
+  const multiYear = years.length > 1
+  // 다년 계약이면 현재 연차만 기본 펼침
+  const [openYears, setOpenYears] = useState<Record<number, boolean>>({})
+  const isOpen = (y: MeetingYearGroup) => openYears[y.year] ?? y.isCurrent
+
+  const renderMeeting = (m: ServiceMeeting) => (
+    <div key={m.id} className="rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <span>{m.meetingDate || '—'}</span>
+          {m.meetingType && <Badge variant="outline">{m.meetingType}</Badge>}
+          {m.meetingMode && (
+            <Badge variant="outline" className={m.meetingMode === 'online' ? 'text-sky-700 border-sky-200 bg-sky-50' : 'text-emerald-700 border-emerald-200 bg-emerald-50'}>
+              {t(m.meetingMode === 'online' ? 'student360.meetingModeOnline' : 'student360.meetingModeInPerson')}
+            </Badge>
+          )}
+          <span className="text-muted-foreground font-normal">{consultantName(m.consultantId)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge className={REPORT_META[m.reportStatus].className}>
+            <FileText className="size-3 mr-1" />{t(REPORT_META[m.reportStatus].labelKey)}
+          </Badge>
+          {canEdit && (
+            <AutoDiaryButton studentId={studentId} meeting={m} createdBy={createdBy} authorName={authorName} canEdit={canEdit} />
+          )}
+          {canEdit && (
+            <MeetingDialog
+              studentId={studentId} meeting={m} createdBy={createdBy} canEdit={canEdit}
+              trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
+            />
+          )}
+          {canEdit && (
+            <Button
+              size="sm" variant="ghost"
+              onClick={() => { if (!canEdit) return; if (confirm(t('student360.confirmDelete'))) del.mutate({ id: m.id, studentId }) }}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+      {m.summary && <p className="text-sm mt-2 whitespace-pre-wrap">{m.summary}</p>}
+      {(m.prepUrl || m.reportUrl) && (
+        <div className="mt-1 flex flex-wrap gap-3">
+          {m.prepUrl && (
+            <a href={m.prepUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
+              {t('student360.meetingPrepUrl')}
+            </a>
+          )}
+          {m.reportUrl && (
+            <a href={m.reportUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
+              {t('student360.reportLink')}{m.reportDate ? ` · ${m.reportDate}` : ''}
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <Card>
@@ -1783,67 +1936,42 @@ function MeetingsSection({ studentId, createdBy, authorName, canEdit }: {
           />
         )}
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-3">
         {meetings.length === 0 && <p className="text-sm text-muted-foreground">{t('student360.noMeetings')}</p>}
-        {meetings.map(m => (
-          <div key={m.id} className="rounded-lg border p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <span>{m.meetingDate || '—'}</span>
-                {m.meetingType && <Badge variant="outline">{m.meetingType}</Badge>}
-                {m.meetingMode && (
-                  <Badge variant="outline" className={m.meetingMode === 'online' ? 'text-sky-700 border-sky-200 bg-sky-50' : 'text-emerald-700 border-emerald-200 bg-emerald-50'}>
-                    {t(m.meetingMode === 'online' ? 'student360.meetingModeOnline' : 'student360.meetingModeInPerson')}
-                  </Badge>
-                )}
-                <span className="text-muted-foreground font-normal">{consultantName(m.consultantId)}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge className={REPORT_META[m.reportStatus].className}>
-                  <FileText className="size-3 mr-1" />{t(REPORT_META[m.reportStatus].labelKey)}
-                </Badge>
-                {canEdit && (
-                  <AutoDiaryButton
-                    studentId={studentId}
-                    meeting={m}
-                    createdBy={createdBy}
-                    authorName={authorName}
-                    canEdit={canEdit}
-                  />
-                )}
-                {canEdit && (
-                  <MeetingDialog
-                    studentId={studentId} meeting={m} createdBy={createdBy} canEdit={canEdit}
-                    trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>}
-                  />
-                )}
-                {canEdit && (
-                  <Button
-                    size="sm" variant="ghost"
-                    onClick={() => { if (!canEdit) return; if (confirm(t('student360.confirmDelete'))) del.mutate({ id: m.id, studentId }) }}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                )}
-              </div>
+
+        {/* 단일 연도 계약: 기존처럼 평면 리스트 */}
+        {!multiYear && meetings.map(renderMeeting)}
+
+        {/* 다년 계약: 연차별 접기/펼치기 드롭다운 (연차별 진행률 막대 포함) */}
+        {multiYear && years.map(yg => {
+          const open = isOpen(yg)
+          return (
+            <div key={yg.year} className="rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setOpenYears(m => ({ ...m, [yg.year]: !open }))}
+                className="w-full flex items-center justify-between gap-3 p-3 hover:bg-muted/30 transition-colors rounded-lg"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold shrink-0">
+                  {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                  {t('student360.contractYear', { n: yg.year })}
+                  {yg.isCurrent && <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-200 bg-emerald-50">{t('student360.currentYearBadge')}</Badge>}
+                </span>
+                <span className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{yg.completed} / {yg.target}</span>
+                  <span className="hidden sm:block w-40 max-w-[45%]"><MeetingProgressBar completed={yg.completed} target={yg.target} /></span>
+                </span>
+              </button>
+              {open && (
+                <div className="border-t p-3 space-y-2">
+                  {yg.meetings.length === 0
+                    ? <p className="text-sm text-muted-foreground">{t('student360.noMeetings')}</p>
+                    : yg.meetings.map(renderMeeting)}
+                </div>
+              )}
             </div>
-            {m.summary && <p className="text-sm mt-2 whitespace-pre-wrap">{m.summary}</p>}
-            {(m.prepUrl || m.reportUrl) && (
-              <div className="mt-1 flex flex-wrap gap-3">
-                {m.prepUrl && (
-                  <a href={m.prepUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
-                    {t('student360.meetingPrepUrl')}
-                  </a>
-                )}
-                {m.reportUrl && (
-                  <a href={m.reportUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
-                    {t('student360.reportLink')}{m.reportDate ? ` · ${m.reportDate}` : ''}
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </CardContent>
     </Card>
   )
