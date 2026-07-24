@@ -1,9 +1,9 @@
 // 학생별 미팅 진행률 계산 (계약 시작일 기준 12개월 주기)
 //
-// 대부분의 학생은 연간 26회의 미팅을 진행하므로 기본 목표치를 26으로 둔다.
+// 대부분의 학생은 연간 24회의 미팅을 진행하므로 기본 목표치를 24로 둔다.
 // 학생별로 다르면 contractDetails.annualMeetingTarget 로 개별 재정의할 수 있다.
 
-export const DEFAULT_ANNUAL_MEETING_TARGET = 26
+export const DEFAULT_ANNUAL_MEETING_TARGET = 24
 
 /** 월 단위 가감 (말일 오버플로우는 이전 달 말일로 보정). */
 export function addMonths(base: string | Date, months: number): Date {
