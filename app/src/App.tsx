@@ -46,6 +46,7 @@ import { WeeklyReportPage } from '@/pages/service/WeeklyReportPage'
 import { ExternalFeesPage } from '@/pages/service/ExternalFeesPage'
 import { MessagesPage } from '@/pages/common/MessagesPage'
 import { TaskBoardPage } from '@/pages/common/TaskBoardPage'
+import { DailyTasksPage } from '@/pages/common/DailyTasksPage'
 import { PersonalTodoPage } from '@/pages/common/PersonalTodoPage'
 import { PersonProfilePage } from '@/pages/common/PersonProfilePage'
 import { StudentPortalPage } from '@/pages/portal/StudentPortalPage'
@@ -88,6 +89,7 @@ export default function App() {
                 <Route path="/todos" element={<Navigate to="/tasks" replace />} />
                 <Route path="/messages" element={<MessagesPage />} />
                 <Route path="/tasks" element={<TaskBoardPage />} />
+                <Route path="/daily-tasks" element={<DailyTasksPage />} />
                 <Route path="/my-todos" element={<PersonalTodoPage />} />
                 <Route path="/person" element={<PersonProfilePage />} />
 

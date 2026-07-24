@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  CheckCircle2, Loader2, Megaphone, Plus, Pencil, Trash2, Pin,
+  CheckCircle2, Loader2, Megaphone, Plus, Pencil, Trash2, Pin, CalendarDays, ChevronRight,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useDailyTasks, useDailyTaskMembers } from '@/hooks/useDailyTasks'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
@@ -43,6 +45,8 @@ export function DashboardPage() {
 
   const { data: todos = [], isLoading: todosLoading } = useDashboardTodos()
   const { data: notices = [], isLoading: noticesLoading } = useNotices()
+  const { data: dtMembers = [] } = useDailyTaskMembers()
+  const { data: dtTasks = [] } = useDailyTasks(todayKST())
   const createNotice = useCreateNotice()
   const updateNotice = useUpdateNotice()
   const deleteNotice = useDeleteNotice()
@@ -96,6 +100,51 @@ export function DashboardPage() {
         <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.title')}</h1>
         <p className="text-muted-foreground">{todayKST()} {t('dashboard.companyStatus')}</p>
       </div>
+
+      {/* 오늘의 업무 (담당자별) */}
+      {dtMembers.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CalendarDays className="size-4 text-primary" /> 오늘의 업무
+              </CardTitle>
+              <Link to="/daily-tasks" className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                일일 업무 <ChevronRight className="size-3.5" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {[...dtMembers].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')).map((mem) => {
+                const list = dtTasks.filter((t) => t.userId === mem.profileId)
+                const done = list.filter((t) => t.status === 'done').length
+                return (
+                  <div key={mem.profileId} className="rounded-md border p-2.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium">{mem.name || '(이름 없음)'}</span>
+                      <span className="text-[11px] text-muted-foreground">{list.length}건 · 완료 {done}</span>
+                    </div>
+                    {list.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">기록 없음</p>
+                    ) : (
+                      <ul className="space-y-0.5">
+                        {list.slice(0, 5).map((t) => (
+                          <li key={t.id} className={`text-xs flex items-center gap-1 ${t.status === 'done' ? 'text-muted-foreground line-through' : ''}`}>
+                            <span className={`size-1.5 rounded-full shrink-0 ${t.status === 'done' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                            <span className="truncate">{t.title}</span>
+                          </li>
+                        ))}
+                        {list.length > 5 && <li className="text-[11px] text-muted-foreground">+{list.length - 5}건</li>}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 공지사항 */}

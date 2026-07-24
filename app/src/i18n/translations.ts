@@ -1673,6 +1673,7 @@ const koTranslations = {
 
   // ── Tasks ──
   'nav.taskBoard': '업무요청',
+  'nav.dailyTask': '일일 업무',
   'nav.myTodo': 'To-do',
   'tasks.title': '업무 요청 보드',
   'tasks.description': '팀 간 업무 요청과 진행 상황을 관리합니다.',
@@ -4189,6 +4190,7 @@ const enTranslations: Record<string, string> = {
 
   // ── Tasks ──
   'nav.taskBoard': 'Work Requests',
+  'nav.dailyTask': 'Daily Tasks',
   'nav.myTodo': 'To-do',
   'tasks.title': 'Task Board',
   'tasks.description': 'Manage team task requests and track progress.',

@@ -138,6 +138,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/dashboard', labelKey: 'nav.dashboard', module: 'dashboard' },
   { path: '/calendar', labelKey: 'nav.calendar', module: 'dashboard', hidden: true },
   { path: '/tasks', labelKey: 'nav.taskBoard', module: 'dashboard' },
+  { path: '/daily-tasks', labelKey: 'nav.dailyTask', module: 'dashboard' },
   { path: '/my-todos', labelKey: 'nav.myTodo', module: 'dashboard' },
   { path: '/messages', labelKey: 'nav.messages', module: 'dashboard' },
   { path: '/person', labelKey: 'nav.personProfile', module: 'dashboard', hidden: true },

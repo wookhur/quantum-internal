@@ -61,7 +61,9 @@ const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: N
     titleKey: 'nav.common',
     module: 'dashboard',
     items: [
+      { labelKey: 'nav.dashboard', to: '/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.taskBoard', to: '/tasks', icon: ClipboardList },
+      { labelKey: 'nav.dailyTask', to: '/daily-tasks', icon: CalendarDays },
       { labelKey: 'nav.myTodo', to: '/my-todos', icon: CheckSquare },
       { labelKey: 'nav.messages', to: '/messages', icon: MessageSquare },
       { labelKey: 'nav.coupangOrders', to: '/common/coupang-orders', icon: ShoppingCart },
