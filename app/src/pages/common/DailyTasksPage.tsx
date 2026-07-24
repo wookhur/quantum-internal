@@ -10,7 +10,7 @@ import { useProfiles } from '@/hooks/useProfiles'
 import { useTasks } from '@/hooks/useTasks'
 import {
   useDailyTaskMembers, useAddDailyTaskMembers, useRemoveDailyTaskMember,
-  useDailyTasks, useCreateDailyTask, useUpdateDailyTask, useDeleteDailyTask,
+  useDailyTasks, useDailyTasksRange, useCreateDailyTask, useUpdateDailyTask, useDeleteDailyTask,
   type DailyTask,
 } from '@/hooks/useDailyTasks'
 
@@ -28,18 +28,56 @@ function fmtDate(iso: string) {
   const wd = ['일', '월', '화', '수', '목', '금', '토'][new Date(y, m - 1, d).getDay()]
   return `${y}. ${m}. ${d} (${wd})`
 }
+const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
+/** 그 주의 월요일(ISO) */
+function weekStartMon(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  return addDays(iso, -((dt.getDay() + 6) % 7))
+}
+function addMonths(iso: string, n: number) {
+  const [y, m] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1 + n, 1)
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-01`
+}
+/** 월간 달력 그리드(월요일 시작, 6주 42칸)의 ISO 날짜 목록 */
+function monthGrid(iso: string): string[] {
+  const [y, m] = iso.split('-').map(Number)
+  const first = `${y}-${String(m).padStart(2, '0')}-01`
+  const gridStart = weekStartMon(first)
+  return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i))
+}
 
 export function DailyTasksPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
   const [date, setDate] = useState(todayISO())
   const [membersOpen, setMembersOpen] = useState(false)
+  const [view, setView] = useState<'day' | 'week' | 'month'>('day')
 
   const { data: members = [] } = useDailyTaskMembers()
   const { data: tasks = [] } = useDailyTasks(date)
   const create = useCreateDailyTask()
   const update = useUpdateDailyTask()
   const del = useDeleteDailyTask()
+
+  // 주/월 뷰용 기간 조회 + 날짜·담당자별 개수 집계
+  const range = useMemo(() => {
+    if (view === 'week') { const s = weekStartMon(date); return { start: s, end: addDays(s, 6) } }
+    if (view === 'month') { const g = monthGrid(date); return { start: g[0], end: g[41] } }
+    return { start: '', end: '' }
+  }, [view, date])
+  const { data: rangeTasks = [] } = useDailyTasksRange(range.start, range.end)
+  const countByDateUser = useMemo(() => {
+    const m = new Map<string, Map<string, number>>()
+    for (const t of rangeTasks) {
+      if (!m.has(t.taskDate)) m.set(t.taskDate, new Map())
+      const inner = m.get(t.taskDate)!
+      inner.set(t.userId, (inner.get(t.userId) || 0) + 1)
+    }
+    return m
+  }, [rangeTasks])
+  const openDay = (d: string) => { setDate(d); setView('day') }
 
   // 현재 사용자에게 배정된 미완료 업무요청 (드롭다운 연동용) — 페이지에서 한 번만 조회
   const { data: myTasks = [] } = useTasks(user?.id ? { assigneeId: user.id } : undefined)
@@ -70,27 +108,38 @@ export function DailyTasksPage() {
           <h1 className="text-xl font-bold flex items-center gap-2"><CalendarDays className="size-5 text-primary" />일일 업무</h1>
           <p className="text-sm text-muted-foreground">담당자별로 그날 진행한/진행 중인 업무를 기록하고 공유합니다.</p>
         </div>
-        {isAdmin && (
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMembersOpen(true)}>
-            <Users className="size-4" />대상자 설정 ({members.length})
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* 뷰 전환 */}
+          <div className="flex rounded-md border overflow-hidden">
+            {([['day', '일간'], ['week', '주간'], ['month', '월간']] as const).map(([v, label]) => (
+              <button key={v} onClick={() => setView(v)}
+                className={`px-3 h-8 text-sm font-medium ${view === v ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'} ${v !== 'day' ? 'border-l' : ''}`}>{label}</button>
+            ))}
+          </div>
+          {isAdmin && (
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMembersOpen(true)}>
+              <Users className="size-4" />대상자 설정 ({members.length})
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Date nav */}
+      {/* Period nav */}
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" className="size-8" onClick={() => setDate((d) => addDays(d, -1))}><ChevronLeft className="size-4" /></Button>
-        <div className="font-semibold min-w-[130px] text-center">{fmtDate(date)}</div>
-        <Button variant="outline" size="icon" className="size-8" onClick={() => setDate((d) => addDays(d, 1))}><ChevronRight className="size-4" /></Button>
-        <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className="h-8 rounded-md border px-2 text-sm bg-background" />
-        {date !== todayISO() && <Button variant="ghost" size="sm" onClick={() => setDate(todayISO())}>오늘</Button>}
+        <Button variant="outline" size="icon" className="size-8" onClick={() => setDate((d) => view === 'day' ? addDays(d, -1) : view === 'week' ? addDays(d, -7) : addMonths(d, -1))}><ChevronLeft className="size-4" /></Button>
+        <div className="font-semibold min-w-[150px] text-center">
+          {view === 'day' ? fmtDate(date) : view === 'week' ? `${weekStartMon(date).slice(5)} ~ ${addDays(weekStartMon(date), 6).slice(5)}` : `${date.slice(0, 4)}년 ${Number(date.slice(5, 7))}월`}
+        </div>
+        <Button variant="outline" size="icon" className="size-8" onClick={() => setDate((d) => view === 'day' ? addDays(d, 1) : view === 'week' ? addDays(d, 7) : addMonths(d, 1))}><ChevronRight className="size-4" /></Button>
+        {view === 'day' && <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} className="h-8 rounded-md border px-2 text-sm bg-background" />}
+        <Button variant="ghost" size="sm" onClick={() => setDate(todayISO())}>오늘</Button>
       </div>
 
       {sortedMembers.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
           아직 작성 대상자가 없습니다. {isAdmin ? '"대상자 설정"에서 직원을 추가하세요.' : '관리자에게 대상자 등록을 요청하세요.'}
         </CardContent></Card>
-      ) : (
+      ) : view === 'day' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {sortedMembers.map((mem) => (
             <MemberCard
@@ -109,6 +158,10 @@ export function DailyTasksPage() {
             />
           ))}
         </div>
+      ) : view === 'week' ? (
+        <WeekView weekStart={weekStartMon(date)} members={sortedMembers} countByDateUser={countByDateUser} onDay={openDay} />
+      ) : (
+        <MonthView anchor={date} members={sortedMembers} countByDateUser={countByDateUser} onDay={openDay} />
       )}
 
       {isAdmin && (
@@ -246,5 +299,81 @@ function MembersDialog({ open, onClose, memberIds, createdBy }: {
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── 주/월 달력 뷰 ───
+type MemberLite = { profileId: string; name?: string }
+function dayCounts(members: MemberLite[], day: string, byDateUser: Map<string, Map<string, number>>) {
+  const inner = byDateUser.get(day)
+  if (!inner) return [] as { name: string; count: number }[]
+  return members
+    .map((m) => ({ name: m.name || '(이름 없음)', count: inner.get(m.profileId) || 0 }))
+    .filter((x) => x.count > 0)
+}
+
+function WeekView({ weekStart, members, countByDateUser, onDay }: {
+  weekStart: string
+  members: MemberLite[]
+  countByDateUser: Map<string, Map<string, number>>
+  onDay: (d: string) => void
+}) {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const today = todayISO()
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+      {days.map((d, i) => {
+        const counts = dayCounts(members, d, countByDateUser)
+        const total = counts.reduce((s, c) => s + c.count, 0)
+        return (
+          <button key={d} onClick={() => onDay(d)}
+            className={`text-left rounded-md border p-2 min-h-[120px] hover:bg-muted/40 ${d === today ? 'border-primary' : ''}`}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold">{WEEKDAYS[i]} {Number(d.slice(8, 10))}</span>
+              {total > 0 && <span className="text-[10px] text-muted-foreground">{total}건</span>}
+            </div>
+            <div className="space-y-0.5">
+              {counts.length === 0
+                ? <span className="text-[11px] text-muted-foreground">-</span>
+                : counts.map((c) => <div key={c.name} className="text-[11px] truncate">{c.name} ({c.count})</div>)}
+            </div>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function MonthView({ anchor, members, countByDateUser, onDay }: {
+  anchor: string
+  members: MemberLite[]
+  countByDateUser: Map<string, Map<string, number>>
+  onDay: (d: string) => void
+}) {
+  const days = monthGrid(anchor)
+  const curMonth = anchor.slice(0, 7)
+  const today = todayISO()
+  return (
+    <div>
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {WEEKDAYS.map((w) => <div key={w} className="text-center text-[11px] text-muted-foreground">{w}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((d) => {
+          const inMonth = d.slice(0, 7) === curMonth
+          const counts = dayCounts(members, d, countByDateUser)
+          return (
+            <button key={d} onClick={() => onDay(d)}
+              className={`text-left rounded border p-1 min-h-[86px] hover:bg-muted/40 ${inMonth ? '' : 'opacity-40'} ${d === today ? 'border-primary' : ''}`}>
+              <div className="text-[11px] font-medium mb-0.5">{Number(d.slice(8, 10))}</div>
+              <div className="space-y-0.5">
+                {counts.slice(0, 3).map((c) => <div key={c.name} className="text-[10px] leading-tight truncate">{c.name}({c.count})</div>)}
+                {counts.length > 3 && <div className="text-[10px] text-muted-foreground">+{counts.length - 3}</div>}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
