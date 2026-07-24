@@ -501,13 +501,6 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
 }) {
   const t = useT()
   const del = useDeleteServiceStudent()
-  const { data: meetings = [] } = useServiceMeetings(student.id)
-  const { years, currentYear, target } = useMemo(
-    () => groupMeetingsByYear(student, meetings, todayKST()),
-    [student, meetings],
-  )
-  const cur = years.find(y => y.year === currentYear)
-  const curCompleted = cur?.completed ?? 0
 
   return (
     <Card>
@@ -541,19 +534,6 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
         )}
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-        {/* 미팅 진행률: 현재 연차 기준 완료 횟수를 초록 막대로 표시 */}
-        <div className="col-span-2 rounded-lg border bg-muted/20 p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <CalendarDays className="size-3.5" /> {t('student360.meetingProgress')}
-              {years.length > 1 && <Badge variant="outline" className="text-[10px]">{t('student360.contractYear', { n: currentYear })}</Badge>}
-            </span>
-            <span className="text-sm font-semibold whitespace-nowrap">
-              {curCompleted} / {target} <span className="text-xs font-normal text-muted-foreground">{t('student360.meetingsCompleted')}</span>
-            </span>
-          </div>
-          <MeetingProgressBar completed={curCompleted} target={target} />
-        </div>
         <Field icon={<Mail className="size-4" />} label={t('student360.email')} value={student.email} />
         <Field icon={<Mail className="size-4" />} label={t('student360.parentEmail')} value={student.parentEmail} />
         <Field icon={<Phone className="size-4" />} label={t('student360.contact')} value={student.contact} />
