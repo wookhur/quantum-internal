@@ -5,6 +5,7 @@ export interface ServiceProgram {
   id: string
   key: string
   name: string
+  subtitle?: string      // 이름 아래 작은 부제(담당자·기관). 그룹 소속이면 그룹 밴드의 부제로 쓰임
   groupName?: string
   capacity: number       // 학년당 정원
   sortOrder: number
@@ -21,6 +22,7 @@ function mapProgram(r: Record<string, unknown>): ServiceProgram {
     id: r.id as string,
     key: r.key as string,
     name: r.name as string,
+    subtitle: (r.subtitle as string) || undefined,
     groupName: (r.group_name as string) || undefined,
     capacity: Number(r.capacity) || 0,
     sortOrder: Number(r.sort_order) || 0,
@@ -61,13 +63,14 @@ export function useProgramSeatAssignments() {
 export function useCreateProgram() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (p: { name: string; groupName?: string; capacity: number; sortOrder?: number }) => {
+    mutationFn: async (p: { name: string; subtitle?: string; groupName?: string; capacity: number; sortOrder?: number }) => {
       // key는 안정적 slug — 이름 기반 + 타임스탬프로 유일성 확보
       const base = (p.name || 'program').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'program'
       const key = `${base}_${Math.floor(Date.now() / 1000)}`
       const { error } = await supabase.from('service_programs').insert({
         key,
         name: p.name,
+        subtitle: p.subtitle || null,
         group_name: p.groupName || null,
         capacity: p.capacity,
         sort_order: p.sortOrder ?? 999,
@@ -81,9 +84,10 @@ export function useCreateProgram() {
 export function useUpdateProgram() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (p: { id: string; name?: string; groupName?: string | null; capacity?: number; sortOrder?: number }) => {
+    mutationFn: async (p: { id: string; name?: string; subtitle?: string | null; groupName?: string | null; capacity?: number; sortOrder?: number }) => {
       const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (p.name !== undefined) update.name = p.name
+      if (p.subtitle !== undefined) update.subtitle = p.subtitle || null
       if (p.groupName !== undefined) update.group_name = p.groupName || null
       if (p.capacity !== undefined) update.capacity = p.capacity
       if (p.sortOrder !== undefined) update.sort_order = p.sortOrder

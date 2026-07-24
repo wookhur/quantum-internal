@@ -1620,12 +1620,12 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
 // ─────────────────── 외부서비스 좌석 배정판 (②) ───────────────────
 const SEAT_GRADES = ['G9', 'G10', 'G11', 'G12'] as const
 
-// 상위 묶음(그룹)은 원색 대신 그레이톤 밝기 차이로 구분 — 진한 밴드(상위) / 연한 헤더 / 은은한 열 배경
+// 상위 묶음(그룹)은 주변보다 '약간만' 더 진한 그레이톤으로만 구분
 const GROUP_COLORS = [
-  { band: 'bg-slate-600 text-white', head: 'bg-slate-100 text-slate-700', col: 'bg-slate-100/60' },
-  { band: 'bg-slate-400 text-white', head: 'bg-slate-50 text-slate-600',  col: 'bg-slate-50' },
-  { band: 'bg-slate-700 text-white', head: 'bg-slate-200 text-slate-700', col: 'bg-slate-100' },
-  { band: 'bg-slate-500 text-white', head: 'bg-slate-100 text-slate-600', col: 'bg-slate-100/40' },
+  { band: 'bg-slate-300 text-slate-700', head: 'bg-slate-100 text-slate-600', col: 'bg-slate-50' },
+  { band: 'bg-slate-200 text-slate-700', head: 'bg-slate-50 text-slate-600',  col: 'bg-slate-50/60' },
+  { band: 'bg-slate-400 text-white',     head: 'bg-slate-100 text-slate-600', col: 'bg-slate-100/50' },
+  { band: 'bg-slate-300 text-slate-700', head: 'bg-slate-50 text-slate-600',  col: 'bg-slate-50' },
 ] as const
 type GroupColor = (typeof GROUP_COLORS)[number]
 
@@ -1737,6 +1737,7 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
                         <div key={i} style={{ gridColumn: `${startCol}`, gridRow: '1 / span 2' }}
                           className="bg-white flex flex-col items-center justify-center gap-0.5 px-1 py-2 text-center">
                           <div className="font-semibold text-slate-800 leading-tight">{p.name}</div>
+                          {p.subtitle && <div className="text-[9px] text-slate-400 leading-tight">{p.subtitle}</div>}
                           <div className={countPill(filled, p.capacity)}>{filled}/{p.capacity}</div>
                         </div>
                       )
@@ -1744,8 +1745,9 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
                     const c = colOf.get(g.programs[0].id)!
                     return (
                       <div key={i} style={{ gridColumn: `${startCol} / span ${span}`, gridRow: 1 }}
-                        className={`${c.band} flex items-center justify-center font-bold text-[11px] py-1.5`}>
-                        {g.name}
+                        className={`${c.band} flex flex-col items-center justify-center py-1 leading-tight`}>
+                        <span className="font-bold text-[11px]">{g.name}</span>
+                        {g.programs[0].subtitle && <span className="text-[9px] font-normal opacity-70">{g.programs[0].subtitle}</span>}
                       </div>
                     )
                   })}
@@ -1836,23 +1838,27 @@ function ProgramManageDialog({ open, onOpenChange, programs }: {
   const create = useCreateProgram()
   const update = useUpdateProgram()
   const del = useDeleteProgram()
-  const [newP, setNewP] = useState({ name: '', groupName: '', capacity: '5' })
+  const [newP, setNewP] = useState({ name: '', subtitle: '', groupName: '', capacity: '5' })
+  const cols = 'grid grid-cols-[1fr_1fr_1fr_64px_auto] gap-2'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{t('serviceDash.manageProgramsTitle')}</DialogTitle></DialogHeader>
         <div className="space-y-2">
-          <div className="grid grid-cols-[1fr_1fr_70px_auto] gap-2 text-[11px] text-muted-foreground px-1">
+          <div className={`${cols} text-[11px] text-muted-foreground px-1`}>
             <span>{t('serviceDash.progName')}</span>
+            <span>{t('serviceDash.progSubtitle')}</span>
             <span>{t('serviceDash.progGroup')}</span>
             <span>{t('serviceDash.progCapacity')}</span>
             <span></span>
           </div>
           {programs.map(p => (
-            <div key={p.id} className="grid grid-cols-[1fr_1fr_70px_auto] gap-2 items-center">
+            <div key={p.id} className={`${cols} items-center`}>
               <Input defaultValue={p.name} className="h-8"
                 onBlur={e => { const v = e.target.value.trim(); if (v && v !== p.name) update.mutate({ id: p.id, name: v }) }} />
+              <Input defaultValue={p.subtitle || ''} className="h-8" placeholder="—"
+                onBlur={e => { const v = e.target.value.trim(); if (v !== (p.subtitle || '')) update.mutate({ id: p.id, subtitle: v }) }} />
               <Input defaultValue={p.groupName || ''} className="h-8" placeholder="—"
                 onBlur={e => { const v = e.target.value.trim(); if (v !== (p.groupName || '')) update.mutate({ id: p.id, groupName: v }) }} />
               <Input type="number" min={1} defaultValue={String(p.capacity)} className="h-8"
@@ -1864,21 +1870,22 @@ function ProgramManageDialog({ open, onOpenChange, programs }: {
             </div>
           ))}
           {/* Add new */}
-          <div className="grid grid-cols-[1fr_1fr_70px_auto] gap-2 items-center border-t pt-2 mt-2">
+          <div className={`${cols} items-center border-t pt-2 mt-2`}>
             <Input value={newP.name} onChange={e => setNewP(f => ({ ...f, name: e.target.value }))} className="h-8" placeholder={t('serviceDash.progName')} />
+            <Input value={newP.subtitle} onChange={e => setNewP(f => ({ ...f, subtitle: e.target.value }))} className="h-8" placeholder={t('serviceDash.progSubtitle')} />
             <Input value={newP.groupName} onChange={e => setNewP(f => ({ ...f, groupName: e.target.value }))} className="h-8" placeholder={t('serviceDash.progGroup')} />
             <Input type="number" min={1} value={newP.capacity} onChange={e => setNewP(f => ({ ...f, capacity: e.target.value }))} className="h-8" />
             <Button size="sm" className="h-8"
               disabled={!newP.name.trim() || create.isPending}
               onClick={() => create.mutate(
-                { name: newP.name.trim(), groupName: newP.groupName.trim() || undefined, capacity: Number(newP.capacity) || 5, sortOrder: (programs[programs.length - 1]?.sortOrder ?? 0) + 1 },
-                { onSuccess: () => setNewP({ name: '', groupName: '', capacity: '5' }) },
+                { name: newP.name.trim(), subtitle: newP.subtitle.trim() || undefined, groupName: newP.groupName.trim() || undefined, capacity: Number(newP.capacity) || 5, sortOrder: (programs[programs.length - 1]?.sortOrder ?? 0) + 1 },
+                { onSuccess: () => setNewP({ name: '', subtitle: '', groupName: '', capacity: '5' }) },
               )}>
               <Plus size={14} />
             </Button>
           </div>
         </div>
-        <p className="text-[11px] text-muted-foreground">{t('serviceDash.manageProgramsHint')}</p>
+        <p className="text-[11px] text-muted-foreground">{t('serviceDash.manageProgramsHint2')}</p>
       </DialogContent>
     </Dialog>
   )
