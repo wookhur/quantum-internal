@@ -471,6 +471,10 @@ export interface ServiceStudent {
   essayEditor?: string
   partners?: string
   majors?: string
+  /** 전공 계열 (1단계, majorTaxonomy의 track key) */
+  majorTrack?: string
+  /** 세부전공 (2단계, 영어). 'Other' 선택 시 자유 입력값이 여기에 저장됨 */
+  majorDetail?: string
   contractType?: string
   /** 담당 컨설턴트 변경 이력 (from→to, 변경일). 현재 담당자는 assignedConsultant 유지. */
   consultantHistory?: { from?: string; to: string; date: string }[]

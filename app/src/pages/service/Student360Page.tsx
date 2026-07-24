@@ -25,6 +25,7 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
 import { contractYearOf, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
+import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, OTHER_MAJOR } from '@/lib/majorTaxonomy'
 import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
   type EditorMeeting,
@@ -544,6 +545,7 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
         <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
         <ConsultantField student={student} canEdit={canEdit} />
         <Field label={t('student360.essayEditor')} value={student.essayEditor} />
+        <Field label={t('student360.majorTrack')} value={[student.majorTrack ? MAJOR_TRACK_LABEL[student.majorTrack] : '', student.majorDetail].filter(Boolean).join(' · ') || undefined} />
         <Field label={t('student360.majors')} value={student.majors} />
         <Field label={t('student360.status')} value={statusLabelFor(t, student.status)} />
         <Field label={t('student360.acceptedUni')} value={student.acceptedUni} />
@@ -1639,6 +1641,9 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
     assignedConsultant: student?.assignedConsultant || '',
     essayEditor: student?.essayEditor || '',
     majors: student?.majors || '',
+    majorTrack: student?.majorTrack || '',
+    majorDetail: student?.majorDetail || '',
+    majorIsOther: !!(student?.majorDetail && !majorsForTrack(student?.majorTrack).includes(student.majorDetail)),
     contractType: student?.contractType || '',
     applicationCount: student?.applicationCount ? String(student.applicationCount) : '',
     additionalServices: student?.additionalServices || '',
@@ -1679,6 +1684,8 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
       assignedConsultant: form.assignedConsultant || undefined,
       essayEditor: form.essayEditor || undefined,
       majors: form.majors || undefined,
+      majorTrack: form.majorTrack || undefined,
+      majorDetail: form.majorDetail || undefined,
       contractType: form.contractType || undefined,
       applicationCount: form.applicationCount ? Number(form.applicationCount) : undefined,
       additionalServices: form.additionalServices || undefined,
@@ -1742,6 +1749,36 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
               <option value="">{t('student360.unassigned')}</option>
               {ESSAY_EDITORS.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
+          </div>
+          {/* 전공: 1단계 계열 → 2단계 세부전공(연동). 목록에 없으면 Other로 직접 입력 */}
+          <div className="col-span-2 grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">{t('student360.majorTrack')}</Label>
+              <select value={form.majorTrack} onChange={e => setForm(f => ({ ...f, majorTrack: e.target.value, majorDetail: '', majorIsOther: false }))}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                <option value="">—</option>
+                {MAJOR_TRACKS.map(tr => <option key={tr.key} value={tr.key}>{tr.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs">{t('student360.majorDetail')}</Label>
+              <select
+                value={form.majorIsOther ? OTHER_MAJOR : form.majorDetail}
+                disabled={!form.majorTrack}
+                onChange={e => {
+                  const v = e.target.value
+                  if (v === OTHER_MAJOR) setForm(f => ({ ...f, majorIsOther: true, majorDetail: '' }))
+                  else setForm(f => ({ ...f, majorIsOther: false, majorDetail: v }))
+                }}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none disabled:opacity-50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                <option value="">—</option>
+                {majorsForTrack(form.majorTrack).map(mj => <option key={mj} value={mj}>{mj}</option>)}
+                <option value={OTHER_MAJOR}>Other</option>
+              </select>
+              {form.majorIsOther && (
+                <Input className="h-9 mt-1" placeholder={t('student360.majorDetailOther')} value={form.majorDetail} onChange={e => setForm(f => ({ ...f, majorDetail: e.target.value }))} />
+              )}
+            </div>
           </div>
           <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
           <LabeledInput label={t('student360.contractType')} value={form.contractType} onChange={v => set('contractType', v)} />

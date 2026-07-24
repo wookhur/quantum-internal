@@ -18,7 +18,7 @@ import {
 import {
   ChevronLeft, ChevronRight, Plus, X, ExternalLink,
   Users, Calendar, AlertCircle, FileText, CheckSquare,
-  Loader2, Trash2, UserSearch, BarChart3, UserPlus, CheckCircle2, XCircle, Activity,
+  Loader2, Trash2, UserSearch, BarChart3, UserPlus, CheckCircle2, XCircle, Activity, GraduationCap,
 } from 'lucide-react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -39,6 +39,8 @@ import {
   type DashboardMilestone,
 } from '@/hooks/useStudentMilestones'
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
+import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, GRADE_BUCKETS, gradeBucket } from '@/lib/majorTaxonomy'
+import type { ServiceStudent } from '@/types'
 import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -1500,6 +1502,116 @@ function days0Class(days: number): string {
   return 'text-gray-400'
 }
 
+// ───────────────── 전공 계열 × 학년 현황판 (①) ─────────────────
+function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
+  const t = useT()
+  // 현재 서비스 중(활성) 학생만 — 완료/취소 제외
+  const active = useMemo(
+    () => students.filter(s => !(s.status === 'finished' || s.status === 'canceled')),
+    [students],
+  )
+  const [cell, setCell] = useState<{ track: string; grade: string } | null>(null)
+
+  const rowKeys = useMemo(() => {
+    const hasUnassigned = active.some(s => !s.majorTrack)
+    return [...MAJOR_TRACKS.map(tr => tr.key), ...(hasUnassigned ? ['unassigned'] : [])]
+  }, [active])
+
+  const { counts, colTotals, rowTotals, grand } = useMemo(() => {
+    const counts: Record<string, Record<string, ServiceStudent[]>> = {}
+    const colTotals: Record<string, number> = {}
+    const rowTotals: Record<string, number> = {}
+    let grand = 0
+    for (const s of active) {
+      const rk = s.majorTrack || 'unassigned'
+      const gb = gradeBucket(s.grade)
+      counts[rk] = counts[rk] || {}
+      counts[rk][gb] = counts[rk][gb] || []
+      counts[rk][gb].push(s)
+      colTotals[gb] = (colTotals[gb] || 0) + 1
+      rowTotals[rk] = (rowTotals[rk] || 0) + 1
+      grand++
+    }
+    return { counts, colTotals, rowTotals, grand }
+  }, [active])
+
+  const rowLabel = (rk: string) => rk === 'unassigned' ? t('serviceDash.majorUnassigned') : MAJOR_TRACK_LABEL[rk]
+  const cellStudents = cell ? (counts[cell.track]?.[cell.grade] || []) : []
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">{t('serviceDash.majorsTitle')}</h3>
+          <span className="text-xs text-muted-foreground">{t('serviceDash.activeStudents')} {grand}{t('serviceDash.studentsUnit')}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left font-medium py-2 pr-3">{t('student360.majorTrack')}</th>
+                {GRADE_BUCKETS.map(g => <th key={g} className="text-center font-medium py-2 px-2 w-16">{g}</th>)}
+                <th className="text-center font-semibold py-2 px-2 w-16">{t('serviceDash.majorTotal')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rowKeys.map(rk => (
+                <tr key={rk} className="border-b hover:bg-muted/20">
+                  <td className={`py-2 pr-3 ${rk === 'unassigned' ? 'text-amber-600 font-medium' : ''}`}>{rowLabel(rk)}</td>
+                  {GRADE_BUCKETS.map(g => {
+                    const n = counts[rk]?.[g]?.length || 0
+                    const isSel = cell?.track === rk && cell?.grade === g
+                    return (
+                      <td key={g} className="text-center px-2 py-1">
+                        {n > 0 ? (
+                          <button
+                            onClick={() => setCell(isSel ? null : { track: rk, grade: g })}
+                            className={`inline-flex min-w-7 justify-center rounded px-1.5 py-0.5 tabular-nums ${isSel ? 'bg-emerald-600 text-white' : 'text-emerald-700 hover:bg-emerald-50'}`}
+                          >{n}</button>
+                        ) : <span className="text-muted-foreground/40">·</span>}
+                      </td>
+                    )
+                  })}
+                  <td className="text-center font-semibold tabular-nums">{rowTotals[rk] || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 font-semibold">
+                <td className="py-2 pr-3">{t('serviceDash.majorTotal')}</td>
+                {GRADE_BUCKETS.map(g => <td key={g} className="text-center tabular-nums">{colTotals[g] || 0}</td>)}
+                <td className="text-center tabular-nums">{grand}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {cell && (
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <div className="text-xs text-muted-foreground mb-2">
+              {rowLabel(cell.track)} · {cell.grade} — {cellStudents.length}{t('serviceDash.studentsUnit')}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {cellStudents.map(s => (
+                <Link key={s.id} to={`/service/student-360?student=${s.id}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs hover:border-emerald-400">
+                  <span className="font-medium">{s.name}</span>
+                  {s.majorDetail && <span className="text-muted-foreground">{s.majorDetail}</span>}
+                  {s.school && <span className="text-muted-foreground/70">· {s.school}</span>}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {active.some(s => !s.majorTrack) && (
+          <p className="text-xs text-amber-600">{t('serviceDash.majorUnassignedHint')}</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ─────────────────────── Metrics (지표) ───────────────────────
 /** True if the service student's status is one of the "archived" outcomes. */
 function isFinished(status?: string) { return status === 'finished' }
@@ -1714,7 +1826,7 @@ export function ServiceDashboardPage() {
   // 캘린더의 학생 미팅을 클릭하면 해당 학생의 Student 360(미팅노트) 화면으로 이동
   const openMeetingNote = (m: DashboardMeeting) => routerNav(`/service/student-360?student=${m.studentId}`)
 
-  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student' | 'metrics'>('calendar')
+  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student' | 'majors' | 'metrics'>('calendar')
   const [calMode,          setCalMode]          = useState<'week' | 'month'>('week')
   const [refDate,          setRefDate]          = useState<Date>(todayDate)
   const [consultantFilter, setConsultantFilter] = useState('all')
@@ -1908,6 +2020,12 @@ export function ServiceDashboardPage() {
                 className={`px-3 h-8 text-sm font-medium border-l ${view === 'student' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 <UserSearch size={14} className="inline mr-1.5" />학생별
+              </button>
+              <button
+                onClick={() => setView('majors')}
+                className={`px-3 h-8 text-sm font-medium border-l ${view === 'majors' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              >
+                <GraduationCap size={14} className="inline mr-1.5" />{t('serviceDash.majorsTab')}
               </button>
               <button
                 onClick={() => setView('metrics')}
@@ -2177,6 +2295,8 @@ export function ServiceDashboardPage() {
             onEditMilestone={openEditMilestone}
           />
         )}
+
+        {view === 'majors' && <MajorGradeMatrixSection students={vStudents} />}
 
         {view === 'metrics' && <ServiceMetricsSection />}
       </div>

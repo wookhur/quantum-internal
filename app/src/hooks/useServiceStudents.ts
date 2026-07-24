@@ -28,6 +28,8 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     essayEditor: (row.essay_editor as string) || undefined,
     partners: (row.partners as string) || undefined,
     majors: (row.majors as string) || undefined,
+    majorTrack: (row.major_track as string) || undefined,
+    majorDetail: (row.major_detail as string) || undefined,
     contractType: (row.contract_type as string) || undefined,
     consultantHistory: (row.consultant_history as ServiceStudent['consultantHistory']) || undefined,
     applicationCount: (row.application_count as number) || undefined,
@@ -141,6 +143,8 @@ export function useCreateServiceStudent() {
       essayEditor?: string
       partners?: string
       majors?: string
+      majorTrack?: string
+      majorDetail?: string
       contractType?: string
       applicationCount?: number
       additionalServices?: string
@@ -171,6 +175,8 @@ export function useCreateServiceStudent() {
         essay_editor: s.essayEditor,
         partners: s.partners,
         majors: s.majors,
+        major_track: s.majorTrack || null,
+        major_detail: s.majorDetail || null,
         contract_type: s.contractType,
         application_count: s.applicationCount || null,
         additional_services: s.additionalServices || null,
@@ -212,6 +218,8 @@ export function useUpdateServiceStudent() {
       essayEditor?: string
       partners?: string
       majors?: string
+      majorTrack?: string
+      majorDetail?: string
       contractType?: string
       consultantHistory?: ServiceStudent['consultantHistory']
       applicationCount?: number
@@ -244,6 +252,8 @@ export function useUpdateServiceStudent() {
       if (rest.essayEditor !== undefined) update.essay_editor = rest.essayEditor
       if (rest.partners !== undefined) update.partners = rest.partners
       if (rest.majors !== undefined) update.majors = rest.majors
+      if (rest.majorTrack !== undefined) update.major_track = rest.majorTrack || null
+      if (rest.majorDetail !== undefined) update.major_detail = rest.majorDetail || null
       if (rest.contractType !== undefined) update.contract_type = rest.contractType
       if (rest.consultantHistory !== undefined) update.consultant_history = rest.consultantHistory
       if (rest.applicationCount !== undefined) update.application_count = rest.applicationCount || null
