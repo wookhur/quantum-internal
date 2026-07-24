@@ -1652,6 +1652,17 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
     return m
   }, [seats, studentById])
 
+  // 연속된 같은 묶음(group_name) 프로그램을 헤더에서 하나로 병합하기 위한 세그먼트
+  const programGroups = useMemo(() => {
+    const gs: { name?: string; programs: ServiceProgram[] }[] = []
+    for (const p of programs) {
+      const last = gs[gs.length - 1]
+      if (p.groupName && last && last.name === p.groupName) last.programs.push(p)
+      else gs.push({ name: p.groupName, programs: [p] })
+    }
+    return gs
+  }, [programs])
+
   const pickerProgram = programs.find(p => p.id === picker?.programId)
   const pickerOptions = useMemo(() => {
     if (!picker) return []
@@ -1682,26 +1693,36 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
         ) : SEAT_GRADES.map(grade => {
           const maxCap = Math.max(0, ...programs.map(p => p.capacity))
           return (
-            <div key={grade} className="space-y-1">
-              <div className="text-sm font-bold text-gray-800">{grade}</div>
-              <div className="overflow-x-auto">
-                <table className="text-xs border-collapse">
+            <div key={grade} className="rounded-xl border overflow-hidden">
+              <div className="bg-slate-50 border-b px-3 py-1.5 text-sm font-bold text-slate-700">{grade}</div>
+              <div className="overflow-x-auto p-2">
+                <table className="text-xs border-separate border-spacing-x-1.5 border-spacing-y-1">
+                  <colgroup>
+                    <col style={{ width: 28 }} />
+                    {programs.map(p => <col key={p.id} style={{ width: 150 }} />)}
+                  </colgroup>
                   <thead>
+                    {/* 묶음 헤더 (연속 같은 묶음은 셀 병합) */}
                     <tr>
-                      <th className="w-7"></th>
-                      {programs.map(p => (
-                        <th key={p.id} className="px-1 text-center text-[10px] text-muted-foreground font-normal">{p.groupName || ''}</th>
+                      <th />
+                      {programGroups.map((g, i) => (
+                        <th key={i} colSpan={g.programs.length} className="pb-0.5 text-center align-bottom">
+                          {g.name && (
+                            <span className="inline-block rounded-full bg-slate-100 text-slate-500 text-[10px] font-medium px-2 py-0.5">{g.name}</span>
+                          )}
+                        </th>
                       ))}
                     </tr>
-                    <tr className="border-b">
-                      <th className="w-7"></th>
+                    {/* 프로그램 헤더 */}
+                    <tr>
+                      <th />
                       {programs.map(p => {
                         const filled = grid.get(p.id)?.get(grade)?.length || 0
                         const full = filled >= p.capacity
                         return (
-                          <th key={p.id} className="px-1 py-1 text-center align-bottom min-w-[130px]">
-                            <div className="font-semibold text-gray-800">{p.name}</div>
-                            <div className={`text-[10px] font-medium ${full ? 'text-red-600' : 'text-emerald-600'}`}>{filled}/{p.capacity}</div>
+                          <th key={p.id} className="px-1 pb-1.5 text-center align-bottom">
+                            <div className="font-semibold text-slate-800 leading-tight">{p.name}</div>
+                            <div className={`mt-0.5 inline-block rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${full ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{filled}/{p.capacity}</div>
                           </th>
                         )
                       })}
@@ -1709,22 +1730,24 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
                   </thead>
                   <tbody>
                     {Array.from({ length: maxCap }).map((_, ri) => (
-                      <tr key={ri} className="border-b border-muted/60">
-                        <td className="text-[10px] text-muted-foreground/60 text-right pr-1 w-7">{ri + 1}</td>
+                      <tr key={ri}>
+                        <td className="text-[10px] text-slate-300 text-right pr-0.5 align-middle tabular-nums">{ri + 1}</td>
                         {programs.map(p => {
-                          if (ri >= p.capacity) return <td key={p.id} className="bg-muted/20" />
+                          if (ri >= p.capacity) return <td key={p.id} />
                           const arr = grid.get(p.id)?.get(grade) || []
                           const seat = arr[ri]
                           return (
-                            <td key={p.id} className="px-1 py-0.5 min-w-[130px]">
+                            <td key={p.id} className="align-middle">
                               {seat ? (
-                                <span className="group flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5">
-                                  <Link to={`/service/student-360?student=${seat.student.id}`} className="truncate hover:underline flex-1">{studentPickerLabel(seat.student)}</Link>
-                                  {canEdit && <button onClick={() => unassign.mutate(seat.seatId)} className="opacity-0 group-hover:opacity-100 text-red-500 shrink-0"><X size={11} /></button>}
-                                </span>
+                                <div className="group/seat flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 pl-2 pr-1 h-7">
+                                  <Link to={`/service/student-360?student=${seat.student.id}`} className="truncate text-emerald-900 hover:underline flex-1 leading-none">{studentPickerLabel(seat.student)}</Link>
+                                  {canEdit && <button onClick={() => unassign.mutate(seat.seatId)} className="opacity-0 group-hover/seat:opacity-100 text-emerald-400 hover:text-red-500 shrink-0 transition"><X size={12} /></button>}
+                                </div>
                               ) : canEdit ? (
-                                <button onClick={() => openPicker(p.id, grade)} className="w-full text-left text-muted-foreground/40 hover:text-emerald-600 hover:bg-emerald-50 rounded px-1.5 py-0.5">+</button>
-                              ) : <span className="block text-muted-foreground/20 px-1.5">·</span>}
+                                <button onClick={() => openPicker(p.id, grade)} className="w-full h-7 flex items-center justify-center rounded-md border border-dashed border-slate-200 text-slate-300 hover:border-emerald-300 hover:text-emerald-500 hover:bg-emerald-50/60 transition-colors">
+                                  <Plus size={13} />
+                                </button>
+                              ) : <div className="h-7 rounded-md border border-dashed border-slate-100" />}
                             </td>
                           )
                         })}
