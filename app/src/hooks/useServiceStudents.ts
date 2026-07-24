@@ -327,6 +327,39 @@ export function useServiceMeetings(studentId?: string) {
   })
 }
 
+/**
+ * 학생 목록 카드용: 완료(held)된 미팅을 학생별로 집계한 Map.
+ * 1000행 제한을 넘기기 위해 페이지네이션으로 전량 로드한다.
+ */
+export function useHeldMeetingsByStudent() {
+  return useQuery({
+    queryKey: ['service_meetings_held_all'],
+    queryFn: async () => {
+      const map = new Map<string, { date: string }[]>()
+      const pageSize = 1000
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from('service_meetings')
+          .select('student_id, meeting_date, created_at')
+          .eq('status', 'held')
+          .order('created_at', { ascending: true })
+          .range(from, from + pageSize - 1)
+        if (error) throw error
+        const rows = data || []
+        for (const r of rows) {
+          const sid = r.student_id as string
+          if (!sid) continue
+          const arr = map.get(sid) || []
+          arr.push({ date: (r.meeting_date as string) || (r.created_at as string) })
+          map.set(sid, arr)
+        }
+        if (rows.length < pageSize) break
+      }
+      return map
+    },
+  })
+}
+
 export function useCreateServiceMeeting() {
   const qc = useQueryClient()
   return useMutation({

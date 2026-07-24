@@ -33,6 +33,7 @@ import {
   useServiceStudents, useCreateServiceStudent, useUpdateServiceStudent, useDeleteServiceStudent,
   useServiceMeetings, useCreateServiceMeeting, useUpdateServiceMeeting, useDeleteServiceMeeting,
   useServiceDiary, useCreateServiceDiary, useUpdateServiceDiary, useDeleteServiceDiary,
+  useHeldMeetingsByStudent,
 } from '@/hooks/useServiceStudents'
 import {
   useServiceReports, useCreateServiceReport, useDeleteServiceReport,
@@ -228,6 +229,16 @@ export function Student360Page() {
   const statusFlags = useStudentStatusFlags()
   const consultantPool = useConsultantPool()
   const consultantName = useConsultantName()
+  const { data: heldByStudent } = useHeldMeetingsByStudent()
+
+  // 학생 카드용: 현재 연차에 완료된 미팅 수 / 목표(기본 24)
+  const meetingProgressFor = (s: ServiceStudent) => {
+    const target = s.contractDetails?.annualMeetingTarget || DEFAULT_ANNUAL_MEETING_TARGET
+    const arr = heldByStudent?.get(s.id) || []
+    const cy = contractYearOf(s.startDate, todayKST())
+    const completed = arr.filter(m => contractYearOf(s.startDate, m.date) === cy).length
+    return { completed, target }
+  }
 
   // Consultants who actually have at least one student (for the filter dropdown).
   // Match by NAME so legacy slug IDs (e.g. 'yeonse') and live profile UUIDs
@@ -385,6 +396,15 @@ export function Student360Page() {
               <div className="text-xs text-muted-foreground mt-1 truncate">
                 {[s.school, s.grade].filter(Boolean).join(' · ') || '—'}
               </div>
+              {(() => {
+                const { completed, target } = meetingProgressFor(s)
+                return (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <MeetingProgressBar completed={completed} target={target} />
+                    <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{completed}/{target}</span>
+                  </div>
+                )
+              })()}
             </button>
           ))}
         </div>
