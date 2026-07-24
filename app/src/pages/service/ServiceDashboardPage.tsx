@@ -39,7 +39,7 @@ import {
   type DashboardMilestone,
 } from '@/hooks/useStudentMilestones'
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
-import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, GRADE_BUCKETS, gradeBucket } from '@/lib/majorTaxonomy'
+import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, gradeBucket, gradesToShow } from '@/lib/majorTaxonomy'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
 import {
   useServicePrograms, useCreateProgram, useUpdateProgram, useDeleteProgram, type ServiceProgram,
@@ -1539,6 +1539,7 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
     return { counts, colTotals, rowTotals, grand }
   }, [active])
 
+  const gradeCols = useMemo(() => gradesToShow(active.map(s => gradeBucket(s.grade))), [active])
   const rowLabel = (rk: string) => rk === 'unassigned' ? t('serviceDash.majorUnassigned') : MAJOR_TRACK_LABEL[rk]
   const cellStudents = cell ? (counts[cell.track]?.[cell.grade] || []) : []
 
@@ -1554,7 +1555,7 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
             <thead>
               <tr className="border-b">
                 <th className="text-left font-medium py-2 pr-3">{t('student360.majorTrack')}</th>
-                {GRADE_BUCKETS.map(g => <th key={g} className="text-center font-medium py-2 px-2 w-16">{g}</th>)}
+                {gradeCols.map(g => <th key={g} className="text-center font-medium py-2 px-2 w-16">{g}</th>)}
                 <th className="text-center font-semibold py-2 px-2 w-16">{t('serviceDash.majorTotal')}</th>
               </tr>
             </thead>
@@ -1562,7 +1563,7 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
               {rowKeys.map(rk => (
                 <tr key={rk} className="border-b hover:bg-muted/20">
                   <td className={`py-2 pr-3 ${rk === 'unassigned' ? 'text-amber-600 font-medium' : ''}`}>{rowLabel(rk)}</td>
-                  {GRADE_BUCKETS.map(g => {
+                  {gradeCols.map(g => {
                     const n = counts[rk]?.[g]?.length || 0
                     const isSel = cell?.track === rk && cell?.grade === g
                     return (
@@ -1583,7 +1584,7 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
             <tfoot>
               <tr className="border-t-2 font-semibold">
                 <td className="py-2 pr-3">{t('serviceDash.majorTotal')}</td>
-                {GRADE_BUCKETS.map(g => <td key={g} className="text-center tabular-nums">{colTotals[g] || 0}</td>)}
+                {gradeCols.map(g => <td key={g} className="text-center tabular-nums">{colTotals[g] || 0}</td>)}
                 <td className="text-center tabular-nums">{grand}</td>
               </tr>
             </tfoot>
@@ -1617,8 +1618,6 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
 }
 
 // ─────────────────── 외부서비스 좌석 배정판 (②) ───────────────────
-const SEAT_GRADES = ['G9', 'G10', 'G11', 'G12'] as const
-
 // 상위 묶음(그룹)은 주변보다 '약간만' 더 진한 그레이톤으로만 구분
 const GROUP_COLORS = [
   { band: 'bg-slate-300 text-slate-700', head: 'bg-slate-100 text-slate-600', col: 'bg-slate-50' },
@@ -1692,6 +1691,13 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
   const countPill = (filled: number, cap: number) =>
     `mt-0.5 inline-block rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${filled > cap ? 'bg-red-100 text-red-700' : filled >= cap ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`
 
+  // 기본 학년(G9~G12) + 실제 배정된 학년(G8 등)만 섹션으로 표시
+  const boardGrades = useMemo(() => {
+    const present = new Set<string>()
+    for (const gm of grid.values()) for (const g of gm.keys()) present.add(g)
+    return gradesToShow(present)
+  }, [grid])
+
   return (
     <Card>
       <CardContent className="p-4 space-y-5">
@@ -1709,7 +1715,7 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
 
         {programs.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center">{t('serviceDash.noPrograms')}</p>
-        ) : SEAT_GRADES.map(grade => {
+        ) : boardGrades.map(grade => {
           const maxCap = Math.max(0, ...programs.map(p => p.capacity))
           const rowCount = Math.max(maxCap, ...programs.map(p => grid.get(p.id)?.get(grade)?.length || 0))
           const colIndex = new Map(programs.map((p, i) => [p.id, i + 2])) // grid 열(1열=좌석번호)

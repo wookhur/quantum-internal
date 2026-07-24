@@ -105,25 +105,31 @@ export function majorsForTrack(trackKey?: string): string[] {
   return MAJOR_TRACKS.find(t => t.key === trackKey)?.majors || []
 }
 
-// ── 학년 정규화: 자유입력 grade를 G9~G12/기타 버킷으로 묶는다 ──
+// ── 학년 정규화: 자유입력 grade를 G6~G12/기타 버킷으로 묶는다 ──
+// (좌석표·전공표의 기본 학년은 G9~G12이지만, 데이터에 G8 등 다른 학년이 있으면 그 학년도 표시)
 export const GRADE_BUCKETS = ['G9', 'G10', 'G11', 'G12', '기타'] as const
-export type GradeBucket = (typeof GRADE_BUCKETS)[number]
+export type GradeBucket = string
 
-export function gradeBucket(grade?: string): GradeBucket {
+/** 좌석표/전공표에 항상 표시하는 기본 학년 */
+export const BASE_GRADES = ['G9', 'G10', 'G11', 'G12']
+const GRADE_ORDER = ['G6', 'G7', 'G8', 'G9', 'G10', 'G11', 'G12', '기타']
+
+/** 기본 학년(G9~G12) + 실제 데이터에 존재하는 학년만, 정해진 순서로 반환 */
+export function gradesToShow(present: Iterable<string>): string[] {
+  const set = new Set(present)
+  return GRADE_ORDER.filter(g => BASE_GRADES.includes(g) || set.has(g))
+}
+
+export function gradeBucket(grade?: string): string {
   if (!grade) return '기타'
   const g = grade.toLowerCase().replace(/\s+/g, '')
-  // "12학년", "grade12", "g12", "12", "12th", "senior" 등 다양한 표기 → 숫자 추출 우선
-  const m = g.match(/(9|10|11|12)/)
-  if (m) {
-    const n = m[1]
-    if (n === '9') return 'G9'
-    if (n === '10') return 'G10'
-    if (n === '11') return 'G11'
-    if (n === '12') return 'G12'
-  }
-  if (/(senior|고3|고삼)/.test(g)) return 'G12'
-  if (/(junior|고2|고이)/.test(g)) return 'G11'
-  if (/(sophomore|고1|고일)/.test(g)) return 'G10'
-  if (/(freshman)/.test(g)) return 'G9'
+  // 영어/한국어 학년 표기
+  if (/freshman/.test(g)) return 'G9'
+  if (/sophomore|고1|고일/.test(g)) return 'G10'
+  if (/junior|고2|고이/.test(g)) return 'G11'
+  if (/senior|고3|고삼/.test(g)) return 'G12'
+  // 숫자 추출: 10~12 우선, 그다음 6~9 (예: "G8", "8", "7학년", "grade 11")
+  const m = g.match(/1[0-2]|[6-9]/)
+  if (m) return 'G' + m[0]
   return '기타'
 }
