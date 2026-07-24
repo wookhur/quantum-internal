@@ -145,6 +145,18 @@ export function useUpsertPartnerInstructor() {
   })
 }
 
+/** 외부 강사 비밀번호를 기본값(000000)으로 초기화 (관리자용, 서버 엣지함수 경유). */
+export function useResetInstructorPassword() {
+  return useMutation({
+    mutationFn: async (email: string): Promise<{ success: boolean; password: string }> => {
+      const { data, error } = await supabase.functions.invoke('reset-instructor-password', { body: { email } })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      return data as { success: boolean; password: string }
+    },
+  })
+}
+
 export function useDeletePartnerInstructor() {
   const qc = useQueryClient()
   return useMutation({

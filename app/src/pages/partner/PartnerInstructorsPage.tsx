@@ -16,7 +16,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { Loader2, Plus, Pencil, Trash2, GraduationCap, Lock } from 'lucide-react'
+import { Loader2, Plus, Pencil, Trash2, GraduationCap, Lock, KeyRound } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import {
@@ -27,7 +27,7 @@ import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { EC_PARTNERS } from '@/lib/ecPartners'
 import { X } from 'lucide-react'
 import {
-  usePartnerInstructors, useUpsertPartnerInstructor, useDeletePartnerInstructor,
+  usePartnerInstructors, useUpsertPartnerInstructor, useDeletePartnerInstructor, useResetInstructorPassword,
   type PartnerInstructor,
 } from '@/hooks/usePartnerInstructors'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -56,6 +56,15 @@ export function PartnerInstructorsPage() {
   const { data: instructors = [], isLoading } = usePartnerInstructors()
   const { data: fees = [] } = useAllServiceProgramFees()
   const del = useDeletePartnerInstructor()
+  const resetPw = useResetInstructorPassword()
+
+  const handleResetPassword = (ins: PartnerInstructor) => {
+    if (!confirm(`'${ins.name || ins.email}' 강사의 비밀번호를 초기화할까요?\n(가입된 계정만 초기화됩니다)`)) return
+    resetPw.mutate(ins.email, {
+      onSuccess: (r) => alert(`비밀번호가 '${r.password}' 로 초기화되었습니다.\n강사에게 전달 후 로그인하면 변경하도록 안내해 주세요.`),
+      onError: (e: unknown) => alert(`초기화 실패: ${(e as Error)?.message || ''}`),
+    })
+  }
 
   const [editing, setEditing] = useState<PartnerInstructor | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -138,6 +147,10 @@ export function PartnerInstructorsPage() {
                         <div className="flex items-center justify-end gap-0.5">
                           {canEdit && (
                             <>
+                              <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-blue-600" title="비밀번호 초기화 (000000)"
+                                disabled={resetPw.isPending} onClick={() => handleResetPassword(ins)}>
+                                {resetPw.isPending && resetPw.variables === ins.email ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+                              </Button>
                               <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-purple-600" title="수정" onClick={() => setEditing(ins)}>
                                 <Pencil className="size-4" />
                               </Button>
