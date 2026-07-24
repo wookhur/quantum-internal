@@ -43,7 +43,8 @@ import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { useT } from '@/i18n/LanguageContext'
-import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus, MeetingStatus, MeetingCancelledBy } from '@/types'
+import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus, MeetingStatus, MeetingCancelledBy, ServiceStudent } from '@/types'
+import { GRADES } from '@/types'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -437,7 +438,7 @@ function MilestoneDialog({
 }: {
   open: boolean
   onClose: () => void
-  students: { id: string; name: string }[]
+  students: { id: string; name: string; koreanName?: string }[]
   editing: StudentMilestone | null
   defaultStudentId?: string
   defaultDate?: string
@@ -530,8 +531,11 @@ function MilestoneDialog({
             <Select value={studentId} onValueChange={v => setStudentId(v ?? '')}>
               <SelectTrigger><SelectValue placeholder={t('serviceDash.selectStudent')} /></SelectTrigger>
               <SelectContent>
+                {studentId && !students.some(s => s.id === studentId) && (
+                  <SelectItem value={studentId}>(삭제된 학생)</SelectItem>
+                )}
                 {students.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>{studentDisplayName(s.name, s.koreanName)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -1296,11 +1300,80 @@ function CycleOverview({
 
 // ─── By-student schedule view (item 2) ──────────────────────────────────────
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/** 학생 표시 이름. name/koreanName이 비었거나 UUID면 절대 UUID를 노출하지 않는다. */
 function studentDisplayName(name?: string, koreanName?: string): string {
-  const ko = (koreanName || '').trim()
-  const en = (name || '').trim()
+  const clean = (v?: string) => { const s = (v || '').trim(); return s && !UUID_RE.test(s) ? s : '' }
+  const ko = clean(koreanName)
+  const en = clean(name)
   if (ko && en && ko !== en) return `${ko} (${en})`
-  return ko || en || '—'
+  return ko || en || '(이름 없음)'
+}
+
+/** 진행 중 학생 상세: 학년·전공별 인원 요약 + 학생/학교 표. */
+function ActiveStudentsBreakdown({ list, onGo }: { list: ServiceStudent[]; onGo: (id: string) => void }) {
+  const gradeOrder = (g?: string) => { const i = GRADES.indexOf((g || '').trim() as (typeof GRADES)[number]); return i < 0 ? 999 : i }
+  const gradeLabel = (g?: string) => (g || '').trim() || '미입력'
+  const majorLabel = (m?: string) => (m || '').trim() || '미입력'
+  const nameLabel = (s: ServiceStudent) => studentDisplayName(s.name, s.koreanName)
+
+  const rows = [...list].sort((a, b) =>
+    (gradeOrder(a.grade) - gradeOrder(b.grade)) ||
+    majorLabel(a.majors).localeCompare(majorLabel(b.majors), 'ko') ||
+    nameLabel(a).localeCompare(nameLabel(b), 'ko'))
+
+  const byGrade = new Map<string, number>()
+  const byMajor = new Map<string, number>()
+  rows.forEach(s => {
+    byGrade.set(gradeLabel(s.grade), (byGrade.get(gradeLabel(s.grade)) || 0) + 1)
+    byMajor.set(majorLabel(s.majors), (byMajor.get(majorLabel(s.majors)) || 0) + 1)
+  })
+  const gradeSummary = [...byGrade.entries()].sort((a, b) => gradeOrder(a[0]) - gradeOrder(b[0]))
+  const majorSummary = [...byMajor.entries()].sort((a, b) => b[1] - a[1])
+
+  if (rows.length === 0) return <p className="text-sm text-muted-foreground py-6 text-center">데이터가 없습니다.</p>
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="rounded-md border p-2.5">
+          <div className="text-xs font-semibold text-muted-foreground mb-1.5">학년별 ({rows.length}명)</div>
+          <div className="flex flex-wrap gap-1.5">
+            {gradeSummary.map(([g, c]) => <Badge key={g} variant="outline" className="text-xs">{g} · {c}명</Badge>)}
+          </div>
+        </div>
+        <div className="rounded-md border p-2.5">
+          <div className="text-xs font-semibold text-muted-foreground mb-1.5">전공별</div>
+          <div className="flex flex-wrap gap-1.5">
+            {majorSummary.map(([m, c]) => <Badge key={m} variant="outline" className="text-xs">{m} · {c}명</Badge>)}
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border rounded-md">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-xs text-muted-foreground">
+            <tr>
+              <th className="text-left px-2.5 py-2 whitespace-nowrap">학년</th>
+              <th className="text-left px-2.5 py-2">전공</th>
+              <th className="text-left px-2.5 py-2 whitespace-nowrap">이름</th>
+              <th className="text-left px-2.5 py-2">학교</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rows.map(s => (
+              <tr key={s.id} className="hover:bg-muted/40 cursor-pointer" onClick={() => onGo(s.id)}>
+                <td className="px-2.5 py-1.5 whitespace-nowrap">{gradeLabel(s.grade)}</td>
+                <td className="px-2.5 py-1.5">{majorLabel(s.majors)}</td>
+                <td className="px-2.5 py-1.5 font-medium whitespace-nowrap">{nameLabel(s)}</td>
+                <td className="px-2.5 py-1.5 text-muted-foreground">{s.school || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 /** Priority escalates as the deadline approaches (overdue/≤3d = P0). */
@@ -1408,6 +1481,10 @@ function StudentScheduleView({
             <SelectValue placeholder="학생 선택 (이름)" />
           </SelectTrigger>
           <SelectContent className="max-h-80">
+            {/* 목록에 없는(삭제된) 학생이 선택돼 있으면 UUID 대신 라벨을 보여주도록 항목 주입 */}
+            {studentId && !sortedStudents.some(s => s.id === studentId) && (
+              <SelectItem value={studentId}>(삭제된 학생)</SelectItem>
+            )}
             {sortedStudents.map(s => (
               <SelectItem key={s.id} value={s.id}>{studentDisplayName(s.name, s.koreanName)}</SelectItem>
             ))}
@@ -1574,7 +1651,7 @@ function ServiceMetricsSection() {
     meetings: t('serviceDash.mMeetings'), newEnrolled: t('serviceDash.mNewEnrolled'),
     active: t('serviceDash.mActive'), finished: t('serviceDash.mFinished'), canceled: t('serviceDash.mCanceled'),
   }
-  const nameOf = (s?: { name: string; koreanName?: string }) => s ? (s.koreanName ? `${s.name} (${s.koreanName})` : s.name) : '—'
+  const nameOf = (s?: { name: string; koreanName?: string }) => s ? studentDisplayName(s.name, s.koreanName) : '—'
 
   return (
     <div className="space-y-4">
@@ -1606,14 +1683,16 @@ function ServiceMetricsSection() {
 
       {/* Detail dialog */}
       <Dialog open={!!detail} onOpenChange={(o) => { if (!o) setDetail(null) }}>
-        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+        <DialogContent className={`${detail === 'active' ? 'max-w-3xl' : 'max-w-md'} max-h-[80vh] overflow-y-auto`}>
           <DialogHeader>
             <DialogTitle>
               {detail ? detailTitle[detail] : ''}
-              <span className="ml-2 text-sm font-normal text-muted-foreground">{activePeriod}</span>
+              <span className="ml-2 text-sm font-normal text-muted-foreground">{detail === 'active' ? t('serviceDash.currentTime') : activePeriod}</span>
             </DialogTitle>
           </DialogHeader>
-          {detail === 'meetings' ? (
+          {detail === 'active' ? (
+            <ActiveStudentsBreakdown list={activeList} onGo={goStudent} />
+          ) : detail === 'meetings' ? (
             meetingByStudent.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">{t('serviceDash.metricsEmpty')}</p> : (
               <div className="divide-y">
                 {meetingByStudent.map(({ student, count }) => (
@@ -1627,7 +1706,7 @@ function ServiceMetricsSection() {
             )
           ) : detail ? (
             (() => {
-              const list = detail === 'newEnrolled' ? newEnrolledList : detail === 'active' ? activeList : detail === 'finished' ? finishedList : canceledList
+              const list = detail === 'newEnrolled' ? newEnrolledList : detail === 'finished' ? finishedList : canceledList
               return list.length === 0 ? <p className="text-sm text-muted-foreground py-6 text-center">{t('serviceDash.metricsEmpty')}</p> : (
                 <div className="divide-y">
                   {list.map(s => (
@@ -2170,7 +2249,7 @@ export function ServiceDashboardPage() {
       <MilestoneDialog
         open={showAddMilestone}
         onClose={() => { setShowAddMilestone(false); setEditingMilestone(null) }}
-        students={vStudents.map(s => ({ id: s.id, name: s.name }))}
+        students={vStudents.map(s => ({ id: s.id, name: s.name, koreanName: s.koreanName }))}
         editing={editingMilestone}
         defaultStudentId={defaultMilestoneStudentId}
         defaultDate={defaultMilestoneDate}
