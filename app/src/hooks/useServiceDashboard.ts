@@ -117,6 +117,38 @@ export function useAllServiceFollowupsDue(startDate: string, endDate: string) {
   })
 }
 
+/** 미완료(done=false) follow-up 전체 — 대시보드에서 완료될 때까지 계속 표시. */
+export function useOpenServiceFollowups() {
+  return useQuery({
+    queryKey: ['dashboard_open_followups'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('service_followups')
+        .select('*, service_students!inner(name, assigned_consultant)')
+        .eq('done', false)
+        .order('due_date', { ascending: true, nullsFirst: false })
+      if (error) throw error
+      return (data || []).map((row: Record<string, unknown>) => {
+        const s = row.service_students as Record<string, unknown>
+        return {
+          id: row.id as string,
+          studentId: row.student_id as string,
+          diaryId: (row.diary_id as string) || undefined,
+          text: row.text as string,
+          done: row.done as boolean,
+          doneAt: (row.done_at as string) || undefined,
+          dueDate: (row.due_date as string) || undefined,
+          createdBy: (row.created_by as string) || undefined,
+          createdAt: row.created_at as string,
+          updatedAt: row.updated_at as string,
+          studentName: (s?.name as string) || '',
+          studentConsultant: (s?.assigned_consultant as string) || undefined,
+        } as DashboardFollowup
+      })
+    },
+  })
+}
+
 /** All follow-ups (done or not) due within the range — for QC completion rates. */
 export function useAllServiceFollowupsInRange(startDate: string, endDate: string) {
   return useQuery({

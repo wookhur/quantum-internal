@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,12 +8,23 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  CheckCircle2, Loader2, Megaphone, Plus, Pencil, Trash2, Pin, CalendarDays, ChevronRight,
+  Loader2, Megaphone, Plus, Pencil, Trash2, Pin, CalendarDays, ChevronRight, Wallet, CalendarClock, AlertTriangle,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useDailyTasks, useDailyTaskMembers } from '@/hooks/useDailyTasks'
-import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { useInstallments } from '@/hooks/useInstallments'
+import { useAllServiceMeetings, useOpenServiceFollowups } from '@/hooks/useServiceDashboard'
+import { useConsultantName } from '@/lib/consultants'
+
+function addDaysISO(iso: string, n: number) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + n)
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+function fmtWon(n?: number) {
+  if (!n) return ''
+  return n >= 10000 ? `${Math.round(n / 10000).toLocaleString()}만` : n.toLocaleString()
+}
 import { todayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -21,35 +32,34 @@ import {
   type Notice,
 } from '@/hooks/useNotices'
 
-function useDashboardTodos() {
-  return useQuery({
-    queryKey: ['dashboard-todos'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('todos')
-        .select('*')
-        .neq('status', 'done')
-        .order('priority', { ascending: true })
-        .order('due_date', { ascending: true })
-        .limit(10)
-      if (error) throw error
-      return data || []
-    },
-  })
-}
-
 export function DashboardPage() {
   const t = useT()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
 
-  const { data: todos = [], isLoading: todosLoading } = useDashboardTodos()
   const { data: notices = [], isLoading: noticesLoading } = useNotices()
   const { data: dtMembers = [] } = useDailyTaskMembers()
   const { data: dtTasks = [] } = useDailyTasks(todayKST())
   const createNotice = useCreateNotice()
   const updateNotice = useUpdateNotice()
   const deleteNotice = useDeleteNotice()
+
+  // ── 자동 연동: 수금 예정 · 예정 미팅 · 미해결 follow-up ──
+  const today = todayKST()
+  const weekEnd = addDaysISO(today, 7)
+  const consultantName = useConsultantName()
+  const { data: installments = [] } = useInstallments()
+  const { data: upcomingMeetings = [] } = useAllServiceMeetings(today, weekEnd)
+  const { data: openFollowups = [] } = useOpenServiceFollowups()
+
+  // 수금: 미납이면서 마감이 오늘~7일 이내(연체 포함)
+  const dueCollections = useMemo(() => installments
+    .filter((i) => i.status !== 'paid' && i.dueDate && i.dueDate.slice(0, 10) <= weekEnd)
+    .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '')), [installments, weekEnd])
+  // 미팅: 오늘~7일, 취소/노쇼 제외
+  const meetings = useMemo(() => upcomingMeetings
+    .filter((m) => m.status !== 'cancelled' && m.status !== 'no_show' && m.meetingDate)
+    .sort((a, b) => (a.meetingDate || '').localeCompare(b.meetingDate || '')), [upcomingMeetings])
 
   const [showNoticeForm, setShowNoticeForm] = useState(false)
   const [editingNotice, setEditingNotice] = useState<Notice | null>(null)
@@ -146,7 +156,79 @@ export function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* 자동 연동: 수금 예정 · 예정 미팅 · 미해결 follow-up */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* 수금 예정 */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between">
+              <span className="flex items-center gap-2"><Wallet className="size-4 text-amber-600" /> 수금 예정</span>
+              <Link to="/consulting/collections" className="text-xs font-normal text-muted-foreground hover:text-foreground">전체 <ChevronRight className="size-3 inline" /></Link>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {dueCollections.length === 0 ? <p className="text-sm text-muted-foreground py-2">예정된 수금 없음</p> :
+              dueCollections.slice(0, 8).map((i) => {
+                const overdue = !!i.dueDate && i.dueDate.slice(0, 10) < today
+                return (
+                  <div key={i.id} className="text-sm flex items-start gap-2">
+                    <span className={`mt-1 size-1.5 rounded-full shrink-0 ${overdue ? 'bg-red-500' : 'bg-amber-400'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate">{i.contract?.studentName || i.contract?.contractorName || '-'} <span className="text-muted-foreground">· {fmtWon(i.amount)}</span></div>
+                      <div className="text-[11px] text-muted-foreground">{i.dueDate?.slice(0, 10)}{i.contract?.salesRep ? ` · ${i.contract.salesRep}` : ''}{overdue ? ' · 연체' : ''}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            {dueCollections.length > 8 && <p className="text-[11px] text-muted-foreground">+{dueCollections.length - 8}건</p>}
+          </CardContent>
+        </Card>
+
+        {/* 예정 미팅 */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2"><CalendarClock className="size-4 text-blue-600" /> 예정 미팅 <span className="text-xs font-normal text-muted-foreground">(7일)</span></CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {meetings.length === 0 ? <p className="text-sm text-muted-foreground py-2">예정 미팅 없음</p> :
+              meetings.slice(0, 8).map((m) => {
+                const c = consultantName(m.consultantId || m.studentConsultant)
+                return (
+                  <div key={m.id} className="text-sm flex items-start gap-2">
+                    <span className="mt-1 size-1.5 rounded-full shrink-0 bg-blue-400" />
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate">{m.studentName || '-'}{m.meetingType ? ` · ${m.meetingType}` : ''}</div>
+                      <div className="text-[11px] text-muted-foreground">{m.meetingDate}{c ? ` · ${c}` : ''}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            {meetings.length > 8 && <p className="text-[11px] text-muted-foreground">+{meetings.length - 8}건</p>}
+          </CardContent>
+        </Card>
+
+        {/* 미해결 follow-up */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2"><AlertTriangle className="size-4 text-rose-500" /> 미해결 follow-up <span className="text-xs font-normal text-muted-foreground">({openFollowups.length})</span></CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {openFollowups.length === 0 ? <p className="text-sm text-muted-foreground py-2">미해결 없음</p> :
+              openFollowups.slice(0, 8).map((f) => (
+                <div key={f.id} className="text-sm flex items-start gap-2">
+                  <span className="mt-1 size-1.5 rounded-full shrink-0 bg-rose-400" />
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate">{f.text}</div>
+                    <div className="text-[11px] text-muted-foreground">{f.studentName}{f.dueDate ? ` · 마감 ${f.dueDate.slice(0, 10)}` : ''}</div>
+                  </div>
+                </div>
+              ))}
+            {openFollowups.length > 8 && <p className="text-[11px] text-muted-foreground">+{openFollowups.length - 8}건</p>}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
         {/* 공지사항 */}
         <Card>
           <CardHeader className="pb-3">
@@ -208,48 +290,6 @@ export function DashboardPage() {
                         </Button>
                       </div>
                     )}
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 급한 할일 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle2 className="size-4" /> {t('dashboard.urgentTodos')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {todosLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : todos.length === 0 ? (
-              <div className="text-sm text-muted-foreground text-center py-8">
-                {t('dashboard.noTodos')}
-              </div>
-            ) : (
-              todos.map((todo: Record<string, unknown>, i: number) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
-                    todo.priority === 'high' ? 'bg-destructive' :
-                    todo.priority === 'medium' ? 'bg-warning' : 'bg-muted-foreground'
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm truncate">{String(todo.title || '')}</div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-muted-foreground">
-                        {t('priority.' + ((todo.priority as string) || 'medium'))}
-                      </span>
-                      {todo.due_date ? (
-                        <span className="text-xs text-muted-foreground">
-                          · {t('dashboard.due')}: {String(todo.due_date).slice(0, 10)}
-                        </span>
-                      ) : null}
-                    </div>
                   </div>
                 </div>
               ))
