@@ -1745,9 +1745,11 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
                     const c = colOf.get(g.programs[0].id)!
                     return (
                       <div key={i} style={{ gridColumn: `${startCol} / span ${span}`, gridRow: 1 }}
-                        className={`${c.band} flex flex-col items-center justify-center py-1 leading-tight`}>
-                        <span className="font-bold text-[11px]">{g.name}</span>
-                        {g.programs[0].subtitle && <span className="text-[9px] font-normal opacity-70">{g.programs[0].subtitle}</span>}
+                        className="bg-white flex items-center px-1 pt-1">
+                        <div className={`${c.band} w-full rounded-full flex flex-col items-center justify-center py-1 leading-tight`}>
+                          <span className="font-bold text-[11px]">{g.name}</span>
+                          {g.programs[0].subtitle && <span className="text-[9px] font-normal opacity-70">{g.programs[0].subtitle}</span>}
+                        </div>
                       </div>
                     )
                   })}
