@@ -727,8 +727,9 @@ function ProjectSection({ profiles }: { profiles: User[] }) {
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [form, setForm] = useState<ProjectFormData>({ ...EMPTY_PROJECT_FORM })
 
-  // Active projects (not done)
-  const activeProjects = useMemo(() => todos.filter(t => t.status !== 'done'), [todos])
+  // Active projects (not done). 업무요청에서 자동 복제된 [요청] 연동 항목(linkedTaskId)은
+  // 업무요청 목록과 중복되므로 프로젝트 목록에서는 숨기고 직접 생성한 프로젝트만 표시.
+  const activeProjects = useMemo(() => todos.filter(t => t.status !== 'done' && !t.linkedTaskId), [todos])
 
 
   const openCreate = () => {
