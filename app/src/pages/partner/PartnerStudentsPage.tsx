@@ -37,20 +37,26 @@ export function PartnerStudentsPage() {
   const { data: myInstructor } = useMyPartnerInstructor()
   const { data: instructors = [] } = usePartnerInstructors()
 
-  // 작성자 표시용: 로그인 계정 id → 강사관리에 기입된 강사 이름 (이메일로 연결).
+  // 작성자 표시용: 로그인 계정 id → 강사관리에 기입된 강사 이름·학원 (이메일로 연결).
   // 예전에 이름이 없어 로그인 id(예: '1mlmf2mpmf3')로 저장된 미팅도 실제 이름으로 보이게 한다.
-  const instructorNameById = useMemo(() => {
-    const emailToName = new Map<string, string>()
-    instructors.forEach(i => { if (i.name && i.email) emailToName.set(i.email.trim().toLowerCase(), i.name) })
-    const m = new Map<string, string>()
+  const instructorById = useMemo(() => {
+    const emailTo = new Map<string, { name?: string; academy?: string }>()
+    instructors.forEach(i => { if (i.email) emailTo.set(i.email.trim().toLowerCase(), { name: i.name, academy: i.academy }) })
+    const m = new Map<string, { name?: string; academy?: string }>()
     profiles.forEach(p => {
-      const n = emailToName.get((p.email || '').trim().toLowerCase())
-      if (n) m.set(p.id, n)
+      const info = emailTo.get((p.email || '').trim().toLowerCase())
+      if (info) m.set(p.id, info)
     })
     return m
   }, [instructors, profiles])
-  const meetingAuthor = (m: PartnerStudentMeeting) =>
-    instructorNameById.get(m.partnerId || m.createdBy || '') || m.authorName
+  // "김지성 | KYN" 형식 — 한 학생이 여러 학원을 다닐 때 어느 학원 코멘트인지 구분되도록 학원명을 붙인다.
+  const meetingAuthorLabel = (m: PartnerStudentMeeting) => {
+    const info = instructorById.get(m.partnerId || m.createdBy || '')
+    const name = info?.name || m.authorName
+    const academy = info?.academy || m.partnerAcademy
+    if (!name) return ''
+    return academy ? `${name} | ${academy}` : name
+  }
   // 파트너사(외부 강사) 로그인: 학생의 다른 수업/프로그램 정보는 감추고 이름·학교만 노출
   const isPartnerViewer = !isAdmin && (!!myInstructor || !!user?.isPartner)
   // 소속학원명 — 같은 학원 강사끼리 코멘트를 공유하는 기준
@@ -269,7 +275,7 @@ export function PartnerStudentsPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-sm font-medium flex-wrap">
                       <span>{m.meetingDate || '—'}</span>
-                      {meetingAuthor(m) && <span className="text-muted-foreground font-normal">· {meetingAuthor(m)}</span>}
+                      {meetingAuthorLabel(m) && <span className="text-muted-foreground font-normal">· {meetingAuthorLabel(m)}</span>}
                       {m.program && <Badge variant="outline">{m.program}</Badge>}
                     </div>
                     {/* 같은 학원 동료 코멘트는 조회만 가능 — 수정·삭제는 작성자 본인 또는 관리자만 */}
