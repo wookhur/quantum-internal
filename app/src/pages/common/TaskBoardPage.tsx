@@ -1066,6 +1066,9 @@ export function TaskBoardPage() {
   // 요약 카드 클릭 시 해당 업무 하이라이트
   const [highlight, setHighlight] = useState<null | 'assigned' | 'requested' | 'overdue' | 'completed'>(null)
   const toggleHighlight = (k: 'assigned' | 'requested' | 'overdue' | 'completed') => setHighlight(h => (h === k ? null : k))
+  // 완료 등 항목이 많은 컬럼은 기본 10개만 보이고, 화살표로 나머지 펼침
+  const COLUMN_LIMIT = 10
+  const [expandedCols, setExpandedCols] = useState<Record<string, boolean>>({})
   const [newTask, setNewTask] = useState({
     title: '', description: '', priority: 'normal' as TaskPriority,
     assigneeId: '', department: '', dueDate: '',
@@ -1277,10 +1280,20 @@ export function TaskBoardPage() {
                     <span className="text-xs opacity-70">({col.length})</span>
                   </div>
                   <div className="space-y-2 min-h-[200px]">
-                    {col.map(task => (
+                    {(expandedCols[status] ? col : col.slice(0, COLUMN_LIMIT)).map(task => (
                       <TaskCard key={task.id} task={task} onClick={() => setSelectedTaskId(task.id)}
                         highlighted={isHighlighted(task)} dimmed={!!highlight && !isHighlighted(task)} highlightRing={highlightRing} />
                     ))}
+                    {col.length > COLUMN_LIMIT && (
+                      <button
+                        onClick={() => setExpandedCols(m => ({ ...m, [status]: !m[status] }))}
+                        className="w-full flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground hover:text-foreground rounded-lg border border-dashed hover:bg-muted/40 transition-colors"
+                      >
+                        {expandedCols[status]
+                          ? <><ChevronUp className="size-3.5" /> {t('tasks.showLess')}</>
+                          : <><ChevronDown className="size-3.5" /> {t('tasks.showMoreCount', { n: col.length - COLUMN_LIMIT })}</>}
+                      </button>
+                    )}
                     {col.length === 0 && (
                       <div className="text-xs text-muted-foreground text-center py-8">
                         {t('tasks.emptyColumn')}
