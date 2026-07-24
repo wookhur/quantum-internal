@@ -40,6 +40,11 @@ import {
 } from '@/hooks/useStudentMilestones'
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, GRADE_BUCKETS, gradeBucket } from '@/lib/majorTaxonomy'
+import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
+import {
+  useServicePrograms, useProgramSeatAssignments, useAssignSeat, useUnassignSeat,
+  useCreateProgram, useUpdateProgram, useDeleteProgram, type ServiceProgram,
+} from '@/hooks/useProgramSeats'
 import type { ServiceStudent } from '@/types'
 import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
@@ -1612,6 +1617,211 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
   )
 }
 
+// ─────────────────── 외부서비스 좌석 배정판 (②) ───────────────────
+const SEAT_GRADES = ['G9', 'G10', 'G11', 'G12'] as const
+
+function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; canEdit: boolean }) {
+  const t = useT()
+  const { data: programs = [] } = useServicePrograms()
+  const { data: seats = [] } = useProgramSeatAssignments()
+  const assign = useAssignSeat()
+  const unassign = useUnassignSeat()
+  const [manageOpen, setManageOpen] = useState(false)
+  const [picker, setPicker] = useState<{ programId: string; grade: string } | null>(null)
+  const [q, setQ] = useState('')
+
+  const active = useMemo(
+    () => students.filter(s => !(s.status === 'finished' || s.status === 'canceled')),
+    [students],
+  )
+  const studentById = useMemo(() => new Map(active.map(s => [s.id, s])), [active])
+
+  // grid: programId → grade → [{ seatId, student }] (한글이름순 정렬)
+  const grid = useMemo(() => {
+    const m = new Map<string, Map<string, { seatId: string; student: ServiceStudent }[]>>()
+    for (const seat of seats) {
+      const st = studentById.get(seat.studentId)
+      if (!st) continue
+      const g = gradeBucket(st.grade)
+      if (!m.has(seat.programId)) m.set(seat.programId, new Map())
+      const gm = m.get(seat.programId)!
+      if (!gm.has(g)) gm.set(g, [])
+      gm.get(g)!.push({ seatId: seat.id, student: st })
+    }
+    for (const gm of m.values()) for (const arr of gm.values()) arr.sort((a, b) => compareStudentsKo(a.student, b.student))
+    return m
+  }, [seats, studentById])
+
+  const pickerProgram = programs.find(p => p.id === picker?.programId)
+  const pickerOptions = useMemo(() => {
+    if (!picker) return []
+    const already = new Set(seats.filter(s => s.programId === picker.programId).map(s => s.studentId))
+    const query = q.trim().toLowerCase()
+    return active
+      .filter(s => gradeBucket(s.grade) === picker.grade && !already.has(s.id))
+      .filter(s => !query || studentPickerLabel(s).toLowerCase().includes(query) || (s.school || '').toLowerCase().includes(query))
+      .sort(compareStudentsKo)
+  }, [picker, active, seats, q])
+
+  const openPicker = (programId: string, grade: string) => { setQ(''); setPicker({ programId, grade }) }
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-5">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">{t('serviceDash.programsTitle')}</h3>
+          {canEdit && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setManageOpen(true)}>
+              <Plus size={13} /> {t('serviceDash.managePrograms')}
+            </Button>
+          )}
+        </div>
+
+        {programs.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">{t('serviceDash.noPrograms')}</p>
+        ) : SEAT_GRADES.map(grade => {
+          const maxCap = Math.max(0, ...programs.map(p => p.capacity))
+          return (
+            <div key={grade} className="space-y-1">
+              <div className="text-sm font-bold text-gray-800">{grade}</div>
+              <div className="overflow-x-auto">
+                <table className="text-xs border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="w-7"></th>
+                      {programs.map(p => (
+                        <th key={p.id} className="px-1 text-center text-[10px] text-muted-foreground font-normal">{p.groupName || ''}</th>
+                      ))}
+                    </tr>
+                    <tr className="border-b">
+                      <th className="w-7"></th>
+                      {programs.map(p => {
+                        const filled = grid.get(p.id)?.get(grade)?.length || 0
+                        const full = filled >= p.capacity
+                        return (
+                          <th key={p.id} className="px-1 py-1 text-center align-bottom min-w-[130px]">
+                            <div className="font-semibold text-gray-800">{p.name}</div>
+                            <div className={`text-[10px] font-medium ${full ? 'text-red-600' : 'text-emerald-600'}`}>{filled}/{p.capacity}</div>
+                          </th>
+                        )
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Array.from({ length: maxCap }).map((_, ri) => (
+                      <tr key={ri} className="border-b border-muted/60">
+                        <td className="text-[10px] text-muted-foreground/60 text-right pr-1 w-7">{ri + 1}</td>
+                        {programs.map(p => {
+                          if (ri >= p.capacity) return <td key={p.id} className="bg-muted/20" />
+                          const arr = grid.get(p.id)?.get(grade) || []
+                          const seat = arr[ri]
+                          return (
+                            <td key={p.id} className="px-1 py-0.5 min-w-[130px]">
+                              {seat ? (
+                                <span className="group flex items-center gap-1 rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5">
+                                  <Link to={`/service/student-360?student=${seat.student.id}`} className="truncate hover:underline flex-1">{studentPickerLabel(seat.student)}</Link>
+                                  {canEdit && <button onClick={() => unassign.mutate(seat.seatId)} className="opacity-0 group-hover:opacity-100 text-red-500 shrink-0"><X size={11} /></button>}
+                                </span>
+                              ) : canEdit ? (
+                                <button onClick={() => openPicker(p.id, grade)} className="w-full text-left text-muted-foreground/40 hover:text-emerald-600 hover:bg-emerald-50 rounded px-1.5 py-0.5">+</button>
+                              ) : <span className="block text-muted-foreground/20 px-1.5">·</span>}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })}
+      </CardContent>
+
+      {/* 좌석 배정 학생 선택 */}
+      <Dialog open={!!picker} onOpenChange={o => !o && setPicker(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{pickerProgram?.name} · {picker?.grade} — {t('serviceDash.assignSeat')}</DialogTitle>
+          </DialogHeader>
+          <Input placeholder={t('serviceDash.searchStudent')} value={q} onChange={e => setQ(e.target.value)} autoFocus />
+          <div className="max-h-72 overflow-y-auto space-y-1 mt-1">
+            {pickerOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">{t('serviceDash.noAssignable')}</p>
+            ) : pickerOptions.map(s => (
+              <button
+                key={s.id}
+                onClick={() => picker && assign.mutate({ programId: picker.programId, studentId: s.id }, { onSuccess: () => setPicker(null) })}
+                className="w-full flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm text-left hover:bg-emerald-50 hover:border-emerald-300"
+              >
+                <span className="font-medium truncate">{studentPickerLabel(s)}</span>
+                {s.school && <span className="text-xs text-muted-foreground truncate shrink-0">{s.school}</span>}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ProgramManageDialog open={manageOpen} onOpenChange={setManageOpen} programs={programs} />
+    </Card>
+  )
+}
+
+function ProgramManageDialog({ open, onOpenChange, programs }: {
+  open: boolean; onOpenChange: (o: boolean) => void; programs: ServiceProgram[]
+}) {
+  const t = useT()
+  const create = useCreateProgram()
+  const update = useUpdateProgram()
+  const del = useDeleteProgram()
+  const [newP, setNewP] = useState({ name: '', groupName: '', capacity: '5' })
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>{t('serviceDash.manageProgramsTitle')}</DialogTitle></DialogHeader>
+        <div className="space-y-2">
+          <div className="grid grid-cols-[1fr_1fr_70px_auto] gap-2 text-[11px] text-muted-foreground px-1">
+            <span>{t('serviceDash.progName')}</span>
+            <span>{t('serviceDash.progGroup')}</span>
+            <span>{t('serviceDash.progCapacity')}</span>
+            <span></span>
+          </div>
+          {programs.map(p => (
+            <div key={p.id} className="grid grid-cols-[1fr_1fr_70px_auto] gap-2 items-center">
+              <Input defaultValue={p.name} className="h-8"
+                onBlur={e => { const v = e.target.value.trim(); if (v && v !== p.name) update.mutate({ id: p.id, name: v }) }} />
+              <Input defaultValue={p.groupName || ''} className="h-8" placeholder="—"
+                onBlur={e => { const v = e.target.value.trim(); if (v !== (p.groupName || '')) update.mutate({ id: p.id, groupName: v }) }} />
+              <Input type="number" min={1} defaultValue={String(p.capacity)} className="h-8"
+                onBlur={e => { const v = Number(e.target.value); if (v > 0 && v !== p.capacity) update.mutate({ id: p.id, capacity: v }) }} />
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive"
+                onClick={() => { if (confirm(t('serviceDash.confirmDeleteProgram'))) del.mutate(p.id) }}>
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          ))}
+          {/* Add new */}
+          <div className="grid grid-cols-[1fr_1fr_70px_auto] gap-2 items-center border-t pt-2 mt-2">
+            <Input value={newP.name} onChange={e => setNewP(f => ({ ...f, name: e.target.value }))} className="h-8" placeholder={t('serviceDash.progName')} />
+            <Input value={newP.groupName} onChange={e => setNewP(f => ({ ...f, groupName: e.target.value }))} className="h-8" placeholder={t('serviceDash.progGroup')} />
+            <Input type="number" min={1} value={newP.capacity} onChange={e => setNewP(f => ({ ...f, capacity: e.target.value }))} className="h-8" />
+            <Button size="sm" className="h-8"
+              disabled={!newP.name.trim() || create.isPending}
+              onClick={() => create.mutate(
+                { name: newP.name.trim(), groupName: newP.groupName.trim() || undefined, capacity: Number(newP.capacity) || 5, sortOrder: (programs[programs.length - 1]?.sortOrder ?? 0) + 1 },
+                { onSuccess: () => setNewP({ name: '', groupName: '', capacity: '5' }) },
+              )}>
+              <Plus size={14} />
+            </Button>
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground">{t('serviceDash.manageProgramsHint')}</p>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─────────────────────── Metrics (지표) ───────────────────────
 /** True if the service student's status is one of the "archived" outcomes. */
 function isFinished(status?: string) { return status === 'finished' }
@@ -1826,7 +2036,7 @@ export function ServiceDashboardPage() {
   // 캘린더의 학생 미팅을 클릭하면 해당 학생의 Student 360(미팅노트) 화면으로 이동
   const openMeetingNote = (m: DashboardMeeting) => routerNav(`/service/student-360?student=${m.studentId}`)
 
-  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student' | 'majors' | 'metrics'>('calendar')
+  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student' | 'majors' | 'programs' | 'metrics'>('calendar')
   const [calMode,          setCalMode]          = useState<'week' | 'month'>('week')
   const [refDate,          setRefDate]          = useState<Date>(todayDate)
   const [consultantFilter, setConsultantFilter] = useState('all')
@@ -2026,6 +2236,12 @@ export function ServiceDashboardPage() {
                 className={`px-3 h-8 text-sm font-medium border-l ${view === 'majors' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 <GraduationCap size={14} className="inline mr-1.5" />{t('serviceDash.majorsTab')}
+              </button>
+              <button
+                onClick={() => setView('programs')}
+                className={`px-3 h-8 text-sm font-medium border-l ${view === 'programs' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              >
+                <Users size={14} className="inline mr-1.5" />{t('serviceDash.programsTab')}
               </button>
               <button
                 onClick={() => setView('metrics')}
@@ -2297,6 +2513,8 @@ export function ServiceDashboardPage() {
         )}
 
         {view === 'majors' && <MajorGradeMatrixSection students={vStudents} />}
+
+        {view === 'programs' && <ProgramSeatBoard students={vStudents} canEdit={canEdit} />}
 
         {view === 'metrics' && <ServiceMetricsSection />}
       </div>
