@@ -38,13 +38,22 @@ export function DashboardPage() {
   const updateCompany = useUpdateCompanyInfo()
   const { data: profiles = [] } = useProfiles()
 
-  // 내부 정규직 직원 연락처 (파트너/외부 제외)
-  const staff = useMemo(
-    () => profiles
-      .filter((p) => !p.isExternal && (p.employmentType === 'permanent' || p.employmentTypes?.includes('permanent')))
-      .sort((a, b) => a.name.localeCompare(b.name, 'ko')),
-    [profiles],
-  )
+  // 대시보드에 노출할 임직원 명단 — 지정된 순서·직함은 고정, 이메일은 프로필에서 보완
+  const staff = useMemo(() => {
+    const roster: { name: string; title: string; email?: string }[] = [
+      { name: '한상범', title: '대표', email: 'samhan@quantumadmissions.com' },
+      { name: '김지현', title: '부대표' },
+      { name: '곽지수', title: '이사 · Sales Department' },
+      { name: '허욱', title: '팀장 · 경영기획팀' },
+      { name: '남연서', title: '팀장 · Consultant Department' },
+      { name: '신디', title: '팀장 · Sales Operations Manager' },
+      { name: '박성원', title: '팀장 · Marketing Department' },
+    ]
+    return roster.map((r) => {
+      const p = profiles.find((x) => x.name === r.name || x.name.includes(r.name) || r.name.includes(x.name))
+      return { id: p?.id || r.name, name: r.name, title: r.title, email: r.email || p?.email }
+    })
+  }, [profiles])
 
   // 공지 폼
   const [showNoticeForm, setShowNoticeForm] = useState(false)
@@ -103,7 +112,7 @@ export function DashboardPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.title')}</h1>
-        <p className="text-muted-foreground">{todayKST()} {t('dashboard.companyStatus')}</p>
+        <p className="text-muted-foreground">{todayKST()}</p>
       </div>
 
       {/* 회사 정보 */}
@@ -184,24 +193,20 @@ export function DashboardPage() {
             <CardTitle className="text-base flex items-center gap-2"><Users className="size-4" /> 직원 연락처 <span className="text-xs font-normal text-muted-foreground">({staff.length})</span></CardTitle>
           </CardHeader>
           <CardContent>
-            {staff.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">등록된 정규직 직원이 없습니다.</p>
-            ) : (
-              <div className="divide-y">
-                {staff.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between py-2 gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{p.name}
-                        {(p.position || p.department) && <span className="text-xs text-muted-foreground ml-1.5">{p.position || p.department}</span>}
-                      </div>
+            <div className="divide-y">
+              {staff.map((p) => (
+                <div key={p.id} className="flex items-center justify-between py-2 gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{p.name}
+                      <span className="text-xs text-muted-foreground ml-1.5">{p.title}</span>
                     </div>
-                    {p.email && (
-                      <a href={`mailto:${p.email}`} className="text-xs text-primary hover:underline truncate shrink-0 max-w-[55%] text-right">{p.email}</a>
-                    )}
                   </div>
-                ))}
-              </div>
-            )}
+                  {p.email && (
+                    <a href={`mailto:${p.email}`} className="text-xs text-primary hover:underline truncate shrink-0 max-w-[55%] text-right">{p.email}</a>
+                  )}
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
