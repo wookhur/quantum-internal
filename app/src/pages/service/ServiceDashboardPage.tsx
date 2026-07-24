@@ -529,7 +529,11 @@ function MilestoneDialog({
           <div className="space-y-1">
             <Label>{t('serviceDash.student')}</Label>
             <Select value={studentId} onValueChange={v => setStudentId(v ?? '')}>
-              <SelectTrigger><SelectValue placeholder={t('serviceDash.selectStudent')} /></SelectTrigger>
+              <SelectTrigger>
+                {studentId
+                  ? (() => { const s = students.find(x => x.id === studentId); return <span className="truncate">{s ? studentDisplayName(s.name, s.koreanName) : '(삭제된 학생)'}</span> })()
+                  : <SelectValue placeholder={t('serviceDash.selectStudent')} />}
+              </SelectTrigger>
               <SelectContent>
                 {studentId && !students.some(s => s.id === studentId) && (
                   <SelectItem value={studentId}>(삭제된 학생)</SelectItem>
@@ -1436,6 +1440,17 @@ function StudentScheduleView({
     [students],
   )
 
+  // 선택된 학생의 표시 이름을 직접 계산(트리거에 렌더). 목록에 없으면 마일스톤/미팅 조인명으로,
+  // 그래도 없으면 '(삭제된 학생)' — Radix가 미매칭 값에서 raw UUID를 노출하는 문제 방지.
+  const selectedLabel = useMemo(() => {
+    if (!studentId) return ''
+    const s = sortedStudents.find(x => x.id === studentId)
+    if (s) return studentDisplayName(s.name, s.koreanName)
+    const nm = milestones.find(x => x.studentId === studentId)?.studentName
+      || allMeetings.find(x => x.studentId === studentId)?.studentName
+    return nm && !UUID_RE.test(nm) ? nm : '(삭제된 학생)'
+  }, [studentId, sortedStudents, milestones, allMeetings])
+
   const items = useMemo<ScheduleItem[]>(() => {
     if (!studentId) return []
     const out: ScheduleItem[] = []
@@ -1478,12 +1493,14 @@ function StudentScheduleView({
       <div className="flex items-center gap-3 flex-wrap">
         <Select value={studentId} onValueChange={v => setStudentId(v ?? '')}>
           <SelectTrigger className="h-9 w-72">
-            <SelectValue placeholder="학생 선택 (이름)" />
+            {/* 트리거 라벨을 직접 렌더 — Radix가 미매칭 값에서 raw UUID를 보이는 문제 회피 */}
+            {studentId
+              ? <span className="truncate">{selectedLabel}</span>
+              : <SelectValue placeholder="학생 선택 (이름)" />}
           </SelectTrigger>
           <SelectContent className="max-h-80">
-            {/* 목록에 없는(삭제된) 학생이 선택돼 있으면 UUID 대신 라벨을 보여주도록 항목 주입 */}
             {studentId && !sortedStudents.some(s => s.id === studentId) && (
-              <SelectItem value={studentId}>(삭제된 학생)</SelectItem>
+              <SelectItem value={studentId}>{selectedLabel}</SelectItem>
             )}
             {sortedStudents.map(s => (
               <SelectItem key={s.id} value={s.id}>{studentDisplayName(s.name, s.koreanName)}</SelectItem>
