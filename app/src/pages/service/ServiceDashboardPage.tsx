@@ -1691,11 +1691,14 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
   const countPill = (filled: number, cap: number) =>
     `mt-0.5 inline-block rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${filled > cap ? 'bg-red-100 text-red-700' : filled >= cap ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`
 
-  // 기본 학년(G9~G12) + 실제 배정된 학년(G8 등)만 섹션으로 표시
+  // 기본 학년(G9~G12) + 실제 배정된 학년(G8 등)을 G12→G8 역순으로, '기타'는 맨 아래
   const boardGrades = useMemo(() => {
     const present = new Set<string>()
     for (const gm of grid.values()) for (const g of gm.keys()) present.add(g)
-    return gradesToShow(present)
+    const list = gradesToShow(present)
+    const etc = list.filter(g => g === '기타')
+    const grades = list.filter(g => g !== '기타').reverse()
+    return [...grades, ...etc]
   }, [grid])
 
   return (
