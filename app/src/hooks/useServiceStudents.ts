@@ -101,12 +101,24 @@ export function useServiceStudents() {
   return useQuery({
     queryKey: ['service_students'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('service_students')
-        .select('*')
-        .order('name', { ascending: true })
-      if (error) throw error
-      return (data || []).map(mapStudent)
+      // Supabase는 요청당 최대 1000행을 반환하므로, 학생이 1000명을 넘으면
+      // 잘려서 일부 학생이 드롭다운 등에서 누락(이름 대신 UUID 노출)된다. 페이지네이션으로 전체 조회.
+      const PAGE = 1000
+      let from = 0
+      const rows: Record<string, unknown>[] = []
+      for (;;) {
+        const { data, error } = await supabase
+          .from('service_students')
+          .select('*')
+          .order('name', { ascending: true })
+          .range(from, from + PAGE - 1)
+        if (error) throw error
+        const batch = (data || []) as Record<string, unknown>[]
+        rows.push(...batch)
+        if (batch.length < PAGE) break
+        from += PAGE
+      }
+      return rows.map(mapStudent)
     },
   })
 }
