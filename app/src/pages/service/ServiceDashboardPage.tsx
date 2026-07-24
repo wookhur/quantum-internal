@@ -42,8 +42,7 @@ import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, GRADE_BUCKETS, gradeBucket } from '@/lib/majorTaxonomy'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
 import {
-  useServicePrograms, useProgramSeatAssignments, useAssignSeat, useUnassignSeat,
-  useCreateProgram, useUpdateProgram, useDeleteProgram, type ServiceProgram,
+  useServicePrograms, useCreateProgram, useUpdateProgram, useDeleteProgram, type ServiceProgram,
 } from '@/hooks/useProgramSeats'
 import type { ServiceStudent } from '@/types'
 import { todayKST, daysFromTodayKST } from '@/lib/date'
@@ -1632,12 +1631,8 @@ type GroupColor = (typeof GROUP_COLORS)[number]
 function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; canEdit: boolean }) {
   const t = useT()
   const { data: programs = [] } = useServicePrograms()
-  const { data: seats = [] } = useProgramSeatAssignments()
-  const assign = useAssignSeat()
-  const unassign = useUnassignSeat()
+  const { data: fees = [] } = useAllServiceProgramFees()
   const [manageOpen, setManageOpen] = useState(false)
-  const [picker, setPicker] = useState<{ programId: string; grade: string } | null>(null)
-  const [q, setQ] = useState('')
 
   const active = useMemo(
     () => students.filter(s => !(s.status === 'finished' || s.status === 'canceled')),
@@ -1645,21 +1640,33 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
   )
   const studentById = useMemo(() => new Map(active.map(s => [s.id, s])), [active])
 
-  // grid: programId → grade → [{ seatId, student }] (한글이름순 정렬)
+  // Student360(외부서비스 EC·학업지원) 입력을 좌석에 자동 연동:
+  // 각 프로그램의 이름/부제를 파트너(label)·프로그램(detail) 값과 매칭해 학생을 자동 배치.
   const grid = useMemo(() => {
-    const m = new Map<string, Map<string, { seatId: string; student: ServiceStudent }[]>>()
-    for (const seat of seats) {
-      const st = studentById.get(seat.studentId)
+    const norm = (v?: string) => (v || '').replace(/\s+/g, '').toLowerCase()
+    const keysOf = new Map<string, string[]>()
+    for (const p of programs) keysOf.set(p.id, [p.name, p.subtitle].filter(Boolean).map(v => norm(v as string)))
+    const m = new Map<string, Map<string, ServiceStudent[]>>()
+    const seen = new Map<string, Set<string>>() // programId → studentIds (중복 제거)
+    for (const f of fees) {
+      const st = studentById.get(f.studentId)
       if (!st) continue
-      const g = gradeBucket(st.grade)
-      if (!m.has(seat.programId)) m.set(seat.programId, new Map())
-      const gm = m.get(seat.programId)!
-      if (!gm.has(g)) gm.set(g, [])
-      gm.get(g)!.push({ seatId: seat.id, student: st })
+      const vals = [f.label, f.detail].filter(Boolean).map(v => norm(v as string))
+      for (const p of programs) {
+        if (!keysOf.get(p.id)!.some(k => vals.includes(k))) continue
+        if (!seen.has(p.id)) seen.set(p.id, new Set())
+        if (seen.get(p.id)!.has(st.id)) continue
+        seen.get(p.id)!.add(st.id)
+        const g = gradeBucket(st.grade)
+        if (!m.has(p.id)) m.set(p.id, new Map())
+        const gm = m.get(p.id)!
+        if (!gm.has(g)) gm.set(g, [])
+        gm.get(g)!.push(st)
+      }
     }
-    for (const gm of m.values()) for (const arr of gm.values()) arr.sort((a, b) => compareStudentsKo(a.student, b.student))
+    for (const gm of m.values()) for (const arr of gm.values()) arr.sort(compareStudentsKo)
     return m
-  }, [seats, studentById])
+  }, [fees, programs, studentById])
 
   // 연속된 같은 묶음(group_name) 프로그램을 헤더에서 하나로 병합하기 위한 세그먼트
   const programGroups = useMemo(() => {
@@ -1683,28 +1690,18 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
   }, [programs, programGroups])
 
   const countPill = (filled: number, cap: number) =>
-    `mt-0.5 inline-block rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${filled >= cap ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`
-
-  const pickerProgram = programs.find(p => p.id === picker?.programId)
-  const pickerOptions = useMemo(() => {
-    if (!picker) return []
-    const already = new Set(seats.filter(s => s.programId === picker.programId).map(s => s.studentId))
-    const query = q.trim().toLowerCase()
-    return active
-      .filter(s => gradeBucket(s.grade) === picker.grade && !already.has(s.id))
-      .filter(s => !query || studentPickerLabel(s).toLowerCase().includes(query) || (s.school || '').toLowerCase().includes(query))
-      .sort(compareStudentsKo)
-  }, [picker, active, seats, q])
-
-  const openPicker = (programId: string, grade: string) => { setQ(''); setPicker({ programId, grade }) }
+    `mt-0.5 inline-block rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${filled > cap ? 'bg-red-100 text-red-700' : filled >= cap ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`
 
   return (
     <Card>
       <CardContent className="p-4 space-y-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">{t('serviceDash.programsTitle')}</h3>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold">{t('serviceDash.programsTitle')}</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{t('serviceDash.programsAutoHint')}</p>
+          </div>
           {canEdit && (
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setManageOpen(true)}>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0" onClick={() => setManageOpen(true)}>
               <Plus size={13} /> {t('serviceDash.managePrograms')}
             </Button>
           )}
@@ -1714,6 +1711,7 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
           <p className="text-sm text-muted-foreground py-6 text-center">{t('serviceDash.noPrograms')}</p>
         ) : SEAT_GRADES.map(grade => {
           const maxCap = Math.max(0, ...programs.map(p => p.capacity))
+          const rowCount = Math.max(maxCap, ...programs.map(p => grid.get(p.id)?.get(grade)?.length || 0))
           const colIndex = new Map(programs.map((p, i) => [p.id, i + 2])) // grid 열(1열=좌석번호)
           return (
             <div key={grade} className="rounded-xl border overflow-hidden">
@@ -1768,8 +1766,8 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
                     )
                   })}
 
-                  {/* 좌석 행들 */}
-                  {Array.from({ length: maxCap }).flatMap((_, ri) => {
+                  {/* 좌석 행들 — Student360(외부서비스) 입력에서 자동 채움 */}
+                  {Array.from({ length: rowCount }).flatMap((_, ri) => {
                     const row = 3 + ri
                     return [
                       <div key={`n${ri}`} style={{ gridColumn: 1, gridRow: row }}
@@ -1777,21 +1775,21 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
                       ...programs.map(p => {
                         const c = colOf.get(p.id)
                         const col = colIndex.get(p.id)
-                        if (ri >= p.capacity) return <div key={`${ri}-${p.id}`} style={{ gridColumn: col, gridRow: row }} className="bg-slate-50/70" />
                         const arr = grid.get(p.id)?.get(grade) || []
-                        const seat = arr[ri]
+                        const student = arr[ri]
+                        const overCap = ri >= p.capacity
+                        if (!student && overCap) return <div key={`${ri}-${p.id}`} style={{ gridColumn: col, gridRow: row }} className="bg-slate-50/70" />
                         return (
                           <div key={`${ri}-${p.id}`} style={{ gridColumn: col, gridRow: row }} className={`${c ? c.col : 'bg-white'} p-1 flex items-center`}>
-                            {seat ? (
-                              <div className="group/seat flex items-center gap-1 rounded-md bg-white border border-emerald-300 pl-2 pr-1 h-7 w-full shadow-sm">
-                                <Link to={`/service/student-360?student=${seat.student.id}`} className="truncate text-emerald-900 hover:underline flex-1 leading-none">{studentPickerLabel(seat.student)}</Link>
-                                {canEdit && <button onClick={() => unassign.mutate(seat.seatId)} className="opacity-0 group-hover/seat:opacity-100 text-emerald-400 hover:text-red-500 shrink-0 transition"><X size={12} /></button>}
-                              </div>
-                            ) : canEdit ? (
-                              <button onClick={() => openPicker(p.id, grade)} className="w-full h-7 flex items-center justify-center rounded-md border border-dashed border-slate-300 bg-white/70 text-slate-300 hover:border-emerald-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
-                                <Plus size={13} />
-                              </button>
-                            ) : <div className="w-full h-7" />}
+                            {student ? (
+                              <Link to={`/service/student-360?student=${student.id}`}
+                                title={overCap ? '정원 초과' : undefined}
+                                className={`flex items-center rounded-md pl-2 pr-1 h-7 w-full leading-none truncate shadow-sm hover:brightness-95 ${overCap ? 'bg-red-50 border border-red-300 text-red-800' : 'bg-white border border-emerald-300 text-emerald-900'}`}>
+                                <span className="truncate">{studentPickerLabel(student)}</span>
+                              </Link>
+                            ) : (
+                              <div className="w-full h-7 rounded-md border border-dashed border-slate-200 bg-white/40" />
+                            )}
                           </div>
                         )
                       }),
@@ -1803,30 +1801,6 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
           )
         })}
       </CardContent>
-
-      {/* 좌석 배정 학생 선택 */}
-      <Dialog open={!!picker} onOpenChange={o => !o && setPicker(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{pickerProgram?.name} · {picker?.grade} — {t('serviceDash.assignSeat')}</DialogTitle>
-          </DialogHeader>
-          <Input placeholder={t('serviceDash.searchStudent')} value={q} onChange={e => setQ(e.target.value)} autoFocus />
-          <div className="max-h-72 overflow-y-auto space-y-1 mt-1">
-            {pickerOptions.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">{t('serviceDash.noAssignable')}</p>
-            ) : pickerOptions.map(s => (
-              <button
-                key={s.id}
-                onClick={() => picker && assign.mutate({ programId: picker.programId, studentId: s.id }, { onSuccess: () => setPicker(null) })}
-                className="w-full flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm text-left hover:bg-emerald-50 hover:border-emerald-300"
-              >
-                <span className="font-medium truncate">{studentPickerLabel(s)}</span>
-                {s.school && <span className="text-xs text-muted-foreground truncate shrink-0">{s.school}</span>}
-              </button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <ProgramManageDialog open={manageOpen} onOpenChange={setManageOpen} programs={programs} />
     </Card>
