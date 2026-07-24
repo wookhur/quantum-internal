@@ -1620,12 +1620,12 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
 // ─────────────────── 외부서비스 좌석 배정판 (②) ───────────────────
 const SEAT_GRADES = ['G9', 'G10', 'G11', 'G12'] as const
 
-// 상위 묶음(그룹)별 색상 — 진한 밴드(상위) / 연한 헤더 / 은은한 열 배경(하위 소속 표시)
+// 상위 묶음(그룹)은 원색 대신 그레이톤 밝기 차이로 구분 — 진한 밴드(상위) / 연한 헤더 / 은은한 열 배경
 const GROUP_COLORS = [
-  { band: 'bg-indigo-500 text-white', head: 'bg-indigo-50 text-indigo-900', col: 'bg-indigo-50/40', edge: 'border-indigo-200' },
-  { band: 'bg-amber-500 text-white',  head: 'bg-amber-50 text-amber-900',  col: 'bg-amber-50/40',  edge: 'border-amber-200' },
-  { band: 'bg-sky-500 text-white',    head: 'bg-sky-50 text-sky-900',      col: 'bg-sky-50/40',    edge: 'border-sky-200' },
-  { band: 'bg-rose-500 text-white',   head: 'bg-rose-50 text-rose-900',    col: 'bg-rose-50/40',   edge: 'border-rose-200' },
+  { band: 'bg-slate-600 text-white', head: 'bg-slate-100 text-slate-700', col: 'bg-slate-100/60' },
+  { band: 'bg-slate-400 text-white', head: 'bg-slate-50 text-slate-600',  col: 'bg-slate-50' },
+  { band: 'bg-slate-700 text-white', head: 'bg-slate-200 text-slate-700', col: 'bg-slate-100' },
+  { band: 'bg-slate-500 text-white', head: 'bg-slate-100 text-slate-600', col: 'bg-slate-100/40' },
 ] as const
 type GroupColor = (typeof GROUP_COLORS)[number]
 
@@ -1735,7 +1735,7 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
                       const filled = grid.get(p.id)?.get(grade)?.length || 0
                       return (
                         <div key={i} style={{ gridColumn: `${startCol}`, gridRow: '1 / span 2' }}
-                          className="bg-slate-100 flex flex-col items-center justify-center gap-0.5 px-1 py-2 text-center">
+                          className="bg-white flex flex-col items-center justify-center gap-0.5 px-1 py-2 text-center">
                           <div className="font-semibold text-slate-800 leading-tight">{p.name}</div>
                           <div className={countPill(filled, p.capacity)}>{filled}/{p.capacity}</div>
                         </div>
