@@ -1620,6 +1620,15 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
 // ─────────────────── 외부서비스 좌석 배정판 (②) ───────────────────
 const SEAT_GRADES = ['G9', 'G10', 'G11', 'G12'] as const
 
+// 상위 묶음(그룹)별 색상 — 진한 밴드(상위) / 연한 헤더 / 은은한 열 배경(하위 소속 표시)
+const GROUP_COLORS = [
+  { band: 'bg-indigo-500 text-white', head: 'bg-indigo-50 text-indigo-900', col: 'bg-indigo-50/40', edge: 'border-indigo-200' },
+  { band: 'bg-amber-500 text-white',  head: 'bg-amber-50 text-amber-900',  col: 'bg-amber-50/40',  edge: 'border-amber-200' },
+  { band: 'bg-sky-500 text-white',    head: 'bg-sky-50 text-sky-900',      col: 'bg-sky-50/40',    edge: 'border-sky-200' },
+  { band: 'bg-rose-500 text-white',   head: 'bg-rose-50 text-rose-900',    col: 'bg-rose-50/40',   edge: 'border-rose-200' },
+] as const
+type GroupColor = (typeof GROUP_COLORS)[number]
+
 function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; canEdit: boolean }) {
   const t = useT()
   const { data: programs = [] } = useServicePrograms()
@@ -1663,6 +1672,20 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
     return gs
   }, [programs])
 
+  // 프로그램별 그룹 색상 + 세그먼트 시작 여부(구분선용)
+  const { colOf, segStart } = useMemo(() => {
+    const colorByName = new Map<string, GroupColor>()
+    let ci = 0
+    for (const g of programGroups) if (g.name && !colorByName.has(g.name)) colorByName.set(g.name, GROUP_COLORS[ci++ % GROUP_COLORS.length])
+    const colOf = new Map<string, GroupColor | null>()
+    for (const p of programs) colOf.set(p.id, p.groupName ? (colorByName.get(p.groupName) || null) : null)
+    const segStart = new Set(programGroups.map(g => g.programs[0].id))
+    return { colOf, segStart }
+  }, [programs, programGroups])
+
+  const countPill = (filled: number, cap: number) =>
+    `mt-0.5 inline-block rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${filled >= cap ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`
+
   const pickerProgram = programs.find(p => p.id === picker?.programId)
   const pickerOptions = useMemo(() => {
     if (!picker) return []
@@ -1696,33 +1719,45 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
             <div key={grade} className="rounded-xl border overflow-hidden">
               <div className="bg-slate-50 border-b px-3 py-1.5 text-sm font-bold text-slate-700">{grade}</div>
               <div className="overflow-x-auto p-2">
-                <table className="text-xs border-separate border-spacing-x-1.5 border-spacing-y-1">
+                <table className="text-xs border-collapse">
                   <colgroup>
                     <col style={{ width: 28 }} />
                     {programs.map(p => <col key={p.id} style={{ width: 150 }} />)}
                   </colgroup>
                   <thead>
-                    {/* 묶음 헤더 (연속 같은 묶음은 셀 병합) */}
+                    {/* 상위 카테고리(묶음) 밴드 — 진한 색으로 병합. 단독 프로그램은 아래로 rowSpan */}
                     <tr>
-                      <th />
-                      {programGroups.map((g, i) => (
-                        <th key={i} colSpan={g.programs.length} className="pb-0.5 text-center align-bottom">
-                          {g.name && (
-                            <span className="inline-block rounded-full bg-slate-100 text-slate-500 text-[10px] font-medium px-2 py-0.5">{g.name}</span>
-                          )}
-                        </th>
-                      ))}
-                    </tr>
-                    {/* 프로그램 헤더 */}
-                    <tr>
-                      <th />
-                      {programs.map(p => {
-                        const filled = grid.get(p.id)?.get(grade)?.length || 0
-                        const full = filled >= p.capacity
+                      <th className="w-7" />
+                      {programGroups.map((g, i) => {
+                        const divider = i > 0 ? 'border-l-4 border-white' : ''
+                        if (!g.name) {
+                          const p = g.programs[0]
+                          const filled = grid.get(p.id)?.get(grade)?.length || 0
+                          return (
+                            <th key={i} rowSpan={2} className={`px-1 py-1.5 text-center align-middle bg-slate-100 ${divider}`}>
+                              <div className="font-semibold text-slate-800 leading-tight">{p.name}</div>
+                              <div className={countPill(filled, p.capacity)}>{filled}/{p.capacity}</div>
+                            </th>
+                          )
+                        }
+                        const c = colOf.get(g.programs[0].id)!
                         return (
-                          <th key={p.id} className="px-1 pb-1.5 text-center align-bottom">
-                            <div className="font-semibold text-slate-800 leading-tight">{p.name}</div>
-                            <div className={`mt-0.5 inline-block rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${full ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{filled}/{p.capacity}</div>
+                          <th key={i} colSpan={g.programs.length} className={`px-2 py-1 text-center text-[11px] font-bold ${c.band} ${divider}`}>
+                            {g.name}
+                          </th>
+                        )
+                      })}
+                    </tr>
+                    {/* 하위 프로그램 헤더 (묶음에 속한 것만; 단독은 위에서 rowSpan 처리) */}
+                    <tr>
+                      {programs.map(p => {
+                        const c = colOf.get(p.id)
+                        if (!c) return null
+                        const filled = grid.get(p.id)?.get(grade)?.length || 0
+                        return (
+                          <th key={p.id} className={`px-1 pb-1.5 pt-1 text-center align-bottom ${c.head} ${segStart.has(p.id) ? 'border-l-4 border-white' : ''}`}>
+                            <div className="font-semibold leading-tight">{p.name}</div>
+                            <div className={countPill(filled, p.capacity)}>{filled}/{p.capacity}</div>
                           </th>
                         )
                       })}
@@ -1731,23 +1766,25 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
                   <tbody>
                     {Array.from({ length: maxCap }).map((_, ri) => (
                       <tr key={ri}>
-                        <td className="text-[10px] text-slate-300 text-right pr-0.5 align-middle tabular-nums">{ri + 1}</td>
+                        <td className="text-[10px] text-slate-300 text-right pr-1 align-middle tabular-nums">{ri + 1}</td>
                         {programs.map(p => {
-                          if (ri >= p.capacity) return <td key={p.id} />
+                          const c = colOf.get(p.id)
+                          const divider = segStart.has(p.id) ? 'border-l-4 border-white' : ''
+                          if (ri >= p.capacity) return <td key={p.id} className={`${c ? c.col : ''} ${divider}`} />
                           const arr = grid.get(p.id)?.get(grade) || []
                           const seat = arr[ri]
                           return (
-                            <td key={p.id} className="align-middle">
+                            <td key={p.id} className={`p-1 align-middle ${c ? c.col : ''} ${divider}`}>
                               {seat ? (
-                                <div className="group/seat flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 pl-2 pr-1 h-7">
+                                <div className="group/seat flex items-center gap-1 rounded-md bg-white border border-emerald-300 pl-2 pr-1 h-7 shadow-sm">
                                   <Link to={`/service/student-360?student=${seat.student.id}`} className="truncate text-emerald-900 hover:underline flex-1 leading-none">{studentPickerLabel(seat.student)}</Link>
                                   {canEdit && <button onClick={() => unassign.mutate(seat.seatId)} className="opacity-0 group-hover/seat:opacity-100 text-emerald-400 hover:text-red-500 shrink-0 transition"><X size={12} /></button>}
                                 </div>
                               ) : canEdit ? (
-                                <button onClick={() => openPicker(p.id, grade)} className="w-full h-7 flex items-center justify-center rounded-md border border-dashed border-slate-200 text-slate-300 hover:border-emerald-300 hover:text-emerald-500 hover:bg-emerald-50/60 transition-colors">
+                                <button onClick={() => openPicker(p.id, grade)} className="w-full h-7 flex items-center justify-center rounded-md border border-dashed border-slate-300 bg-white/60 text-slate-300 hover:border-emerald-300 hover:text-emerald-500 hover:bg-emerald-50 transition-colors">
                                   <Plus size={13} />
                                 </button>
-                              ) : <div className="h-7 rounded-md border border-dashed border-slate-100" />}
+                              ) : <div className="h-7 rounded-md border border-dashed border-slate-200 bg-white/40" />}
                             </td>
                           )
                         })}
