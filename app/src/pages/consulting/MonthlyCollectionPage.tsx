@@ -354,6 +354,7 @@ export function MonthlyCollectionPage() {
       title: '수금 안내 요청',
       message: `${inst.contract?.studentName || ''} 학생 ${inst.label} ${formatCurrency(inst.amount, inst.currency)} 수금 예정입니다. 학부모님께 납부 안내 부탁드립니다.`,
       link: '/consulting/collections',
+      metadata: { studentName: inst.contract?.studentName || '', label: inst.label || '', amount: formatCurrency(inst.amount, inst.currency) },
     })
     alert('담당자에게 수금 안내 알림을 보냈습니다.')
   }, [canEdit, recipientsByContract, profiles])

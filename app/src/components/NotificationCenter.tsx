@@ -7,6 +7,7 @@ import { useNotificationPreferences, useUpdateNotificationPreferences } from '@/
 import { useNavigate } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { localizeNotification } from '@/lib/notificationText'
 
 export function NotificationCenter() {
   const t = useT()
@@ -152,9 +153,9 @@ export function NotificationCenter() {
               <button
                 onClick={() => setHistoryMode(h => !h)}
                 className={`text-xs font-medium px-2 py-1 rounded transition-colors ${historyMode ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-                title="지난 알림 전체 보기"
+                title={t("notif.viewPast")}
               >
-                {historyMode ? '최근' : '전체 기록'}
+                {historyMode ? t("notif.recent") : t("notif.allHistory")}
               </button>
               {!historyMode && dbNotifications.length > 0 && (
                 <button
@@ -166,7 +167,7 @@ export function NotificationCenter() {
               )}
               <button
                 onClick={closePanel}
-                title="닫기"
+                title={t("notif.close")}
                 className="text-gray-400 hover:text-gray-600 rounded p-1 hover:bg-gray-100"
               >
                 <X className="size-4" />
@@ -180,26 +181,25 @@ export function NotificationCenter() {
               /* ── History: all notifications (read + unread), read-only ── */
               <div className="p-2 space-y-2">
                 <div className="flex items-center justify-between px-1 pb-1">
-                  <span className="text-[11px] text-gray-400">지난 알림 전체 ({allNotifs.length})</span>
-                  <button onClick={handleResetHidden} className="text-[11px] text-blue-600 hover:underline">
-                    숨긴 알림 다시 표시
-                  </button>
+                  <span className="text-[11px] text-gray-400">{t("notif.pastAll")} ({allNotifs.length})</span>
+                  <button onClick={handleResetHidden} className="text-[11px] text-blue-600 hover:underline">{t("notif.showHidden")}</button>
                 </div>
                 {allNotifs.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-gray-400">알림 기록이 없습니다.</div>
+                  <div className="py-12 text-center text-sm text-gray-400">{t("notif.noHistory")}</div>
                 ) : allNotifs.map((notif) => {
                   const icon = typeIcon[notif.type] || <Info className="size-4 text-blue-500 shrink-0" />
+                  const loc = localizeNotification(notif.type, notif.metadata, t, { title: notif.title, message: notif.message })
                   return (
                     <div key={`hist-${notif.id}`} className={`relative rounded-lg border p-3 ${notif.isRead ? 'bg-gray-50 border-gray-200 opacity-70' : (typeBg[notif.type] || 'bg-blue-50 border-blue-200')}`}>
                       <div className="flex items-start gap-2">
                         {icon}
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
-                            {notif.title}
-                            {notif.isRead && <span className="text-[9px] text-gray-400 font-normal">읽음</span>}
+                            {loc.title}
+                            {notif.isRead && <span className="text-[9px] text-gray-400 font-normal">{t('notif.read')}</span>}
                           </div>
-                          <div className="text-xs text-gray-600 mt-0.5">{notif.message}</div>
-                          <div className="text-[10px] text-gray-400 mt-1">{formatTimeAgo(notif.createdAt)}</div>
+                          <div className="text-xs text-gray-600 mt-0.5">{loc.message}</div>
+                          <div className="text-[10px] text-gray-400 mt-1">{formatTimeAgo(notif.createdAt, t)}</div>
                           {notif.link && (
                             <button
                               onClick={() => handleNavigate(notif.link!)}
@@ -224,6 +224,7 @@ export function NotificationCenter() {
                 {dbNotifications.map((notif) => {
                   const bgClass = typeBg[notif.type] || 'bg-blue-50 border-blue-200'
                   const icon = typeIcon[notif.type] || <Info className="size-4 text-blue-500 shrink-0" />
+                  const loc = localizeNotification(notif.type, notif.metadata, t, { title: notif.title, message: notif.message })
 
                   return (
                     <div
@@ -234,7 +235,7 @@ export function NotificationCenter() {
                       <button
                         onClick={() => handleMarkRead(notif.id)}
                         disabled={markRead.isPending}
-                        title="읽음"
+                        title={t("notif.read")}
                         className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 rounded p-0.5 hover:bg-black/5"
                       >
                         <X className="size-3.5" />
@@ -242,10 +243,10 @@ export function NotificationCenter() {
                       <div className="flex items-start gap-2">
                         {icon}
                         <div className="flex-1 min-w-0 pr-4">
-                          <div className="text-sm font-medium text-gray-900">{notif.title}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">{notif.message}</div>
+                          <div className="text-sm font-medium text-gray-900">{loc.title}</div>
+                          <div className="text-xs text-gray-600 mt-0.5">{loc.message}</div>
                           <div className="text-[10px] text-gray-400 mt-1">
-                            {formatTimeAgo(notif.createdAt)}
+                            {formatTimeAgo(notif.createdAt, t)}
                           </div>
                           <div className="flex items-center gap-2 mt-2">
                             {notif.link && (
@@ -326,20 +327,21 @@ export function NotificationCenter() {
 }
 
 /** Format a timestamp into a relative time string */
-function formatTimeAgo(isoString: string): string {
+type TFn = (key: string, params?: Record<string, string | number>) => string
+function formatTimeAgo(isoString: string, t: TFn): string {
   const now = Date.now()
   const then = new Date(isoString).getTime()
   const diffMs = now - then
 
   const minutes = Math.floor(diffMs / 60000)
-  if (minutes < 1) return '방금 전'
-  if (minutes < 60) return `${minutes}분 전`
+  if (minutes < 1) return t('notif.justNow')
+  if (minutes < 60) return t('notif.minAgo', { n: minutes })
 
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}시간 전`
+  if (hours < 24) return t('notif.hourAgo', { n: hours })
 
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}일 전`
+  if (days < 7) return t('notif.dayAgo', { n: days })
 
-  return new Date(isoString).toLocaleDateString('ko-KR')
+  return new Date(isoString).toLocaleDateString()
 }

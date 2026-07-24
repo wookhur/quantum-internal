@@ -775,7 +775,7 @@ function ProjectSection({ profiles }: { profiles: User[] }) {
                     title: '새 프로젝트 업무 요청',
                     message: `${user.name}님이 프로젝트 "${form.title}"의 업무를 요청했습니다.`,
                     link: `/tasks?open=${created.id}`,
-                    metadata: { taskId: created.id },
+                    metadata: { taskId: created.id, actor: user.name, task: form.title, kind: 'request' },
                   }).catch(() => {})
                 }
               },
@@ -846,7 +846,7 @@ function ProjectSection({ profiles }: { profiles: User[] }) {
                     title: '새 프로젝트 업무 요청',
                     message: `${user.name}님이 프로젝트 "${form.title}"의 업무를 요청했습니다.`,
                     link: `/tasks?open=${created.id}`,
-                    metadata: { taskId: created.id },
+                    metadata: { taskId: created.id, actor: user.name, task: form.title, kind: 'request' },
                   }).catch(() => {})
                 }
               },
@@ -1126,7 +1126,7 @@ export function TaskBoardPage() {
             title: '새 업무 요청',
             message: `${user.name}님이 "${created.title}" 업무를 요청했습니다.`,
             link: `/tasks?open=${created.id}`,
-            metadata: { taskId: created.id },
+            metadata: { taskId: created.id, actor: user.name, task: created.title, kind: 'request' },
           }).catch(() => {})
         }
       },

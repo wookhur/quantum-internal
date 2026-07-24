@@ -332,7 +332,7 @@ export function useCreateTask() {
           title: '새 업무 배정',
           message: `${requesterName}님이 "${task.title}" 업무를 배정했습니다.`,
           link: `/tasks?task=${task.id}`,
-          metadata: { taskId: task.id },
+          metadata: { taskId: task.id, actor: requesterName, task: task.title, kind: 'assign' },
         }).catch(() => {})
       }
       return task
@@ -399,7 +399,7 @@ export function useUpdateTask() {
           title: '업무 배정',
           message: `${requesterName}님이 "${task.title}" 업무를 배정했습니다.`,
           link: `/tasks?task=${task.id}`,
-          metadata: { taskId: task.id },
+          metadata: { taskId: task.id, actor: requesterName, task: task.title, kind: 'assign' },
         }).catch(() => {})
       }
 
@@ -419,7 +419,7 @@ export function useUpdateTask() {
             title: '업무 상태 변경',
             message: `${assigneeName}님이 "${task.title}" 업무를 ${label}(으)로 변경했습니다.`,
             link: `/tasks?task=${task.id}`,
-            metadata: { taskId: task.id, status: updates.status },
+            metadata: { taskId: task.id, status: updates.status, actor: assigneeName, task: task.title },
           }).catch(() => {})
         }
       }
@@ -483,7 +483,7 @@ export function useAddTaskComment() {
               title: '업무 댓글',
               message: `${authorName}님이 "${taskRow.title}" 업무에 댓글을 남겼습니다.`,
               link: `/tasks?task=${params.taskId}`,
-              metadata: { taskId: params.taskId },
+              metadata: { taskId: params.taskId, actor: authorName, task: taskRow.title },
             }).catch(() => {})
           }
         }

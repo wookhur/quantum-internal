@@ -180,6 +180,7 @@ export function PartnerStudentsPage() {
       title: '파트너 학생 코멘트 등록',
       message: `${from}에서 ${selected} 학생 미팅 코멘트를 남겼습니다.`,
       link: '/partner/students',
+      metadata: { from, student: selected },
     }).catch(() => {})
   }
 

@@ -84,7 +84,7 @@ async function notifyAdminsOfIssue(studentName: string, issueId: string, student
     message: `${studentName || '학생'}에 이슈가 보고되었습니다`,
     // 자세히 보기 → 해당 학생의 Student360 카드로 이동
     link: `/service/student-360?student=${studentId}`,
-    metadata: { issueId, studentId },
+    metadata: { issueId, studentId, studentName: studentName || '' },
   })
 }
 

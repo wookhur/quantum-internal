@@ -144,6 +144,7 @@ export function useUpdateLeaveStatus() {
           title: approved ? '휴가 승인됨' : '휴가 반려됨',
           message: `${input.startDate || ''} ~ ${input.endDate || ''} 휴가 신청이 ${approved ? '승인되었습니다.' : '반려되었습니다.'}`,
           link: '/hr/leave',
+          metadata: { approved, startDate: input.startDate || '', endDate: input.endDate || '' },
         })
       }
     },

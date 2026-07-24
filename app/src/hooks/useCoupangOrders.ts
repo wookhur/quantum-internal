@@ -161,6 +161,7 @@ export function useCreateCoupangOrder() {
         title: '주문요청 승인 요청',
         message: `${order.requesterName}님이 "${order.productName}" 주문요청을 보냈습니다.${urgentTag}`,
         link: '/common/coupang-orders',
+        metadata: { variant: 'request', productName: order.productName || '', requesterName: order.requesterName || '', neededBy: order.neededBy || '' },
       })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['coupang-orders'] }),
@@ -208,11 +209,13 @@ export function useUpdateCoupangOrder() {
         delivered: '배송이 완료되었습니다.',
       }
       if (rest.status && rest.requesterId && NOTIFY_TITLE[rest.status]) {
+        const VARIANT: Record<string, string> = { approved: 'approved', rejected: 'rejected', ordered: 'completed', delivered: 'shipped' }
         await createNotificationsForUsers([rest.requesterId], {
           type: 'coupang_order',
           title: NOTIFY_TITLE[rest.status],
           message: `"${rest.productName || '요청하신'}" 주문요청이 ${NOTIFY_TAIL[rest.status]}`,
           link: '/common/coupang-orders',
+          metadata: { variant: VARIANT[rest.status], productName: rest.productName || '' },
         })
       }
     },

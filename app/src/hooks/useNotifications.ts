@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useNotificationPreferences } from './useNotificationPreferences'
 import { useFeatureAccess, getEffectiveRoutes } from './useProfiles'
@@ -21,6 +22,7 @@ export interface AppNotification {
  * These are computed in real-time, not stored in DB.
  */
 export function useAppNotifications() {
+  const t = useT()
   const { user } = useAuth()
   const { data: prefs } = useNotificationPreferences()
   const disabledTypes = prefs?.disabledTypes || []
@@ -187,39 +189,30 @@ export function useAppNotifications() {
     // Neglected leads
     if (!disabledTypes.includes('neglected_lead') && neglectedLeads.length > 0) {
       items.push({
-        id: 'neglected-leads',
-        type: 'neglected_lead',
-        title: '방치 리드 경고',
-        message: `${neglectedLeads.length}건의 리드가 7일 이상 방치되었습니다.`,
-        severity: 'warning',
-        link: '/sales/leads',
-        createdAt: now,
+        id: 'neglected-leads', type: 'neglected_lead',
+        title: t('notif.a.neglected_lead.title'),
+        message: t('notif.a.neglected_lead.body', { count: neglectedLeads.length }),
+        severity: 'warning', link: '/sales/leads', createdAt: now,
       })
     }
 
     // Overdue payments
     if (!disabledTypes.includes('overdue_payment') && overduePayments.length > 0) {
       items.push({
-        id: 'overdue-payments',
-        type: 'overdue_payment',
-        title: '미수금 알림',
-        message: `${overduePayments.length}건의 결제가 기한을 초과했습니다.`,
-        severity: 'error',
-        link: '/consulting/collections',
-        createdAt: now,
+        id: 'overdue-payments', type: 'overdue_payment',
+        title: t('notif.a.overdue_payment.title'),
+        message: t('notif.a.overdue_payment.body', { count: overduePayments.length }),
+        severity: 'error', link: '/consulting/collections', createdAt: now,
       })
     }
 
     // Today's meetings
     if (!disabledTypes.includes('today_meeting') && todayMeetings.length > 0) {
       items.push({
-        id: 'today-meetings',
-        type: 'today_meeting',
-        title: '오늘 미팅',
-        message: `오늘 ${todayMeetings.length}건의 미팅이 예정되어 있습니다.`,
-        severity: 'info',
-        link: '/calendar',
-        createdAt: now,
+        id: 'today-meetings', type: 'today_meeting',
+        title: t('notif.a.today_meeting.title'),
+        message: t('notif.a.today_meeting.body', { count: todayMeetings.length }),
+        severity: 'info', link: '/calendar', createdAt: now,
       })
     }
 
@@ -233,64 +226,52 @@ export function useAppNotifications() {
         })
         .join(', ')
       items.push({
-        id: 'missing-reports',
-        type: 'missing_report',
-        title: '미팅일지 미제출 알림',
-        message: `최근 24시간 내 미팅 중 일지 미제출: ${names}`,
-        severity: 'error',
-        link: '/service/student360',
-        createdAt: now,
+        id: 'missing-reports', type: 'missing_report',
+        title: t('notif.a.missing_report.title'),
+        message: t('notif.a.missing_report.body', { names }),
+        severity: 'error', link: '/service/student360', createdAt: now,
       })
     }
 
     // My tasks overdue (기한 지났는데 아직 진행/완료 안 됨) — 담당자에게 반복 알림
-    const overdueTasks = myOpenTasks.filter(t => t.due_date && daysFromTodayKST(t.due_date) < 0)
+    const overdueTasks = myOpenTasks.filter(tk => tk.due_date && daysFromTodayKST(tk.due_date) < 0)
     if (!disabledTypes.includes('task_overdue') && overdueTasks.length > 0) {
-      const names = overdueTasks.slice(0, 5).map(t => t.title).join(', ')
+      const names = overdueTasks.slice(0, 5).map(tk => tk.title).join(', ')
       items.push({
-        id: 'task-overdue',
-        type: 'task_overdue',
-        title: '기한 초과 업무',
-        message: `기한이 지난 미완료 업무 ${overdueTasks.length}건: ${names}${overdueTasks.length > 5 ? ' 외' : ''}`,
-        severity: 'error',
-        link: '/tasks',
-        createdAt: now,
+        id: 'task-overdue', type: 'task_overdue',
+        title: t('notif.a.task_overdue.title'),
+        message: t('notif.a.task_overdue.body', { count: overdueTasks.length, names, more: overdueTasks.length > 5 ? t('notif.a.moreSuffix') : '' }),
+        severity: 'error', link: '/tasks', createdAt: now,
       })
     }
 
     // My tasks due tomorrow (마감 하루 전) — 담당자에게 사전 알림
-    const dueSoonTasks = myOpenTasks.filter(t => t.due_date && daysFromTodayKST(t.due_date) === 1)
+    const dueSoonTasks = myOpenTasks.filter(tk => tk.due_date && daysFromTodayKST(tk.due_date) === 1)
     if (!disabledTypes.includes('task_due_soon') && dueSoonTasks.length > 0) {
-      const names = dueSoonTasks.slice(0, 5).map(t => t.title).join(', ')
+      const names = dueSoonTasks.slice(0, 5).map(tk => tk.title).join(', ')
       items.push({
-        id: 'task-due-soon',
-        type: 'task_due_soon',
-        title: '업무 마감 하루 전',
-        message: `내일 마감 예정 업무 ${dueSoonTasks.length}건: ${names}${dueSoonTasks.length > 5 ? ' 외' : ''}`,
-        severity: 'warning',
-        link: '/tasks',
-        createdAt: now,
+        id: 'task-due-soon', type: 'task_due_soon',
+        title: t('notif.a.task_due_soon.title'),
+        message: t('notif.a.task_due_soon.body', { count: dueSoonTasks.length, names, more: dueSoonTasks.length > 5 ? t('notif.a.moreSuffix') : '' }),
+        severity: 'warning', link: '/tasks', createdAt: now,
       })
     }
 
     // Upcoming employee birthdays (only for users who can view 직원정보)
     if (canSeeBirthdayAlerts && !disabledTypes.includes('employee_birthday')) {
       upcomingBirthdays.forEach((b) => {
-        const dday = b.daysUntil === 0 ? '오늘' : `D-${b.daysUntil}`
+        const dday = b.daysUntil === 0 ? t('notif.dday.today') : `D-${b.daysUntil}`
         items.push({
-          id: `birthday-${b.profileId}-${b.cycleYear}`,
-          type: 'employee_birthday',
-          title: `${b.name}님 생일 (${dday})`,
-          message: `${b.dateLabel} · 직원 생일이 다가옵니다.`,
-          severity: 'info',
-          link: '/hr/personal-info',
-          createdAt: now,
+          id: `birthday-${b.profileId}-${b.cycleYear}`, type: 'employee_birthday',
+          title: t('notif.a.employee_birthday.title', { name: b.name, dday }),
+          message: t('notif.a.employee_birthday.body', { dateLabel: b.dateLabel }),
+          severity: 'info', link: '/hr/personal-info', createdAt: now,
         })
       })
     }
 
     return items
-  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, myOpenTasks, upcomingBirthdays, canSeeBirthdayAlerts, disabledTypes])
+  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, myOpenTasks, upcomingBirthdays, canSeeBirthdayAlerts, disabledTypes, t])
 
   return notifications
 }
