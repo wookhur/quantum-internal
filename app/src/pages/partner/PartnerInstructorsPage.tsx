@@ -16,7 +16,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { Loader2, Plus, Pencil, Trash2, GraduationCap, Lock, KeyRound } from 'lucide-react'
+import { Loader2, Plus, Pencil, Trash2, GraduationCap, Lock, KeyRound, Mail } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import {
@@ -28,6 +28,7 @@ import { EC_PARTNERS } from '@/lib/ecPartners'
 import { X } from 'lucide-react'
 import {
   usePartnerInstructors, useUpsertPartnerInstructor, useDeletePartnerInstructor, useResetInstructorPassword,
+  useSendInstructorMagicLink,
   type PartnerInstructor,
 } from '@/hooks/usePartnerInstructors'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -57,6 +58,15 @@ export function PartnerInstructorsPage() {
   const { data: fees = [] } = useAllServiceProgramFees()
   const del = useDeletePartnerInstructor()
   const resetPw = useResetInstructorPassword()
+  const magicLink = useSendInstructorMagicLink()
+
+  const handleSendMagicLink = (ins: PartnerInstructor) => {
+    if (!confirm(`'${ins.name || ins.email}' 강사에게 로그인 링크 이메일을 보낼까요?\n강사가 이메일의 링크를 클릭하면 비밀번호 없이 로그인됩니다.`)) return
+    magicLink.mutate(ins.email, {
+      onSuccess: () => alert(`${ins.email} 로 로그인 링크를 보냈습니다.\n강사가 이메일(스팸함도 확인)의 링크를 클릭하면 로그인됩니다.`),
+      onError: (e: unknown) => alert(`전송 실패: ${(e as Error)?.message || ''}`),
+    })
+  }
 
   const handleResetPassword = (ins: PartnerInstructor) => {
     if (!confirm(`'${ins.name || ins.email}' 강사의 비밀번호를 초기화할까요?\n(가입된 계정만 초기화됩니다)`)) return
@@ -147,7 +157,11 @@ export function PartnerInstructorsPage() {
                         <div className="flex items-center justify-end gap-0.5">
                           {canEdit && (
                             <>
-                              <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-blue-600" title="비밀번호 초기화 (000000)"
+                              <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-emerald-600" title="로그인 링크 이메일 보내기"
+                                disabled={magicLink.isPending} onClick={() => handleSendMagicLink(ins)}>
+                                {magicLink.isPending && magicLink.variables === ins.email ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                              </Button>
+                              <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-blue-600" title="비밀번호 초기화 (000000) — 엣지 함수 배포 후 사용"
                                 disabled={resetPw.isPending} onClick={() => handleResetPassword(ins)}>
                                 {resetPw.isPending && resetPw.variables === ins.email ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
                               </Button>

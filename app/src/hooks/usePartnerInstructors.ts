@@ -145,6 +145,22 @@ export function useUpsertPartnerInstructor() {
   })
 }
 
+/**
+ * 강사에게 로그인(매직) 링크 이메일을 보낸다. 비밀번호를 잊은 강사가 링크만 클릭하면 로그인됨.
+ * 클라이언트에서 바로 호출 — 엣지 함수/서버 불필요.
+ */
+export function useSendInstructorMagicLink() {
+  return useMutation({
+    mutationFn: async (email: string) => {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: { shouldCreateUser: false },
+      })
+      if (error) throw error
+    },
+  })
+}
+
 /** 외부 강사 비밀번호를 기본값(000000)으로 초기화 (관리자용, 서버 엣지함수 경유). */
 export function useResetInstructorPassword() {
   return useMutation({
