@@ -1146,16 +1146,8 @@ function CycleOverview({
   const ref = new Date(today + 'T00:00:00')
   const months = getCycleMonths(ref, 2, 6)
   const currentMonthKey = today.slice(0, 7)
-  // 원서 학년(G11·G12)만 기본 표시, 토글로 전체 활성 학생 보기
-  const [gradeScope, setGradeScope] = useState<'apply' | 'all'>('apply')
-  const applyEligible = useMemo(
-    () => students.filter(s => isActiveStudent(s.status) && APPLICATION_GRADES.includes(gradeBucket(s.grade))).length,
-    [students, gradeScope],
-  )
-
   const filteredStudents = useMemo(() => {
     let list = students.filter(s => isActiveStudent(s.status))
-    if (gradeScope === 'apply') list = list.filter(s => APPLICATION_GRADES.includes(gradeBucket(s.grade)))
     if (consultantFilter !== 'all') list = list.filter(s => s.assignedConsultant === consultantFilter)
 
     if (cycleFilter === 'at_risk') {
@@ -1168,7 +1160,7 @@ function CycleOverview({
       list = list.filter(s => riskIds.has(s.id))
     }
     return list
-  }, [students, consultantFilter, cycleFilter, milestones, today, gradeScope])
+  }, [students, consultantFilter, cycleFilter, milestones, today])
 
   const milestonesMap = useMemo(() => {
     const map = new Map<string, Map<string, DashboardMilestone[]>>()
@@ -1220,24 +1212,16 @@ function CycleOverview({
     const order = ['G12', 'G11', 'G10', 'G9', 'G8', 'G7', 'G6', '기타']
     return order.filter(g => map.has(g)).map(g => ({ grade: g, students: map.get(g)! }))
   }, [filteredStudents])
-  const [collapsedGrades, setCollapsedGrades] = useState<Record<string, boolean>>({})
-  const isGradeOpen = (g: string) => !collapsedGrades[g]
-  const toggleGrade = (g: string) => setCollapsedGrades(m => ({ ...m, [g]: !m[g] }))
+  // 기본: 원서 학년(G11·G12)은 펼침, 나머지 학년은 접힘. 사용자가 누르면 개별로 토글.
+  const [gradeOpen, setGradeOpen] = useState<Record<string, boolean>>({})
+  const isGradeOpen = (g: string) => gradeOpen[g] ?? APPLICATION_GRADES.includes(g)
+  const toggleGrade = (g: string) => setGradeOpen(m => ({ ...m, [g]: !isGradeOpen(g) }))
 
   return (
     <div className="space-y-4">
-      {/* 학년 스코프 토글 — 원서 학년(G11·G12) 기본, 전체 활성 토글 */}
+      {/* 학년별 그룹: 전체 활성 학생을 학년별로 묶어 표시(원서 학년 기본 펼침) */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="inline-flex rounded-md border overflow-hidden text-xs">
-          <button onClick={() => setGradeScope('apply')}
-            className={`px-3 h-8 font-medium ${gradeScope === 'apply' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-            {t('serviceDash.applyGrades')} ({applyEligible})
-          </button>
-          <button onClick={() => setGradeScope('all')}
-            className={`px-3 h-8 font-medium border-l ${gradeScope === 'all' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-            {t('serviceDash.allGrades')}
-          </button>
-        </div>
+        <span className="text-xs font-medium text-gray-600">{t('serviceDash.activeStudents')} {filteredStudents.length}{t('serviceDash.studentsUnit')}</span>
         <span className="text-[11px] text-muted-foreground">{t('serviceDash.cycleScopeHint')}</span>
       </div>
       <div className="border rounded-lg overflow-hidden">
