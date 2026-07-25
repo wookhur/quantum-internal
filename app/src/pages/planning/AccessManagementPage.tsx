@@ -12,10 +12,12 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   Loader2, Shield, Search, UserCog, Save,
-  CheckCircle2, Users, ShieldCheck, Eye, Briefcase, UserX,
-  ChevronDown, ChevronRight, Mail, UserPlus, Copy, Check,
+  CheckCircle2, Users, ShieldCheck, Eye, EyeOff, Briefcase, UserX,
+  ChevronDown, ChevronRight, ChevronUp, Mail, UserPlus, Copy, Check,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { NAV_SECTIONS } from '@/components/layout/AppSidebar'
+import { useHiddenBoards, useSetBoardHidden } from '@/hooks/useHiddenBoards'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useProfiles, useUpdateProfile,
@@ -765,6 +767,48 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
+/** 전사 게시판 표시/숨김 관리 (관리자 전용) */
+function BoardVisibilitySection() {
+  const t = useT()
+  const hidden = useHiddenBoards()
+  const setHidden = useSetBoardHidden()
+  const [open, setOpen] = useState(false)
+  return (
+    <Card>
+      <CardHeader className="cursor-pointer select-none py-3" onClick={() => setOpen(o => !o)}>
+        <CardTitle className="text-base flex items-center justify-between">
+          <span className="flex items-center gap-2"><EyeOff className="size-4 text-primary" /> {t('access.boardVisibility')}</span>
+          {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        </CardTitle>
+      </CardHeader>
+      {open && (
+        <CardContent className="space-y-4 pt-0">
+          <p className="text-xs text-muted-foreground">{t('access.boardVisibilityHint')}</p>
+          {NAV_SECTIONS.map(sec => (
+            <div key={sec.titleKey}>
+              <div className="text-xs font-semibold text-muted-foreground mb-1">{t(sec.titleKey)}</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-0.5">
+                {sec.items.map(item => {
+                  const isHidden = hidden.has(item.to)
+                  return (
+                    <label key={item.to} className="flex items-center justify-between gap-3 py-1 text-sm cursor-pointer">
+                      <span className={`flex items-center gap-1.5 ${isHidden ? 'text-muted-foreground' : ''}`}>
+                        {isHidden ? <EyeOff className="size-3.5 text-muted-foreground" /> : <Eye className="size-3.5 text-emerald-500" />}
+                        {t(item.labelKey)}
+                      </span>
+                      <Switch checked={!isHidden} onCheckedChange={(v) => setHidden.mutate({ route: item.to, hidden: !v })} />
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
 export function AccessManagementPage() {
   const t = useT()
   const DEPT_OPTIONS = useDeptOptions()
@@ -846,6 +890,9 @@ export function AccessManagementPage() {
           {t('access.inviteUser')}
         </Button>
       </div>
+
+      {/* 전사 게시판 표시/숨김 (관리자 전용) */}
+      {isAdmin && <BoardVisibilitySection />}
 
       {/* Summary */}
       <div className="grid grid-cols-5 gap-3">

@@ -46,17 +46,18 @@ import {
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useFeatureAccess, getEffectiveRoutes, getEffectiveModules, type FeatureModule } from '@/hooks/useProfiles'
+import { useHiddenBoards } from '@/hooks/useHiddenBoards'
 import { useLanguage } from '@/i18n/LanguageContext'
 import type { TranslationKeys } from '@/i18n/translations'
 
-interface NavItemDef {
+export interface NavItemDef {
   labelKey: TranslationKeys
   to: string
   icon: LucideIcon
 }
 
 /** Each nav section maps to a feature module for access control */
-const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: NavItemDef[] }[] = [
+export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; items: NavItemDef[] }[] = [
   {
     titleKey: 'nav.common',
     module: 'dashboard',
@@ -172,6 +173,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
   // Determine which routes this user can access
   const enabledRoutes = user ? getEffectiveRoutes(user, featureAccess) : []
   const enabledModules = user ? getEffectiveModules(user, featureAccess) : []
+  const hiddenBoards = useHiddenBoards() // 전사 숨김 게시판
   // Only show sections whose module the user can access
   const visibleSections = NAV_SECTIONS.filter(s => enabledModules.includes(s.module))
 
@@ -218,6 +220,7 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
             <SidebarGroupContent>
               <SidebarMenu>
                 {section.items.map((item) => {
+                  if (hiddenBoards.has(item.to)) return null // 전사 숨김
                   const active = isActive(item.to)
                   const Icon = item.icon
                   const hasAccess = enabledRoutes.includes(item.to)
