@@ -39,7 +39,7 @@ import {
   type DashboardMilestone,
 } from '@/hooks/useStudentMilestones'
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
-import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, gradeBucket, gradesToShow } from '@/lib/majorTaxonomy'
+import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, MAJOR_TRACK_LABEL_EN, gradeBucket, gradesToShow } from '@/lib/majorTaxonomy'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
 import { normalizeStatus } from './Student360Page'
 import {
@@ -1614,7 +1614,11 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
             <tbody>
               {rowKeys.map(rk => (
                 <tr key={rk} className="border-b hover:bg-muted/20">
-                  <td className={`py-2 pr-3 ${rk === 'unassigned' ? 'text-amber-600 font-medium' : ''}`}>{rowLabel(rk)}</td>
+                  <td className={`py-2 pr-3 ${rk === 'unassigned' ? 'text-amber-600 font-medium' : ''}`}>
+                    {rk === 'unassigned' ? rowLabel(rk) : (
+                      <span>{MAJOR_TRACK_LABEL[rk]} <span className="text-xs font-normal text-muted-foreground">{MAJOR_TRACK_LABEL_EN[rk]}</span></span>
+                    )}
+                  </td>
                   {gradeCols.map(g => {
                     const n = counts[rk]?.[g]?.length || 0
                     const isSel = cell?.track === rk && cell?.grade === g

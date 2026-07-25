@@ -7,6 +7,7 @@
 export interface MajorTrack {
   key: string        // DB 저장값(안정적 slug)
   label: string      // 화면 표시(한국어)
+  labelEn: string    // 화면 표시(영어)
   majors: string[]   // 2단계 세부전공 (영어, 알파벳순)
 }
 
@@ -15,7 +16,7 @@ export const OTHER_MAJOR = 'Other' // 목록에 없을 때 직접 입력용 옵�
 export const MAJOR_TRACKS: MajorTrack[] = [
   {
     key: 'cs',
-    label: '컴퓨터·CS',
+    label: '컴퓨터·CS', labelEn: 'Computer Science',
     majors: [
       'Artificial Intelligence', 'Computer Science', 'Cybersecurity', 'Data Science',
       'Human-Computer Interaction', 'Information Systems', 'Information Technology', 'Software Engineering',
@@ -23,7 +24,7 @@ export const MAJOR_TRACKS: MajorTrack[] = [
   },
   {
     key: 'engineering',
-    label: '공학',
+    label: '공학', labelEn: 'Engineering',
     majors: [
       'Aerospace Engineering', 'Biomedical Engineering', 'Chemical Engineering', 'Civil Engineering',
       'Computer Engineering', 'Electrical Engineering', 'Environmental Engineering', 'Industrial Engineering',
@@ -32,7 +33,7 @@ export const MAJOR_TRACKS: MajorTrack[] = [
   },
   {
     key: 'natural_science',
-    label: '자연과학·수학',
+    label: '자연과학·수학', labelEn: 'Natural Sciences & Math',
     majors: [
       'Astronomy', 'Chemistry', 'Earth Science', 'Environmental Science', 'Geology',
       'Mathematics', 'Physics', 'Statistics',
@@ -40,7 +41,7 @@ export const MAJOR_TRACKS: MajorTrack[] = [
   },
   {
     key: 'life_science',
-    label: '생명과학·의예',
+    label: '생명과학·의예', labelEn: 'Life Sciences & Pre-Med',
     majors: [
       'Biochemistry', 'Bioinformatics', 'Biology', 'Biotechnology', 'Genetics', 'Kinesiology',
       'Microbiology', 'Molecular Biology', 'Neuroscience', 'Nursing', 'Nutrition', 'Pharmacy', 'Public Health',
@@ -48,7 +49,7 @@ export const MAJOR_TRACKS: MajorTrack[] = [
   },
   {
     key: 'business',
-    label: '경영·경제',
+    label: '경영·경제', labelEn: 'Business & Economics',
     majors: [
       'Accounting', 'Business Administration', 'Economics', 'Entrepreneurship', 'Finance',
       'Hospitality Management', 'International Business', 'Management', 'Management Information Systems',
@@ -57,7 +58,7 @@ export const MAJOR_TRACKS: MajorTrack[] = [
   },
   {
     key: 'social_science',
-    label: '사회과학',
+    label: '사회과학', labelEn: 'Social Sciences',
     majors: [
       'Anthropology', 'Criminology and Criminal Justice', 'Geography', 'International Relations',
       'Political Science', 'Psychology', 'Public Policy', 'Social Work', 'Sociology', 'Urban Studies',
@@ -65,7 +66,7 @@ export const MAJOR_TRACKS: MajorTrack[] = [
   },
   {
     key: 'humanities',
-    label: '인문',
+    label: '인문', labelEn: 'Humanities',
     majors: [
       'Classics', 'Comparative Literature', 'East Asian Studies', 'English', 'History', 'Linguistics',
       'Philosophy', 'Religious Studies', 'Translation and Interpretation', 'World Languages',
@@ -73,7 +74,7 @@ export const MAJOR_TRACKS: MajorTrack[] = [
   },
   {
     key: 'arts',
-    label: '예술',
+    label: '예술', labelEn: 'Arts',
     majors: [
       'Animation', 'Architecture', 'Art History', 'Dance', 'Fashion Design', 'Film and Television',
       'Fine Arts', 'Graphic Design', 'Illustration', 'Industrial and Product Design', 'Interior Design',
@@ -82,7 +83,7 @@ export const MAJOR_TRACKS: MajorTrack[] = [
   },
   {
     key: 'media',
-    label: '미디어·커뮤니케이션',
+    label: '미디어·커뮤니케이션', labelEn: 'Media & Communication',
     majors: [
       'Advertising', 'Communication Studies', 'Digital Media', 'Game Design', 'Journalism',
       'Media Studies', 'Public Relations',
@@ -90,7 +91,7 @@ export const MAJOR_TRACKS: MajorTrack[] = [
   },
   {
     key: 'undecided',
-    label: '미정·기타',
+    label: '미정·기타', labelEn: 'Undecided / Other',
     majors: [
       'Interdisciplinary Studies', 'Liberal Arts / Undecided',
     ],
@@ -99,6 +100,9 @@ export const MAJOR_TRACKS: MajorTrack[] = [
 
 export const MAJOR_TRACK_LABEL: Record<string, string> = Object.fromEntries(
   MAJOR_TRACKS.map(t => [t.key, t.label]),
+)
+export const MAJOR_TRACK_LABEL_EN: Record<string, string> = Object.fromEntries(
+  MAJOR_TRACKS.map(t => [t.key, t.labelEn]),
 )
 
 export function majorsForTrack(trackKey?: string): string[] {
