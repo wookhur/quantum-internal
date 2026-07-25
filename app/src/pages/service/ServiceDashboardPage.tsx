@@ -1284,13 +1284,27 @@ function CycleOverview({
                           monthMilestones.map(m => {
                             const cfg = milestoneConfig(m.type)
                             const isPast = m.date < today
+                            const base = `group relative w-5 h-5 rounded-full border-2 border-white shadow-sm flex items-center justify-center ${cfg.dot} ${
+                              m.status === 'completed' ? 'opacity-40' : isPast ? 'opacity-70' : ''
+                            } ${isCurrentMonth ? 'ring-2 ring-offset-1 ring-blue-300' : ''}`
+                            // 자동(EC) 마일스톤: 읽기 전용, 학생카드로 이동. 안쪽 흰 점으로 구분
+                            if (m.auto) {
+                              return (
+                                <Link
+                                  key={m.id}
+                                  to={`/service/student-360?student=${student.id}`}
+                                  className={`${base} hover:ring-2 hover:ring-offset-1 hover:ring-emerald-400`}
+                                  title={`${m.title} · ${t('serviceDash.autoEc')}`}
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white/90" />
+                                </Link>
+                              )
+                            }
                             return (
                               <button
                                 key={m.id}
                                 onClick={() => onEditMilestone(m)}
-                                className={`group relative w-5 h-5 rounded-full border-2 border-white shadow-sm flex items-center justify-center hover:ring-2 hover:ring-offset-1 hover:ring-blue-400 ${cfg.dot} ${
-                                  m.status === 'completed' ? 'opacity-40' : isPast ? 'opacity-70' : ''
-                                } ${isCurrentMonth ? 'ring-2 ring-offset-1 ring-blue-300' : ''}`}
+                                className={`${base} hover:ring-2 hover:ring-offset-1 hover:ring-blue-400`}
                                 title={`${m.title} · ${t(MILESTONE_STATUS_KEYS.find(s => s.value === m.status)?.key ?? 'serviceDash.statusUpcoming')} (${t('serviceDash.clickToEdit')})`}
                               >
                                 {m.status === 'urgent' && (
@@ -2231,6 +2245,31 @@ export function ServiceDashboardPage() {
   const filteredMilestones = consultantFilter === 'all' ? vMilestones : vMilestones.filter(m  => m.studentConsultant === consultantFilter)
   const filteredFollowups  = consultantFilter === 'all' ? vFollowups : vFollowups.filter(f => f.studentConsultant === consultantFilter)
 
+  // 외부서비스(EC)·학업지원 기간에서 EC Activity 마일스톤을 자동 생성(읽기 전용) → 사이클 뷰에 병합
+  const autoEcMilestones = useMemo<DashboardMilestone[]>(() => {
+    const byId = new Map(vStudents.map(s => [s.id, s]))
+    const out: DashboardMilestone[] = []
+    for (const f of programFees) {
+      if (!f.periodStart || f.periodStart < cycleStart || f.periodStart > cycleEnd) continue
+      const s = byId.get(f.studentId)
+      out.push({
+        id: `ec-${f.id}`,
+        studentId: f.studentId,
+        type: 'ec_activity',
+        title: [f.label, f.detail].filter(Boolean).join(' · ') || 'EC',
+        date: f.periodStart,
+        status: (f.periodEnd && f.periodEnd < today) ? 'completed' : 'on_track',
+        studentName: s?.name || f.studentName,
+        studentConsultant: s?.assignedConsultant,
+        auto: true,
+        createdAt: f.periodStart,
+        updatedAt: f.periodStart,
+      })
+    }
+    return out
+  }, [programFees, vStudents, cycleStart, cycleEnd, today])
+  const cycleMilestones = useMemo(() => [...filteredMilestones, ...autoEcMilestones], [filteredMilestones, autoEcMilestones])
+
   const viewMilestones = filteredMilestones.filter(m => m.date >= viewStartDate && m.date <= viewEndDate)
 
   const stats = {
@@ -2575,7 +2614,7 @@ export function ServiceDashboardPage() {
         {view === 'cycle' && (
           <CycleOverview
             students={vStudents.map(s => ({ id: s.id, name: s.name, assignedConsultant: s.assignedConsultant, status: s.status, grade: s.grade }))}
-            milestones={filteredMilestones}
+            milestones={cycleMilestones}
             consultantFilter={consultantFilter}
             cycleFilter={cycleFilter}
             onAddMilestone={studentId => { if (!canEdit) return; setDefaultMilestoneStudentId(studentId); setDefaultMilestoneDate(undefined); setEditingMilestone(null); setShowAddMilestone(true) }}

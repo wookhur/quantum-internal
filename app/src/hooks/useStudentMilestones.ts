@@ -20,6 +20,8 @@ function mapMilestone(row: Record<string, unknown>): StudentMilestone {
 export interface DashboardMilestone extends StudentMilestone {
   studentName: string
   studentConsultant?: string
+  /** 기존 데이터(EC·학업지원 기간)에서 자동 생성된 읽기전용 마일스톤 */
+  auto?: boolean
 }
 
 export function useAllStudentMilestones(startDate: string, endDate: string) {
