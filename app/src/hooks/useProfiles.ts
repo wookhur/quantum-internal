@@ -190,6 +190,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   // ── Partner ──
   { path: '/partner/students', labelKey: 'nav.partnerStudents', module: 'partner' },
   { path: '/partner/instructors', labelKey: 'nav.partnerInstructors', module: 'partner' },
+  { path: '/partner/mentors', labelKey: 'nav.mentors', module: 'partner' },
   { path: '/partner/companies', labelKey: 'nav.partnerCompanies', module: 'partner' },
   { path: '/partner/programs', labelKey: 'nav.partnerPrograms', module: 'partner' },
   { path: '/partner/contracts', labelKey: 'nav.partnerContracts', module: 'partner' },
@@ -214,7 +215,7 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
 ]
 
 /** Routes that require admin role — non-admins are always blocked */
-export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info', '/partner/instructors']
+export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info', '/partner/instructors', '/partner/mentors']
 
 /** 서비스입금관리: 관리자(admin)만 열람/편집 */
 export const SERVICE_FINANCE_ROUTES: string[] = ['/service/external-fees']

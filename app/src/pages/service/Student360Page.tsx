@@ -25,6 +25,7 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
 import { contractYearOf, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
+import { useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching, type StudentCoaching } from '@/hooks/useMentors'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, OTHER_MAJOR, gradeBucket } from '@/lib/majorTaxonomy'
 import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
@@ -442,6 +443,7 @@ export function Student360Page() {
             <ContractSection student={selected} canEdit={canEdit} />
             <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
+            <CoachingSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} canEdit={canEdit} />
             <IssueReportSection studentId={selected.id} studentName={selected.name} userId={user?.id} userName={user?.name} isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit} />
             <MeetingsSection student={selected} createdBy={user?.id} authorName={user?.name} canEdit={canEdit} />
@@ -1899,6 +1901,104 @@ function LabeledInput({ label, value, onChange, type }: { label: string; value: 
       <Label className="text-xs">{label}</Label>
       <Input type={type} value={value} onChange={e => onChange(e.target.value)} />
     </div>
+  )
+}
+
+// ─────────────────── 학습코칭 멘토 ───────────────────
+function CoachingSection({ studentId, createdBy, canEdit }: { studentId: string; createdBy?: string; canEdit: boolean }) {
+  const { data: mentors = [] } = useMentors()
+  const { data: items = [] } = useStudentCoaching(studentId)
+  const upsert = useUpsertCoaching()
+  const del = useDeleteCoaching()
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState({ mentorId: '', startDate: '', schedule: '', fieldNotes: '' })
+  const reset = () => { setEditingId(null); setForm({ mentorId: '', startDate: '', schedule: '', fieldNotes: '' }) }
+
+  const mentorName = (m: { koreanName?: string; englishName?: string }) => [m.koreanName, m.englishName].filter(Boolean).join(' ')
+  const mentorLabel = (id?: string) => {
+    const m = mentors.find(x => x.id === id)
+    return m ? (mentorName(m) || '멘토') : (id ? '(삭제된 멘토)' : '—')
+  }
+
+  const startEdit = (c: StudentCoaching) => {
+    if (!canEdit) return
+    setEditingId(c.id)
+    setForm({ mentorId: c.mentorId || '', startDate: c.startDate || '', schedule: c.schedule || '', fieldNotes: c.fieldNotes || '' })
+  }
+  const save = () => {
+    if (!canEdit) return
+    if (!form.mentorId && !form.schedule && !form.fieldNotes) return
+    upsert.mutate(
+      { id: editingId || undefined, studentId, mentorId: form.mentorId || undefined, startDate: form.startDate || undefined, schedule: form.schedule || undefined, fieldNotes: form.fieldNotes || undefined, createdBy },
+      { onSuccess: reset },
+    )
+  }
+
+  return (
+    <Card className="border-emerald-200">
+      <CardHeader className="bg-emerald-50/40 rounded-t-xl">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BookOpen className="size-5 text-emerald-600" />
+          학습코칭 멘토 <span className="text-muted-foreground font-normal">({items.length})</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {items.length === 0 && <p className="text-sm text-muted-foreground">배정된 학습코칭 멘토가 없습니다.</p>}
+        {items.map(c => (
+          <div key={c.id} className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium flex-wrap">
+                <span>{mentorLabel(c.mentorId)}</span>
+                {c.startDate && <Badge variant="outline">시작 {c.startDate}</Badge>}
+                {c.schedule && <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">{c.schedule}</Badge>}
+              </div>
+              {canEdit && (
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => startEdit(c)}><Pencil className="size-3.5" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: c.id, studentId }) }}><Trash2 className="size-3.5" /></Button>
+                </div>
+              )}
+            </div>
+            {c.fieldNotes && <p className="text-sm mt-2 whitespace-pre-wrap">{c.fieldNotes}</p>}
+          </div>
+        ))}
+
+        {canEdit && (
+          <div className="rounded-lg border border-dashed p-3 space-y-2">
+            <div className="text-xs font-medium text-muted-foreground">{editingId ? '코칭 수정' : '코칭 추가'}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">멘토</Label>
+                <select value={form.mentorId} onChange={e => setForm(f => ({ ...f, mentorId: e.target.value }))}
+                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                  <option value="">멘토 선택</option>
+                  {mentors.map(m => <option key={m.id} value={m.id}>{mentorName(m) || m.id}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">시작일</Label>
+                <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="h-9" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">코칭 스케줄</Label>
+              <Input value={form.schedule} onChange={e => setForm(f => ({ ...f, schedule: e.target.value }))} placeholder="예: 주3회, 월/목/토" className="h-9" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">코칭 분야 (메모)</Label>
+              <Textarea value={form.fieldNotes} onChange={e => setForm(f => ({ ...f, fieldNotes: e.target.value }))} rows={2} placeholder="예: AP Calculus 단원평가 대비, 주간 학습계획 점검" className="text-sm" />
+            </div>
+            <div className="flex justify-end gap-2">
+              {editingId && <Button size="sm" variant="outline" onClick={reset}>취소</Button>}
+              <Button size="sm" onClick={save} disabled={upsert.isPending}>
+                <Plus className="size-3.5 mr-1" />{editingId ? '저장' : '추가'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
