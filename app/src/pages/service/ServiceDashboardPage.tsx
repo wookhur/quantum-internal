@@ -1121,6 +1121,9 @@ function MonthCalendar({
 
 // ─── Cycle Overview ───────────────────────────────────────────────────────────
 
+// 원서 지원 학년(주니어·시니어). 사이클 뷰 기본 스코프.
+const APPLICATION_GRADES = ['G11', 'G12']
+
 function CycleOverview({
   students,
   milestones,
@@ -1130,7 +1133,7 @@ function CycleOverview({
   onEditMilestone,
   canEdit,
 }: {
-  students: { id: string; name: string; assignedConsultant?: string; status?: string }[]
+  students: { id: string; name: string; assignedConsultant?: string; status?: string; grade?: string }[]
   milestones: DashboardMilestone[]
   consultantFilter: string
   cycleFilter: 'all' | 'at_risk'
@@ -1143,9 +1146,16 @@ function CycleOverview({
   const ref = new Date(today + 'T00:00:00')
   const months = getCycleMonths(ref, 2, 6)
   const currentMonthKey = today.slice(0, 7)
+  // 원서 학년(G11·G12)만 기본 표시, 토글로 전체 활성 학생 보기
+  const [gradeScope, setGradeScope] = useState<'apply' | 'all'>('apply')
+  const applyEligible = useMemo(
+    () => students.filter(s => isActiveStudent(s.status) && APPLICATION_GRADES.includes(gradeBucket(s.grade))).length,
+    [students, gradeScope],
+  )
 
   const filteredStudents = useMemo(() => {
     let list = students.filter(s => isActiveStudent(s.status))
+    if (gradeScope === 'apply') list = list.filter(s => APPLICATION_GRADES.includes(gradeBucket(s.grade)))
     if (consultantFilter !== 'all') list = list.filter(s => s.assignedConsultant === consultantFilter)
 
     if (cycleFilter === 'at_risk') {
@@ -1158,7 +1168,7 @@ function CycleOverview({
       list = list.filter(s => riskIds.has(s.id))
     }
     return list
-  }, [students, consultantFilter, cycleFilter, milestones, today])
+  }, [students, consultantFilter, cycleFilter, milestones, today, gradeScope])
 
   const milestonesMap = useMemo(() => {
     const map = new Map<string, Map<string, DashboardMilestone[]>>()
@@ -1201,6 +1211,20 @@ function CycleOverview({
 
   return (
     <div className="space-y-4">
+      {/* 학년 스코프 토글 — 원서 학년(G11·G12) 기본, 전체 활성 토글 */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="inline-flex rounded-md border overflow-hidden text-xs">
+          <button onClick={() => setGradeScope('apply')}
+            className={`px-3 h-8 font-medium ${gradeScope === 'apply' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+            {t('serviceDash.applyGrades')} ({applyEligible})
+          </button>
+          <button onClick={() => setGradeScope('all')}
+            className={`px-3 h-8 font-medium border-l ${gradeScope === 'all' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+            {t('serviceDash.allGrades')}
+          </button>
+        </div>
+        <span className="text-[11px] text-muted-foreground">{t('serviceDash.cycleScopeHint')}</span>
+      </div>
       <div className="border rounded-lg overflow-hidden">
         {/* Header row */}
         <div className="grid bg-gray-50 border-b" style={{ gridTemplateColumns: '11rem repeat(' + months.length + ', 1fr)' }}>
@@ -2550,7 +2574,7 @@ export function ServiceDashboardPage() {
         {/* Cycle overview */}
         {view === 'cycle' && (
           <CycleOverview
-            students={vStudents.map(s => ({ id: s.id, name: s.name, assignedConsultant: s.assignedConsultant, status: s.status }))}
+            students={vStudents.map(s => ({ id: s.id, name: s.name, assignedConsultant: s.assignedConsultant, status: s.status, grade: s.grade }))}
             milestones={filteredMilestones}
             consultantFilter={consultantFilter}
             cycleFilter={cycleFilter}
