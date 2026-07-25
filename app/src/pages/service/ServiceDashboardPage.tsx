@@ -16,7 +16,7 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet'
 import {
-  ChevronLeft, ChevronRight, Plus, X, ExternalLink,
+  ChevronLeft, ChevronRight, ChevronDown, Plus, X, ExternalLink,
   Users, Calendar, AlertCircle, FileText, CheckSquare,
   Loader2, Trash2, UserSearch, BarChart3, UserPlus, CheckCircle2, XCircle, Activity, GraduationCap,
 } from 'lucide-react'
@@ -1209,6 +1209,21 @@ function CycleOverview({
     return { onTrack, behind, urgent }
   }, [filteredStudents, milestonesMap])
 
+  // 학년별 그룹(12→11→10→9→8… 내림차순) + 접기/펼치기
+  const gradeGroups = useMemo(() => {
+    const map = new Map<string, typeof filteredStudents>()
+    for (const s of filteredStudents) {
+      const g = gradeBucket(s.grade)
+      if (!map.has(g)) map.set(g, [])
+      map.get(g)!.push(s)
+    }
+    const order = ['G12', 'G11', 'G10', 'G9', 'G8', 'G7', 'G6', '기타']
+    return order.filter(g => map.has(g)).map(g => ({ grade: g, students: map.get(g)! }))
+  }, [filteredStudents])
+  const [collapsedGrades, setCollapsedGrades] = useState<Record<string, boolean>>({})
+  const isGradeOpen = (g: string) => !collapsedGrades[g]
+  const toggleGrade = (g: string) => setCollapsedGrades(m => ({ ...m, [g]: !m[g] }))
+
   return (
     <div className="space-y-4">
       {/* 학년 스코프 토글 — 원서 학년(G11·G12) 기본, 전체 활성 토글 */}
@@ -1245,7 +1260,17 @@ function CycleOverview({
         {filteredStudents.length === 0 ? (
           <div className="py-12 text-center text-sm text-gray-400">{t('serviceDash.noStudents')}</div>
         ) : (
-          filteredStudents.map(student => {
+          gradeGroups.map(({ grade, students: gradeStudents }) => (
+            <div key={grade}>
+              <button
+                onClick={() => toggleGrade(grade)}
+                className="w-full flex items-center gap-2 px-3 py-2 bg-gray-50 border-b hover:bg-gray-100 text-sm font-semibold text-gray-700"
+              >
+                {isGradeOpen(grade) ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                {grade}
+                <span className="text-xs font-normal text-gray-400">({gradeStudents.length})</span>
+              </button>
+              {isGradeOpen(grade) && gradeStudents.map(student => {
             const sm = milestonesMap.get(student.id)
             const st = studentStatus(student.id)
 
@@ -1320,7 +1345,9 @@ function CycleOverview({
                 })}
               </div>
             )
-          })
+          })}
+            </div>
+          ))
         )}
       </div>
 
