@@ -41,6 +41,7 @@ import {
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, gradeBucket, gradesToShow } from '@/lib/majorTaxonomy'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
+import { normalizeStatus } from './Student360Page'
 import {
   useServicePrograms, useCreateProgram, useUpdateProgram, useDeleteProgram, type ServiceProgram,
 } from '@/hooks/useProgramSeats'
@@ -1144,7 +1145,7 @@ function CycleOverview({
   const currentMonthKey = today.slice(0, 7)
 
   const filteredStudents = useMemo(() => {
-    let list = students.filter(s => s.status === 'active' || !s.status)
+    let list = students.filter(s => isActiveStudent(s.status))
     if (consultantFilter !== 'all') list = list.filter(s => s.assignedConsultant === consultantFilter)
 
     if (cycleFilter === 'at_risk') {
@@ -1511,7 +1512,7 @@ function MajorGradeMatrixSection({ students }: { students: ServiceStudent[] }) {
   const t = useT()
   // 현재 서비스 중(활성) 학생만 — 완료/취소 제외
   const active = useMemo(
-    () => students.filter(s => !(s.status === 'finished' || s.status === 'canceled')),
+    () => students.filter(s => isActiveStudent(s.status)),
     [students],
   )
   const [cell, setCell] = useState<{ track: string; grade: string } | null>(null)
@@ -1634,7 +1635,7 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
   const [manageOpen, setManageOpen] = useState(false)
 
   const active = useMemo(
-    () => students.filter(s => !(s.status === 'finished' || s.status === 'canceled')),
+    () => students.filter(s => isActiveStudent(s.status)),
     [students],
   )
   const studentById = useMemo(() => new Map(active.map(s => [s.id, s])), [active])
@@ -1877,9 +1878,12 @@ function ProgramManageDialog({ open, onOpenChange, programs }: {
 }
 
 // ─────────────────────── Metrics (지표) ───────────────────────
-/** True if the service student's status is one of the "archived" outcomes. */
-function isFinished(status?: string) { return status === 'finished' }
-function isCanceled(status?: string) { return status === 'canceled' }
+// 상태값 표기 편차(active/진행중/Active, finished/완료, canceled/취소 …)를 정규화해
+// Student360 '활성' 집계와 동일하게 맞춘다.
+function isFinished(status?: string) { return normalizeStatus(status) === 'finished' }
+function isCanceled(status?: string) { return normalizeStatus(status) === 'canceled' }
+/** 활성 = 아카이브(완료/취소)가 아닌 모든 학생 — Student360 활성 정의와 일치 */
+function isActiveStudent(status?: string) { return !isFinished(status) && !isCanceled(status) }
 
 type MetricKind = 'meetings' | 'newEnrolled' | 'active' | 'finished' | 'canceled'
 
@@ -2347,7 +2351,7 @@ export function ServiceDashboardPage() {
           <div className="flex items-center gap-2 mt-3">
             <p className="text-xs text-gray-500">
               {consultantFilter === 'all' ? t('serviceDash.allConsultants') : consultantName(consultantFilter)}
-              {' · '}{t('serviceDash.activeStudents')} {vStudents.filter(s => s.status === 'active' || !s.status).length}{t('serviceDash.studentsUnit')}
+              {' · '}{t('serviceDash.activeStudents')} {vStudents.filter(s => isActiveStudent(s.status)).length}{t('serviceDash.studentsUnit')}
             </p>
             <div className="flex rounded-md border overflow-hidden ml-auto">
               <button onClick={() => setCycleFilter('all')}
