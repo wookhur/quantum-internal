@@ -2327,7 +2327,14 @@ export function ServiceDashboardPage() {
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-0.5">Service · Consultant View</p>
             <h1 className="text-xl font-semibold text-gray-900">
-              {view === 'calendar' ? 'Service Calendar' : 'Application Cycle Overview'}
+              {{
+                calendar: t('serviceDash.titleCalendar'),
+                cycle: t('serviceDash.titleCycle'),
+                student: t('serviceDash.titleStudent'),
+                majors: t('serviceDash.titleMajors'),
+                programs: t('serviceDash.titlePrograms'),
+                metrics: t('serviceDash.titleMetrics'),
+              }[view]}
             </h1>
           </div>
 
