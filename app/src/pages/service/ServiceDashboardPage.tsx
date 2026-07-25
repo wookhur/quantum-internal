@@ -1133,7 +1133,7 @@ function CycleOverview({
   onEditMilestone,
   canEdit,
 }: {
-  students: { id: string; name: string; assignedConsultant?: string; status?: string; grade?: string }[]
+  students: { id: string; name: string; koreanName?: string; assignedConsultant?: string; status?: string; grade?: string }[]
   milestones: DashboardMilestone[]
   consultantFilter: string
   cycleFilter: 'all' | 'at_risk'
@@ -1269,7 +1269,9 @@ function CycleOverview({
                   <div className="h-7 w-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold shrink-0">
                     {student.name.slice(0, 2).toUpperCase()}
                   </div>
-                  <span className="text-sm text-gray-700 truncate">{student.name}</span>
+                  <Link to={`/service/student-360?student=${student.id}`} className="text-sm text-gray-700 truncate hover:text-primary hover:underline">
+                    {studentPickerLabel(student)}
+                  </Link>
                 </div>
 
                 {/* Month cells */}
@@ -2624,7 +2626,7 @@ export function ServiceDashboardPage() {
         {/* Cycle overview */}
         {view === 'cycle' && (
           <CycleOverview
-            students={vStudents.map(s => ({ id: s.id, name: s.name, assignedConsultant: s.assignedConsultant, status: s.status, grade: s.grade }))}
+            students={vStudents.map(s => ({ id: s.id, name: s.name, koreanName: s.koreanName, assignedConsultant: s.assignedConsultant, status: s.status, grade: s.grade }))}
             milestones={cycleMilestones}
             consultantFilter={consultantFilter}
             cycleFilter={cycleFilter}
