@@ -25,7 +25,7 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
 import { contractYearOf, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
-import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, OTHER_MAJOR } from '@/lib/majorTaxonomy'
+import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, OTHER_MAJOR, gradeBucket } from '@/lib/majorTaxonomy'
 import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
   type EditorMeeting,
@@ -204,6 +204,7 @@ export function Student360Page() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [consultantFilter, setConsultantFilter] = useState('')
+  const [gradeFilter, setGradeFilter] = useState('all')
   const [showArchive, setShowArchive] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('student'))
 
@@ -263,11 +264,18 @@ export function Student360Page() {
   const archiveCount = useMemo(() => students.filter(s => isArchivedStatus(s.status)).length, [students])
   const activeCount = students.length - archiveCount
 
+  // 학년 필터 옵션: 실제 학생들의 학년을 G12→G6→기타 순으로
+  const gradeOptions = useMemo(() => {
+    const present = new Set(students.filter(s => !isArchivedStatus(s.status)).map(s => gradeBucket(s.grade)))
+    return ['G12', 'G11', 'G10', 'G9', 'G8', 'G7', 'G6', '기타'].filter(g => present.has(g))
+  }, [students])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return students.filter(s => {
       if (showArchive ? !isArchivedStatus(s.status) : isArchivedStatus(s.status)) return false
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
+      if (gradeFilter !== 'all' && gradeBucket(s.grade) !== gradeFilter) return false
       if (!q) return true
       return (
         s.name.toLowerCase().includes(q) ||
@@ -276,7 +284,7 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     })
-  }, [students, search, filterName, consultantName, showArchive])
+  }, [students, search, filterName, consultantName, showArchive, gradeFilter])
 
   const selected = students.find(s => s.id === selectedId) || null
   const statusLabel = (status?: string) => {
@@ -311,22 +319,33 @@ export function Student360Page() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Select
-          value={consultantFilter || '__all__'}
-          onValueChange={v => setConsultantFilter(v === '__all__' ? '' : (v ?? ''))}
-        >
-          <SelectTrigger className="mb-3">
-            <span className="truncate">
-              {consultantFilter ? consultantName(consultantFilter) : t('student360.allConsultants')}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">{t('student360.allConsultants')}</SelectItem>
-            {activeConsultants.map(c => (
-              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2 mb-3">
+          <Select
+            value={consultantFilter || '__all__'}
+            onValueChange={v => setConsultantFilter(v === '__all__' ? '' : (v ?? ''))}
+          >
+            <SelectTrigger className="flex-1">
+              <span className="truncate">
+                {consultantFilter ? consultantName(consultantFilter) : t('student360.allConsultants')}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">{t('student360.allConsultants')}</SelectItem>
+              {activeConsultants.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={gradeFilter} onValueChange={v => setGradeFilter(v ?? 'all')}>
+            <SelectTrigger className="w-28 shrink-0">
+              <span className="truncate">{gradeFilter === 'all' ? t('student360.allGrades') : gradeFilter}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('student360.allGrades')}</SelectItem>
+              {gradeOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
         {/* Active / Archive toggle */}
         <div className="mb-2 flex rounded-md border overflow-hidden text-xs">
           <button

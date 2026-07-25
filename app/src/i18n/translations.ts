@@ -298,6 +298,7 @@ const koTranslations = {
   'student360.diarySearchPlaceholder': '미팅 다이어리 검색 (예: 강점분석)...',
   'student360.diaryNoMatch': '검색 결과가 없습니다',
   'student360.allConsultants': '전체 컨설턴트',
+  'student360.allGrades': '전체 학년',
   'student360.missingReportTooltip': '미팅일지 미제출',
   'student360.pendingFollowupTooltip': '미처리 Follow-up',
   'student360.placeholderAppCount': '예: 15',
@@ -4946,6 +4947,7 @@ const enTranslations: Record<string, string> = {
 
   // ── Student360 extras ──
   'student360.allConsultants': 'All Consultants',
+  'student360.allGrades': 'All Grades',
   'student360.missingReportTooltip': 'Meeting report not submitted',
   'student360.pendingFollowupTooltip': 'Pending follow-up',
   'student360.placeholderAppCount': 'e.g. 15',
