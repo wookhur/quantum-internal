@@ -1330,6 +1330,20 @@ export function FreelancerInvoicesPage(
               ? `수령완료(초록) 표시는 회계 계정만 변경할 수 있습니다${canToggleReceived ? '' : ' — 현재 계정은 조회만 가능'}. 미수령 건은 다음 달로 자동 이월되어 (원래 달) 태그로 계속 표시되고, "인보이스 발행"은 미수령 건을 품명·금액에 채웁니다.`
               : '"인보이스 발행"을 누르면 위 학생이 품명에 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.'}
           </p>
+          {isIncentive && displayItems.length > 0 && (
+            <details className="mt-1 rounded-md border bg-muted/20 p-2">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground select-none">🔎 원천 상세 보기 (진단용) — 각 인센티브가 어디서 나왔는지</summary>
+              <div className="mt-2 divide-y">
+                {displayItems.map(d => (
+                  <div key={d.id} className="flex items-start gap-3 py-1.5 text-xs">
+                    <span className="font-medium w-44 shrink-0 truncate">{d.label}</span>
+                    <span className="tabular-nums w-20 shrink-0 text-right">{formatKRW(d.amount)}</span>
+                    <span className="text-muted-foreground flex-1 break-all">{d.sourceDetail || '(원천 정보 없음)'}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </CardContent>
       </Card>
 
