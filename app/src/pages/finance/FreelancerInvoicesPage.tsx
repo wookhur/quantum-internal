@@ -885,6 +885,9 @@ export function useIncentiveLinesByPerson() {
 
     const map = new Map<string, IncentiveLine[]>()
     entries.forEach(e => {
+      // 'sp-' 항목(Student360 EC 서비스프로그램)은 useServiceIncentiveLines가 이미 계산하므로
+      // 여기서 제외해 이중계산 방지. (rs- 계약 추가회차·일반 계약 인센티브는 유지)
+      if (e.key.startsWith('sp-')) return
       const dateRef = e.isPaid ? e.paidDate : (e.dueDate || e.contractDate)
       if (!dateRef || e.incentiveAmount <= 0) return
       const name = canonicalConsultantName(e.displayName)
