@@ -863,7 +863,7 @@ function useConsultantBillable(month: string) {
   }, [students, meetings, consultantName])
 }
 
-export interface IncentiveLine { id: string; label: string; amount: number; month: string }
+export interface IncentiveLine { id: string; label: string; amount: number; month: string; source: 'contract' | 'service'; sourceDetail: string }
 
 /** Per person NAME → ALL their sales-incentive lines (with settlement month).
  *  Combines contract-based incentives with service (EC/Academic) incentives
@@ -891,13 +891,15 @@ export function useIncentiveLinesByPerson() {
       if (!name) return
       const arr = map.get(name) || []
       const studentLabel = resolveStudent(e.studentName) || e.contractorName || e.incentiveType
-      arr.push({ id: `c:${e.key}`, label: studentLabel, amount: e.incentiveAmount, month: dateRef.slice(0, 7) })
+      const sourceDetail = `계약 · ${[e.contractorName, e.installmentLabel, `${e.incentiveType} ${e.percentage}%`].filter(Boolean).join(' · ')} · 회차키 ${e.key}`
+      arr.push({ id: `c:${e.key}`, label: studentLabel, amount: e.incentiveAmount, month: dateRef.slice(0, 7), source: 'contract', sourceDetail })
       map.set(name, arr)
     })
     serviceLines.forEach(sl => {
       if (!sl.name) return
       const arr = map.get(sl.name) || []
-      arr.push({ id: sl.id, label: sl.label, amount: sl.amount, month: sl.month })
+      const partner = sl.label.split(' · ')[1] || 'EC'
+      arr.push({ id: sl.id, label: sl.label, amount: sl.amount, month: sl.month, source: 'service', sourceDetail: `서비스(EC) · ${partner} · 수금 ${sl.month}` })
       map.set(sl.name, arr)
     })
     return map
@@ -985,17 +987,16 @@ export function FreelancerInvoicesPage(
   const incentiveStatus = useIncentiveStatus()
   const setIncentiveReceived = useSetIncentiveReceived()
 
-  const displayItems = useMemo<{ id: string; label: string; amount: number; originMonth?: string; received: boolean }[]>(() => {
+  type DItem = { id: string; label: string; amount: number; originMonth?: string; received: boolean; sourceDetail?: string }
+  const displayItems = useMemo<DItem[]>(() => {
     if (isIncentive) {
-      const out: { id: string; label: string; amount: number; originMonth?: string; received: boolean }[] = []
+      const out: DItem[] = []
       for (const l of (linesByPerson.get(myName) || [])) {
         const st = incentiveStatus.get(l.id)
         if (st?.received) {
-          // 수령한 달에만 초록으로 표시
-          if (st.receivedMonth === issueMonth) out.push({ id: l.id, label: l.label, amount: l.amount, originMonth: l.month, received: true })
+          if (st.receivedMonth === issueMonth) out.push({ id: l.id, label: l.label, amount: l.amount, originMonth: l.month, received: true, sourceDetail: l.sourceDetail })
         } else if (l.month <= issueMonth) {
-          // 미수령: 발생 달부터 계속 이월 표시 (발생 달보다 뒤면 태그로 원래 달 표시)
-          out.push({ id: l.id, label: l.label, amount: l.amount, originMonth: l.month, received: false })
+          out.push({ id: l.id, label: l.label, amount: l.amount, originMonth: l.month, received: false, sourceDetail: l.sourceDetail })
         }
       }
       return out
@@ -1307,7 +1308,7 @@ export function FreelancerInvoicesPage(
                     type="button"
                     onClick={() => toggleReceived(r.id, r.received)}
                     disabled={!canToggleReceived}
-                    title={!canToggleReceived ? '수령 여부는 회계 계정만 변경할 수 있습니다' : (r.received ? '수령완료 — 클릭하면 미수령으로 되돌립니다' : '클릭하면 이 달 수령완료로 표시됩니다')}
+                    title={`${r.sourceDetail || ''}\n${!canToggleReceived ? '수령 여부는 회계 계정만 변경할 수 있습니다' : (r.received ? '수령완료 — 클릭하면 미수령으로 되돌립니다' : '클릭하면 이 달 수령완료로 표시됩니다')}`}
                     className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${canToggleReceived ? 'cursor-pointer' : 'cursor-default'} ${
                       r.received
                         ? 'bg-emerald-500 border-emerald-500 text-white'
