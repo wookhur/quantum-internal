@@ -87,6 +87,9 @@ function mapContract(row: Record<string, unknown>): Contract {
     salesRep: (row.sales_rep as string) || undefined,
     serviceRep: (row.service_rep as string) || undefined,
     status,
+    notes: (row.notes as string) || undefined,
+    refundAmount: row.refund_amount != null ? Number(row.refund_amount) : undefined,
+    refundDate: (row.refund_date as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -396,15 +399,18 @@ export function useContract(id: string | undefined) {
 export function useCancelContract() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ contractId, reason }: { contractId: string; reason?: string }) => {
-      // Update contract status
+    mutationFn: async ({ contractId, reason, refundAmount, refundDate, studentName }: { contractId: string; reason?: string; refundAmount?: number; refundDate?: string; studentName?: string }) => {
+      // Update contract status + 환불 기록
+      const update: Record<string, unknown> = {
+        status: 'cancelled',
+        notes: reason || null,
+        updated_at: new Date().toISOString(),
+      }
+      if (refundAmount !== undefined) update.refund_amount = refundAmount || null
+      if (refundDate !== undefined) update.refund_date = refundDate || null
       const { error: contractError } = await supabase
         .from('contracts')
-        .update({
-          status: 'cancelled',
-          notes: reason || null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(update)
         .eq('id', contractId)
       if (contractError) throw contractError
 
@@ -419,12 +425,20 @@ export function useCancelContract() {
         .eq('contract_id', contractId)
         .in('status', ['pending', 'overdue'])
       if (installError) throw installError
+
+      // 연동: 같은 이름의 Student360 학생 상태를 '서비스 취소'로 동기화 (best-effort)
+      if (studentName?.trim()) {
+        await supabase.from('service_students')
+          .update({ status: 'canceled', updated_at: new Date().toISOString() })
+          .or(`name.ilike.${studentName.trim()},korean_name.ilike.${studentName.trim()}`)
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['contracts'] })
       qc.invalidateQueries({ queryKey: ['contracts-with-installments'] })
       qc.invalidateQueries({ queryKey: ['installments'] })
       qc.invalidateQueries({ queryKey: ['revenue-projection'] })
+      qc.invalidateQueries({ queryKey: ['service_students'] })
     },
   })
 }

@@ -197,6 +197,9 @@ export interface Contract {
   additionalServices?: string
   status: ContractStatus
   notes?: string
+  /** 계약 취소(중도해지) 시 환불한 금액·일자 */
+  refundAmount?: number
+  refundDate?: string
   createdAt: string
   updatedAt: string
   // Joined

@@ -546,6 +546,8 @@ export function ContractDetailPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+  const [refundAmount, setRefundAmount] = useState('')
+  const [refundDate, setRefundDate] = useState(new Date().toISOString().slice(0, 10))
   const [addChargeDialogOpen, setAddChargeDialogOpen] = useState(false)
   const [addBaseDialogOpen, setAddBaseDialogOpen] = useState(false)
   const [baseForm, setBaseForm] = useState({ label: '', amount: '', dueDate: '' })
@@ -565,17 +567,24 @@ export function ContractDetailPage() {
   const handleCancel = useCallback(() => {
     if (!canEdit) return
     if (!id) return
-    cancelContract.mutate({ contractId: id, reason: cancelReason || undefined }, {
+    cancelContract.mutate({
+      contractId: id,
+      reason: cancelReason || undefined,
+      refundAmount: refundAmount ? Number(refundAmount) : undefined,
+      refundDate: refundAmount ? refundDate : undefined,
+      studentName: contract?.studentName,
+    }, {
       onSuccess: () => {
         setCancelDialogOpen(false)
         setCancelReason('')
+        setRefundAmount('')
       },
       onError: (e: unknown) => {
         const err = e as { message?: string }
         alert(`계약 취소 처리에 실패했습니다.\n${err?.message || ''}`)
       },
     })
-  }, [id, cancelReason, cancelContract, canEdit])
+  }, [id, cancelReason, refundAmount, refundDate, contract?.studentName, cancelContract, canEdit])
 
   const openPayDialog = useCallback((inst: PaymentInstallment) => {
     if (!canEdit) return
@@ -911,6 +920,15 @@ export function ContractDetailPage() {
               </div>
             </div>
           </div>
+          {/* 환불 기록 (계약 취소 시) */}
+          {contract.refundAmount != null && contract.refundAmount > 0 && (
+            <div className="mt-4 pt-4 border-t border-dashed border-amber-200 flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50">환불</Badge>
+              <span className="font-mono font-bold text-amber-700">{formatCurrency(contract.refundAmount, contract.currency)}</span>
+              {contract.refundDate && <span className="text-xs text-muted-foreground">· {contract.refundDate} 환불</span>}
+              <span className="text-xs text-muted-foreground">· 실수령(수금−환불) {formatCurrency(Math.max(0, basePaid - contract.refundAmount), contract.currency)}</span>
+            </div>
+          )}
           {/* Extra charges summary (only show if there are extra charges) */}
           {extraInstallments.length > 0 && (
             <div className="mt-4 pt-4 border-t border-dashed border-gray-200">
@@ -1516,6 +1534,18 @@ export function ContractDetailPage() {
                 className="resize-none"
               />
             </div>
+            {/* 환불 기록 */}
+            <div className="grid grid-cols-2 gap-3 pt-1 border-t">
+              <div className="space-y-1">
+                <Label className="text-xs">환불액 (선택)</Label>
+                <Input type="number" min={0} value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} placeholder="예: 5000000" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">환불일</Label>
+                <Input type="date" value={refundDate} onChange={(e) => setRefundDate(e.target.value)} disabled={!refundAmount} />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">환불액을 입력하면 계약에 환불 기록으로 저장되고, 같은 이름의 Student360 학생 상태도 "서비스 취소"로 함께 반영됩니다.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelDialogOpen(false)}>
