@@ -984,8 +984,10 @@ export function FreelancerInvoicesPage(
   // 발행 대상 = 아직 수령완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({ label: d.label, amount: d.amount })), [displayItems])
 
+  // 수령/미수령 변경은 회계(accounting) 계정만 — 본인 임의 조작 방지
+  const canToggleReceived = isAccounting
   const toggleReceived = (id: string, currentlyReceived: boolean) => {
-    if (!canEdit) return
+    if (!canToggleReceived) return
     setIncentiveReceived.mutate({ key: id, received: !currentlyReceived, month: issueMonth })
   }
 
@@ -1250,9 +1252,9 @@ export function FreelancerInvoicesPage(
                     key={r.id}
                     type="button"
                     onClick={() => toggleReceived(r.id, r.received)}
-                    disabled={!canEdit}
-                    title={r.received ? '수령완료 — 클릭하면 미수령으로 되돌립니다' : '클릭하면 이 달 수령완료로 표시됩니다'}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${canEdit ? 'cursor-pointer' : 'cursor-default'} ${
+                    disabled={!canToggleReceived}
+                    title={!canToggleReceived ? '수령 여부는 회계 계정만 변경할 수 있습니다' : (r.received ? '수령완료 — 클릭하면 미수령으로 되돌립니다' : '클릭하면 이 달 수령완료로 표시됩니다')}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${canToggleReceived ? 'cursor-pointer' : 'cursor-default'} ${
                       r.received
                         ? 'bg-emerald-500 border-emerald-500 text-white'
                         : carried
@@ -1270,7 +1272,7 @@ export function FreelancerInvoicesPage(
           )}
           <p className="text-[11px] text-muted-foreground">
             {isIncentive
-              ? '칩을 클릭하면 이 달 수령완료(초록)로 표시됩니다. 클릭 안 한 미수령 건은 다음 달로 자동 이월되어 (원래 달) 태그로 계속 표시됩니다. "인보이스 발행"은 미수령 건을 품명·금액에 채웁니다.'
+              ? `수령완료(초록) 표시는 회계 계정만 변경할 수 있습니다${canToggleReceived ? '' : ' — 현재 계정은 조회만 가능'}. 미수령 건은 다음 달로 자동 이월되어 (원래 달) 태그로 계속 표시되고, "인보이스 발행"은 미수령 건을 품명·금액에 채웁니다.`
               : '"인보이스 발행"을 누르면 위 학생이 품명에 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.'}
           </p>
         </CardContent>
