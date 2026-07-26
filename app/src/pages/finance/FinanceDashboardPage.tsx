@@ -138,6 +138,43 @@ export function FinanceDashboardPage() {
     return [...byStudent.values()].filter(r => r.student && r.labels.size > 1).sort((a, b) => b.count - a.count)
   }, [linesByPerson, students])
 
+  // ─── 중복 의심 진단: 같은 학생·같은 금액이 계약(contract)과 서비스(service) 양쪽에서 잡히면 이중 입력 의심 ───
+  const dupDiagnostics = useMemo(() => {
+    const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
+    const canonByName = new Map<string, string>()
+    for (const st of students) {
+      const canon = [st.koreanName, st.name].filter(Boolean).join(' ')
+      if (st.name) canonByName.set(norm(st.name), canon)
+      if (st.koreanName) canonByName.set(norm(st.koreanName), canon)
+    }
+    type L = { source: 'contract' | 'service'; amount: number; month: string; person: string }
+    const byStudent = new Map<string, { name: string; lines: L[] }>()
+    linesByPerson.forEach((lines, person) => {
+      for (const l of lines) {
+        const studentPart = (l.label.split('·')[0] || '').trim()
+        if (!studentPart) continue
+        const canon = canonByName.get(norm(studentPart)) || studentPart
+        const key = norm(canon)
+        const src: 'contract' | 'service' = l.id.startsWith('c:') ? 'contract' : 'service'
+        const e = byStudent.get(key) || { name: canon, lines: [] }
+        e.lines.push({ source: src, amount: l.amount, month: l.month, person })
+        byStudent.set(key, e)
+      }
+    })
+    const flagged: { name: string; amount: number; contract: number; service: number; persons: string[] }[] = []
+    for (const e of byStudent.values()) {
+      const byAmount = new Map<number, { contract: number; service: number; persons: Set<string> }>()
+      for (const l of e.lines) {
+        const a = byAmount.get(l.amount) || { contract: 0, service: 0, persons: new Set<string>() }
+        a[l.source]++; a.persons.add(l.person); byAmount.set(l.amount, a)
+      }
+      for (const [amount, a] of byAmount) {
+        if (a.contract > 0 && a.service > 0) flagged.push({ name: e.name, amount, contract: a.contract, service: a.service, persons: [...a.persons] })
+      }
+    }
+    return flagged.sort((a, b) => b.amount - a.amount)
+  }, [linesByPerson, students])
+
   if (!allowed) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
@@ -289,6 +326,46 @@ export function FinanceDashboardPage() {
                 </TableBody>
               </Table>
               <p className="px-4 py-2 text-[11px] text-muted-foreground">같은 학생인데 계약서·서비스 기록에 이름이 다르게(한글/영어·띄어쓰기 등) 입력돼 인센티브가 분산 표시됩니다. 원천 기록(계약서 학생명 / Student360 학생기록)의 이름을 하나로 통일하면 합쳐집니다. 금액 계산 자체는 정상입니다.</p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 중복 의심 진단 (계약 + 서비스 이중 입력) */}
+      <Card className={dupDiagnostics.length > 0 ? 'border-red-300' : ''}>
+        <CardContent className="p-0">
+          <div className={`flex items-center gap-2 px-4 py-3 border-b ${dupDiagnostics.length > 0 ? 'bg-red-50' : ''}`}>
+            <AlertTriangle className={`size-4 ${dupDiagnostics.length > 0 ? 'text-red-600' : 'text-muted-foreground'}`} />
+            <span className="font-semibold text-sm">중복 의심 인센티브 (계약·서비스 이중 입력)</span>
+            <Badge variant="outline" className={dupDiagnostics.length > 0 ? 'text-red-700 border-red-300 bg-red-50' : ''}>{dupDiagnostics.length}건</Badge>
+          </div>
+          {dupDiagnostics.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">계약·서비스 양쪽에서 같은 금액으로 잡힌 인센티브가 없습니다.</div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-56">학생</TableHead>
+                    <TableHead className="text-right w-32">금액</TableHead>
+                    <TableHead className="w-40">중복 출처</TableHead>
+                    <TableHead className="w-48">관련 직원</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dupDiagnostics.map((r, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="text-sm font-medium">{r.name}</TableCell>
+                      <TableCell className="text-sm text-right font-semibold tabular-nums">{formatCurrency(r.amount)}</TableCell>
+                      <TableCell className="text-xs">
+                        <span className="text-amber-700">계약 {r.contract}건</span> · <span className="text-emerald-700">서비스 {r.service}건</span>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{r.persons.join(', ')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <p className="px-4 py-2 text-[11px] text-muted-foreground">같은 학생·같은 금액이 <b>계약</b>과 <b>서비스입금관리(EC)</b> 양쪽에서 잡혀 인센티브가 이중 계산됐을 가능성이 큽니다. 같은 매출을 한 곳에만 남기고 다른 한 곳의 기록을 삭제하면 해소됩니다. (EC 프로그램은 서비스입금관리에만 기록 권장)</p>
             </>
           )}
         </CardContent>
