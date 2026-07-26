@@ -12,6 +12,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useIncentivesByInstallment, type IncentiveType } from '@/hooks/useIncentives'
 import { useAllExtraInstallments } from '@/hooks/useExternalFees'
 import { useAllInvoices, useUpdateInvoiceStatus } from '@/hooks/useFreelancerInvoices'
+import { useIncentiveLinesByPerson } from '@/pages/finance/FreelancerInvoicesPage'
+import { useServiceStudents } from '@/hooks/useServiceStudents'
+import { AlertTriangle } from 'lucide-react'
 
 const ACCOUNTING_EMAIL = 'accounting@quantumadmissions.com'
 
@@ -108,6 +111,32 @@ export function FinanceDashboardPage() {
     }
     return { total: unpaid.reduce((s, e) => s + e.amount, 0), count: unpaid.length, byPerson: [...map.values()].sort((a, b) => b.amount - a.amount) }
   }, [allExtras])
+
+  // ─── 이름 표기 불일치 진단: 같은 학생이 인센티브에서 여러 이름으로 분산 ───
+  const linesByPerson = useIncentiveLinesByPerson()
+  const { data: students = [] } = useServiceStudents()
+  const nameDiagnostics = useMemo(() => {
+    const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
+    const studentByName = new Map<string, { id: string; name?: string; koreanName?: string }>()
+    for (const st of students) {
+      if (st.name) studentByName.set(norm(st.name), st)
+      if (st.koreanName) studentByName.set(norm(st.koreanName), st)
+    }
+    type Row = { id: string; student?: { name?: string; koreanName?: string }; labels: Set<string>; persons: Set<string>; count: number }
+    const byStudent = new Map<string, Row>()
+    linesByPerson.forEach((lines, person) => {
+      for (const l of lines) {
+        const studentPart = (l.label.split('·')[0] || '').trim()
+        if (!studentPart) continue
+        const st = studentByName.get(norm(studentPart))
+        const key = st ? `s:${st.id}` : `?:${norm(studentPart)}`
+        const e = byStudent.get(key) || { id: key, student: st, labels: new Set<string>(), persons: new Set<string>(), count: 0 }
+        e.labels.add(studentPart); e.persons.add(person); e.count++
+        byStudent.set(key, e)
+      }
+    })
+    return [...byStudent.values()].filter(r => r.student && r.labels.size > 1).sort((a, b) => b.count - a.count)
+  }, [linesByPerson, students])
 
   if (!allowed) {
     return (
@@ -219,6 +248,48 @@ export function FinanceDashboardPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 이름 표기 불일치 진단 */}
+      <Card className={nameDiagnostics.length > 0 ? 'border-amber-300' : ''}>
+        <CardContent className="p-0">
+          <div className={`flex items-center gap-2 px-4 py-3 border-b ${nameDiagnostics.length > 0 ? 'bg-amber-50' : ''}`}>
+            <AlertTriangle className={`size-4 ${nameDiagnostics.length > 0 ? 'text-amber-600' : 'text-muted-foreground'}`} />
+            <span className="font-semibold text-sm">이름 표기 불일치 학생 (인센티브 분산)</span>
+            <Badge variant="outline" className={nameDiagnostics.length > 0 ? 'text-amber-700 border-amber-300 bg-amber-50' : ''}>{nameDiagnostics.length}명</Badge>
+          </div>
+          {nameDiagnostics.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">이름이 여러 형태로 나뉜 학생이 없습니다. (전 직원 인센티브 기준)</div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-48">학생 (서비스 학생기록 기준)</TableHead>
+                    <TableHead>인센티브에서 발견된 이름 표기</TableHead>
+                    <TableHead className="w-20 text-center">건수</TableHead>
+                    <TableHead className="w-48">관련 직원</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {nameDiagnostics.map(r => (
+                    <TableRow key={r.id}>
+                      <TableCell className="text-sm font-medium">{[r.student?.koreanName, r.student?.name].filter(Boolean).join(' ') || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {[...r.labels].map(l => <Badge key={l} variant="outline" className="text-[11px]">{l}</Badge>)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center tabular-nums text-sm">{r.count}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{[...r.persons].join(', ')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <p className="px-4 py-2 text-[11px] text-muted-foreground">같은 학생인데 계약서·서비스 기록에 이름이 다르게(한글/영어·띄어쓰기 등) 입력돼 인센티브가 분산 표시됩니다. 원천 기록(계약서 학생명 / Student360 학생기록)의 이름을 하나로 통일하면 합쳐집니다. 금액 계산 자체는 정상입니다.</p>
+            </>
           )}
         </CardContent>
       </Card>

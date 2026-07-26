@@ -868,7 +868,7 @@ export interface IncentiveLine { id: string; label: string; amount: number; mont
 /** Per person NAME → ALL their sales-incentive lines (with settlement month).
  *  Combines contract-based incentives with service (EC/Academic) incentives
  *  from 서비스입금관리 (청구금액 × 파트너사 소속팀 수수료율, 수금 완료분). */
-function useIncentiveLinesByPerson() {
+export function useIncentiveLinesByPerson() {
   const { data: entries = [] } = useIncentivesByInstallment()
   const serviceLines = useServiceIncentiveLines()
   return useMemo(() => {
