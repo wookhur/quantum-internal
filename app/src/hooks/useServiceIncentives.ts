@@ -6,6 +6,7 @@ import { canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
 
 /** A sales-incentive line generated from a collected EC/Academic service. */
 export interface ServiceIncentiveLine {
+  id: string      // stable key (programFeeId + contributor slot)
   name: string    // canonical contributor name
   label: string   // student · partner
   amount: number  // 청구금액 × 팀 수수료율
@@ -36,6 +37,7 @@ export function useServiceIncentiveLines(): ServiceIncentiveLine[] {
     const lines: ServiceIncentiveLine[] = []
     for (const f of fees) {
       if (f.collectionStatus !== 'paid' || !f.paidDate) continue
+      const paidMonth = f.paidDate.slice(0, 7)
       const billed = f.billedAmount || 0
       if (!billed) continue
       const er = partnerRateMap.get(normalizePartner(f.label)) || { salesRate: defSales, serviceRate: defService }
@@ -43,16 +45,16 @@ export function useServiceIncentiveLines(): ServiceIncentiveLine[] {
         { name: f.contributor1, override: f.contributor1Team },
         { name: f.contributor2, override: f.contributor2Team },
       ]
-      for (const s of slots) {
-        if (!s.name?.trim()) continue
+      slots.forEach((s, idx) => {
+        if (!s.name?.trim()) return
         const team = s.override ?? autoTeam(s.name)
         const rate = rateForTeam(team, er.salesRate, er.serviceRate)
-        if (!rate) continue
+        if (!rate) return
         const amount = Math.round((billed * rate) / 100)
-        if (amount <= 0) continue
+        if (amount <= 0) return
         const label = [f.studentName, f.label].filter(Boolean).join(' · ') || f.label
-        lines.push({ name: canonicalConsultantName(s.name), label, amount, month: f.paidDate.slice(0, 7) })
-      }
+        lines.push({ id: `s:${f.id}:${idx}`, name: canonicalConsultantName(s.name), label, amount, month: paidMonth })
+      })
     }
     return lines
   }, [fees, partnerRateMap, defSales, defService, profiles])

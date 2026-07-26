@@ -22,6 +22,7 @@ import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useConsultantName, canonicalConsultantName } from '@/lib/consultants'
 import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
+import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
 import {
@@ -852,7 +853,7 @@ function useConsultantBillable(month: string) {
   }, [students, meetings, consultantName])
 }
 
-export interface IncentiveLine { label: string; amount: number; month: string }
+export interface IncentiveLine { id: string; label: string; amount: number; month: string }
 
 /** Per person NAME → ALL their sales-incentive lines (with settlement month).
  *  Combines contract-based incentives with service (EC/Academic) incentives
@@ -868,13 +869,13 @@ function useIncentiveLinesByPerson() {
       const name = canonicalConsultantName(e.displayName)
       if (!name) return
       const arr = map.get(name) || []
-      arr.push({ label: e.studentName || e.contractorName || e.incentiveType, amount: e.incentiveAmount, month: dateRef.slice(0, 7) })
+      arr.push({ id: `c:${e.key}`, label: e.studentName || e.contractorName || e.incentiveType, amount: e.incentiveAmount, month: dateRef.slice(0, 7) })
       map.set(name, arr)
     })
     serviceLines.forEach(sl => {
       if (!sl.name) return
       const arr = map.get(sl.name) || []
-      arr.push({ label: sl.label, amount: sl.amount, month: sl.month })
+      arr.push({ id: sl.id, label: sl.label, amount: sl.amount, month: sl.month })
       map.set(sl.name, arr)
     })
     return map
@@ -958,16 +959,35 @@ export function FreelancerInvoicesPage(
   const byConsultant = useConsultantBillable(issueMonth)
   const linesByPerson = useIncentiveLinesByPerson()
   const myName = canonicalConsultantName(user?.name)
-  // Each incentive (already 수금-collected) reflects in its own settlement
-  // month — no carry-over. Invoice for a month = all that month's incentives.
-  const issueItems = useMemo<{ label: string; amount: number }[]>(() => {
+  // 수령 상태: 클릭한 것만 그 달에 수령완료. 미수령 건은 다음 달로 자동 이월(원래 달 태그 유지).
+  const incentiveStatus = useIncentiveStatus()
+  const setIncentiveReceived = useSetIncentiveReceived()
+
+  const displayItems = useMemo<{ id: string; label: string; amount: number; originMonth?: string; received: boolean }[]>(() => {
     if (isIncentive) {
-      return (linesByPerson.get(myName) || [])
-        .filter(l => l.month === issueMonth)
-        .map(l => ({ label: l.label, amount: l.amount }))
+      const out: { id: string; label: string; amount: number; originMonth?: string; received: boolean }[] = []
+      for (const l of (linesByPerson.get(myName) || [])) {
+        const st = incentiveStatus.get(l.id)
+        if (st?.received) {
+          // 수령한 달에만 초록으로 표시
+          if (st.receivedMonth === issueMonth) out.push({ id: l.id, label: l.label, amount: l.amount, originMonth: l.month, received: true })
+        } else if (l.month <= issueMonth) {
+          // 미수령: 발생 달부터 계속 이월 표시 (발생 달보다 뒤면 태그로 원래 달 표시)
+          out.push({ id: l.id, label: l.label, amount: l.amount, originMonth: l.month, received: false })
+        }
+      }
+      return out
     }
-    return (byConsultant.get(myName) || []).filter(r => r.billable).map(r => ({ label: r.label, amount: 0 }))
-  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant])
+    return (byConsultant.get(myName) || []).filter(r => r.billable).map(r => ({ id: r.label, label: r.label, amount: 0, received: false }))
+  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus])
+
+  // 발행 대상 = 아직 수령완료 안 된 항목
+  const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({ label: d.label, amount: d.amount })), [displayItems])
+
+  const toggleReceived = (id: string, currentlyReceived: boolean) => {
+    if (!canEdit) return
+    setIncentiveReceived.mutate({ key: id, received: !currentlyReceived, month: issueMonth })
+  }
 
   // "인보이스 발행" — open the form pre-filled with this month's source lines.
   const openIssueInvoice = () => {
@@ -1214,17 +1234,45 @@ export function FreelancerInvoicesPage(
       <Card>
         <CardContent className="p-4 space-y-2">
           <div className="text-sm">
-            <b>{issueMonth}</b> {isIncentive ? '정산 대상 인센티브' : '청구 가능 학생'} <span className="font-bold text-emerald-600">{issueItems.length}</span>{isIncentive ? '건' : '명'}
+            <b>{issueMonth}</b> {isIncentive ? '정산 대상 인센티브' : '청구 가능 학생'} <span className="font-bold text-emerald-600">{displayItems.length}</span>{isIncentive ? '건' : '명'}
+            {isIncentive && <span className="text-muted-foreground"> · 수령완료 {displayItems.filter(d => d.received).length} / 미수령 {displayItems.filter(d => !d.received).length}</span>}
             {!isIncentive && <span className="text-muted-foreground"> · 미팅리포트 월 2회 업로드 완료 학생만 발행 가능</span>}
           </div>
-          {issueItems.length === 0 ? (
+          {displayItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">{isIncentive ? '이 달에 정산할(수금 완료) 세일즈 인센티브가 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)'}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
-              {issueItems.map((r, i) => <Badge key={i} variant="outline">{r.label}{isIncentive ? ` · ${formatKRW(r.amount)}` : ''}</Badge>)}
+              {displayItems.map((r) => {
+                if (!isIncentive) return <Badge key={r.id} variant="outline">{r.label}</Badge>
+                const carried = !!r.originMonth && r.originMonth < issueMonth
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => toggleReceived(r.id, r.received)}
+                    disabled={!canEdit}
+                    title={r.received ? '수령완료 — 클릭하면 미수령으로 되돌립니다' : '클릭하면 이 달 수령완료로 표시됩니다'}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${canEdit ? 'cursor-pointer' : 'cursor-default'} ${
+                      r.received
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : carried
+                          ? 'bg-amber-50 border-amber-300 text-amber-800 hover:border-emerald-400'
+                          : 'bg-white border-gray-300 text-gray-700 hover:border-emerald-400 hover:bg-emerald-50'
+                    }`}
+                  >
+                    {r.received && <CheckCircle2 className="size-3" />}
+                    <span>{r.label} · {formatKRW(r.amount)}</span>
+                    {carried && <span className={`text-[10px] font-medium ${r.received ? 'text-emerald-100' : 'text-amber-600'}`}>({Number(r.originMonth!.slice(5, 7))}월)</span>}
+                  </button>
+                )
+              })}
             </div>
           )}
-          <p className="text-[11px] text-muted-foreground">"인보이스 발행"을 누르면 {isIncentive ? '이 달 정산 대상 인센티브가 품명·금액에' : '위 학생이 품명에'} 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.</p>
+          <p className="text-[11px] text-muted-foreground">
+            {isIncentive
+              ? '칩을 클릭하면 이 달 수령완료(초록)로 표시됩니다. 클릭 안 한 미수령 건은 다음 달로 자동 이월되어 (원래 달) 태그로 계속 표시됩니다. "인보이스 발행"은 미수령 건을 품명·금액에 채웁니다.'
+              : '"인보이스 발행"을 누르면 위 학생이 품명에 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.'}
+          </p>
         </CardContent>
       </Card>
 
