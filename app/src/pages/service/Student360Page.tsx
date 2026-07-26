@@ -26,6 +26,7 @@ import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
 import { contractYearOf, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
 import { useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching, type StudentCoaching } from '@/hooks/useMentors'
+import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, OTHER_MAJOR, gradeBucket } from '@/lib/majorTaxonomy'
 import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
@@ -284,7 +285,7 @@ export function Student360Page() {
         (s.school || '').toLowerCase().includes(q) ||
         (s.parentName || '').toLowerCase().includes(q)
       )
-    })
+    }).sort(compareStudentsKo)
   }, [students, search, filterName, consultantName, showArchive, gradeFilter])
 
   const selected = students.find(s => s.id === selectedId) || null
@@ -386,7 +387,7 @@ export function Student360Page() {
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className="font-medium text-sm truncate">
-                    {s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}
+                    {studentPickerLabel(s)}
                   </span>
                   {statusFlags.missingReports.has(s.id) && (
                     <span title={missingReportTitle(statusFlags.missingReportDetails.get(s.id), t('student360.missingReportTooltip'))}>
