@@ -14,6 +14,7 @@ import { useAllExtraInstallments } from '@/hooks/useExternalFees'
 import { useAllInvoices, useUpdateInvoiceStatus } from '@/hooks/useFreelancerInvoices'
 import { useIncentiveLinesByPerson } from '@/pages/finance/FreelancerInvoicesPage'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
+import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { AlertTriangle } from 'lucide-react'
 
 const ACCOUNTING_EMAIL = 'accounting@quantumadmissions.com'
@@ -174,6 +175,42 @@ export function FinanceDashboardPage() {
     }
     return flagged.sort((a, b) => b.amount - a.amount)
   }, [linesByPerson, students])
+
+  // ─── 외부서비스 이중 입력 진단: 같은 학생·같은 파트너(EC)가 계약 추가비용(A)과 Student360 EC(B) 양쪽에 존재 ───
+  const { data: programFees = [] } = useAllServiceProgramFees()
+  const ecDoubleEntry = useMemo(() => {
+    const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
+    const canonByName = new Map<string, string>()
+    for (const st of students) {
+      const canon = [st.koreanName, st.name].filter(Boolean).join(' ')
+      if (st.name) canonByName.set(norm(st.name), canon)
+      if (st.koreanName) canonByName.set(norm(st.koreanName), canon)
+    }
+    const resolve = (raw?: string) => (raw ? (canonByName.get(norm(raw)) || raw) : '')
+    // B: 학생 → 파트너(EC) → 금액합
+    const ecByStudent = new Map<string, Map<string, { partner: string; amount: number }>>()
+    for (const f of programFees) {
+      const canon = resolve(f.studentName); if (!canon) continue
+      const key = norm(canon)
+      const partner = f.label || 'EC'
+      const m = ecByStudent.get(key) || new Map()
+      const e = m.get(norm(partner)) || { partner, amount: 0 }
+      e.amount += f.billedAmount || 0
+      m.set(norm(partner), e); ecByStudent.set(key, m)
+    }
+    // A: 계약 추가비용 라벨이 그 학생 EC 파트너명을 포함하면 이중 입력 의심
+    const flagged: { student: string; partner: string; contractAmount: number; ecAmount: number; hasShare: boolean; label: string }[] = []
+    for (const ext of allExtras) {
+      const canon = resolve(ext.studentName); if (!canon) continue
+      const partners = ecByStudent.get(norm(canon)); if (!partners) continue
+      for (const [pn, info] of partners) {
+        if (norm(ext.label).includes(pn)) {
+          flagged.push({ student: canon, partner: info.partner, contractAmount: ext.amount, ecAmount: info.amount, hasShare: (ext.revenueShares?.length || 0) > 0, label: ext.label })
+        }
+      }
+    }
+    return flagged.sort((a, b) => b.contractAmount - a.contractAmount)
+  }, [allExtras, programFees, students])
 
   if (!allowed) {
     return (
@@ -366,6 +403,46 @@ export function FinanceDashboardPage() {
                 </TableBody>
               </Table>
               <p className="px-4 py-2 text-[11px] text-muted-foreground">같은 학생·같은 금액이 <b>계약</b>과 <b>서비스입금관리(EC)</b> 양쪽에서 잡혀 인센티브가 이중 계산됐을 가능성이 큽니다. 같은 매출을 한 곳에만 남기고 다른 한 곳의 기록을 삭제하면 해소됩니다. (EC 프로그램은 서비스입금관리에만 기록 권장)</p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 외부서비스 이중 입력 진단 (계약 추가비용 A + Student360 EC B) */}
+      <Card className={ecDoubleEntry.length > 0 ? 'border-red-300' : ''}>
+        <CardContent className="p-0">
+          <div className={`flex items-center gap-2 px-4 py-3 border-b ${ecDoubleEntry.length > 0 ? 'bg-red-50' : ''}`}>
+            <AlertTriangle className={`size-4 ${ecDoubleEntry.length > 0 ? 'text-red-600' : 'text-muted-foreground'}`} />
+            <span className="font-semibold text-sm">외부서비스 이중 입력 (계약 추가비용 ↔ Student360 EC)</span>
+            <Badge variant="outline" className={ecDoubleEntry.length > 0 ? 'text-red-700 border-red-300 bg-red-50' : ''}>{ecDoubleEntry.length}건</Badge>
+          </div>
+          {ecDoubleEntry.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">계약 추가비용과 Student360 EC 양쪽에 동시에 잡힌 외부서비스가 없습니다.</div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-56">학생</TableHead>
+                    <TableHead className="w-32">외부서비스</TableHead>
+                    <TableHead className="w-40">계약 추가비용(A)</TableHead>
+                    <TableHead className="w-40">Student360 EC(B)</TableHead>
+                    <TableHead className="w-28">수익배분</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {ecDoubleEntry.map((r, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="text-sm font-medium">{r.student}</TableCell>
+                      <TableCell className="text-sm">{r.partner}</TableCell>
+                      <TableCell className="text-sm tabular-nums">{formatCurrency(r.contractAmount)} <span className="text-[11px] text-muted-foreground">· {r.label}</span></TableCell>
+                      <TableCell className="text-sm tabular-nums">{formatCurrency(r.ecAmount)}</TableCell>
+                      <TableCell className="text-xs">{r.hasShare ? <span className="text-red-600 font-medium">있음(인센티브 이중)</span> : <span className="text-muted-foreground">없음(매출만 이중)</span>}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <p className="px-4 py-2 text-[11px] text-muted-foreground">같은 학생·같은 외부서비스가 <b>계약 추가비용(A)</b>과 <b>Student360 EC(B)</b> 양쪽에 입력돼 매출이 이중 집계됩니다. <b>수익배분 "있음"</b>은 인센티브까지 이중. 한 곳만 남기세요(권장: Student360 EC 유지, 계약 추가비용의 해당 항목 삭제).</p>
             </>
           )}
         </CardContent>
