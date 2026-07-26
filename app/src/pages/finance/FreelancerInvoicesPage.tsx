@@ -802,6 +802,16 @@ async function exportInvoicesToExcel(invoices: FreelancerInvoice[], month: strin
 
 // ─── Auto-generate tab (consultant management-fee invoices) ─────────────────
 
+/** "2026-06" → 6 (월 숫자) */
+function monthNum(m?: string): number { return m ? Number(m.slice(5, 7)) : 0 }
+/** from~to 사이 개월 수 (예: 2026-06 → 2026-08 = 2) */
+function monthsBetween(from?: string, to?: string): number {
+  if (!from || !to) return 0
+  const [y1, m1] = from.split('-').map(Number)
+  const [y2, m2] = to.split('-').map(Number)
+  return (y2 - y1) * 12 + (m2 - m1)
+}
+
 function monthRange(month: string): { start: string; end: string } {
   const [y, m] = month.split('-').map(Number)
   const lastDay = new Date(y, m, 0).getDate()
@@ -982,7 +992,18 @@ export function FreelancerInvoicesPage(
   }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus])
 
   // 발행 대상 = 아직 수령완료 안 된 항목
-  const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({ label: d.label, amount: d.amount })), [displayItems])
+  const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
+    label: d.label, amount: d.amount,
+    carried: !!d.originMonth && d.originMonth < issueMonth,
+    originMonth: d.originMonth,
+  })), [displayItems, issueMonth])
+
+  // 이월(원래 달 < 현재 달) 미수령만 보기 필터
+  const [agedOnly, setAgedOnly] = useState(false)
+  const renderedItems = useMemo(
+    () => agedOnly ? displayItems.filter(d => !d.received && !!d.originMonth && d.originMonth < issueMonth) : displayItems,
+    [agedOnly, displayItems, issueMonth],
+  )
 
   // 수령/미수령 변경은 회계(accounting) 계정만 — 본인 임의 조작 방지
   const canToggleReceived = isAccounting
@@ -998,7 +1019,12 @@ export function FreelancerInvoicesPage(
       invoiceDate: new Date().toISOString().slice(0, 10),
       residentNumber: '', phone: '', email: user?.email || '', bankAccount: '',
       items: issueItems.length
-        ? issueItems.map(r => ({ itemName: r.label, quantity: 1, unitPrice: r.amount, remark: '' }))
+        ? issueItems.map(r => ({
+            itemName: r.carried ? `(${monthNum(r.originMonth)}월분) ${r.label}` : r.label,
+            quantity: 1,
+            unitPrice: r.amount,
+            remark: r.carried ? `${monthNum(r.originMonth)}월 발생 · ${monthsBetween(r.originMonth, issueMonth)}개월 이월(소급)` : '',
+          }))
         : [emptyItem()],
     }
     setEditInvoice(undefined)
@@ -1235,18 +1261,34 @@ export function FreelancerInvoicesPage(
 
       <Card>
         <CardContent className="p-4 space-y-2">
-          <div className="text-sm">
-            <b>{issueMonth}</b> {isIncentive ? '정산 대상 인센티브' : '청구 가능 학생'} <span className="font-bold text-emerald-600">{displayItems.length}</span>{isIncentive ? '건' : '명'}
-            {isIncentive && <span className="text-muted-foreground"> · 수령완료 {displayItems.filter(d => d.received).length} / 미수령 {displayItems.filter(d => !d.received).length}</span>}
+          <div className="text-sm flex items-center gap-2 flex-wrap">
+            <span>
+              <b>{issueMonth}</b> {isIncentive ? '정산 대상 인센티브' : '청구 가능 학생'} <span className="font-bold text-emerald-600">{displayItems.length}</span>{isIncentive ? '건' : '명'}
+            </span>
+            {isIncentive && (() => {
+              const agedCount = displayItems.filter(d => !d.received && !!d.originMonth && d.originMonth < issueMonth).length
+              return (
+                <>
+                  <span className="text-muted-foreground">· 수령완료 {displayItems.filter(d => d.received).length} / 미수령 {displayItems.filter(d => !d.received).length}</span>
+                  {agedCount > 0 && (
+                    <button type="button" onClick={() => setAgedOnly(v => !v)}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${agedOnly ? 'bg-amber-500 border-amber-500 text-white' : 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'}`}>
+                      이월 미수령 {agedCount}건{agedOnly ? ' ✕' : ''}
+                    </button>
+                  )}
+                </>
+              )
+            })()}
             {!isIncentive && <span className="text-muted-foreground"> · 미팅리포트 월 2회 업로드 완료 학생만 발행 가능</span>}
           </div>
-          {displayItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{isIncentive ? '이 달에 정산할(수금 완료) 세일즈 인센티브가 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)'}</p>
+          {renderedItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{agedOnly ? '이월된 미수령 인센티브가 없습니다.' : (isIncentive ? '이 달에 정산할(수금 완료) 세일즈 인센티브가 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)')}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
-              {displayItems.map((r) => {
+              {renderedItems.map((r) => {
                 if (!isIncentive) return <Badge key={r.id} variant="outline">{r.label}</Badge>
                 const carried = !!r.originMonth && r.originMonth < issueMonth
+                const delay = carried ? monthsBetween(r.originMonth, issueMonth) : 0
                 return (
                   <button
                     key={r.id}
@@ -1264,7 +1306,7 @@ export function FreelancerInvoicesPage(
                   >
                     {r.received && <CheckCircle2 className="size-3" />}
                     <span>{r.label} · {formatKRW(r.amount)}</span>
-                    {carried && <span className={`text-[10px] font-medium ${r.received ? 'text-emerald-100' : 'text-amber-600'}`}>({Number(r.originMonth!.slice(5, 7))}월)</span>}
+                    {carried && <span className={`text-[10px] font-medium ${r.received ? 'text-emerald-100' : 'text-amber-600'}`}>({monthNum(r.originMonth)}월분{delay > 0 ? ` · ${delay}개월 이월` : ''})</span>}
                   </button>
                 )
               })}
