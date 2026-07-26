@@ -326,8 +326,9 @@ export function FinanceDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* 이름 표기 불일치 진단 */}
-      <Card className={nameDiagnostics.length > 0 ? 'border-amber-300' : ''}>
+      {/* 이름 표기 불일치 진단 — 문제가 있을 때만 표시 */}
+      {nameDiagnostics.length > 0 && (
+      <Card className="border-amber-300">
         <CardContent className="p-0">
           <div className={`flex items-center gap-2 px-4 py-3 border-b ${nameDiagnostics.length > 0 ? 'bg-amber-50' : ''}`}>
             <AlertTriangle className={`size-4 ${nameDiagnostics.length > 0 ? 'text-amber-600' : 'text-muted-foreground'}`} />
@@ -367,9 +368,11 @@ export function FinanceDashboardPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
-      {/* 중복 의심 진단 (계약 + 서비스 이중 입력) */}
-      <Card className={dupDiagnostics.length > 0 ? 'border-red-300' : ''}>
+      {/* 중복 의심 진단 — 문제가 있을 때만 표시 */}
+      {dupDiagnostics.length > 0 && (
+      <Card className="border-red-300">
         <CardContent className="p-0">
           <div className={`flex items-center gap-2 px-4 py-3 border-b ${dupDiagnostics.length > 0 ? 'bg-red-50' : ''}`}>
             <AlertTriangle className={`size-4 ${dupDiagnostics.length > 0 ? 'text-red-600' : 'text-muted-foreground'}`} />
@@ -407,9 +410,11 @@ export function FinanceDashboardPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
-      {/* 외부서비스 이중 입력 진단 (계약 추가비용 A + Student360 EC B) */}
-      <Card className={ecDoubleEntry.length > 0 ? 'border-red-300' : ''}>
+      {/* 외부서비스 이중 입력 진단 — 문제가 있을 때만 표시 */}
+      {ecDoubleEntry.length > 0 && (
+      <Card className="border-red-300">
         <CardContent className="p-0">
           <div className={`flex items-center gap-2 px-4 py-3 border-b ${ecDoubleEntry.length > 0 ? 'bg-red-50' : ''}`}>
             <AlertTriangle className={`size-4 ${ecDoubleEntry.length > 0 ? 'text-red-600' : 'text-muted-foreground'}`} />
@@ -447,6 +452,7 @@ export function FinanceDashboardPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* ③ 미지급 현황 (기존): 프리랜서 커미션 + 서비스 수수료 */}
       {(incLoading || extLoading) ? (
