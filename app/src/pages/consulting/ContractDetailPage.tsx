@@ -13,11 +13,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText,
+  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText, Star,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
 import { useRevenueSharesByInstallments, useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare } from '@/hooks/useRevenueShares'
+import { useECActivities } from '@/hooks/useECActivities'
 import { useContractIncentives, useCreateIncentive, useDeleteIncentive, useIncentiveRecipients, useCreateIncentiveRecipient, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -528,6 +529,8 @@ export function ContractDetailPage() {
   const { data: leadActivities = [] } = useLeadActivities(contract?.leadId)
   const { data: salesMeetings = [] } = useSalesMeetings(contract?.leadId, contract?.contractorName)
   const { data: serviceData } = useServiceStudentMeetings(contract?.studentName)
+  // 외부서비스(EC)를 Student360 기준으로 조회 전용 표시 (계약 총액엔 미반영)
+  const { data: ecActivities = [] } = useECActivities(serviceData?.student?.id)
   const extraInstIds = (contract?.installments || []).filter(i => i.category === 'extra').map(i => i.id)
   const { data: revenueShares = [] } = useRevenueSharesByInstallments(extraInstIds)
   const { data: contractIncentives = [] } = useContractIncentives(id)
@@ -1054,6 +1057,43 @@ export function ContractDetailPage() {
           </div>
         )}
       </div>
+
+      {/* 외부서비스(EC) · Student360 연동 (조회 전용) */}
+      {ecActivities.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Star className="size-5 text-blue-500" />
+              외부서비스 (EC)
+              <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50">{ecActivities.length}</Badge>
+            </h2>
+            <span className="text-[11px] text-muted-foreground">Student360 연동 · 조회 전용 (수금·인센티브는 서비스입금관리에서 관리 — 계약 총액에 미반영)</span>
+          </div>
+          <div className="space-y-2">
+            {ecActivities.map(ec => (
+              <Card key={ec.id} className="border-blue-100 bg-blue-50/30">
+                <CardContent className="py-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="text-blue-700 border-blue-200 bg-blue-100 text-xs">{ec.partner || 'EC'}</Badge>
+                      {ec.program && <span className="text-sm">{ec.program}</span>}
+                      <Badge className={ec.collectionStatus === 'paid' ? 'bg-green-100 text-green-700 text-[10px] h-4' : 'bg-amber-100 text-amber-700 text-[10px] h-4'}>
+                        {ec.collectionStatus === 'paid' ? t('contracts.status.fullyPaid') : t('incentive.unpaid')}
+                      </Badge>
+                    </div>
+                    <span className="font-mono font-semibold text-sm">{formatCurrency(ec.billedAmount || 0, (ec.currency as 'KRW' | 'USD') || 'KRW')}</span>
+                  </div>
+                  {(ec.periodStart || ec.paidDate) && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {ec.periodStart || ''}{ec.periodEnd ? ` ~ ${ec.periodEnd}` : ''}{ec.paidDate ? ` · 납입 ${ec.paidDate}` : ''}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Incentive Settings */}
       <div>
