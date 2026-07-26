@@ -871,7 +871,18 @@ export interface IncentiveLine { id: string; label: string; amount: number; mont
 export function useIncentiveLinesByPerson() {
   const { data: entries = [] } = useIncentivesByInstallment()
   const serviceLines = useServiceIncentiveLines()
+  const { data: students = [] } = useServiceStudents()
   return useMemo(() => {
+    // 계약서 학생명(자유 텍스트)을 Student360 학생기록 기준 한글+영어 이름으로 해소
+    const normName = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
+    const canonByName = new Map<string, string>()
+    for (const st of students) {
+      const canon = [st.koreanName, st.name].filter(Boolean).join(' ')
+      if (st.name) canonByName.set(normName(st.name), canon)
+      if (st.koreanName) canonByName.set(normName(st.koreanName), canon)
+    }
+    const resolveStudent = (raw?: string) => (raw ? (canonByName.get(normName(raw)) || raw) : '')
+
     const map = new Map<string, IncentiveLine[]>()
     entries.forEach(e => {
       const dateRef = e.isPaid ? e.paidDate : (e.dueDate || e.contractDate)
@@ -879,7 +890,8 @@ export function useIncentiveLinesByPerson() {
       const name = canonicalConsultantName(e.displayName)
       if (!name) return
       const arr = map.get(name) || []
-      arr.push({ id: `c:${e.key}`, label: e.studentName || e.contractorName || e.incentiveType, amount: e.incentiveAmount, month: dateRef.slice(0, 7) })
+      const studentLabel = resolveStudent(e.studentName) || e.contractorName || e.incentiveType
+      arr.push({ id: `c:${e.key}`, label: studentLabel, amount: e.incentiveAmount, month: dateRef.slice(0, 7) })
       map.set(name, arr)
     })
     serviceLines.forEach(sl => {
@@ -889,7 +901,7 @@ export function useIncentiveLinesByPerson() {
       map.set(sl.name, arr)
     })
     return map
-  }, [entries, serviceLines])
+  }, [entries, serviceLines, students])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────

@@ -52,7 +52,9 @@ export function useServiceIncentiveLines(): ServiceIncentiveLine[] {
         if (!rate) return
         const amount = Math.round((billed * rate) / 100)
         if (amount <= 0) return
-        const label = [f.studentName, f.label].filter(Boolean).join(' · ') || f.label
+        // 학생명은 Student360(service_students) 기준 한글+영어로 통일 표기
+        const studentDisplay = [f.studentKoreanName, f.studentName].filter(Boolean).join(' ') || f.studentName
+        const label = [studentDisplay, f.label].filter(Boolean).join(' · ') || f.label
         lines.push({ id: `s:${f.id}:${idx}`, name: canonicalConsultantName(s.name), label, amount, month: paidMonth })
       })
     }
