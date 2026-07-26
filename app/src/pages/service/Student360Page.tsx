@@ -1911,6 +1911,7 @@ function CoachingSection({ studentId, createdBy, canEdit }: { studentId: string;
   const upsert = useUpsertCoaching()
   const del = useDeleteCoaching()
 
+  const [expanded, setExpanded] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ mentorId: '', startDate: '', schedule: '', fieldNotes: '' })
   const reset = () => { setEditingId(null); setForm({ mentorId: '', startDate: '', schedule: '', fieldNotes: '' }) }
@@ -1937,13 +1938,19 @@ function CoachingSection({ studentId, createdBy, canEdit }: { studentId: string;
 
   return (
     <Card className="border-emerald-200">
-      <CardHeader className="bg-emerald-50/40 rounded-t-xl">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <BookOpen className="size-5 text-emerald-600" />
-          학습코칭 멘토 <span className="text-muted-foreground font-normal">({items.length})</span>
-        </CardTitle>
+      <CardHeader className="bg-emerald-50/40 rounded-t-xl py-3 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BookOpen className="size-5 text-emerald-600" />
+            학습코칭 멘토 <span className="text-muted-foreground font-normal">({items.length})</span>
+          </CardTitle>
+          <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
+            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </Button>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-2">
+      {expanded && (
+      <CardContent className="space-y-2 pt-0">
         {items.length === 0 && <p className="text-sm text-muted-foreground">배정된 학습코칭 멘토가 없습니다.</p>}
         {items.map(c => (
           <div key={c.id} className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-3">
@@ -1998,6 +2005,7 @@ function CoachingSection({ studentId, createdBy, canEdit }: { studentId: string;
           </div>
         )}
       </CardContent>
+      )}
     </Card>
   )
 }
