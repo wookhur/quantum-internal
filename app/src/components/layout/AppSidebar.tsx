@@ -115,6 +115,7 @@ export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; i
     titleKey: 'nav.finance',
     module: 'finance',
     items: [
+      { labelKey: 'nav.financeDashboard', to: '/finance/dashboard', icon: Wallet },
       { labelKey: 'nav.contractManagement', to: '/consulting/clients', icon: FileText },
       { labelKey: 'nav.externalFees', to: '/service/external-fees', icon: HandCoins },
       { labelKey: 'nav.monthlyCollection', to: '/consulting/collections', icon: CalendarDays },
@@ -222,6 +223,9 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
               <SidebarMenu>
                 {section.items.map((item) => {
                   if (hiddenBoards.has(item.to)) return null // 전사 숨김
+                  // 재무 대시보드는 재무담당(회계) 또는 관리자에게만 노출
+                  if (item.to === '/finance/dashboard' &&
+                      !(user?.role === 'admin' || user?.role === 'c_level' || (user?.email || '').toLowerCase() === 'accounting@quantumadmissions.com')) return null
                   const active = isActive(item.to)
                   const Icon = item.icon
                   const hasAccess = enabledRoutes.includes(item.to)

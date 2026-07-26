@@ -191,6 +191,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/partner/students', labelKey: 'nav.partnerStudents', module: 'partner' },
   { path: '/partner/instructors', labelKey: 'nav.partnerInstructors', module: 'partner' },
   { path: '/partner/mentors', labelKey: 'nav.mentors', module: 'partner' },
+  { path: '/finance/dashboard', labelKey: 'nav.financeDashboard', module: 'finance' },
   { path: '/partner/companies', labelKey: 'nav.partnerCompanies', module: 'partner' },
   { path: '/partner/programs', labelKey: 'nav.partnerPrograms', module: 'partner' },
   { path: '/partner/contracts', labelKey: 'nav.partnerContracts', module: 'partner' },

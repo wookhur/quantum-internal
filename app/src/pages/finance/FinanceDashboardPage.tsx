@@ -1,13 +1,41 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, Users, Receipt } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Loader2, Users, Receipt, Lock, Clock, CheckCircle2, XCircle, Wallet } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
+import { useAuth } from '@/contexts/AuthContext'
 import { useIncentivesByInstallment, type IncentiveType } from '@/hooks/useIncentives'
 import { useAllExtraInstallments } from '@/hooks/useExternalFees'
+import { useAllInvoices, useUpdateInvoiceStatus } from '@/hooks/useFreelancerInvoices'
+
+const ACCOUNTING_EMAIL = 'accounting@quantumadmissions.com'
 
 // Freelancer commission types (partner/freelancer)
 const FREELANCER_TYPES: IncentiveType[] = ['partner_sales', 'partner_fee']
+
+const KIND_META: { key: string; label: string }[] = [
+  { key: 'freelancer', label: '프리랜서 (개인)' },
+  { key: 'freelancer_business', label: '프리랜서 (사업자)' },
+  { key: 'sales_incentive', label: '세일즈 인센티브' },
+  { key: 'partner', label: '파트너 (개인)' },
+  { key: 'partner_business', label: '파트너 (사업자)' },
+]
+const kindLabel = (k?: string) => KIND_META.find(x => x.key === k)?.label || k || '기타'
+
+function monthOptions(): string[] {
+  const out: string[] = []
+  const d = new Date()
+  for (let i = 0; i < 12; i++) {
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    d.setMonth(d.getMonth() - 1)
+  }
+  return out
+}
 
 interface PersonAmount {
   name: string
@@ -21,132 +49,195 @@ function groupByPerson(
   const map = new Map<string, PersonAmount>()
   for (const item of items) {
     let entry = map.get(item.displayName)
-    if (!entry) {
-      entry = { name: item.displayName, amount: 0, details: [] }
-      map.set(item.displayName, entry)
-    }
+    if (!entry) { entry = { name: item.displayName, amount: 0, details: [] }; map.set(item.displayName, entry) }
     entry.amount += item.incentiveAmount
-    entry.details.push({
-      label: `${item.studentName} (${item.incentiveType})`,
-      amount: item.incentiveAmount,
-    })
+    entry.details.push({ label: `${item.studentName} (${item.incentiveType})`, amount: item.incentiveAmount })
   }
   return [...map.values()].sort((a, b) => b.amount - a.amount)
 }
 
 export function FinanceDashboardPage() {
   const t = useT()
+  const { user } = useAuth()
+  const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
+  const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
+  const allowed = isAccounting || isAdmin
+
+  const months = useMemo(() => monthOptions(), [])
+  const [month, setMonth] = useState<string>(months[0])
+
+  const { data: invoices = [], isLoading: invLoading } = useAllInvoices(month === 'all' ? undefined : month)
+  const updateStatus = useUpdateInvoiceStatus()
 
   const { data: allIncentives = [], isLoading: incLoading } = useIncentivesByInstallment()
   const { data: allExtras = [], isLoading: extLoading } = useAllExtraInstallments()
 
-  const isLoading = incLoading || extLoading
+  const pending = useMemo(() => invoices.filter(i => i.status === 'submitted'), [invoices])
 
-  // ─── 1. 프리랜서 세일즈 커미션 미지급 ────────────────────────────
+  const invoiceSummary = useMemo(() => {
+    const byKind = new Map<string, { count: number; total: number }>()
+    for (const inv of invoices) {
+      const k = inv.kind || 'etc'
+      const e = byKind.get(k) || { count: 0, total: 0 }
+      e.count++; e.total += inv.totalAmount || 0
+      byKind.set(k, e)
+    }
+    const grandTotal = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0)
+    const approvedTotal = invoices.filter(i => i.status === 'approved').reduce((s, i) => s + (i.totalAmount || 0), 0)
+    const pendingTotal = invoices.filter(i => i.status === 'submitted').reduce((s, i) => s + (i.totalAmount || 0), 0)
+    return { byKind, grandTotal, approvedTotal, pendingTotal }
+  }, [invoices])
+
+  // ─── 미지급 현황 (기존): 프리랜서 커미션 + 서비스 수수료 ───
   const freelancerCommission = useMemo(() => {
     const unpaid = allIncentives.filter(e => !e.isPaid && FREELANCER_TYPES.includes(e.incentiveType))
-    const total = unpaid.reduce((s, e) => s + e.incentiveAmount, 0)
-    const byPerson = groupByPerson(unpaid)
-    return { total, count: unpaid.length, byPerson }
+    return { total: unpaid.reduce((s, e) => s + e.incentiveAmount, 0), count: unpaid.length, byPerson: groupByPerson(unpaid) }
   }, [allIncentives])
 
-  // ─── 2. 서비스 수수료 미지급 ─────────────────────────────────────
   const serviceFees = useMemo(() => {
-    const unpaidShares: { name: string; amount: number; studentName: string; label: string }[] = []
-    for (const ext of allExtras) {
-      for (const s of ext.revenueShares) {
-        if (!s.isPaid) {
-          unpaidShares.push({
-            name: s.recipientName,
-            amount: s.amount,
-            studentName: ext.studentName,
-            label: ext.label,
-          })
-        }
-      }
+    const unpaid: { name: string; amount: number; studentName: string; label: string }[] = []
+    for (const ext of allExtras) for (const s of ext.revenueShares) {
+      if (!s.isPaid) unpaid.push({ name: s.recipientName, amount: s.amount, studentName: ext.studentName, label: ext.label })
     }
-    const total = unpaidShares.reduce((s, e) => s + e.amount, 0)
-
-    // Group by recipient
     const map = new Map<string, PersonAmount>()
-    for (const item of unpaidShares) {
+    for (const item of unpaid) {
       let entry = map.get(item.name)
-      if (!entry) {
-        entry = { name: item.name, amount: 0, details: [] }
-        map.set(item.name, entry)
-      }
+      if (!entry) { entry = { name: item.name, amount: 0, details: [] }; map.set(item.name, entry) }
       entry.amount += item.amount
       entry.details.push({ label: `${item.studentName} - ${item.label}`, amount: item.amount })
     }
-    const byPerson = [...map.values()].sort((a, b) => b.amount - a.amount)
-
-    return { total, count: unpaidShares.length, byPerson }
+    return { total: unpaid.reduce((s, e) => s + e.amount, 0), count: unpaid.length, byPerson: [...map.values()].sort((a, b) => b.amount - a.amount) }
   }, [allExtras])
 
-  const grandTotal = freelancerCommission.total + serviceFees.total
+  if (!allowed) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
+        <Lock className="size-8 text-muted-foreground" />
+        <h1 className="text-xl font-bold">접근 권한이 없습니다</h1>
+        <p className="text-sm text-muted-foreground">재무 대시보드는 재무담당(회계) 또는 관리자만 볼 수 있습니다.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{t('financeDash.title')}</h1>
-        <p className="text-muted-foreground text-sm">{t('financeDash.subtitle')}</p>
+      {/* Header + month */}
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">{t('financeDash.title')}</h1>
+          <p className="text-muted-foreground text-sm">각 인원이 제출한 인보이스를 한곳에서 승인·관리하고, 지급 예정·미지급을 파악합니다.</p>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">정산월</Label>
+          <Select value={month} onValueChange={v => v && setMonth(v)}>
+            <SelectTrigger className="h-9 w-40"><span>{month === 'all' ? '전체' : month}</span></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체</SelectItem>
+              {months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+      {/* ② 인보이스 지급 요약 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card><CardContent className="py-4">
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Wallet className="size-4" /> 전체 신청 총액</div>
+          <div className="text-xl font-bold mt-1">{formatCurrency(invoiceSummary.grandTotal)}</div>
+          <div className="text-[11px] text-muted-foreground">{invoices.length}건</div>
+        </CardContent></Card>
+        <Card><CardContent className="py-4">
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Clock className="size-4 text-amber-500" /> 승인 대기</div>
+          <div className="text-xl font-bold mt-1 text-amber-600">{formatCurrency(invoiceSummary.pendingTotal)}</div>
+          <div className="text-[11px] text-muted-foreground">{pending.length}건</div>
+        </CardContent></Card>
+        <Card><CardContent className="py-4">
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5"><CheckCircle2 className="size-4 text-emerald-500" /> 승인 완료(지급 예정)</div>
+          <div className="text-xl font-bold mt-1 text-emerald-600">{formatCurrency(invoiceSummary.approvedTotal)}</div>
+        </CardContent></Card>
+        <Card><CardContent className="py-4">
+          <div className="text-xs text-muted-foreground">종류별 신청</div>
+          <div className="mt-1 space-y-0.5">
+            {[...invoiceSummary.byKind.entries()].map(([k, e]) => (
+              <div key={k} className="flex items-center justify-between text-[11px]">
+                <span className="text-muted-foreground truncate">{kindLabel(k)}</span>
+                <span className="font-medium tabular-nums">{formatCurrency(e.total)} · {e.count}건</span>
+              </div>
+            ))}
+            {invoiceSummary.byKind.size === 0 && <div className="text-[11px] text-muted-foreground">없음</div>}
+          </div>
+        </CardContent></Card>
+      </div>
+
+      {/* ① 승인 대기함 */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex items-center gap-2 px-4 py-3 border-b">
+            <Clock className="size-4 text-amber-500" />
+            <span className="font-semibold text-sm">승인 대기함</span>
+            <Badge variant="outline" className="text-amber-700 border-amber-200 bg-amber-50">{pending.length}건</Badge>
+          </div>
+          {invLoading ? (
+            <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+          ) : pending.length === 0 ? (
+            <div className="py-14 text-center text-sm text-muted-foreground">승인 대기 중인 인보이스가 없습니다.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-40">제출자</TableHead>
+                  <TableHead className="w-40">종류</TableHead>
+                  <TableHead className="w-24">정산월</TableHead>
+                  <TableHead className="text-right w-32">금액</TableHead>
+                  <TableHead className="w-28">제출일</TableHead>
+                  <TableHead className="w-40 text-right">승인/반려</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pending.map(inv => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="text-sm font-medium">{inv.freelancerName || inv.freelancerEmail || '-'}</TableCell>
+                    <TableCell className="text-sm"><Badge variant="outline">{kindLabel(inv.kind)}</Badge></TableCell>
+                    <TableCell className="text-sm tabular-nums">{inv.invoiceMonth}</TableCell>
+                    <TableCell className="text-sm text-right font-semibold tabular-nums">{formatCurrency(inv.totalAmount)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{inv.invoiceDate}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button size="sm" variant="outline" className="h-8 gap-1 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                          disabled={updateStatus.isPending}
+                          onClick={() => updateStatus.mutate({ id: inv.id, status: 'approved' })}>
+                          <CheckCircle2 className="size-4" /> 승인
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 gap-1 text-red-700 border-red-200 hover:bg-red-50"
+                          disabled={updateStatus.isPending}
+                          onClick={() => { if (confirm('이 인보이스를 반려할까요?')) updateStatus.mutate({ id: inv.id, status: 'rejected' }) }}>
+                          <XCircle className="size-4" /> 반려
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ③ 미지급 현황 (기존): 프리랜서 커미션 + 서비스 수수료 */}
+      {(incLoading || extLoading) ? (
+        <div className="flex items-center justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
       ) : (
         <>
-          {/* ─── Summary Cards ────────────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xs font-medium text-muted-foreground">{t('financeDash.freelancerCommission')}</CardTitle>
-                <Users className="size-4 text-purple-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(freelancerCommission.total)}</div>
-                <p className="text-[11px] text-muted-foreground mt-1">{freelancerCommission.count}{t('financeDash.cases')}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xs font-medium text-muted-foreground">{t('financeDash.serviceFee')}</CardTitle>
-                <Receipt className="size-4 text-amber-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(serviceFees.total)}</div>
-                <p className="text-[11px] text-muted-foreground mt-1">{serviceFees.count}{t('financeDash.cases')}</p>
-              </CardContent>
-            </Card>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-muted-foreground">미지급 현황 (수금 완료·미정산)</h2>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">{t('financeDash.totalToPay')}:</span>
+              <span className="text-lg font-bold">{formatCurrency(freelancerCommission.total + serviceFees.total)}</span>
+            </div>
           </div>
-
-          {/* Grand total */}
-          <div className="flex items-center justify-end gap-2 text-sm">
-            <span className="text-muted-foreground">{t('financeDash.totalToPay')}:</span>
-            <span className="text-lg font-bold">{formatCurrency(grandTotal)}</span>
-          </div>
-
-          {/* ─── Detail Cards ─────────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* 프리랜서 세일즈 커미션 */}
-            <PayoutCard
-              title={t('financeDash.freelancerCommission')}
-              color="purple"
-              persons={freelancerCommission.byPerson}
-              t={t}
-            />
-
-            {/* 서비스 수수료 */}
-            <PayoutCard
-              title={t('financeDash.serviceFee')}
-              color="amber"
-              persons={serviceFees.byPerson}
-              t={t}
-            />
+            <PayoutCard title={t('financeDash.freelancerCommission')} color="purple" persons={freelancerCommission.byPerson} icon={<Users className="size-4 text-purple-500" />} t={t} />
+            <PayoutCard title={t('financeDash.serviceFee')} color="amber" persons={serviceFees.byPerson} icon={<Receipt className="size-4 text-amber-500" />} t={t} />
           </div>
         </>
       )}
@@ -156,44 +247,27 @@ export function FinanceDashboardPage() {
 
 // ─── Payout detail card ──────────────────────────────────────────────────────
 
-function PayoutCard({
-  title,
-  color,
-  persons,
-  t,
-}: {
+function PayoutCard({ title, color, persons, icon, t }: {
   title: string
   color: 'purple' | 'blue' | 'amber'
   persons: PersonAmount[]
+  icon?: React.ReactNode
   t: (key: string, params?: Record<string, string | number>) => string
 }) {
   const colorMap = {
-    purple: { bg: 'bg-purple-50', text: 'text-purple-700', badge: 'bg-purple-100 text-purple-700 border-purple-200' },
-    blue: { bg: 'bg-blue-50', text: 'text-blue-700', badge: 'bg-blue-100 text-blue-700 border-blue-200' },
-    amber: { bg: 'bg-amber-50', text: 'text-amber-700', badge: 'bg-amber-100 text-amber-700 border-amber-200' },
+    purple: { bg: 'bg-purple-50', text: 'text-purple-700' },
+    blue: { bg: 'bg-blue-50', text: 'text-blue-700' },
+    amber: { bg: 'bg-amber-50', text: 'text-amber-700' },
   }
   const c = colorMap[color]
 
-  if (persons.length === 0) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">{title}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground text-center py-6">{t('financeDash.noPending')}</p>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm">{title}</CardTitle>
-      </CardHeader>
+      <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2">{icon}{title}</CardTitle></CardHeader>
       <CardContent className="space-y-3">
-        {persons.map((p) => (
+        {persons.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">{t('financeDash.noPending')}</p>
+        ) : persons.map((p) => (
           <div key={p.name} className={`${c.bg} rounded-lg p-3`}>
             <div className="flex items-center justify-between mb-2">
               <span className={`text-sm font-semibold ${c.text}`}>{p.name}</span>

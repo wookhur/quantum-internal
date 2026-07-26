@@ -15,6 +15,7 @@ export interface InvoiceItem {
 export interface FreelancerInvoice {
   id: string
   freelancerId: string
+  kind?: string
   invoiceDate: string
   invoiceMonth: string
   status: 'draft' | 'submitted' | 'approved' | 'rejected'
@@ -35,6 +36,7 @@ function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
   return {
     id: r.id as string,
     freelancerId: r.freelancer_id as string,
+    kind: (r.kind as string) || undefined,
     invoiceDate: r.invoice_date as string,
     invoiceMonth: r.invoice_month as string,
     status: r.status as FreelancerInvoice['status'],
@@ -71,6 +73,23 @@ export function useFreelancerInvoices(month?: string, kind: string = 'freelancer
         .from('freelancer_invoices')
         .select('*, profiles!freelancer_invoices_freelancer_id_fkey(name, email)')
         .eq('kind', kind)
+        .order('invoice_date', { ascending: false })
+      if (month) q = q.eq('invoice_month', month)
+      const { data, error } = await q
+      if (error) throw error
+      return (data || []).map(r => mapInvoice(r as Record<string, unknown>))
+    },
+  })
+}
+
+/** 모든 종류의 인보이스 (재무 대시보드용). month 미지정 시 전체. */
+export function useAllInvoices(month?: string) {
+  return useQuery({
+    queryKey: ['all-invoices', month],
+    queryFn: async () => {
+      let q = supabase
+        .from('freelancer_invoices')
+        .select('*, profiles!freelancer_invoices_freelancer_id_fkey(name, email)')
         .order('invoice_date', { ascending: false })
       if (month) q = q.eq('invoice_month', month)
       const { data, error } = await q
@@ -260,6 +279,7 @@ export function useUpdateInvoiceStatus() {
       qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
+      qc.invalidateQueries({ queryKey: ['all-invoices'] })
     },
   })
 }
