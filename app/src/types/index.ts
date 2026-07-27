@@ -458,7 +458,7 @@ export type ServiceReportStatus = 'none' | 'pending' | 'submitted'
 /** 계약사항 체크리스트 (별첨1 형식): 서비스 티어 + 세부 서비스 체크/수량 */
 export interface ContractDetails {
   tier?: string | null                                     // 선택된 티어 id (하나)
-  services?: Record<string, { checked?: boolean; qty?: number | null }>
+  services?: Record<string, { checked?: boolean; qty?: number | null; memo?: string }>
   otherChecked?: boolean
   otherText?: string
   /** 연간 미팅 목표 횟수(기본 26). 학생별로 다를 때만 지정. */

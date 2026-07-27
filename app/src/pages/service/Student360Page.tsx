@@ -722,6 +722,10 @@ function ContractSection({ student, canEdit }: { student: ServiceStudent; canEdi
     const n = qty === '' ? null : Number(qty)
     setLocal({ ...local, services: { ...(local.services || {}), [id]: { ...s, qty: n } } })
   }
+  const setMemo = (id: string, memo: string) => {
+    const s = local.services?.[id] || {}
+    setLocal({ ...local, services: { ...(local.services || {}), [id]: { ...s, memo } } })
+  }
   const saveQty = () => { if (canEdit) update.mutate({ id: student.id, contractDetails: local }) }
   const saveAppServices = () => {
     if (!canEdit) return
@@ -798,7 +802,7 @@ function ContractSection({ student, canEdit }: { student: ServiceStudent; canEdi
               const s = local.services?.[svc.id] || {}
               return (
                 <div key={svc.id} className={rowCls}>
-                  <div className="flex items-center gap-1.5 flex-wrap text-sm">
+                  <div className="flex items-center gap-1.5 flex-wrap text-sm shrink-0">
                     <span>{svc.label}</span>
                     {svc.unit && (
                       <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -815,6 +819,15 @@ function ContractSection({ student, canEdit }: { student: ServiceStudent; canEdi
                       </span>
                     )}
                   </div>
+                  <input
+                    type="text"
+                    className="flex-1 min-w-0 h-7 rounded border px-2 text-sm bg-background disabled:opacity-70"
+                    placeholder="특이사항 메모"
+                    value={s.memo || ''}
+                    disabled={!canEdit}
+                    onChange={(e) => setMemo(svc.id, e.target.value)}
+                    onBlur={saveQty}
+                  />
                   <input type="checkbox" className={boxCls} checked={!!s.checked} disabled={!canEdit} onChange={() => toggleSvc(svc.id)} />
                 </div>
               )
