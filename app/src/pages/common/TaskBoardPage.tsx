@@ -41,6 +41,34 @@ import type { Task, TaskStatus, TaskPriority, Todo, TodoStatus, TodoPriority, Pr
 
 const STATUS_ORDER: TaskStatus[] = ['requested', 'in_progress', 'on_hold', 'completed', 'cancelled']
 
+// ── 첨부파일(이미지/PDF/DOC) 공통 ──
+const ATTACH_ACCEPT = 'image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+const ATTACH_MAX = 10 * 1024 * 1024 // 10MB
+
+/** 허용되지 않는 파일이면 안내 문구, 정상이면 null */
+function attachmentError(file: File): string | null {
+  const name = file.name.toLowerCase()
+  const isImage = file.type.startsWith('image/')
+  const isPdf = file.type === 'application/pdf' || name.endsWith('.pdf')
+  const isDoc = name.endsWith('.doc') || name.endsWith('.docx')
+    || file.type === 'application/msword'
+    || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  if (!isImage && !isPdf && !isDoc) return '이미지, PDF, DOC/DOCX 파일만 업로드할 수 있습니다.'
+  if (file.size > ATTACH_MAX) return '파일 크기는 10MB 이하만 가능합니다.'
+  return null
+}
+
+/** Storage 업로드 후 공개 URL 반환 */
+async function uploadTaskFileToStorage(taskId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'bin'
+  const path = `${taskId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage
+    .from('task-attachments')
+    .upload(path, file, { contentType: file.type || undefined, upsert: false })
+  if (error) throw error
+  return supabase.storage.from('task-attachments').getPublicUrl(path).data.publicUrl
+}
+
 function usePriorityConfig() {
   const t = useT()
   return {
@@ -285,32 +313,16 @@ function TaskDetailDialog({
     e.target.value = '' // 같은 파일 재선택 가능하도록 초기화
     if (!taskId || !user || !file) return
 
-    // 이미지 또는 PDF만 허용
-    const isImage = file.type.startsWith('image/')
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
-    if (!isImage && !isPdf) {
-      alert('이미지 또는 PDF 파일만 업로드할 수 있습니다.')
-      return
-    }
-    const MAX_SIZE = 10 * 1024 * 1024 // 10MB
-    if (file.size > MAX_SIZE) {
-      alert('파일 크기는 10MB 이하만 가능합니다.')
-      return
-    }
+    const err = attachmentError(file)
+    if (err) { alert(err); return }
 
     setUploading(true)
     try {
-      const ext = file.name.split('.').pop() || 'bin'
-      const path = `${taskId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: upErr } = await supabase.storage
-        .from('task-attachments')
-        .upload(path, file, { contentType: file.type, upsert: false })
-      if (upErr) throw upErr
-      const { data: urlData } = supabase.storage.from('task-attachments').getPublicUrl(path)
+      const fileUrl = await uploadTaskFileToStorage(taskId, file)
       await addAttachment.mutateAsync({
         taskId,
         fileName: file.name,
-        fileUrl: urlData.publicUrl,
+        fileUrl,
         fileSize: file.size,
         uploadedBy: user.id,
       })
@@ -493,9 +505,9 @@ function TaskDetailDialog({
                 </Label>
                 <label className={`text-xs text-blue-600 hover:underline ${uploading ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
                   {uploading ? <span className="inline-flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> 업로드 중…</span> : `+ ${t('tasks.addAttachment')}`}
-                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                  <input type="file" accept={ATTACH_ACCEPT} className="hidden" onChange={handleFileUpload} disabled={uploading} />
                 </label>
-                <span className="text-[10px] text-muted-foreground">이미지 · PDF (최대 10MB)</span>
+                <span className="text-[10px] text-muted-foreground">이미지 · PDF · DOC (최대 10MB)</span>
               </div>
               {attachments.length > 0 && (
                 <div className="space-y-1.5">
@@ -1171,10 +1183,13 @@ export function TaskBoardPage() {
     title: '', description: '', priority: 'normal' as TaskPriority,
     assigneeId: '', department: '', dueDate: '',
   })
+  const [newFiles, setNewFiles] = useState<File[]>([])
+  const [creating, setCreating] = useState(false)
 
   const { data: tasks = [], isLoading } = useTasks({ ...filters, search: searchQuery || undefined })
   const { data: stats } = useTaskStats(user?.id)
   const createTask = useCreateTask()
+  const addAttachment = useAddTaskAttachment()
 
   // Check URL for ?open= param
   const urlParams = new URLSearchParams(window.location.search)
@@ -1207,33 +1222,52 @@ export function TaskBoardPage() {
   const HIGHLIGHT_RING: Record<string, string> = { assigned: 'ring-amber-400', requested: 'ring-blue-500', overdue: 'ring-red-500', completed: 'ring-emerald-500' }
   const highlightRing = highlight ? HIGHLIGHT_RING[highlight] : undefined
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
     if (!user || !newTask.title.trim()) return
-    createTask.mutate({
-      title: newTask.title.trim(),
-      description: newTask.description.trim() || undefined,
-      priority: newTask.priority,
-      requesterId: user.id,
-      assigneeId: newTask.assigneeId || undefined,
-      department: newTask.department || undefined,
-      dueDate: newTask.dueDate || undefined,
-    }, {
-      onSuccess: (created) => {
-        setCreateDialogOpen(false)
-        setNewTask({ title: '', description: '', priority: 'normal', assigneeId: '', department: '', dueDate: '' })
-        // Notify assignee
-        if (created.assigneeId && created.assigneeId !== user.id) {
-          createNotificationsForUsers([created.assigneeId], {
-            type: 'task_assigned',
-            title: '새 업무 요청',
-            message: `${user.name}님이 "${created.title}" 업무를 요청했습니다.`,
-            link: `/tasks?open=${created.id}`,
-            metadata: { taskId: created.id, actor: user.name, task: created.title, kind: 'request' },
-          }).catch(() => {})
+    setCreating(true)
+    try {
+      const created = await createTask.mutateAsync({
+        title: newTask.title.trim(),
+        description: newTask.description.trim() || undefined,
+        priority: newTask.priority,
+        requesterId: user.id,
+        assigneeId: newTask.assigneeId || undefined,
+        department: newTask.department || undefined,
+        dueDate: newTask.dueDate || undefined,
+      })
+
+      // 첨부파일 업로드
+      const failed: string[] = []
+      for (const file of newFiles) {
+        try {
+          const fileUrl = await uploadTaskFileToStorage(created.id, file)
+          await addAttachment.mutateAsync({ taskId: created.id, fileName: file.name, fileUrl, fileSize: file.size, uploadedBy: user.id })
+        } catch {
+          failed.push(file.name)
         }
-      },
-    })
-  }, [user, newTask, createTask])
+      }
+      if (failed.length) alert('일부 첨부파일 업로드 실패:\n' + failed.join('\n'))
+
+      // Notify assignee
+      if (created.assigneeId && created.assigneeId !== user.id) {
+        createNotificationsForUsers([created.assigneeId], {
+          type: 'task_assigned',
+          title: '새 업무 요청',
+          message: `${user.name}님이 "${created.title}" 업무를 요청했습니다.`,
+          link: `/tasks?open=${created.id}`,
+          metadata: { taskId: created.id, actor: user.name, task: created.title, kind: 'request' },
+        }).catch(() => {})
+      }
+
+      setCreateDialogOpen(false)
+      setNewTask({ title: '', description: '', priority: 'normal', assigneeId: '', department: '', dueDate: '' })
+      setNewFiles([])
+    } catch (err) {
+      alert('업무 생성 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'))
+    } finally {
+      setCreating(false)
+    }
+  }, [user, newTask, newFiles, createTask, addAttachment])
 
   return (
     <div className="space-y-6">
@@ -1432,7 +1466,7 @@ export function TaskBoardPage() {
       />
 
       {/* Create Task Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+      <Dialog open={createDialogOpen} onOpenChange={(o) => { if (creating) return; setCreateDialogOpen(o); if (!o) setNewFiles([]) }}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('tasks.createTask')}</DialogTitle>
@@ -1505,13 +1539,47 @@ export function TaskBoardPage() {
                 </Select>
               </div>
             </div>
+
+            {/* 첨부파일 (이미지 · PDF · DOC) */}
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1.5">
+                <Paperclip className="size-3.5" /> {t('tasks.attachments')}
+                <span className="text-[10px] text-muted-foreground font-normal">이미지 · PDF · DOC (최대 10MB)</span>
+              </Label>
+              <label className="flex items-center justify-center gap-1.5 border border-dashed rounded-md py-2 text-xs text-blue-600 hover:bg-blue-50 cursor-pointer">
+                <Plus className="size-3.5" /> 파일 선택
+                <input
+                  type="file"
+                  accept={ATTACH_ACCEPT}
+                  multiple
+                  className="hidden"
+                  onChange={e => {
+                    const files = Array.from(e.target.files || [])
+                    e.target.value = ''
+                    const valid: File[] = []
+                    for (const f of files) { const err = attachmentError(f); if (err) alert(`${f.name}: ${err}`); else valid.push(f) }
+                    if (valid.length) setNewFiles(prev => [...prev, ...valid])
+                  }}
+                />
+              </label>
+              {newFiles.length > 0 && (
+                <div className="space-y-1">
+                  {newFiles.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
+                      <span className="truncate">{f.name}</span>
+                      <button type="button" onClick={() => setNewFiles(prev => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground hover:text-destructive shrink-0"><X className="size-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={creating}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={handleCreate} disabled={!newTask.title.trim() || createTask.isPending}>
-              {createTask.isPending ? <Loader2 className="size-4 animate-spin mr-1" /> : <Send className="size-4 mr-1" />}
+            <Button onClick={handleCreate} disabled={!newTask.title.trim() || creating}>
+              {creating ? <Loader2 className="size-4 animate-spin mr-1" /> : <Send className="size-4 mr-1" />}
               {t('tasks.createTask')}
             </Button>
           </DialogFooter>
