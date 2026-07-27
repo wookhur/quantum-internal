@@ -144,11 +144,12 @@ export function useCreateDailyTask() {
 export function useUpdateDailyTask() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (t: { id: string; title?: string; status?: DailyTaskStatus; note?: string }) => {
+    mutationFn: async (t: { id: string; title?: string; status?: DailyTaskStatus; note?: string; taskDate?: string }) => {
       const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (t.title !== undefined) row.title = t.title.trim()
       if (t.status !== undefined) row.status = t.status
       if (t.note !== undefined) row.note = t.note || null
+      if (t.taskDate !== undefined) row.task_date = t.taskDate
       const { error } = await supabase.from('daily_tasks').update(row).eq('id', t.id)
       if (error) throw error
     },

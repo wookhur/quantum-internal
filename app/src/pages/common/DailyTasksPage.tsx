@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { ChevronLeft, ChevronRight, Plus, Trash2, Check, Users, Link2, CalendarDays, Pencil, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
@@ -154,7 +154,7 @@ export function DailyTasksPage() {
               assignable={mem.profileId === user?.id ? assignable : []}
               onCreate={create.mutate}
               onToggle={(t) => update.mutate({ id: t.id, status: t.status === 'done' ? 'in_progress' : 'done' })}
-              onUpdate={(id, title) => update.mutate({ id, title })}
+              onUpdate={(id, title, taskDate) => update.mutate({ id, title, taskDate })}
               onDelete={(id) => { if (confirm('이 업무를 삭제할까요?')) del.mutate(id) }}
             />
           ))}
@@ -188,20 +188,21 @@ function MemberCard({ name, tasks, date, isSelf, canModify, userId, createdBy, a
   assignable: { id: string; title: string }[]
   onCreate: (t: { userId: string; taskDate: string; title: string; sourceType?: 'manual' | 'task_request'; sourceTaskId?: string; createdBy?: string }) => void
   onToggle: (t: DailyTask) => void
-  onUpdate: (id: string, title: string) => void
+  onUpdate: (id: string, title: string, taskDate: string) => void
   onDelete: (id: string) => void
 }) {
   const [title, setTitle] = useState('')
   const [fromRequest, setFromRequest] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
+  const [editDate, setEditDate] = useState('')
 
-  const startEdit = (t: DailyTask) => { setEditingId(t.id); setEditText(t.title) }
-  const cancelEdit = () => { setEditingId(null); setEditText('') }
+  const startEdit = (t: DailyTask) => { setEditingId(t.id); setEditText(t.title); setEditDate(t.taskDate) }
+  const cancelEdit = () => { setEditingId(null); setEditText(''); setEditDate('') }
   const saveEdit = () => {
     const v = editText.trim()
     if (!editingId || !v) { cancelEdit(); return }
-    onUpdate(editingId, v)
+    onUpdate(editingId, v, editDate || date)
     cancelEdit()
   }
 
@@ -234,16 +235,28 @@ function MemberCard({ name, tasks, date, isSelf, canModify, userId, createdBy, a
           <div className="space-y-1.5">
             {tasks.map((t) => (
               editingId === t.id ? (
-                <div key={t.id} className="flex items-center gap-1.5 text-sm">
-                  <Input
-                    value={editText}
-                    onChange={(e) => setEditText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
-                    className="h-8 text-sm flex-1"
-                    autoFocus
-                  />
-                  <button onClick={saveEdit} disabled={!editText.trim()} className="text-emerald-600 hover:text-emerald-700 disabled:opacity-40 shrink-0"><Check className="size-4" /></button>
-                  <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600 shrink-0"><X className="size-4" /></button>
+                <div key={t.id} className="space-y-1.5 rounded-md border border-blue-200 bg-blue-50/40 p-2">
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <Input
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
+                      className="h-8 text-sm flex-1 bg-white"
+                      autoFocus
+                    />
+                    <button onClick={saveEdit} disabled={!editText.trim()} className="text-emerald-600 hover:text-emerald-700 disabled:opacity-40 shrink-0"><Check className="size-4" /></button>
+                    <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600 shrink-0"><X className="size-4" /></button>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground shrink-0">날짜 이동</span>
+                    <Input
+                      type="date"
+                      value={editDate}
+                      onChange={(e) => setEditDate(e.target.value)}
+                      className="h-8 text-xs w-40 bg-white"
+                    />
+                    {editDate && editDate !== t.taskDate && <span className="text-[11px] text-blue-600">→ 이 날짜로 이동</span>}
+                  </div>
                 </div>
               ) : (
                 <div key={t.id} className="flex items-start gap-2 text-sm">
@@ -272,7 +285,11 @@ function MemberCard({ name, tasks, date, isSelf, canModify, userId, createdBy, a
           <div className="pt-2 border-t space-y-1.5">
             {assignable.length > 0 && (
               <Select value={fromRequest || '_none'} onValueChange={(v) => v && v !== '_none' && pickRequest(v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="내 업무요청에서 가져오기…" /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs">
+                  <span className="truncate text-left">
+                    {fromRequest ? (assignable.find((a) => a.id === fromRequest)?.title || '직접 입력') : '내 업무요청에서 가져오기…'}
+                  </span>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">직접 입력</SelectItem>
                   {assignable.map((t) => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}

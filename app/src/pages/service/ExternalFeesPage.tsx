@@ -13,7 +13,10 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
-  Loader2, Search, CheckCircle2, Clock, HandCoins, Lock, Link as LinkIcon,
+  Popover, PopoverContent, PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Loader2, Search, CheckCircle2, Clock, HandCoins, Lock, Link as LinkIcon, X,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAllServiceProgramFees, type ServiceProgramFee } from '@/hooks/useServiceProgramFees'
@@ -262,17 +265,13 @@ export function ExternalFeesPage() {
                         {f.billedAmount ? formatCurrency(f.billedAmount, f.currency as 'KRW' | 'USD') : '-'}
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           {isPaid ? (
                             <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="size-3" /> {t('svcpay.paid')}</Badge>
                           ) : (
                             <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1"><Clock className="size-3" /> {t('svcpay.unpaid')}</Badge>
                           )}
-                          {f.refundStatus && (
-                            <Badge variant="outline" className={f.refundStatus === 'completed' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-orange-50 text-orange-600 border-orange-200'}>
-                              {f.refundStatus === 'completed' ? '환불완료' : '환불신청'}
-                            </Badge>
-                          )}
+                          <RefundCell fee={f} />
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
@@ -304,6 +303,65 @@ export function ExternalFeesPage() {
           onClose={() => setSelectedId(null)}
         />
       )}
+    </div>
+  )
+}
+
+// ─── 환불 셀 (표에서 바로 환불신청/환불완료) ─────────────────────────────
+function RefundCell({ fee }: { fee: ServiceProgramFee }) {
+  const updateEC = useUpdateECActivity()
+  const updateAC = useUpdateAcademicSupport()
+  const saving = updateEC.isPending || updateAC.isPending
+  const mut = fee.source === 'ec' ? updateEC : updateAC
+  const [open, setOpen] = useState(false)
+  const [amt, setAmt] = useState(fee.refundAmount ? String(fee.refundAmount) : (fee.billedAmount ? String(fee.billedAmount) : ''))
+  const [dt, setDt] = useState(fee.refundDate || todayKST())
+
+  const save = (patch: { refundStatus: RefundStatus | null; refundAmount?: number | null; refundDate?: string | null }) =>
+    mut.mutate({ id: fee.id, studentId: fee.studentId, ...patch }, { onSuccess: () => setOpen(false) })
+  const submitRequest = () => {
+    const n = Number(amt)
+    if (!n || n <= 0) return
+    save({ refundStatus: 'requested', refundAmount: n, refundDate: dt || null })
+  }
+  const rs = fee.refundStatus
+
+  if (rs === 'completed') {
+    return (
+      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+        <Badge variant="outline" className="bg-rose-100 text-rose-700 border-rose-200">환불완료</Badge>
+        <button disabled={saving} onClick={() => { if (confirm('환불 내역을 삭제할까요?')) save({ refundStatus: null, refundAmount: null, refundDate: null }) }} className="text-gray-300 hover:text-gray-500" title="환불 내역 삭제"><X className="size-3" /></button>
+      </div>
+    )
+  }
+  if (rs === 'requested') {
+    return (
+      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+        <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200">환불신청</Badge>
+        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] text-rose-600 border-rose-300 hover:bg-rose-50"
+          disabled={saving} onClick={() => save({ refundStatus: 'completed', refundDate: fee.refundDate || todayKST() })}>완료 처리</Button>
+      </div>
+    )
+  }
+  return (
+    <div onClick={e => e.stopPropagation()}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger className="inline-flex h-6 items-center rounded-md border border-rose-200 bg-transparent px-2 text-[11px] font-medium text-rose-600 hover:bg-rose-50">
+          환불신청
+        </PopoverTrigger>
+        <PopoverContent className="w-60 space-y-2" align="start" onClick={e => e.stopPropagation()}>
+          <div className="text-xs font-medium">환불 신청 · {fee.label}</div>
+          <div className="space-y-1">
+            <label className="text-[11px] text-muted-foreground">환불 금액</label>
+            <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} className="h-8 text-sm" placeholder="0" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] text-muted-foreground">환불 예정일</label>
+            <Input type="date" value={dt} onChange={e => setDt(e.target.value)} className="h-8 text-sm" />
+          </div>
+          <Button size="sm" className="w-full h-8" disabled={saving || !Number(amt)} onClick={submitRequest}>환불신청</Button>
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }
