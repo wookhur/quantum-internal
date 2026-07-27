@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ChevronLeft, ChevronRight, Plus, Trash2, Check, Users, Link2, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Trash2, Check, Users, Link2, CalendarDays, Pencil, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useTasks } from '@/hooks/useTasks'
@@ -154,6 +154,7 @@ export function DailyTasksPage() {
               assignable={mem.profileId === user?.id ? assignable : []}
               onCreate={create.mutate}
               onToggle={(t) => update.mutate({ id: t.id, status: t.status === 'done' ? 'in_progress' : 'done' })}
+              onUpdate={(id, title) => update.mutate({ id, title })}
               onDelete={(id) => { if (confirm('이 업무를 삭제할까요?')) del.mutate(id) }}
             />
           ))}
@@ -176,7 +177,7 @@ export function DailyTasksPage() {
   )
 }
 
-function MemberCard({ name, tasks, date, isSelf, canModify, userId, createdBy, assignable, onCreate, onToggle, onDelete }: {
+function MemberCard({ name, tasks, date, isSelf, canModify, userId, createdBy, assignable, onCreate, onToggle, onUpdate, onDelete }: {
   name: string
   tasks: DailyTask[]
   date: string
@@ -187,10 +188,22 @@ function MemberCard({ name, tasks, date, isSelf, canModify, userId, createdBy, a
   assignable: { id: string; title: string }[]
   onCreate: (t: { userId: string; taskDate: string; title: string; sourceType?: 'manual' | 'task_request'; sourceTaskId?: string; createdBy?: string }) => void
   onToggle: (t: DailyTask) => void
+  onUpdate: (id: string, title: string) => void
   onDelete: (id: string) => void
 }) {
   const [title, setTitle] = useState('')
   const [fromRequest, setFromRequest] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
+
+  const startEdit = (t: DailyTask) => { setEditingId(t.id); setEditText(t.title) }
+  const cancelEdit = () => { setEditingId(null); setEditText('') }
+  const saveEdit = () => {
+    const v = editText.trim()
+    if (!editingId || !v) { cancelEdit(); return }
+    onUpdate(editingId, v)
+    cancelEdit()
+  }
 
   const doneCount = tasks.filter((t) => t.status === 'done').length
 
@@ -220,20 +233,37 @@ function MemberCard({ name, tasks, date, isSelf, canModify, userId, createdBy, a
         ) : (
           <div className="space-y-1.5">
             {tasks.map((t) => (
-              <div key={t.id} className="flex items-start gap-2 text-sm">
-                <button
-                  disabled={!canModify}
-                  onClick={() => onToggle(t)}
-                  className={`mt-0.5 size-4 shrink-0 rounded border flex items-center justify-center ${t.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300'} ${canModify ? 'cursor-pointer' : 'cursor-default'}`}
-                >
-                  {t.status === 'done' && <Check className="size-3" />}
-                </button>
-                <span className={`flex-1 ${t.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>{t.title}</span>
-                {t.sourceType === 'task_request' && <Link2 className="size-3.5 text-blue-400 shrink-0 mt-0.5" aria-label="업무요청 연동" />}
-                {canModify && (
-                  <button onClick={() => onDelete(t.id)} className="text-red-400 hover:text-red-600 shrink-0 mt-0.5"><Trash2 className="size-3.5" /></button>
-                )}
-              </div>
+              editingId === t.id ? (
+                <div key={t.id} className="flex items-center gap-1.5 text-sm">
+                  <Input
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit() }}
+                    className="h-8 text-sm flex-1"
+                    autoFocus
+                  />
+                  <button onClick={saveEdit} disabled={!editText.trim()} className="text-emerald-600 hover:text-emerald-700 disabled:opacity-40 shrink-0"><Check className="size-4" /></button>
+                  <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600 shrink-0"><X className="size-4" /></button>
+                </div>
+              ) : (
+                <div key={t.id} className="flex items-start gap-2 text-sm">
+                  <button
+                    disabled={!canModify}
+                    onClick={() => onToggle(t)}
+                    className={`mt-0.5 size-4 shrink-0 rounded border flex items-center justify-center ${t.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300'} ${canModify ? 'cursor-pointer' : 'cursor-default'}`}
+                  >
+                    {t.status === 'done' && <Check className="size-3" />}
+                  </button>
+                  <span className={`flex-1 ${t.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>{t.title}</span>
+                  {t.sourceType === 'task_request' && <Link2 className="size-3.5 text-blue-400 shrink-0 mt-0.5" aria-label="업무요청 연동" />}
+                  {canModify && (
+                    <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                      <button onClick={() => startEdit(t)} className="text-gray-400 hover:text-gray-700"><Pencil className="size-3.5" /></button>
+                      <button onClick={() => onDelete(t.id)} className="text-red-400 hover:text-red-600"><Trash2 className="size-3.5" /></button>
+                    </div>
+                  )}
+                </div>
+              )
             ))}
           </div>
         )}
