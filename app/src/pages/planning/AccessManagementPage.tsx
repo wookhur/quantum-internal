@@ -657,7 +657,15 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
       const { data, error } = await supabase.functions.invoke('invite-user', {
         body: { email: email.trim(), name: name.trim() || undefined, role },
       })
-      if (error) throw error
+      if (error) {
+        // 함수가 non-2xx로 반환한 실제 오류 메시지(body.error)를 꺼내 표시
+        let detail = error.message
+        const ctx = (error as { context?: Response }).context
+        if (ctx && typeof ctx.json === 'function') {
+          try { const body = await ctx.json(); if (body?.error) detail = body.error } catch { /* body 파싱 실패 시 일반 메시지 */ }
+        }
+        throw new Error(detail)
+      }
       if (data?.error) throw new Error(data.error)
       if (data?.tempPassword) {
         setTempPassword(data.tempPassword)
