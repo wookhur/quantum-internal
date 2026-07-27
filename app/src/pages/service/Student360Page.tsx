@@ -894,7 +894,14 @@ function ECServicesSection({ studentId, createdBy, canEdit }: { studentId: strin
         {activities.map(a => (
           <div key={a.id} className="rounded-lg border p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-sm">{a.partner || '—'}</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">{a.partner || '—'}</span>
+                {a.refundStatus && (
+                  <Badge variant="outline" className={a.refundStatus === 'completed' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-orange-100 text-orange-700 border-orange-200'}>
+                    {a.refundStatus === 'completed' ? '환불완료' : '환불신청중'}{a.refundDate ? ` · ${a.refundStatus === 'completed' ? '완료' : '신청'} ${a.refundDate}` : ''}
+                  </Badge>
+                )}
+              </div>
               {canEdit && (
                 <div className="flex gap-1">
                   <ECActivityDialog
@@ -931,6 +938,13 @@ function ECServicesSection({ studentId, createdBy, canEdit }: { studentId: strin
               <div className="text-sm">
                 <p className="text-xs text-muted-foreground">Sales Contributor</p>
                 <p>{[a.salesContributor1, a.salesContributor2].filter(Boolean).join(' / ')}</p>
+              </div>
+            )}
+            {a.refundStatus && (a.refundReason || a.refundAmount != null) && (
+              <div className={`rounded-md border px-2.5 py-1.5 text-xs ${a.refundStatus === 'completed' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-orange-200 bg-orange-50 text-orange-700'}`}>
+                <span className="font-medium">{a.refundStatus === 'completed' ? '환불완료' : '환불신청중'}</span>
+                {a.refundAmount != null && <> · ₩{a.refundAmount.toLocaleString()}</>}
+                {a.refundReason && <div className="mt-0.5 whitespace-pre-wrap">사유: {a.refundReason}</div>}
               </div>
             )}
           </div>
@@ -1200,7 +1214,14 @@ function AcademicSupportSection({ studentId, createdBy, canEdit }: { studentId: 
         {items.map(item => (
           <div key={item.id} className="rounded-lg border p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-sm">{item.academyName || '—'}</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-sm">{item.academyName || '—'}</span>
+                {item.refundStatus && (
+                  <Badge variant="outline" className={item.refundStatus === 'completed' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-orange-100 text-orange-700 border-orange-200'}>
+                    {item.refundStatus === 'completed' ? '환불완료' : '환불신청중'}{item.refundDate ? ` · ${item.refundStatus === 'completed' ? '완료' : '신청'} ${item.refundDate}` : ''}
+                  </Badge>
+                )}
+              </div>
               {canEdit && (
                 <div className="flex gap-1">
                   <AcademicSupportDialog
@@ -1246,6 +1267,13 @@ function AcademicSupportSection({ studentId, createdBy, canEdit }: { studentId: 
               <div className="text-sm">
                 <p className="text-xs text-muted-foreground">Sales Contributor</p>
                 <p>{[item.salesContributor1, item.salesContributor2].filter(Boolean).join(' / ')}</p>
+              </div>
+            )}
+            {item.refundStatus && (item.refundReason || item.refundAmount != null) && (
+              <div className={`rounded-md border px-2.5 py-1.5 text-xs ${item.refundStatus === 'completed' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-orange-200 bg-orange-50 text-orange-700'}`}>
+                <span className="font-medium">{item.refundStatus === 'completed' ? '환불완료' : '환불신청중'}</span>
+                {item.refundAmount != null && <> · ₩{item.refundAmount.toLocaleString()}</>}
+                {item.refundReason && <div className="mt-0.5 whitespace-pre-wrap">사유: {item.refundReason}</div>}
               </div>
             )}
           </div>

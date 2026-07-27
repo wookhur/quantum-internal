@@ -180,6 +180,16 @@ export function FinanceDashboardPage() {
 
   // ─── 외부서비스 이중 입력 진단: 같은 학생·같은 파트너(EC)가 계약 추가비용(A)과 Student360 EC(B) 양쪽에 존재 ───
   const { data: programFees = [] } = useAllServiceProgramFees()
+
+  // ─── 환불 현황: 서비스(EC/학습지원) 환불신청·완료 ───
+  const refunds = useMemo(() => {
+    const label = (f: typeof programFees[number]) => [f.studentKoreanName, f.studentName].filter(Boolean).join(' ') || f.studentName || '—'
+    const requested = programFees.filter(f => f.refundStatus === 'requested').map(f => ({ ...f, who: label(f) }))
+    const completed = programFees.filter(f => f.refundStatus === 'completed').map(f => ({ ...f, who: label(f) }))
+    const completedTotal = completed.reduce((s, f) => s + (f.refundAmount || 0), 0)
+    return { requested, completed, completedTotal }
+  }, [programFees])
+
   const ecDoubleEntry = useMemo(() => {
     const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
     const canonByName = new Map<string, string>()
@@ -333,6 +343,59 @@ export function FinanceDashboardPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 환불 현황 (서비스 EC/학습지원) */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex items-center gap-2 px-4 py-3 border-b">
+            <Wallet className="size-4 text-rose-500" />
+            <span className="font-semibold text-sm">환불 현황</span>
+            <Badge variant="outline" className="text-orange-700 border-orange-300 bg-orange-50">신청중 {refunds.requested.length}건</Badge>
+            <Badge variant="outline" className="text-rose-700 border-rose-300 bg-rose-50">완료 {refunds.completed.length}건 · {formatCurrency(refunds.completedTotal)}</Badge>
+          </div>
+          {refunds.requested.length === 0 && refunds.completed.length === 0 ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">환불 신청·완료 내역이 없습니다.</div>
+          ) : (
+            <div className="p-3 space-y-4">
+              {/* 환불신청중 — 처리 대기 */}
+              {refunds.requested.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-orange-700 mb-1.5">환불신청중 (처리 대기)</div>
+                  <div className="space-y-1.5">
+                    {refunds.requested.map(f => (
+                      <div key={f.id} className="rounded-md border border-orange-200 bg-orange-50/50 px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="font-medium">{f.who} <span className="text-xs text-muted-foreground">· {f.label}{f.source === 'academic' ? ' (학습지원)' : ' (EC)'}</span></span>
+                          <span className="text-xs text-muted-foreground">신청일 {f.refundDate || '—'} · 서비스금액 {f.billedAmount != null ? formatCurrency(f.billedAmount, f.currency as 'KRW' | 'USD') : '—'}</span>
+                        </div>
+                        {f.refundReason && <p className="text-xs text-orange-700 mt-1 whitespace-pre-wrap">사유: {f.refundReason}</p>}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1.5">서비스입금관리에서 금액 확인 후 &lsquo;완료 처리&rsquo;하세요.</p>
+                </div>
+              )}
+              {/* 환불완료 */}
+              {refunds.completed.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-rose-700 mb-1.5">환불완료</div>
+                  <div className="space-y-1.5">
+                    {refunds.completed.map(f => (
+                      <div key={f.id} className="rounded-md border border-rose-200 bg-rose-50/40 px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="font-medium">{f.who} <span className="text-xs text-muted-foreground">· {f.label}{f.source === 'academic' ? ' (학습지원)' : ' (EC)'}</span></span>
+                          <span className="text-sm font-mono font-medium text-rose-700">{f.refundAmount != null ? formatCurrency(f.refundAmount, f.currency as 'KRW' | 'USD') : '—'}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">완료일 {f.refundDate || '—'}{f.refundReason ? ` · 사유: ${f.refundReason}` : ''}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
