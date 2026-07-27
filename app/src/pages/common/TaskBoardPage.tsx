@@ -12,7 +12,7 @@ import {
   Plus, Search, Loader2, AlertTriangle, Clock, CheckCircle2,
   Ban, Send, Calendar, Paperclip, MessageSquare, Pause,
   ChevronDown, ChevronUp, LayoutList, Columns3,
-  ListTodo, Trash2, X, CircleDot,
+  ListTodo, Trash2, X, CircleDot, Pencil,
   FolderKanban, Users, User as UserIcon, Circle, ChevronRight,
 } from 'lucide-react'
 import {
@@ -210,6 +210,30 @@ function TaskDetailDialog({
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [subtaskAssignee, setSubtaskAssignee] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editDueDate, setEditDueDate] = useState('')
+
+  const startEdit = useCallback(() => {
+    if (!task) return
+    setEditTitle(task.title || '')
+    setEditDescription(task.description || '')
+    setEditDueDate(task.dueDate || '')
+    setEditMode(true)
+  }, [task])
+
+  const handleSaveEdit = useCallback(() => {
+    if (!taskId || !editTitle.trim()) return
+    updateTask.mutate({
+      id: taskId,
+      title: editTitle.trim(),
+      description: editDescription.trim(),
+      dueDate: editDueDate,
+    }, { onSuccess: () => setEditMode(false) })
+  }, [taskId, editTitle, editDescription, editDueDate, updateTask])
+
+  useEffect(() => { setEditMode(false) }, [taskId])
 
   const handleStatusChange = useCallback((newStatus: string | null) => {
     if (!taskId || !newStatus) return
@@ -285,9 +309,23 @@ function TaskDetailDialog({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="text-lg pr-6">{task.title}</DialogTitle>
-              {task.description && (
-                <DialogDescription className="whitespace-pre-wrap">{task.description}</DialogDescription>
+              {editMode ? (
+                <div className="space-y-2 pr-6">
+                  <Input value={editTitle} onChange={e => setEditTitle(e.target.value)} placeholder={t('tasks.titlePlaceholder')} className="text-base font-semibold" />
+                  <Textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder={t('tasks.descPlaceholder')} rows={3} className="text-sm" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-2 pr-6">
+                    <DialogTitle className="text-lg">{task.title}</DialogTitle>
+                    <Button size="sm" variant="ghost" className="h-7 shrink-0 gap-1 text-xs" onClick={startEdit}>
+                      <Pencil className="size-3.5" /> {t('common.edit')}
+                    </Button>
+                  </div>
+                  {task.description && (
+                    <DialogDescription className="whitespace-pre-wrap">{task.description}</DialogDescription>
+                  )}
+                </>
               )}
             </DialogHeader>
 
@@ -340,9 +378,28 @@ function TaskDetailDialog({
             {/* Info */}
             <div className="text-xs text-muted-foreground space-y-1">
               <div>{t('tasks.requester')}: {task.requester?.name || '-'}</div>
-              {task.dueDate && <div>{t('tasks.dueDate')}: {task.dueDate}</div>}
+              {editMode ? (
+                <div className="flex items-center gap-2 py-1">
+                  <span>{t('tasks.dueDate')}:</span>
+                  <Input type="date" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} className="h-8 w-40 text-xs" />
+                  {editDueDate && (
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditDueDate('')}>{t('common.clear')}</Button>
+                  )}
+                </div>
+              ) : (
+                task.dueDate && <div>{t('tasks.dueDate')}: {task.dueDate}</div>
+              )}
               <div>{t('tasks.createdAt')}: {formatRelativeTime(task.createdAt)}</div>
             </div>
+
+            {editMode && (
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => setEditMode(false)}>{t('common.cancel')}</Button>
+                <Button size="sm" onClick={handleSaveEdit} disabled={updateTask.isPending || !editTitle.trim()}>
+                  {t('common.save')}
+                </Button>
+              </div>
+            )}
 
             {/* Subtasks */}
             {(task.subtasks && task.subtasks.length > 0) && (
