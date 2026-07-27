@@ -5,13 +5,14 @@ import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Loader2, Users, Receipt, Lock, Clock, CheckCircle2, XCircle, Wallet } from 'lucide-react'
 import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useIncentivesByInstallment, type IncentiveType } from '@/hooks/useIncentives'
 import { useAllExtraInstallments } from '@/hooks/useExternalFees'
-import { useAllInvoices, useUpdateInvoiceStatus } from '@/hooks/useFreelancerInvoices'
+import { useAllInvoices, useUpdateInvoiceStatus, useInvoiceItems, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
 import { useIncentiveLinesByPerson } from '@/pages/finance/FreelancerInvoicesPage'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
@@ -72,6 +73,7 @@ export function FinanceDashboardPage() {
 
   const { data: invoices = [], isLoading: invLoading } = useAllInvoices(month === 'all' ? undefined : month)
   const updateStatus = useUpdateInvoiceStatus()
+  const [detailInv, setDetailInv] = useState<FreelancerInvoice | null>(null)
 
   const { data: allIncentives = [], isLoading: incLoading } = useIncentivesByInstallment()
   const { data: allExtras = [], isLoading: extLoading } = useAllExtraInstallments()
@@ -302,7 +304,16 @@ export function FinanceDashboardPage() {
                     <TableCell className="text-sm font-medium">{inv.freelancerName || inv.freelancerEmail || '-'}</TableCell>
                     <TableCell className="text-sm"><Badge variant="outline">{kindLabel(inv.kind)}</Badge></TableCell>
                     <TableCell className="text-sm tabular-nums">{inv.invoiceMonth}</TableCell>
-                    <TableCell className="text-sm text-right font-semibold tabular-nums">{formatCurrency(inv.totalAmount)}</TableCell>
+                    <TableCell className="text-sm text-right font-semibold tabular-nums">
+                      <button
+                        type="button"
+                        onClick={() => setDetailInv(inv)}
+                        className="text-primary hover:underline underline-offset-2 tabular-nums"
+                        title="인보이스 상세 보기"
+                      >
+                        {formatCurrency(inv.totalAmount)}
+                      </button>
+                    </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{inv.invoiceDate}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
@@ -472,7 +483,83 @@ export function FinanceDashboardPage() {
           </div>
         </>
       )}
+
+      <InvoiceDetailDialog invoice={detailInv} onClose={() => setDetailInv(null)} />
     </div>
+  )
+}
+
+// ─── Invoice detail popup (제출된 인보이스 내역) ─────────────────────────────
+function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice | null; onClose: () => void }) {
+  const { data: items = [], isLoading } = useInvoiceItems(invoice?.id)
+  const open = !!invoice
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>인보이스 상세</DialogTitle></DialogHeader>
+        {invoice && (
+          <div className="space-y-4">
+            {/* 헤더 정보 */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">제출자</span><span className="font-medium">{invoice.freelancerName || invoice.freelancerEmail || '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">종류</span><span className="font-medium">{kindLabel(invoice.kind)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">정산월</span><span className="font-medium tabular-nums">{invoice.invoiceMonth}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">제출일</span><span className="font-medium tabular-nums">{invoice.invoiceDate}</span></div>
+              {invoice.bankAccount && <div className="flex justify-between col-span-2"><span className="text-muted-foreground">입금 계좌</span><span className="font-medium">{invoice.bankAccount}</span></div>}
+              {invoice.phone && <div className="flex justify-between"><span className="text-muted-foreground">연락처</span><span className="font-medium">{invoice.phone}</span></div>}
+              {invoice.residentNumber && <div className="flex justify-between"><span className="text-muted-foreground">주민/사업자번호</span><span className="font-medium">{invoice.residentNumber}</span></div>}
+            </div>
+
+            {/* 품목 내역 */}
+            <div>
+              <div className="text-sm font-semibold mb-2">항목 내역</div>
+              {isLoading ? (
+                <div className="py-8 flex justify-center"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>
+              ) : items.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">등록된 항목 내역이 없습니다.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10">No</TableHead>
+                      <TableHead>항목명</TableHead>
+                      <TableHead className="text-right w-16">수량</TableHead>
+                      <TableHead className="text-right w-28">단가</TableHead>
+                      <TableHead className="text-right w-28">공급가</TableHead>
+                      <TableHead className="w-32">비고</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((it, i) => (
+                      <TableRow key={it.id}>
+                        <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+                        <TableCell className="text-sm">{it.itemName || '-'}</TableCell>
+                        <TableCell className="text-sm text-right tabular-nums">{it.quantity}</TableCell>
+                        <TableCell className="text-sm text-right tabular-nums">{formatCurrency(it.unitPrice)}</TableCell>
+                        <TableCell className="text-sm text-right tabular-nums font-medium">{formatCurrency(it.supplyAmount)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{it.remark || ''}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+
+            {/* 합계 & 메모 */}
+            <div className="flex items-center justify-between border-t pt-3">
+              <span className="text-sm font-semibold">합계</span>
+              <span className="text-base font-bold tabular-nums">{formatCurrency(invoice.totalAmount)}</span>
+            </div>
+            {invoice.note && (
+              <div className="rounded-lg bg-muted/40 p-3 text-sm">
+                <div className="text-xs text-muted-foreground mb-1">메모</div>
+                <p className="whitespace-pre-wrap">{invoice.note}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
