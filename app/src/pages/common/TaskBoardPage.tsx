@@ -12,7 +12,7 @@ import {
   Plus, Search, Loader2, AlertTriangle, Clock, CheckCircle2,
   Ban, Send, Calendar, Paperclip, MessageSquare, Pause,
   ChevronDown, ChevronUp, LayoutList, Columns3,
-  ListTodo, Trash2, X, CircleDot, Pencil,
+  ListTodo, Trash2, X, CircleDot, Pencil, FileText,
   FolderKanban, Users, User as UserIcon, Circle, ChevronRight,
 } from 'lucide-react'
 import {
@@ -33,6 +33,7 @@ import {
 import { useTodos, useCreateTodo, useUpdateTodo, useUpdateTodoStatus, useDeleteTodo } from '@/hooks/useTodos'
 import { useProjectComments, useCreateComment, useDeleteComment } from '@/hooks/useProjectComments'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
+import { supabase } from '@/lib/supabase'
 import { useT } from '@/i18n/LanguageContext'
 import type { Task, TaskStatus, TaskPriority, Todo, TodoStatus, TodoPriority, ProjectTeam, User } from '@/types'
 
@@ -210,6 +211,7 @@ function TaskDetailDialog({
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [subtaskAssignee, setSubtaskAssignee] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
@@ -279,16 +281,44 @@ function TaskDetailDialog({
   }, [taskId, deleteTask, onClose])
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!taskId || !user || !e.target.files?.[0]) return
-    const file = e.target.files[0]
-    const fileUrl = URL.createObjectURL(file)
-    addAttachment.mutate({
-      taskId,
-      fileName: file.name,
-      fileUrl,
-      fileSize: file.size,
-      uploadedBy: user.id,
-    })
+    const file = e.target.files?.[0]
+    e.target.value = '' // 같은 파일 재선택 가능하도록 초기화
+    if (!taskId || !user || !file) return
+
+    // 이미지 또는 PDF만 허용
+    const isImage = file.type.startsWith('image/')
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    if (!isImage && !isPdf) {
+      alert('이미지 또는 PDF 파일만 업로드할 수 있습니다.')
+      return
+    }
+    const MAX_SIZE = 10 * 1024 * 1024 // 10MB
+    if (file.size > MAX_SIZE) {
+      alert('파일 크기는 10MB 이하만 가능합니다.')
+      return
+    }
+
+    setUploading(true)
+    try {
+      const ext = file.name.split('.').pop() || 'bin'
+      const path = `${taskId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('task-attachments')
+        .upload(path, file, { contentType: file.type, upsert: false })
+      if (upErr) throw upErr
+      const { data: urlData } = supabase.storage.from('task-attachments').getPublicUrl(path)
+      await addAttachment.mutateAsync({
+        taskId,
+        fileName: file.name,
+        fileUrl: urlData.publicUrl,
+        fileSize: file.size,
+        uploadedBy: user.id,
+      })
+    } catch (err) {
+      alert('업로드 실패: ' + (err instanceof Error ? err.message : '알 수 없는 오류'))
+    } finally {
+      setUploading(false)
+    }
   }, [taskId, user, addAttachment])
 
   if (!open) return null
@@ -461,21 +491,32 @@ function TaskDetailDialog({
                 <Label className="text-xs flex items-center gap-1.5">
                   <Paperclip className="size-3.5" /> {t('tasks.attachments')} ({attachments.length})
                 </Label>
-                <label className="cursor-pointer text-xs text-blue-600 hover:underline">
-                  + {t('tasks.addAttachment')}
-                  <input type="file" className="hidden" onChange={handleFileUpload} />
+                <label className={`text-xs text-blue-600 hover:underline ${uploading ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
+                  {uploading ? <span className="inline-flex items-center gap-1"><Loader2 className="size-3 animate-spin" /> 업로드 중…</span> : `+ ${t('tasks.addAttachment')}`}
+                  <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileUpload} disabled={uploading} />
                 </label>
+                <span className="text-[10px] text-muted-foreground">이미지 · PDF (최대 10MB)</span>
               </div>
               {attachments.length > 0 && (
-                <div className="space-y-1">
-                  {attachments.map(a => (
-                    <div key={a.id} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1.5">
-                      <span className="truncate">{a.fileName}</span>
-                      <Button variant="ghost" size="sm" className="h-5 px-1" onClick={() => deleteAttachment.mutate({ id: a.id, taskId: task.id })}>
-                        <X className="size-3" />
-                      </Button>
-                    </div>
-                  ))}
+                <div className="space-y-1.5">
+                  {attachments.map(a => {
+                    const isImg = /\.(png|jpe?g|gif|webp|bmp|svg|heic)$/i.test(a.fileName)
+                    return (
+                      <div key={a.id} className="flex items-center justify-between gap-2 text-xs bg-muted/50 rounded px-2 py-1.5">
+                        <a href={a.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-w-0 flex-1 hover:underline text-blue-700">
+                          {isImg ? (
+                            <img src={a.fileUrl} alt={a.fileName} className="size-9 rounded object-cover border shrink-0" />
+                          ) : (
+                            <FileText className="size-4 shrink-0 text-rose-500" />
+                          )}
+                          <span className="truncate">{a.fileName}</span>
+                        </a>
+                        <Button variant="ghost" size="sm" className="h-5 px-1 shrink-0" onClick={() => deleteAttachment.mutate({ id: a.id, taskId: task.id })}>
+                          <X className="size-3" />
+                        </Button>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
