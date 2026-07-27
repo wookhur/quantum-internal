@@ -64,6 +64,7 @@ import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
   ServiceReportCategory, ContractDetails,
 } from '@/types'
+import { formatCurrency } from '@/types'
 
 // Consultant pool + helpers (shared with KPI page)
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
@@ -959,13 +960,23 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
     sc1Custom: ecSalesCustomVal(activity?.salesContributor1),
     sc2Select: ecSalesSelectVal(activity?.salesContributor2),
     sc2Custom: ecSalesCustomVal(activity?.salesContributor2),
+    refund: activity?.refundStatus === 'requested' ? 'requested' : 'none',
   })
   const [form, setForm] = useState(buildForm)
   useEffect(() => { if (open) setForm(buildForm()) }, [open])
   const set = (k: keyof typeof form, v: string | null) => setForm(f => ({ ...f, [k]: v ?? '' }))
 
+  // 환불완료는 재무담당자(서비스입금관리)만 처리 — 여기선 읽기전용 표시
+  const isRefundCompleted = activity?.refundStatus === 'completed'
+
   const submit = () => {
     if (!canEdit) return
+    // 환불: 완료 상태면 손대지 않음(재무 담당 영역), 아니면 신청/해제만
+    const refundPatch = isRefundCompleted
+      ? {}
+      : form.refund === 'requested'
+        ? { refundStatus: 'requested' as const }
+        : { refundStatus: null, refundAmount: null, refundDate: null }
     const payload = {
       studentId,
       partner: form.partner || undefined,
@@ -978,7 +989,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
       createdBy,
     }
     if (activity) {
-      update.mutate({ id: activity.id, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
+      update.mutate({ id: activity.id, ...payload, ...refundPatch }, { onSuccess: () => setOpen(false), onError: reportSaveError })
     } else {
       create.mutate(payload, { onSuccess: () => setOpen(false), onError: reportSaveError })
     }
@@ -1040,6 +1051,31 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
             />
             <p className="text-[10px] text-muted-foreground mt-1">세일즈한 서비스 금액. 재무 · 서비스관리에서 수금 처리됩니다.</p>
           </div>
+          {/* 환불 (기존 항목만) */}
+          {activity && (
+            <div>
+              <Label className="text-xs">환불</Label>
+              {isRefundCompleted ? (
+                <div className="mt-1 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  환불완료
+                  {activity.refundAmount != null && <> · <span className="font-mono">{formatCurrency(activity.refundAmount, 'KRW')}</span></>}
+                  {activity.refundDate && <> · {activity.refundDate}</>}
+                  <p className="text-[10px] text-rose-400 mt-0.5">재무 담당자가 환불 처리를 완료했습니다.</p>
+                </div>
+              ) : (
+                <>
+                  <Select value={form.refund} onValueChange={v => set('refund', v || 'none')}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">환불 없음</SelectItem>
+                      <SelectItem value="requested">환불신청</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">환불이 필요하면 &lsquo;환불신청&rsquo;으로 저장하세요. 환불 금액 확인·완료 처리는 재무(서비스입금관리)에서 진행되며, 완료되면 여기에 환불액·완료일이 기록됩니다.</p>
+                </>
+              )}
+            </div>
+          )}
           {/* Sales Contributor 1 */}
           <div>
             <Label className="text-xs">Sales Contributor 1</Label>

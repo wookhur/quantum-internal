@@ -324,22 +324,46 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
     if (!n || n <= 0) return
     save({ refundStatus: 'requested', refundAmount: n, refundDate: dt || null })
   }
+  const submitComplete = () => {
+    const n = Number(amt)
+    if (!n || n <= 0) return
+    save({ refundStatus: 'completed', refundAmount: n, refundDate: dt || todayKST() })
+  }
   const rs = fee.refundStatus
 
   if (rs === 'completed') {
     return (
       <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-        <Badge variant="outline" className="bg-rose-100 text-rose-700 border-rose-200">환불완료</Badge>
+        <Badge variant="outline" className="bg-rose-100 text-rose-700 border-rose-200">
+          환불완료{fee.refundAmount != null ? ` · ${formatCurrency(fee.refundAmount, fee.currency as 'KRW' | 'USD')}` : ''}
+        </Badge>
         <button disabled={saving} onClick={() => { if (confirm('환불 내역을 삭제할까요?')) save({ refundStatus: null, refundAmount: null, refundDate: null }) }} className="text-gray-300 hover:text-gray-500" title="환불 내역 삭제"><X className="size-3" /></button>
       </div>
     )
   }
   if (rs === 'requested') {
+    // Student360(컨설턴트)에서 들어온 환불신청 — 재무가 금액 확인·입력 후 완료 처리
     return (
       <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
         <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200">환불신청</Badge>
-        <Button size="sm" variant="outline" className="h-6 px-2 text-[11px] text-rose-600 border-rose-300 hover:bg-rose-50"
-          disabled={saving} onClick={() => save({ refundStatus: 'completed', refundDate: fee.refundDate || todayKST() })}>완료 처리</Button>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger className="inline-flex h-6 items-center rounded-md border border-rose-300 bg-transparent px-2 text-[11px] font-medium text-rose-600 hover:bg-rose-50">
+            완료 처리
+          </PopoverTrigger>
+          <PopoverContent className="w-60 space-y-2" align="start" onClick={e => e.stopPropagation()}>
+            <div className="text-xs font-medium">환불 완료 처리 · {fee.label}</div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">환불 금액 (실지급액)</label>
+              <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} className="h-8 text-sm" placeholder="0" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">환불 완료일</label>
+              <Input type="date" value={dt} onChange={e => setDt(e.target.value)} className="h-8 text-sm" />
+            </div>
+            <Button size="sm" className="w-full h-8" disabled={saving || !Number(amt)} onClick={submitComplete}>환불완료 처리</Button>
+            <button disabled={saving} onClick={() => { if (confirm('환불신청을 취소(삭제)할까요?')) save({ refundStatus: null, refundAmount: null, refundDate: null }) }} className="w-full text-[11px] text-muted-foreground hover:text-destructive">환불신청 취소</button>
+          </PopoverContent>
+        </Popover>
       </div>
     )
   }
