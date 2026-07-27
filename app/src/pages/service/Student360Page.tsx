@@ -1001,7 +1001,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
     const refundPatch = isRefundCompleted
       ? {}
       : form.refund === 'requested'
-        ? { refundStatus: 'requested' as const }
+        ? { refundStatus: 'requested' as const, refundDate: activity?.refundDate || todayKST() }
         : { refundStatus: null, refundAmount: null, refundDate: null }
     const payload = {
       studentId,
@@ -1286,7 +1286,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }:
     const refundPatch = isRefundCompleted
       ? {}
       : form.refund === 'requested'
-        ? { refundStatus: 'requested' as const }
+        ? { refundStatus: 'requested' as const, refundDate: item?.refundDate || todayKST() }
         : { refundStatus: null, refundAmount: null, refundDate: null }
     const payload = {
       studentId,

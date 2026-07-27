@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Plus, Trash2, Check, Users, Link2, CalendarDays, Pencil, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
@@ -268,7 +269,15 @@ function MemberCard({ name, tasks, date, isSelf, canModify, userId, createdBy, a
                     {t.status === 'done' && <Check className="size-3" />}
                   </button>
                   <span className={`flex-1 ${t.status === 'done' ? 'line-through text-muted-foreground' : ''}`}>{t.title}</span>
-                  {t.sourceType === 'task_request' && <Link2 className="size-3.5 text-blue-400 shrink-0 mt-0.5" aria-label="업무요청 연동" />}
+                  {t.sourceType === 'task_request' && (
+                    t.sourceTaskId ? (
+                      <Link to={`/tasks?open=${t.sourceTaskId}`} onClick={(e) => e.stopPropagation()} className="shrink-0 mt-0.5 text-blue-500 hover:text-blue-700" aria-label="업무요청 카드로 이동" title="업무요청 카드로 이동">
+                        <Link2 className="size-3.5" />
+                      </Link>
+                    ) : (
+                      <Link2 className="size-3.5 text-blue-400 shrink-0 mt-0.5" aria-label="업무요청 연동" />
+                    )
+                  )}
                   {canModify && (
                     <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                       <button onClick={() => startEdit(t)} className="text-gray-400 hover:text-gray-700"><Pencil className="size-3.5" /></button>

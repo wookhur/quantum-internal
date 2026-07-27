@@ -307,7 +307,7 @@ export function ExternalFeesPage() {
   )
 }
 
-// ─── 환불 셀 (표에서 바로 환불신청/환불완료) ─────────────────────────────
+// ─── 환불 셀 (Student360에서 들어온 환불신청만 표시 · 재무는 완료 처리) ────────
 function RefundCell({ fee }: { fee: ServiceProgramFee }) {
   const updateEC = useUpdateECActivity()
   const updateAC = useUpdateAcademicSupport()
@@ -315,15 +315,10 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
   const mut = fee.source === 'ec' ? updateEC : updateAC
   const [open, setOpen] = useState(false)
   const [amt, setAmt] = useState(fee.refundAmount ? String(fee.refundAmount) : (fee.billedAmount ? String(fee.billedAmount) : ''))
-  const [dt, setDt] = useState(fee.refundDate || todayKST())
+  const [dt, setDt] = useState(todayKST())
 
   const save = (patch: { refundStatus: RefundStatus | null; refundAmount?: number | null; refundDate?: string | null }) =>
     mut.mutate({ id: fee.id, studentId: fee.studentId, ...patch }, { onSuccess: () => setOpen(false) })
-  const submitRequest = () => {
-    const n = Number(amt)
-    if (!n || n <= 0) return
-    save({ refundStatus: 'requested', refundAmount: n, refundDate: dt || null })
-  }
   const submitComplete = () => {
     const n = Number(amt)
     if (!n || n <= 0) return
@@ -333,10 +328,11 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
 
   if (rs === 'completed') {
     return (
-      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+      <div className="flex flex-wrap items-center gap-1" onClick={e => e.stopPropagation()}>
         <Badge variant="outline" className="bg-rose-100 text-rose-700 border-rose-200">
           환불완료{fee.refundAmount != null ? ` · ${formatCurrency(fee.refundAmount, fee.currency as 'KRW' | 'USD')}` : ''}
         </Badge>
+        {fee.refundDate && <Badge variant="outline" className="text-rose-500 border-rose-200">완료일 {fee.refundDate}</Badge>}
         <button disabled={saving} onClick={() => { if (confirm('환불 내역을 삭제할까요?')) save({ refundStatus: null, refundAmount: null, refundDate: null }) }} className="text-gray-300 hover:text-gray-500" title="환불 내역 삭제"><X className="size-3" /></button>
       </div>
     )
@@ -344,8 +340,9 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
   if (rs === 'requested') {
     // Student360(컨설턴트)에서 들어온 환불신청 — 재무가 금액 확인·입력 후 완료 처리
     return (
-      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-        <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200">환불신청</Badge>
+      <div className="flex flex-wrap items-center gap-1" onClick={e => e.stopPropagation()}>
+        <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-200">환불신청중</Badge>
+        {fee.refundDate && <Badge variant="outline" className="text-orange-500 border-orange-200">신청일 {fee.refundDate}</Badge>}
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger className="inline-flex h-6 items-center rounded-md border border-rose-300 bg-transparent px-2 text-[11px] font-medium text-rose-600 hover:bg-rose-50">
             완료 처리
@@ -367,27 +364,8 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
       </div>
     )
   }
-  return (
-    <div onClick={e => e.stopPropagation()}>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger className="inline-flex h-6 items-center rounded-md border border-rose-200 bg-transparent px-2 text-[11px] font-medium text-rose-600 hover:bg-rose-50">
-          환불신청
-        </PopoverTrigger>
-        <PopoverContent className="w-60 space-y-2" align="start" onClick={e => e.stopPropagation()}>
-          <div className="text-xs font-medium">환불 신청 · {fee.label}</div>
-          <div className="space-y-1">
-            <label className="text-[11px] text-muted-foreground">환불 금액</label>
-            <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} className="h-8 text-sm" placeholder="0" />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[11px] text-muted-foreground">환불 예정일</label>
-            <Input type="date" value={dt} onChange={e => setDt(e.target.value)} className="h-8 text-sm" />
-          </div>
-          <Button size="sm" className="w-full h-8" disabled={saving || !Number(amt)} onClick={submitRequest}>환불신청</Button>
-        </PopoverContent>
-      </Popover>
-    </div>
-  )
+  // 환불 신청은 Student360(EC/학습지원 수정창)에서만 — 재무는 개시하지 않음
+  return null
 }
 
 // ─── Detail / edit dialog ─────────────────────────────────────────────
@@ -421,9 +399,6 @@ function ProgramFeeDialog({
   const [name2, setName2] = useState(fee.contributor2 || '')
   const [team1, setTeam1] = useState<TeamChoice>(fee.contributor1Team || 'auto')
   const [team2, setTeam2] = useState<TeamChoice>(fee.contributor2Team || 'auto')
-  const [refundStatus, setRefundStatus] = useState<'none' | RefundStatus>(fee.refundStatus || 'none')
-  const [refundAmt, setRefundAmt] = useState(fee.refundAmount ? String(fee.refundAmount) : '')
-  const [refundDt, setRefundDt] = useState(fee.refundDate || '')
 
   const saving = updateEC.isPending || updateAC.isPending
   const billedNum = Number(billed) || 0
@@ -453,9 +428,6 @@ function ProgramFeeDialog({
       salesContributor2: name2.trim() || undefined,
       contributor1Team: team1 === 'auto' ? null : team1,
       contributor2Team: team2 === 'auto' ? null : team2,
-      refundStatus: refundStatus === 'none' ? null : refundStatus,
-      refundAmount: refundStatus === 'none' ? null : (refundAmt ? Number(refundAmt) : null),
-      refundDate: refundStatus === 'none' ? null : (refundDt || null),
     }
     const mut = fee.source === 'ec' ? updateEC : updateAC
     mut.mutate(payload, { onSuccess: onClose })
@@ -504,34 +476,14 @@ function ProgramFeeDialog({
           </div>
         </div>
 
-        {/* 환불 처리 */}
-        <div className="space-y-1 pt-1">
-          <label className="text-xs font-medium text-muted-foreground">환불 처리</label>
-          {isAdmin ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={refundStatus} onValueChange={v => setRefundStatus((v as 'none' | RefundStatus) || 'none')}>
-                <SelectTrigger className="h-8 text-sm w-28"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">환불 없음</SelectItem>
-                  <SelectItem value="requested">환불신청</SelectItem>
-                  <SelectItem value="completed">환불완료</SelectItem>
-                </SelectContent>
-              </Select>
-              {refundStatus !== 'none' && (
-                <>
-                  <Input type="number" value={refundAmt} onChange={e => setRefundAmt(e.target.value)} placeholder="환불 금액" className="h-8 text-sm w-32" />
-                  <Input type="date" value={refundDt} onChange={e => setRefundDt(e.target.value)} className="h-8 text-sm w-40" />
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="text-sm">
-              {fee.refundStatus
-                ? `${fee.refundStatus === 'completed' ? '환불완료' : '환불신청'}${fee.refundAmount ? ` · ${formatCurrency(fee.refundAmount, fee.currency as 'KRW' | 'USD')}` : ''}${fee.refundDate ? ` · ${fee.refundDate}` : ''}`
-                : '환불 없음'}
-            </div>
-          )}
-        </div>
+        {/* 환불 상태 (읽기전용 · 환불신청은 Student360에서, 완료 처리는 표의 배지에서) */}
+        {fee.refundStatus && (
+          <div className={`rounded-md border px-3 py-2 text-xs ${fee.refundStatus === 'completed' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-orange-200 bg-orange-50 text-orange-700'}`}>
+            {fee.refundStatus === 'completed' ? '환불완료' : '환불신청중'}
+            {fee.refundAmount != null && <> · <span className="font-mono">{formatCurrency(fee.refundAmount, fee.currency as 'KRW' | 'USD')}</span></>}
+            {fee.refundDate && <> · {fee.refundStatus === 'completed' ? '완료일' : '신청일'} {fee.refundDate}</>}
+          </div>
+        )}
 
         <div className="rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-700">
           {hasPartnerRate
