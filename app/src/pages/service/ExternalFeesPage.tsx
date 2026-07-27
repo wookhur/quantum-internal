@@ -25,7 +25,7 @@ import { consultantNameKey } from '@/lib/consultants'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import { todayKST } from '@/lib/date'
-import { formatCurrency } from '@/types'
+import { formatCurrency, type RefundStatus } from '@/types'
 
 /** Resolve a contributor name → team from 인사관리 department. */
 type TeamResolver = (name: string | undefined) => ContributorTeam | undefined
@@ -262,11 +262,18 @@ export function ExternalFeesPage() {
                         {f.billedAmount ? formatCurrency(f.billedAmount, f.currency as 'KRW' | 'USD') : '-'}
                       </TableCell>
                       <TableCell>
-                        {isPaid ? (
-                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="size-3" /> {t('svcpay.paid')}</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1"><Clock className="size-3" /> {t('svcpay.unpaid')}</Badge>
-                        )}
+                        <div className="flex flex-wrap items-center gap-1">
+                          {isPaid ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="size-3" /> {t('svcpay.paid')}</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1"><Clock className="size-3" /> {t('svcpay.unpaid')}</Badge>
+                          )}
+                          {f.refundStatus && (
+                            <Badge variant="outline" className={f.refundStatus === 'completed' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-orange-50 text-orange-600 border-orange-200'}>
+                              {f.refundStatus === 'completed' ? '환불완료' : '환불신청'}
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
                         {inc <= 0 ? (
@@ -332,6 +339,9 @@ function ProgramFeeDialog({
   const [name2, setName2] = useState(fee.contributor2 || '')
   const [team1, setTeam1] = useState<TeamChoice>(fee.contributor1Team || 'auto')
   const [team2, setTeam2] = useState<TeamChoice>(fee.contributor2Team || 'auto')
+  const [refundStatus, setRefundStatus] = useState<'none' | RefundStatus>(fee.refundStatus || 'none')
+  const [refundAmt, setRefundAmt] = useState(fee.refundAmount ? String(fee.refundAmount) : '')
+  const [refundDt, setRefundDt] = useState(fee.refundDate || '')
 
   const saving = updateEC.isPending || updateAC.isPending
   const billedNum = Number(billed) || 0
@@ -361,6 +371,9 @@ function ProgramFeeDialog({
       salesContributor2: name2.trim() || undefined,
       contributor1Team: team1 === 'auto' ? null : team1,
       contributor2Team: team2 === 'auto' ? null : team2,
+      refundStatus: refundStatus === 'none' ? null : refundStatus,
+      refundAmount: refundStatus === 'none' ? null : (refundAmt ? Number(refundAmt) : null),
+      refundDate: refundStatus === 'none' ? null : (refundDt || null),
     }
     const mut = fee.source === 'ec' ? updateEC : updateAC
     mut.mutate(payload, { onSuccess: onClose })
@@ -407,6 +420,35 @@ function ProgramFeeDialog({
               </Select>
             ) : <div className="text-sm">{fee.collectionStatus === 'paid' ? t('svcpay.paid') : t('svcpay.unpaid')}</div>}
           </div>
+        </div>
+
+        {/* 환불 처리 */}
+        <div className="space-y-1 pt-1">
+          <label className="text-xs font-medium text-muted-foreground">환불 처리</label>
+          {isAdmin ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={refundStatus} onValueChange={v => setRefundStatus((v as 'none' | RefundStatus) || 'none')}>
+                <SelectTrigger className="h-8 text-sm w-28"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">환불 없음</SelectItem>
+                  <SelectItem value="requested">환불신청</SelectItem>
+                  <SelectItem value="completed">환불완료</SelectItem>
+                </SelectContent>
+              </Select>
+              {refundStatus !== 'none' && (
+                <>
+                  <Input type="number" value={refundAmt} onChange={e => setRefundAmt(e.target.value)} placeholder="환불 금액" className="h-8 text-sm w-32" />
+                  <Input type="date" value={refundDt} onChange={e => setRefundDt(e.target.value)} className="h-8 text-sm w-40" />
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm">
+              {fee.refundStatus
+                ? `${fee.refundStatus === 'completed' ? '환불완료' : '환불신청'}${fee.refundAmount ? ` · ${formatCurrency(fee.refundAmount, fee.currency as 'KRW' | 'USD')}` : ''}${fee.refundDate ? ` · ${fee.refundDate}` : ''}`
+                : '환불 없음'}
+            </div>
+          )}
         </div>
 
         <div className="rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-xs text-purple-700">

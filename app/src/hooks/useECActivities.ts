@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { canonicalPartnerName } from '@/lib/partners'
+import type { RefundStatus } from '@/types'
 
 export interface ECActivity {
   id: string
@@ -20,6 +21,10 @@ export interface ECActivity {
   contributor2Percentage?: number
   contributor1Team?: 'sales' | 'service' | null
   contributor2Team?: 'sales' | 'service' | null
+  // 환불(건별)
+  refundStatus?: RefundStatus | null
+  refundAmount?: number | null
+  refundDate?: string | null
   createdBy?: string
   createdAt: string
   updatedAt: string
@@ -43,6 +48,9 @@ function mapRow(row: Record<string, unknown>): ECActivity {
     contributor2Percentage: row.contributor_2_percentage != null ? Number(row.contributor_2_percentage) : undefined,
     contributor1Team: (row.contributor_1_team as 'sales' | 'service') || undefined,
     contributor2Team: (row.contributor_2_team as 'sales' | 'service') || undefined,
+    refundStatus: (row.refund_status as RefundStatus) || undefined,
+    refundAmount: row.refund_amount != null ? Number(row.refund_amount) : undefined,
+    refundDate: (row.refund_date as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -108,6 +116,9 @@ export function useUpdateECActivity() {
       if (a.contributor2Percentage !== undefined) row.contributor_2_percentage = a.contributor2Percentage ?? null
       if (a.contributor1Team !== undefined) row.contributor_1_team = a.contributor1Team || null
       if (a.contributor2Team !== undefined) row.contributor_2_team = a.contributor2Team || null
+      if (a.refundStatus !== undefined) row.refund_status = a.refundStatus || null
+      if (a.refundAmount !== undefined) row.refund_amount = a.refundAmount ?? null
+      if (a.refundDate !== undefined) row.refund_date = a.refundDate || null
       const { error } = await supabase.from('service_ec_activities').update(row).eq('id', a.id)
       if (error) throw error
     },

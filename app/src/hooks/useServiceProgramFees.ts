@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { canonicalPartnerName } from '@/lib/partners'
+import type { RefundStatus } from '@/types'
 
 /** A Student-360 program (EC activity or academic support) surfaced as an
  *  external service fee item. Contributors come from Student 360; billing and
@@ -25,6 +26,10 @@ export interface ServiceProgramFee {
   contributor2Percentage?: number
   contributor1Team?: 'sales' | 'service'
   contributor2Team?: 'sales' | 'service'
+  // 환불(건별)
+  refundStatus?: RefundStatus
+  refundAmount?: number
+  refundDate?: string
 }
 
 function num(v: unknown): number | undefined {
@@ -72,6 +77,9 @@ export function useAllServiceProgramFees() {
           contributor2Percentage: num(r.contributor_2_percentage),
           contributor1Team: (r.contributor_1_team as 'sales' | 'service') || undefined,
           contributor2Team: (r.contributor_2_team as 'sales' | 'service') || undefined,
+          refundStatus: (r.refund_status as RefundStatus) || undefined,
+          refundAmount: num(r.refund_amount),
+          refundDate: (r.refund_date as string) || undefined,
         })
       }
       for (const r of acRes.data || []) {
@@ -96,6 +104,9 @@ export function useAllServiceProgramFees() {
           contributor2Percentage: num(r.contributor_2_percentage),
           contributor1Team: (r.contributor_1_team as 'sales' | 'service') || undefined,
           contributor2Team: (r.contributor_2_team as 'sales' | 'service') || undefined,
+          refundStatus: (r.refund_status as RefundStatus) || undefined,
+          refundAmount: num(r.refund_amount),
+          refundDate: (r.refund_date as string) || undefined,
         })
       }
       return out
