@@ -229,12 +229,19 @@ export interface PaymentInstallment {
   category: InstallmentCategory
   paymentMethod?: PaymentMethod
   notes?: string
+  // 환불(중도해지 등) — 건별 처리
+  refundStatus?: RefundStatus
+  refundAmount?: number
+  refundDate?: string
   createdAt: string
   updatedAt: string
   // Joined
   contract?: Contract
   revenueShares?: RevenueShare[]
 }
+
+/** 환불 진행 상태: requested=환불신청, completed=환불완료 */
+export type RefundStatus = 'requested' | 'completed'
 
 export interface RevenueShare {
   id: string

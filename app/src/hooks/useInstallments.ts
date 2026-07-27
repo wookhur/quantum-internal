@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { PaymentInstallment, InstallmentStatus, InstallmentCategory } from '@/types'
+import type { PaymentInstallment, InstallmentStatus, InstallmentCategory, RefundStatus } from '@/types'
 
 function mapInstallment(row: Record<string, unknown>): PaymentInstallment {
   const contract = row.contracts as Record<string, unknown> | null
@@ -18,6 +18,9 @@ function mapInstallment(row: Record<string, unknown>): PaymentInstallment {
     category: (row.category as InstallmentCategory) || 'base',
     paymentMethod: row.payment_method as PaymentInstallment['paymentMethod'],
     notes: row.notes as string | undefined,
+    refundStatus: (row.refund_status as RefundStatus) || undefined,
+    refundAmount: (row.refund_amount as number) ?? undefined,
+    refundDate: (row.refund_date as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     contract: contract
@@ -87,6 +90,9 @@ export function useUpdateInstallment() {
       paidDate?: string
       paymentMethod?: string
       notes?: string
+      refundStatus?: RefundStatus | null
+      refundAmount?: number | null
+      refundDate?: string | null
     }) => {
       const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (updates.label !== undefined) row.label = updates.label
@@ -97,6 +103,9 @@ export function useUpdateInstallment() {
       if (updates.paidDate !== undefined) row.paid_date = updates.paidDate || null
       if (updates.paymentMethod !== undefined) row.payment_method = updates.paymentMethod || null
       if (updates.notes !== undefined) row.notes = updates.notes || null
+      if (updates.refundStatus !== undefined) row.refund_status = updates.refundStatus || null
+      if (updates.refundAmount !== undefined) row.refund_amount = updates.refundAmount ?? null
+      if (updates.refundDate !== undefined) row.refund_date = updates.refundDate || null
 
       const { data, error } = await supabase
         .from('payment_installments')

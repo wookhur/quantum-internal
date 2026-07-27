@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText, Star,
+  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText, Star, Undo2,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
@@ -28,6 +28,11 @@ import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
+
+function todayLocalISO() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function usePaymentMethodLabel() {
   const t = useT()
@@ -240,6 +245,28 @@ function InstallmentCard({
   const isPartial = derivedStatus === 'partial'
   const isOverdue = derivedStatus === 'overdue'
 
+  // ── 환불 처리 (건별) ──
+  const updateInst = useUpdateInstallment()
+  const refundStatus = installment.refundStatus
+  const [refundOpen, setRefundOpen] = useState(false)
+  const [refundAmt, setRefundAmt] = useState('')
+  const [refundDt, setRefundDt] = useState('')
+  const openRefund = () => {
+    setRefundAmt(String(installment.refundAmount ?? installment.paidAmount ?? ''))
+    setRefundDt(installment.refundDate || todayLocalISO())
+    setRefundOpen(true)
+  }
+  const submitRefund = () => {
+    const amt = Number(refundAmt.replace(/,/g, ''))
+    if (!amt || amt <= 0) return
+    updateInst.mutate(
+      { id: installment.id, refundStatus: 'requested', refundAmount: amt, refundDate: refundDt || undefined },
+      { onSuccess: () => setRefundOpen(false) },
+    )
+  }
+  const completeRefund = () => updateInst.mutate({ id: installment.id, refundStatus: 'completed', refundDate: installment.refundDate || todayLocalISO() })
+  const clearRefund = () => { if (confirm('환불 처리 내역을 삭제할까요?')) updateInst.mutate({ id: installment.id, refundStatus: null, refundAmount: null, refundDate: null }) }
+
   return (
     <Card className={`${isOverdue ? 'border-red-200 bg-red-50/30' : ''} ${isPaid ? 'border-emerald-200 bg-emerald-50/30' : ''} ${isPartial ? 'border-amber-200 bg-amber-50/30' : ''}`}>
       <CardContent className="py-4">
@@ -254,6 +281,11 @@ function InstallmentCard({
                 <Badge variant="outline" className={`text-[10px] h-4 ${config.className}`}>
                   {config.label}
                 </Badge>
+                {refundStatus && (
+                  <Badge variant="outline" className={`text-[10px] h-4 ${refundStatus === 'completed' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-orange-50 text-orange-600 border-orange-200'}`}>
+                    {refundStatus === 'completed' ? '환불완료' : '환불신청'}
+                  </Badge>
+                )}
               </div>
               <div className="text-lg font-bold mt-0.5 font-mono">
                 {formatCurrency(installment.amount, currency)}
@@ -301,6 +333,25 @@ function InstallmentCard({
                   {isPartial ? t('contracts.payRemaining') : t('contracts.markPaid')}
                 </Button>
               )}
+              {/* 환불 처리 */}
+              {(installment.paidAmount > 0 || refundStatus) && (
+                refundStatus === 'completed' ? (
+                  <Button size="sm" variant="outline" className="gap-1.5 text-rose-700 border-rose-300 bg-rose-50 hover:bg-rose-100"
+                    disabled={updateInst.isPending} onClick={clearRefund} title="환불완료 — 클릭 시 환불 내역 삭제">
+                    <Undo2 className="size-3.5" /> 환불완료
+                  </Button>
+                ) : refundStatus === 'requested' ? (
+                  <Button size="sm" variant="outline" className="gap-1.5 text-rose-600 border-rose-300 hover:bg-rose-50"
+                    disabled={updateInst.isPending} onClick={completeRefund} title="클릭 시 환불완료로 변경">
+                    <Undo2 className="size-3.5" /> 환불완료 처리
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50"
+                    disabled={updateInst.isPending} onClick={openRefund}>
+                    <Undo2 className="size-3.5" /> 환불
+                  </Button>
+                )
+              )}
             </div>
           )}
         </div>
@@ -330,6 +381,13 @@ function InstallmentCard({
             </p>
           </div>
         </div>
+        {refundStatus && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-rose-600">
+            <span>환불액: <span className="font-mono font-medium">{installment.refundAmount ? formatCurrency(installment.refundAmount, currency) : '-'}</span></span>
+            {installment.refundDate && <span>{refundStatus === 'completed' ? '환불일' : '환불예정일'}: <span className="font-mono">{installment.refundDate}</span></span>}
+            <span className="text-muted-foreground">({refundStatus === 'completed' ? '환불완료' : '환불신청'})</span>
+          </div>
+        )}
         {installment.paymentMethod && installment.paidDate && (
           <div className="mt-2 text-xs text-muted-foreground">
             {pmLabel(installment.paymentMethod || '')}
@@ -392,6 +450,30 @@ function InstallmentCard({
             </div>
           </div>
         )}
+
+        {/* 환불 신청 다이얼로그 */}
+        <Dialog open={refundOpen} onOpenChange={(o) => { if (!o) setRefundOpen(false) }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>환불 신청</DialogTitle>
+              <DialogDescription>{installment.label} · 환불 금액과 예정일을 입력하면 &lsquo;환불신청&rsquo; 상태가 됩니다.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs">환불 금액 ({currency})</Label>
+                <Input value={refundAmt} onChange={(e) => setRefundAmt(e.target.value)} inputMode="numeric" placeholder="0" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">환불 예정일</Label>
+                <Input type="date" value={refundDt} onChange={(e) => setRefundDt(e.target.value)} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRefundOpen(false)}>취소</Button>
+              <Button onClick={submitRefund} disabled={updateInst.isPending || !Number(refundAmt.replace(/,/g, ''))}>환불신청</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   )
