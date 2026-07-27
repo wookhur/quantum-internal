@@ -30,6 +30,7 @@ export interface ServiceProgramFee {
   refundStatus?: RefundStatus
   refundAmount?: number
   refundDate?: string
+  refundReason?: string
 }
 
 function num(v: unknown): number | undefined {
@@ -80,6 +81,7 @@ export function useAllServiceProgramFees() {
           refundStatus: (r.refund_status as RefundStatus) || undefined,
           refundAmount: num(r.refund_amount),
           refundDate: (r.refund_date as string) || undefined,
+          refundReason: (r.refund_reason as string) || undefined,
         })
       }
       for (const r of acRes.data || []) {
@@ -107,6 +109,7 @@ export function useAllServiceProgramFees() {
           refundStatus: (r.refund_status as RefundStatus) || undefined,
           refundAmount: num(r.refund_amount),
           refundDate: (r.refund_date as string) || undefined,
+          refundReason: (r.refund_reason as string) || undefined,
         })
       }
       return out

@@ -317,7 +317,7 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
   const [amt, setAmt] = useState(fee.refundAmount ? String(fee.refundAmount) : (fee.billedAmount ? String(fee.billedAmount) : ''))
   const [dt, setDt] = useState(todayKST())
 
-  const save = (patch: { refundStatus: RefundStatus | null; refundAmount?: number | null; refundDate?: string | null }) =>
+  const save = (patch: { refundStatus: RefundStatus | null; refundAmount?: number | null; refundDate?: string | null; refundReason?: string | null }) =>
     mut.mutate({ id: fee.id, studentId: fee.studentId, ...patch }, { onSuccess: () => setOpen(false) })
   const submitComplete = () => {
     const n = Number(amt)
@@ -333,7 +333,7 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
           환불완료{fee.refundAmount != null ? ` · ${formatCurrency(fee.refundAmount, fee.currency as 'KRW' | 'USD')}` : ''}
         </Badge>
         {fee.refundDate && <Badge variant="outline" className="text-rose-500 border-rose-200">완료일 {fee.refundDate}</Badge>}
-        <button disabled={saving} onClick={() => { if (confirm('환불 내역을 삭제할까요?')) save({ refundStatus: null, refundAmount: null, refundDate: null }) }} className="text-gray-300 hover:text-gray-500" title="환불 내역 삭제"><X className="size-3" /></button>
+        <button disabled={saving} onClick={() => { if (confirm('환불 내역을 삭제할까요?')) save({ refundStatus: null, refundAmount: null, refundDate: null, refundReason: null }) }} className="text-gray-300 hover:text-gray-500" title="환불 내역 삭제"><X className="size-3" /></button>
       </div>
     )
   }
@@ -347,8 +347,13 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
           <PopoverTrigger className="inline-flex h-6 items-center rounded-md border border-rose-300 bg-transparent px-2 text-[11px] font-medium text-rose-600 hover:bg-rose-50">
             완료 처리
           </PopoverTrigger>
-          <PopoverContent className="w-60 space-y-2" align="start" onClick={e => e.stopPropagation()}>
+          <PopoverContent className="w-64 space-y-2" align="start" onClick={e => e.stopPropagation()}>
             <div className="text-xs font-medium">환불 완료 처리 · {fee.label}</div>
+            {fee.refundReason && (
+              <div className="rounded-md bg-orange-50 border border-orange-200 px-2 py-1.5 text-[11px] text-orange-700 whitespace-pre-wrap">
+                <span className="font-medium">신청 사유</span><br />{fee.refundReason}
+              </div>
+            )}
             <div className="space-y-1">
               <label className="text-[11px] text-muted-foreground">환불 금액 (실지급액)</label>
               <Input type="number" value={amt} onChange={e => setAmt(e.target.value)} className="h-8 text-sm" placeholder="0" />
@@ -358,7 +363,7 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
               <Input type="date" value={dt} onChange={e => setDt(e.target.value)} className="h-8 text-sm" />
             </div>
             <Button size="sm" className="w-full h-8" disabled={saving || !Number(amt)} onClick={submitComplete}>환불완료 처리</Button>
-            <button disabled={saving} onClick={() => { if (confirm('환불신청을 취소(삭제)할까요?')) save({ refundStatus: null, refundAmount: null, refundDate: null }) }} className="w-full text-[11px] text-muted-foreground hover:text-destructive">환불신청 취소</button>
+            <button disabled={saving} onClick={() => { if (confirm('환불신청을 취소(삭제)할까요?')) save({ refundStatus: null, refundAmount: null, refundDate: null, refundReason: null }) }} className="w-full text-[11px] text-muted-foreground hover:text-destructive">환불신청 취소</button>
           </PopoverContent>
         </Popover>
       </div>
@@ -482,6 +487,7 @@ function ProgramFeeDialog({
             {fee.refundStatus === 'completed' ? '환불완료' : '환불신청중'}
             {fee.refundAmount != null && <> · <span className="font-mono">{formatCurrency(fee.refundAmount, fee.currency as 'KRW' | 'USD')}</span></>}
             {fee.refundDate && <> · {fee.refundStatus === 'completed' ? '완료일' : '신청일'} {fee.refundDate}</>}
+            {fee.refundReason && <div className="mt-1 whitespace-pre-wrap">사유: {fee.refundReason}</div>}
           </div>
         )}
 

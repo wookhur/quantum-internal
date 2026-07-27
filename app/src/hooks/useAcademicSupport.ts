@@ -27,6 +27,7 @@ export interface AcademicSupportItem {
   refundStatus?: RefundStatus | null
   refundAmount?: number | null
   refundDate?: string | null
+  refundReason?: string | null
   createdBy?: string
   createdAt: string
   updatedAt: string
@@ -55,6 +56,7 @@ function mapRow(row: Record<string, unknown>): AcademicSupportItem {
     refundStatus: (row.refund_status as RefundStatus) || undefined,
     refundAmount: row.refund_amount != null ? Number(row.refund_amount) : undefined,
     refundDate: (row.refund_date as string) || undefined,
+    refundReason: (row.refund_reason as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -127,6 +129,7 @@ export function useUpdateAcademicSupport() {
       if (a.refundStatus !== undefined) row.refund_status = a.refundStatus || null
       if (a.refundAmount !== undefined) row.refund_amount = a.refundAmount ?? null
       if (a.refundDate !== undefined) row.refund_date = a.refundDate || null
+      if (a.refundReason !== undefined) row.refund_reason = a.refundReason || null
       const { error } = await supabase.from('service_academic_support').update(row).eq('id', a.id)
       if (error) throw error
     },

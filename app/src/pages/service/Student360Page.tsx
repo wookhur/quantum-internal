@@ -987,6 +987,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
     sc2Select: ecSalesSelectVal(activity?.salesContributor2),
     sc2Custom: ecSalesCustomVal(activity?.salesContributor2),
     refund: activity?.refundStatus === 'requested' ? 'requested' : 'none',
+    refundReason: activity?.refundReason || '',
   })
   const [form, setForm] = useState(buildForm)
   useEffect(() => { if (open) setForm(buildForm()) }, [open])
@@ -1001,8 +1002,8 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
     const refundPatch = isRefundCompleted
       ? {}
       : form.refund === 'requested'
-        ? { refundStatus: 'requested' as const, refundDate: activity?.refundDate || todayKST() }
-        : { refundStatus: null, refundAmount: null, refundDate: null }
+        ? { refundStatus: 'requested' as const, refundDate: activity?.refundDate || todayKST(), refundReason: form.refundReason || null }
+        : { refundStatus: null, refundAmount: null, refundDate: null, refundReason: null }
     const payload = {
       studentId,
       partner: form.partner || undefined,
@@ -1093,18 +1094,30 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
                   환불완료
                   {activity.refundAmount != null && <> · <span className="font-mono">{formatCurrency(activity.refundAmount, 'KRW')}</span></>}
                   {activity.refundDate && <> · {activity.refundDate}</>}
+                  {activity.refundReason && <p className="text-xs text-rose-600 mt-1 whitespace-pre-wrap">사유: {activity.refundReason}</p>}
                   <p className="text-[10px] text-rose-400 mt-0.5">재무 담당자가 환불 처리를 완료했습니다.</p>
                 </div>
               ) : (
                 <>
                   <Select value={form.refund} onValueChange={v => set('refund', v || 'none')}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="mt-1">
+                      <span className="text-left">{form.refund === 'requested' ? '환불신청' : '환불 없음'}</span>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">환불 없음</SelectItem>
                       <SelectItem value="requested">환불신청</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-[10px] text-muted-foreground mt-1">환불이 필요하면 &lsquo;환불신청&rsquo;으로 저장하세요. 환불 금액 확인·완료 처리는 재무(서비스입금관리)에서 진행되며, 완료되면 여기에 환불액·완료일이 기록됩니다.</p>
+                  {form.refund === 'requested' && (
+                    <Textarea
+                      className="mt-2"
+                      placeholder="환불 사유·상황을 적어주세요. (재무담당자가 확인합니다) 예: 학부모 개인사정으로 8월 중도 취소 요청, 잔여 2개월분 환불 예정"
+                      value={form.refundReason}
+                      onChange={e => set('refundReason', e.target.value)}
+                      rows={3}
+                    />
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">&lsquo;환불신청&rsquo;으로 저장하면 재무(서비스입금관리)에 전달됩니다. 금액 확인·완료 처리는 재무에서 진행되며, 완료되면 여기에 환불액·완료일이 기록됩니다.</p>
                 </>
               )}
             </div>
@@ -1270,6 +1283,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }:
     salesContributor1: item?.salesContributor1 || '',
     salesContributor2: item?.salesContributor2 || '',
     refund: item?.refundStatus === 'requested' ? 'requested' : 'none',
+    refundReason: item?.refundReason || '',
   })
   const [form, setForm] = useState(buildForm)
   useEffect(() => { if (open) setForm(buildForm()) }, [open])
@@ -1286,8 +1300,8 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }:
     const refundPatch = isRefundCompleted
       ? {}
       : form.refund === 'requested'
-        ? { refundStatus: 'requested' as const, refundDate: item?.refundDate || todayKST() }
-        : { refundStatus: null, refundAmount: null, refundDate: null }
+        ? { refundStatus: 'requested' as const, refundDate: item?.refundDate || todayKST(), refundReason: form.refundReason || null }
+        : { refundStatus: null, refundAmount: null, refundDate: null, refundReason: null }
     const payload = {
       studentId,
       academyName: resolvedAcademy,
@@ -1372,18 +1386,30 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }:
                   환불완료
                   {item.refundAmount != null && <> · <span className="font-mono">{formatCurrency(item.refundAmount, 'KRW')}</span></>}
                   {item.refundDate && <> · {item.refundDate}</>}
+                  {item.refundReason && <p className="text-xs text-rose-600 mt-1 whitespace-pre-wrap">사유: {item.refundReason}</p>}
                   <p className="text-[10px] text-rose-400 mt-0.5">재무 담당자가 환불 처리를 완료했습니다.</p>
                 </div>
               ) : (
                 <>
                   <Select value={form.refund} onValueChange={v => set('refund', v || 'none')}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="mt-1">
+                      <span className="text-left">{form.refund === 'requested' ? '환불신청' : '환불 없음'}</span>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">환불 없음</SelectItem>
                       <SelectItem value="requested">환불신청</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-[10px] text-muted-foreground mt-1">환불이 필요하면 &lsquo;환불신청&rsquo;으로 저장하세요. 환불 금액 확인·완료 처리는 재무(서비스입금관리)에서 진행되며, 완료되면 여기에 환불액·완료일이 기록됩니다.</p>
+                  {form.refund === 'requested' && (
+                    <Textarea
+                      className="mt-2"
+                      placeholder="환불 사유·상황을 적어주세요. (재무담당자가 확인합니다) 예: 학부모 개인사정으로 8월 중도 취소 요청, 잔여분 환불 예정"
+                      value={form.refundReason}
+                      onChange={e => set('refundReason', e.target.value)}
+                      rows={3}
+                    />
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">&lsquo;환불신청&rsquo;으로 저장하면 재무(서비스입금관리)에 전달됩니다. 금액 확인·완료 처리는 재무에서 진행되며, 완료되면 여기에 환불액·완료일이 기록됩니다.</p>
                 </>
               )}
             </div>
