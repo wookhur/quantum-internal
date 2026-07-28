@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, CreditCard, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText, Star, Undo2,
+  UserCircle, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText, Star,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
@@ -211,7 +211,6 @@ function InstallmentCard({
   currency,
   canEdit,
   onMarkPaid,
-  onRevertPaid,
   onEdit,
   onDelete,
   revenueShares,
@@ -275,7 +274,39 @@ function InstallmentCard({
     { id: installment.id, refundStatus: 'completed', refundDate: completeDt || todayLocalISO() },
     { onSuccess: () => setCompleteOpen(false) },
   )
-  const clearRefund = () => { if (confirm('환불 처리 내역을 삭제할까요?')) updateInst.mutate({ id: installment.id, refundStatus: null, refundAmount: null, refundDate: null, refundAccount: null, refundReason: null }) }
+  const clearRefund = () => updateInst.mutate({ id: installment.id, refundStatus: null, refundAmount: null, refundDate: null, refundAccount: null, refundReason: null })
+
+  // ── 상태 드롭다운: 입금예정 / 수금완료 / 환불신청 / 환불완료 ──
+  const stateValue: 'pending' | 'paid' | 'refund_requested' | 'refund_completed' =
+    refundStatus === 'completed' ? 'refund_completed'
+    : refundStatus === 'requested' ? 'refund_requested'
+    : isPaid ? 'paid'
+    : 'pending'
+  const STATE_LABEL: Record<typeof stateValue, string> = {
+    pending: '입금예정', paid: '수금완료', refund_requested: '환불신청', refund_completed: '환불완료',
+  }
+  const revertToPending = () => updateInst.mutate({
+    id: installment.id,
+    paidAmount: 0, paidDate: '', status: 'pending', paymentMethod: '',
+    refundStatus: null, refundAmount: null, refundDate: null, refundAccount: null, refundReason: null,
+  }, {
+    onSuccess: async () => {
+      await supabase.from('invoices_receipts').delete().eq('installment_id', installment.id).eq('type', 'receipt')
+    },
+  })
+  const handleStateChange = (v: string | null) => {
+    if (!v || v === stateValue) return
+    if (v === 'pending') {
+      if (confirm('이 항목의 수금·환불 내역을 초기화하고 입금예정으로 되돌릴까요?')) revertToPending()
+    } else if (v === 'paid') {
+      if (refundStatus) { if (confirm('환불 내역을 취소하고 수금완료로 되돌릴까요?')) clearRefund() }
+      else onMarkPaid(installment)
+    } else if (v === 'refund_requested') {
+      openRefund()
+    } else if (v === 'refund_completed') {
+      openComplete()
+    }
+  }
 
   return (
     <Card className={`${isOverdue ? 'border-red-200 bg-red-50/30' : ''} ${isPaid ? 'border-emerald-200 bg-emerald-50/30' : ''} ${isPartial ? 'border-amber-200 bg-amber-50/30' : ''}`}>
@@ -288,12 +319,9 @@ function InstallmentCard({
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm">{installment.label}</span>
-                <Badge variant="outline" className={`text-[10px] h-4 ${config.className}`}>
-                  {config.label}
-                </Badge>
-                {refundStatus && (
-                  <Badge variant="outline" className={`text-[10px] h-4 ${refundStatus === 'completed' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-orange-50 text-orange-600 border-orange-200'}`}>
-                    {refundStatus === 'completed' ? '환불완료' : '환불신청'}
+                {(isPartial || isOverdue) && (
+                  <Badge variant="outline" className={`text-[10px] h-4 ${config.className}`}>
+                    {config.label}
                   </Badge>
                 )}
               </div>
@@ -304,65 +332,39 @@ function InstallmentCard({
           </div>
 
           {canEdit && (
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="gap-1 text-muted-foreground hover:text-foreground"
-                onClick={() => onEdit(installment)}
-              >
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" onClick={() => onEdit(installment)}>
                 <Pencil className="size-3.5" />
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="gap-1 text-muted-foreground hover:text-destructive"
-                onClick={() => onDelete(installment)}
-              >
+              <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => onDelete(installment)}>
                 <Trash2 className="size-3.5" />
               </Button>
-              {(isPaid || isPartial) && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-amber-600 border-amber-300 hover:bg-amber-50"
-                  onClick={() => onRevertPaid(installment)}
-                >
-                  <AlertTriangle className="size-3.5" />
-                  {t('contracts.revertPaid')}
-                </Button>
-              )}
-              {!isPaid && (
-                <Button
-                  size="sm"
-                  variant={isOverdue ? 'destructive' : 'outline'}
-                  className="gap-1.5"
-                  onClick={() => onMarkPaid(installment)}
-                >
-                  <CreditCard className="size-3.5" />
-                  {isPartial ? t('contracts.payRemaining') : t('contracts.markPaid')}
-                </Button>
-              )}
-              {/* 환불 처리 */}
-              {(installment.paidAmount > 0 || refundStatus) && (
-                refundStatus === 'completed' ? (
-                  <Button size="sm" variant="outline" className="gap-1.5 text-rose-700 border-rose-300 bg-rose-50 hover:bg-rose-100"
-                    disabled={updateInst.isPending} onClick={clearRefund} title="환불완료 — 클릭 시 환불 내역 삭제">
-                    <Undo2 className="size-3.5" /> 환불완료
-                  </Button>
-                ) : refundStatus === 'requested' ? (
-                  <Button size="sm" variant="outline" className="gap-1.5 text-rose-600 border-rose-300 hover:bg-rose-50"
-                    disabled={updateInst.isPending} onClick={openComplete} title="환불 완료일 입력 후 완료 처리">
-                    <Undo2 className="size-3.5" /> 환불완료 처리
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline" className="gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50"
-                    disabled={updateInst.isPending} onClick={openRefund}>
-                    <Undo2 className="size-3.5" /> 환불신청
-                  </Button>
-                )
-              )}
+              {/* 상태 드롭다운: 입금예정 / 수금완료 / 환불신청 / 환불완료 */}
+              <Select value={stateValue} onValueChange={handleStateChange}>
+                <SelectTrigger className={`h-8 w-[124px] text-xs font-medium ${
+                  stateValue === 'paid' ? 'text-emerald-700 border-emerald-300'
+                  : stateValue === 'refund_requested' ? 'text-orange-700 border-orange-300'
+                  : stateValue === 'refund_completed' ? 'text-rose-700 border-rose-300'
+                  : isOverdue ? 'text-red-600 border-red-300' : ''}`}>
+                  <span>{STATE_LABEL[stateValue]}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">입금예정</SelectItem>
+                  <SelectItem value="paid">수금완료</SelectItem>
+                  <SelectItem value="refund_requested">환불신청</SelectItem>
+                  <SelectItem value="refund_completed">환불완료</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+          )}
+          {!canEdit && (
+            <Badge variant="outline" className={`text-[11px] h-5 ${
+              stateValue === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : stateValue === 'refund_requested' ? 'bg-orange-50 text-orange-700 border-orange-200'
+              : stateValue === 'refund_completed' ? 'bg-rose-50 text-rose-700 border-rose-200'
+              : isOverdue ? 'bg-red-50 text-red-600 border-red-200' : ''}`}>
+              {STATE_LABEL[stateValue]}
+            </Badge>
           )}
         </div>
 
