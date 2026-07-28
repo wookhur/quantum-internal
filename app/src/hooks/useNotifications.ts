@@ -75,22 +75,7 @@ export function useAppNotifications() {
     },
   })
 
-  // --- Today's meetings ---
-  const { data: todayMeetings = [] } = useQuery({
-    queryKey: ['notifications-today-meetings'],
-    enabled: !!user?.id,
-    refetchInterval: 5 * 60 * 1000,
-    queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10)
-      const { data, error } = await supabase
-        .from('meetings')
-        .select('id, parent_name, meeting_date')
-        .eq('meeting_date', today)
-        .limit(10)
-      if (error) return []
-      return data || []
-    },
-  })
+  // (오늘 미팅 알림 제거: 관련 조회도 삭제)
 
   // --- Service meetings with missing reports (last 24h) ---
   const { data: missingReportMeetings = [] } = useQuery({
@@ -206,15 +191,7 @@ export function useAppNotifications() {
       })
     }
 
-    // Today's meetings
-    if (!disabledTypes.includes('today_meeting') && todayMeetings.length > 0) {
-      items.push({
-        id: 'today-meetings', type: 'today_meeting',
-        title: t('notif.a.today_meeting.title'),
-        message: t('notif.a.today_meeting.body', { count: todayMeetings.length }),
-        severity: 'info', link: '/calendar', createdAt: now,
-      })
-    }
+    // (오늘 미팅 알림은 전사적으로 사용하지 않아 제거됨)
 
     // Missing service meeting reports (last 24h)
     if (!disabledTypes.includes('missing_report') && missingReportMeetings.length > 0) {
@@ -271,7 +248,7 @@ export function useAppNotifications() {
     }
 
     return items
-  }, [neglectedLeads, overduePayments, todayMeetings, missingReportMeetings, myOpenTasks, upcomingBirthdays, canSeeBirthdayAlerts, disabledTypes, t])
+  }, [neglectedLeads, overduePayments, missingReportMeetings, myOpenTasks, upcomingBirthdays, canSeeBirthdayAlerts, disabledTypes, t])
 
   return notifications
 }
@@ -280,7 +257,6 @@ export function useAppNotifications() {
 export const NOTIFICATION_TYPES = [
   { key: 'neglected_lead', label: '방치 리드 경고', labelEn: 'Neglected Lead Warning' },
   { key: 'overdue_payment', label: '미수금 알림', labelEn: 'Overdue Payment Alert' },
-  { key: 'today_meeting', label: '오늘 미팅 알림', labelEn: 'Today\'s Meeting Alert' },
   { key: 'new_message', label: '새 메시지 알림', labelEn: 'New Message Alert' },
   { key: 'missing_report', label: '미팅일지 미제출 알림', labelEn: 'Missing Meeting Report Alert' },
   { key: 'new_contract', label: '새 계약 등록 알림', labelEn: 'New Contract Alert' },
