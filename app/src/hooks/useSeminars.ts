@@ -63,6 +63,16 @@ export interface SeminarRegistration {
   school: string | null
   interest: string | null
   memo: string | null
+  /** 국내/해외 거주 구분: 'domestic' | 'overseas' */
+  residenceType: string | null
+  /** 전화 분리 저장 */
+  countryCode: string | null   // 국가번호 (+82, +1 …)
+  areaCode: string | null      // 지역번호 (010, 778 …)
+  phoneNumber: string | null   // 나머지 번호
+  country: string | null       // 거주 국가
+  regionGeo: string | null     // 거주 지역 (Geographic Location)
+  source: string | null        // 세미나를 알게되신 경로
+  applicantCount: number | null // 신청 인원
   /** Session labels the registrant selected. Empty for legacy single-date seminars. */
   sessionLabels: string[]
   /** Whether the registrant actually attended. */
@@ -108,6 +118,14 @@ function mapRegistration(r: Record<string, unknown>): SeminarRegistration {
     school: r.school as string | null,
     interest: r.interest as string | null,
     memo: r.memo as string | null,
+    residenceType: (r.residence_type as string | null) ?? null,
+    countryCode: (r.country_code as string | null) ?? null,
+    areaCode: (r.area_code as string | null) ?? null,
+    phoneNumber: (r.phone_number as string | null) ?? null,
+    country: (r.country as string | null) ?? null,
+    regionGeo: (r.region_geo as string | null) ?? null,
+    source: (r.source as string | null) ?? null,
+    applicantCount: (r.applicant_count as number | null) ?? null,
     sessionLabels: Array.isArray(r.session_labels) ? (r.session_labels as string[]) : [],
     attended: !!r.attended,
     createdAt: r.created_at as string,
@@ -241,6 +259,14 @@ export function useSubmitRegistration() {
       school?: string | null
       interest?: string | null
       memo?: string | null
+      residenceType?: string | null
+      countryCode?: string | null
+      areaCode?: string | null
+      phoneNumber?: string | null
+      country?: string | null
+      regionGeo?: string | null
+      source?: string | null
+      applicantCount?: number | null
       sessionLabels?: string[]
     }) => {
       const { error } = await supabase.from('seminar_registrations').insert({
@@ -253,6 +279,14 @@ export function useSubmitRegistration() {
         school: params.school ?? null,
         interest: params.interest ?? null,
         memo: params.memo ?? null,
+        residence_type: params.residenceType ?? null,
+        country_code: params.countryCode ?? null,
+        area_code: params.areaCode ?? null,
+        phone_number: params.phoneNumber ?? null,
+        country: params.country ?? null,
+        region_geo: params.regionGeo ?? null,
+        source: params.source ?? null,
+        applicant_count: params.applicantCount ?? null,
         session_labels: params.sessionLabels ?? [],
       })
       if (error) throw error

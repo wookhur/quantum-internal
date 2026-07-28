@@ -53,6 +53,7 @@ import {
   type SeminarSession,
   type ImportRegistrationRow,
 } from '@/hooks/useSeminars'
+import { resolveByPhoneDetailed } from '@/lib/leadLocation'
 import { useAllLeadAttendance } from '@/hooks/useLeadAttendance'
 import { useLeads } from '@/hooks/useLeads'
 import { normalizePhone, normalizeEmail, normalizeName, useSeminarsWithRegistrations } from '@/hooks/useSeminarPerformance'
@@ -431,19 +432,40 @@ function RegistrationsPanel({ seminar, canEdit }: { seminar: Seminar; canEdit: b
   }, [regs, seminar.sessions, hasSessions])
 
   const exportCsv = () => {
-    const headers = ['신청일', '학부모', '연락처', '이메일', '학생', '학년', '학교', '관심사항', '메모', '신청 세션']
-    const rows = filteredRegs.map(r => [
-      new Date(r.createdAt).toLocaleDateString('ko-KR'),
-      r.parentName,
-      r.phone,
-      r.email || '',
-      r.studentName,
-      r.grade || '',
-      r.school || '',
-      r.interest || '',
-      r.memo || '',
-      r.sessionLabels.join(' / '),
-    ])
+    // 리드 관리 스프레드시트 컬럼 순서에 정확히 맞춘 헤더 (내부용 컬럼은 빈칸으로 자리 유지, 맨 끝에 희망 회차)
+    const headers = [
+      'Timestamp', '부모님 성함 (Parent Name)', '학생 이름 (Student Name)', '이메일 (Email)',
+      '국가번호', '지역번호', '전화번호', '국가', '지역 (전화번호 기준)',
+      '재학 중인 학교 (Current School)', '학년 (Grade/Year)', '지역 (Geographic Location)',
+      '세미나를 알게되신 경로', '신청인원', '참석인원', '참석확인', '통화내용',
+      '1:1 상담 유도완료', '상담 관련 메모', '계약완료', '컨펌', 'highly expected', '가능성 낮음',
+      '세미나후 통화완료/시도', '기타 메모', '희망 회차',
+    ]
+    const rows = filteredRegs.map(r => {
+      const hasParts = !!(r.countryCode || r.areaCode || r.phoneNumber)
+      const cc = hasParts ? (r.countryCode || '') : ''
+      const ac = hasParts ? (r.areaCode || '') : ''
+      const num = hasParts ? (r.phoneNumber || '') : (r.phone || '')
+      const phoneForResolve = hasParts ? [r.countryCode, r.areaCode, r.phoneNumber].filter(Boolean).join(' ') : r.phone
+      const region = resolveByPhoneDetailed(phoneForResolve)?.city || ''
+      return [
+        new Date(r.createdAt).toLocaleString('ko-KR'),        // Timestamp
+        r.parentName,                                         // 부모님 성함
+        r.studentName,                                        // 학생 이름
+        r.email || '',                                        // 이메일
+        cc, ac, num,                                          // 국가번호 / 지역번호 / 전화번호
+        r.country || '',                                      // 국가
+        region,                                               // 지역 (전화번호 기준) — 자동 추정
+        r.school || '',                                       // 재학 중인 학교
+        r.grade || '',                                        // 학년
+        r.regionGeo || '',                                    // 지역 (Geographic Location)
+        r.source || '',                                       // 세미나를 알게되신 경로
+        r.applicantCount != null ? String(r.applicantCount) : '', // 신청인원
+        '', '', '', '', '', '', '', '', '', '',                // 참석인원~세미나후 통화 (내부용, 빈칸)
+        r.memo || '',                                         // 기타 메모
+        r.sessionLabels.join(' / '),                          // 희망 회차
+      ]
+    })
     const bom = '﻿'
     const csv = bom + [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })

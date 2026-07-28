@@ -25,6 +25,19 @@ const GRADES = Array.from({ length: 12 }, (_, i) => `G${i + 1}`)
 const YEARS = Array.from({ length: 12 }, (_, i) => `Y${i + 1}`)
 const GRADE_OPTIONS = [...GRADES, ...YEARS]
 
+const SOURCE_OPTIONS = [
+  '인스타그램', '네이버 블로그/카페', '카카오톡 채널', '지인 소개',
+  '구글/네이버 검색', '유튜브', '문자/DM', '기타',
+]
+
+/** 국내 휴대폰: 숫자만 남기고 010-0000-0000 형식으로 하이픈 삽입 */
+function formatDomesticPhone(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 11)
+  if (d.length > 7) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`
+  if (d.length > 3) return `${d.slice(0, 3)}-${d.slice(3)}`
+  return d
+}
+
 export function SeminarRegisterPage() {
   const { id } = useParams<{ id: string }>()
   const { data: seminar, isLoading, error } = useSeminarById(id)
@@ -33,43 +46,64 @@ export function SeminarRegisterPage() {
 
   const [form, setForm] = useState({
     parentName: '',
-    phone: '',
     email: '',
     studentName: '',
     grade: '',
     school: '',
-    interest: '',
+    regionGeo: '',
+    source: '',
     memo: '',
+    applicantCount: '2',
+    residence: 'domestic' as 'domestic' | 'overseas',
+    domPhone: '',
+    overCC: '',
+    overAC: '',
+    overNum: '',
+    overCountry: '',
   })
-  const [pickedSessions, setPickedSessions] = useState<Set<string>>(new Set())
+  const [pickedSession, setPickedSession] = useState<string>('')
+  const set = (patch: Partial<typeof form>) => setForm(f => ({ ...f, ...patch }))
 
   const hasSessions = !!seminar && seminar.sessions.length > 0
-  const needsSessionPick = hasSessions && pickedSessions.size === 0
-
-  const toggleSession = (label: string) => {
-    setPickedSessions(prev => {
-      const next = new Set(prev)
-      if (next.has(label)) next.delete(label)
-      else next.add(label)
-      return next
-    })
-  }
+  const isDom = form.residence === 'domestic'
+  const domDigits = form.domPhone.replace(/\D/g, '')
+  const phoneOk = isDom
+    ? domDigits.length === 11 && domDigits.startsWith('010')
+    : !!form.overCC.trim() && !!form.overNum.trim()
+  const canSubmit =
+    !!form.parentName.trim() && !!form.studentName.trim() && !!form.email.trim() &&
+    !!form.grade && phoneOk && (!hasSessions || !!pickedSession)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!id || !form.parentName.trim() || !form.phone.trim() || !form.studentName.trim()) return
-    if (needsSessionPick) return
+    if (!id || !canSubmit) return
+
+    const countryCode = isDom ? '+82' : form.overCC.trim()
+    const areaCode = isDom ? '010' : form.overAC.trim()
+    const phoneNumber = isDom ? domDigits.slice(3) : form.overNum.replace(/[^\d]/g, '')
+    const country = isDom ? '대한민국' : (form.overCountry.trim() || null)
+    const combinedPhone = isDom
+      ? formatDomesticPhone(form.domPhone)
+      : [form.overCC.trim(), form.overAC.trim(), form.overNum.trim()].filter(Boolean).join(' ')
+
     await submitMut.mutateAsync({
       seminarId: id,
       parentName: form.parentName.trim(),
-      phone: form.phone.trim(),
+      phone: combinedPhone,
       email: form.email.trim() || null,
       studentName: form.studentName.trim(),
       grade: form.grade || null,
       school: form.school.trim() || null,
-      interest: form.interest.trim() || null,
       memo: form.memo.trim() || null,
-      sessionLabels: Array.from(pickedSessions),
+      residenceType: form.residence,
+      countryCode,
+      areaCode: areaCode || null,
+      phoneNumber,
+      country,
+      regionGeo: form.regionGeo.trim() || null,
+      source: form.source || null,
+      applicantCount: form.applicantCount ? Number(form.applicantCount) : null,
+      sessionLabels: pickedSession ? [pickedSession] : [],
     })
     if (typeof window !== 'undefined' && window.fbq) {
       window.fbq('track', 'CompleteRegistration', {
@@ -114,7 +148,6 @@ export function SeminarRegisterPage() {
   }
 
   if (submitted) {
-    const picked = Array.from(pickedSessions)
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
@@ -125,12 +158,10 @@ export function SeminarRegisterPage() {
               <p className="text-sm text-gray-500 mt-2">
                 {seminar.title} 세미나 신청이 접수되었습니다.
               </p>
-              {picked.length > 0 && (
-                <div className="mt-3 mx-auto max-w-xs text-left bg-gray-50 rounded-md border p-3 space-y-1">
-                  <p className="text-xs font-semibold text-gray-600">신청하신 세션</p>
-                  {picked.map(l => (
-                    <p key={l} className="text-sm text-gray-800 leading-snug">· {l}</p>
-                  ))}
+              {pickedSession && (
+                <div className="mt-3 mx-auto max-w-xs text-left bg-gray-50 rounded-md border p-3">
+                  <p className="text-xs font-semibold text-gray-600">신청하신 회차</p>
+                  <p className="text-sm text-gray-800 leading-snug mt-0.5">· {pickedSession}</p>
                 </div>
               )}
               <p className="text-sm text-gray-500 mt-3">확인 연락을 드리겠습니다. 감사합니다.</p>
@@ -175,16 +206,15 @@ export function SeminarRegisterPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Session picker — only when the seminar defines a schedule */}
+              {/* 희망 회차 — 단일 선택 */}
               {hasSessions && (
                 <div className="space-y-3">
                   <p className="text-sm font-medium text-gray-700 border-b pb-1">
-                    신청하시는 세션 일정 <span className="text-red-500">*</span>
-                    <span className="text-xs text-gray-400 font-normal ml-1">(중복 선택 가능)</span>
+                    희망 회차 <span className="text-red-500">*</span>
                   </p>
                   <div className="space-y-2">
                     {seminar.sessions.map((s: SeminarSession, idx: number) => {
-                      const checked = pickedSessions.has(s.label)
+                      const checked = pickedSession === s.label
                       return (
                         <label
                           key={`${s.label}-${idx}`}
@@ -193,10 +223,11 @@ export function SeminarRegisterPage() {
                           }`}
                         >
                           <input
-                            type="checkbox"
+                            type="radio"
+                            name="session"
                             className="mt-0.5 size-4 accent-indigo-600"
                             checked={checked}
-                            onChange={() => toggleSession(s.label)}
+                            onChange={() => setPickedSession(s.label)}
                           />
                           <span className="text-sm text-gray-800 leading-snug">{s.label}</span>
                         </label>
@@ -206,105 +237,129 @@ export function SeminarRegisterPage() {
                 </div>
               )}
 
-              {/* Parent info */}
+              {/* 학부모 정보 */}
               <div className="space-y-3">
                 <p className="text-sm font-medium text-gray-700 border-b pb-1">학부모 정보</p>
                 <div>
-                  <Label>이름 *</Label>
-                  <Input
-                    value={form.parentName}
-                    onChange={e => setForm({ ...form, parentName: e.target.value })}
-                    placeholder="홍길동"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label>연락처 *</Label>
-                  <Input
-                    value={form.phone}
-                    onChange={e => setForm({ ...form, phone: e.target.value })}
-                    placeholder="010-1234-5678"
-                    required
-                  />
+                  <Label>부모님 성함 *</Label>
+                  <Input value={form.parentName} onChange={e => set({ parentName: e.target.value })} placeholder="홍길동" required />
                 </div>
                 <div>
                   <Label>이메일 *</Label>
-                  <Input
-                    value={form.email}
-                    onChange={e => setForm({ ...form, email: e.target.value })}
-                    placeholder="email@example.com"
-                    type="email"
-                    required
-                  />
+                  <Input value={form.email} onChange={e => set({ email: e.target.value })} placeholder="email@example.com" type="email" required />
                 </div>
               </div>
 
-              {/* Student info */}
+              {/* 학생 정보 */}
               <div className="space-y-3">
-                <p className="text-sm font-medium text-gray-700 border-b pb-1">자녀 정보</p>
+                <p className="text-sm font-medium text-gray-700 border-b pb-1">학생 정보</p>
                 <div>
                   <Label>학생 이름 *</Label>
-                  <Input
-                    value={form.studentName}
-                    onChange={e => setForm({ ...form, studentName: e.target.value })}
-                    placeholder="홍길순"
-                    required
-                  />
+                  <Input value={form.studentName} onChange={e => set({ studentName: e.target.value })} placeholder="홍길순" required />
                 </div>
                 <div>
-                  <Label>학년</Label>
-                  <Select value={form.grade} onValueChange={v => setForm({ ...form, grade: v ?? '' })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="학년 선택" />
-                    </SelectTrigger>
+                  <Label>학년 *</Label>
+                  <Select value={form.grade} onValueChange={v => set({ grade: v ?? '' })}>
+                    <SelectTrigger><SelectValue placeholder="학년 선택" /></SelectTrigger>
                     <SelectContent>
-                      {GRADE_OPTIONS.map(g => (
-                        <SelectItem key={g} value={g}>{g}</SelectItem>
-                      ))}
+                      {GRADE_OPTIONS.map(g => (<SelectItem key={g} value={g}>{g}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <Label>학교</Label>
-                  <Input
-                    value={form.school}
-                    onChange={e => setForm({ ...form, school: e.target.value })}
-                    placeholder="OO고등학교"
-                  />
+                  <Label>재학 중인 학교</Label>
+                  <Input value={form.school} onChange={e => set({ school: e.target.value })} placeholder="OO고등학교" />
+                </div>
+              </div>
+
+              {/* 연락처 (국내/해외) */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-gray-700 border-b pb-1">연락처</p>
+                <div>
+                  <Label>거주 구분 *</Label>
+                  <div className="flex gap-2 mt-1">
+                    {([['domestic', '🇰🇷 국내거주'], ['overseas', '🌏 해외거주']] as const).map(([v, label]) => (
+                      <label
+                        key={v}
+                        className={`flex-1 flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 cursor-pointer text-sm transition ${
+                          form.residence === v ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input type="radio" name="residence" className="size-4 accent-indigo-600" checked={form.residence === v} onChange={() => set({ residence: v })} />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {isDom ? (
+                  <div>
+                    <Label>휴대폰 번호 *</Label>
+                    <Input
+                      value={form.domPhone}
+                      onChange={e => set({ domPhone: formatDomesticPhone(e.target.value) })}
+                      placeholder="010-0000-0000"
+                      inputMode="numeric"
+                      maxLength={13}
+                      required
+                    />
+                    <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 010-0000-0000 형식으로 자동 정리됩니다.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <div className="w-20">
+                        <Label>국가번호 *</Label>
+                        <Input value={form.overCC} onChange={e => set({ overCC: e.target.value })} placeholder="+1" />
+                      </div>
+                      <div className="w-24">
+                        <Label>지역번호</Label>
+                        <Input value={form.overAC} onChange={e => set({ overAC: e.target.value })} placeholder="778" />
+                      </div>
+                      <div className="flex-1">
+                        <Label>전화번호 *</Label>
+                        <Input value={form.overNum} onChange={e => set({ overNum: e.target.value })} placeholder="3453383" />
+                      </div>
+                    </div>
+                    <div>
+                      <Label>거주 국가</Label>
+                      <Input value={form.overCountry} onChange={e => set({ overCountry: e.target.value })} placeholder="미국 / 캐나다 등" />
+                    </div>
+                  </>
+                )}
+                <div>
+                  <Label>거주 지역 (도시)</Label>
+                  <Input value={form.regionGeo} onChange={e => set({ regionGeo: e.target.value })} placeholder="예: 서울 강남 / Vancouver" />
+                </div>
+              </div>
+
+              {/* 추가 정보 */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-gray-700 border-b pb-1">추가 정보</p>
+                <div>
+                  <Label>세미나를 알게되신 경로</Label>
+                  <Select value={form.source} onValueChange={v => set({ source: v ?? '' })}>
+                    <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+                    <SelectContent>
+                      {SOURCE_OPTIONS.map(o => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
-                  <Label>관심 프로그램 / 사항</Label>
-                  <Input
-                    value={form.interest}
-                    onChange={e => setForm({ ...form, interest: e.target.value })}
-                    placeholder="미국 대학 입시, SAT 등"
-                  />
+                  <Label>신청 인원</Label>
+                  <Input type="number" min={1} value={form.applicantCount} onChange={e => set({ applicantCount: e.target.value })} placeholder="2" />
+                  <p className="text-xs text-gray-400 mt-1">참석 예정 인원 (예: 학생 + 학부모 = 2)</p>
                 </div>
               </div>
 
               <div>
                 <Label>추가 메모</Label>
-                <Textarea
-                  value={form.memo}
-                  onChange={e => setForm({ ...form, memo: e.target.value })}
-                  placeholder="궁금한 점이나 전달사항"
-                  rows={3}
-                />
+                <Textarea value={form.memo} onChange={e => set({ memo: e.target.value })} placeholder="궁금한 점이나 전달사항" rows={3} />
               </div>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={
-                  submitMut.isPending ||
-                  !form.parentName.trim() ||
-                  !form.phone.trim() ||
-                  !form.studentName.trim() ||
-                  needsSessionPick
-                }
-              >
+              <Button type="submit" className="w-full" disabled={submitMut.isPending || !canSubmit}>
                 {submitMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
-                {needsSessionPick ? '세션 일정을 선택해주세요' : '신청하기'}
+                {hasSessions && !pickedSession ? '희망 회차를 선택해주세요' : !phoneOk ? '연락처를 확인해주세요' : '신청하기'}
               </Button>
             </form>
           </CardContent>
