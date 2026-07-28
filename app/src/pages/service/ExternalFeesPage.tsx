@@ -408,6 +408,7 @@ function ProgramFeeDialog({
 
   const [billed, setBilled] = useState(fee.billedAmount ? String(fee.billedAmount) : '')
   const [status, setStatus] = useState<'pending' | 'paid'>(fee.collectionStatus)
+  const [paidDt, setPaidDt] = useState(fee.paidDate || todayKST())
   const [name1, setName1] = useState(fee.contributor1 || '')
   const [name2, setName2] = useState(fee.contributor2 || '')
   const [team1, setTeam1] = useState<TeamChoice>(fee.contributor1Team || 'auto')
@@ -436,8 +437,8 @@ function ProgramFeeDialog({
       studentId: fee.studentId,
       billedAmount: billed ? Number(billed) : undefined,
       collectionStatus: status,
-      // stamp a collection date when paid; clear it ('' → null) when pending
-      paidDate: status === 'paid' ? (fee.paidDate || todayKST()) : '',
+      // 입금일: 수금완료면 선택한 날짜(기본 오늘), 미수금이면 초기화
+      paidDate: status === 'paid' ? (paidDt || todayKST()) : '',
       salesContributor1: name1.trim() || undefined,
       salesContributor2: name2.trim() || undefined,
       contributor1Team: team1 === 'auto' ? null : team1,
@@ -489,6 +490,16 @@ function ProgramFeeDialog({
             ) : <div className="text-sm">{fee.collectionStatus === 'paid' ? t('svcpay.paid') : t('svcpay.unpaid')}</div>}
           </div>
         </div>
+
+        {/* 입금일 — 수금완료일 때만 */}
+        {status === 'paid' && (
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">입금일</label>
+            {isAdmin ? (
+              <Input type="date" value={paidDt} onChange={e => setPaidDt(e.target.value)} className="h-8 text-sm w-44" />
+            ) : <div className="text-sm">{fee.paidDate || '-'}</div>}
+          </div>
+        )}
 
         {/* 환불 상태 (읽기전용 · 환불신청은 Student360에서, 완료 처리는 표의 배지에서) */}
         {fee.refundStatus && (
