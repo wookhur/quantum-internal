@@ -233,6 +233,8 @@ export interface PaymentInstallment {
   refundStatus?: RefundStatus
   refundAmount?: number
   refundDate?: string
+  refundAccount?: string   // 환불 계좌
+  refundReason?: string    // 환불 사유/메모
   createdAt: string
   updatedAt: string
   // Joined

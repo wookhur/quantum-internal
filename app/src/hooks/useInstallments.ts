@@ -21,6 +21,8 @@ function mapInstallment(row: Record<string, unknown>): PaymentInstallment {
     refundStatus: (row.refund_status as RefundStatus) || undefined,
     refundAmount: (row.refund_amount as number) ?? undefined,
     refundDate: (row.refund_date as string) || undefined,
+    refundAccount: (row.refund_account as string) || undefined,
+    refundReason: (row.refund_reason as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     contract: contract
@@ -93,6 +95,8 @@ export function useUpdateInstallment() {
       refundStatus?: RefundStatus | null
       refundAmount?: number | null
       refundDate?: string | null
+      refundAccount?: string | null
+      refundReason?: string | null
     }) => {
       const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (updates.label !== undefined) row.label = updates.label
@@ -106,6 +110,8 @@ export function useUpdateInstallment() {
       if (updates.refundStatus !== undefined) row.refund_status = updates.refundStatus || null
       if (updates.refundAmount !== undefined) row.refund_amount = updates.refundAmount ?? null
       if (updates.refundDate !== undefined) row.refund_date = updates.refundDate || null
+      if (updates.refundAccount !== undefined) row.refund_account = updates.refundAccount || null
+      if (updates.refundReason !== undefined) row.refund_reason = updates.refundReason || null
 
       const { data, error } = await supabase
         .from('payment_installments')
