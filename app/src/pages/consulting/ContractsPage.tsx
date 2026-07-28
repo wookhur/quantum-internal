@@ -665,7 +665,9 @@ export function ContractsPage() {
                             <Badge className="bg-slate-100 text-slate-600 border border-slate-300 text-[10px] h-5">종료</Badge>
                           ) : isTerminated ? (
                             <Badge className="bg-amber-100 text-amber-700 border border-amber-300 text-[10px] h-5">중도해지</Badge>
-                          ) : !isCancelled && contract.totalAmount > 0 ? (
+                          ) : isCancelled ? (
+                            <Badge className="bg-gray-100 text-gray-600 border border-gray-300 text-[10px] h-5">{t('contracts.cancelled')}</Badge>
+                          ) : contract.totalAmount > 0 ? (
                             <CollectionStatusBadge progress={progress} hasOverdue={hasOverdue} />
                           ) : null}
                         </TableCell>
