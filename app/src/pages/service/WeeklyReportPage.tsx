@@ -57,6 +57,8 @@ export function WeeklyReportPage() {
   const { data: students = [] } = useServiceStudents()
   const activeStudents = useMemo(() => students.filter(s => !isArchivedStatus(s.status)), [students])
   const { data: meetings = [] } = useAllServiceMeetings(start, end)
+  // 선택 주차 말일 기준 누적 미팅(리포트 2회 완료 학생 집계용)
+  const { data: cumMeetings = [] } = useAllServiceMeetings('2000-01-01', end)
   const { data: diaries = [] } = useAllServiceDiaryInRange(start, end)
   const { data: contracts = [] } = useContracts()
 
@@ -87,6 +89,29 @@ export function WeeklyReportPage() {
     const cn = consultantName(raw)
     return cn && nameToBucket.has(cn) ? nameToBucket.get(cn)! : OTHER_ID
   }
+
+  // ── 미팅보고서 2회 이상 완료 학생 (컨설턴트별, 선택 주차 말일 기준 누적) ──
+  const twoDoneByConsultant = useMemo(() => {
+    // 학생별 완료 리포트 수 (제출완료 or 리포트URL, 취소 제외)
+    const doneCount = new Map<string, number>()
+    for (const mt of cumMeetings) {
+      if ((mt.reportStatus === 'submitted' || !!mt.reportUrl) && mt.status !== 'cancelled') {
+        doneCount.set(mt.studentId, (doneCount.get(mt.studentId) || 0) + 1)
+      }
+    }
+    const byC = new Map<string, { name: string; students: { id: string; label: string; count: number }[] }>()
+    for (const s of activeStudents) {
+      const count = doneCount.get(s.id) || 0
+      if (count < 2) continue
+      const cn = consultantName(s.assignedConsultant) || '미배정'
+      const label = [s.koreanName, s.name].filter(Boolean).join(' ') || s.name || '—'
+      const entry = byC.get(cn) || { name: cn, students: [] }
+      entry.students.push({ id: s.id, label, count })
+      byC.set(cn, entry)
+    }
+    byC.forEach(e => e.students.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'ko')))
+    return Array.from(byC.values()).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }, [cumMeetings, activeStudents, consultantName])
 
   // Critical issues (risks/escalations) from diaries in the period
   const criticalIssues = useMemo(
@@ -262,10 +287,7 @@ export function WeeklyReportPage() {
                 <th className="font-medium p-2" title="Student 360 기준 담당 학생(활성) 수 · 숫자를 누르면 학생 명단">{t('weeklyReport.students')}</th>
                 <th className="font-medium p-2">{t('weeklyReport.held')}</th>
                 <th className="font-medium p-2">{t('weeklyReport.cancelled')}</th>
-                <th className="font-medium p-2">{t('weeklyReport.noShowCol')}</th>
-                <th className="font-medium p-2" title="상담완료 / (상담완료+취소+노쇼)">{t('weeklyReport.complianceRate')}</th>
-                <th className="font-medium p-2">{t('weeklyReport.reportCol')}</th>
-                <th className="font-medium p-2 pr-3">{t('weeklyReport.followUpCol')}</th>
+                <th className="font-medium p-2 pr-3">{t('weeklyReport.noShowCol')}</th>
               </tr>
             </thead>
             <tbody className="text-right">
@@ -280,16 +302,12 @@ export function WeeklyReportPage() {
                     <td className={`p-2 ${r.held > 0 ? 'cursor-pointer hover:underline hover:text-primary' : ''}`}
                       onClick={() => r.held > 0 && setDetail({ title: `${r.name} · ${t('weeklyReport.held')}`, kind: 'students', students: r.heldStudents })}>{r.held}</td>
                     <td className={`p-2 ${r.cancelled > 0 ? 'cursor-help text-red-600' : ''}`} title={cancelMemo}>{r.cancelled}</td>
-                    <td className={`p-2 ${r.noShow > 0 ? 'cursor-help text-red-600' : ''}`} title={noShowMemo}>{r.noShow}</td>
-                    <td className="p-2">{pct(r.held, r.held + r.cancelled + r.noShow)}</td>
-                    <td className="p-2">{pct(r.reportSubmitted, r.held)}</td>
-                    <td className={`p-2 pr-3 ${r.fuCount > 0 ? 'cursor-pointer hover:underline hover:text-primary' : ''}`}
-                      onClick={() => r.fuCount > 0 && setDetail({ title: `${r.name} · ${t('weeklyReport.followUpCol')}`, kind: 'followups', followups: r.followups })}>{r.fuCount || '—'}</td>
+                    <td className={`p-2 pr-3 ${r.noShow > 0 ? 'cursor-help text-red-600' : ''}`} title={noShowMemo}>{r.noShow}</td>
                   </tr>
                 )
               })}
               {rows.length === 0 && (
-                <tr><td colSpan={8} className="p-4 text-center text-gray-400">{t('weeklyReport.noData')}</td></tr>
+                <tr><td colSpan={5} className="p-4 text-center text-gray-400">{t('weeklyReport.noData')}</td></tr>
               )}
               {rows.length > 0 && (
                 <tr className="border-t-2 bg-gray-50 font-medium">
@@ -312,15 +330,36 @@ export function WeeklyReportPage() {
                   <td className="p-2 cursor-pointer hover:underline hover:text-primary"
                     onClick={() => setDetail({ title: t('weeklyReport.held'), kind: 'students', students: Array.from(new Map(rows.flatMap(r => r.heldStudents).map(s => [s.id, s])).values()) })}>{totals.held}</td>
                   <td className="p-2">{totals.cancelled}</td>
-                  <td className="p-2">{totals.noShow}</td>
-                  <td className="p-2">{pct(totals.held, totals.held + totals.cancelled + totals.noShow)}</td>
-                  <td className="p-2">{pct(totals.reportSubmitted, totals.held)}</td>
-                  <td className="p-2 pr-3 cursor-pointer hover:underline hover:text-primary"
-                    onClick={() => setDetail({ title: t('weeklyReport.followUpCol'), kind: 'followups', followups: rows.flatMap(r => r.followups) })}>{totals.fuCount || '—'}</td>
+                  <td className="p-2 pr-3">{totals.noShow}</td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* 미팅보고서 2회 이상 완료 학생 (컨설턴트별) */}
+        <div className="border rounded-lg overflow-hidden mb-5">
+          <div className="bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-600">
+            미팅보고서 2회 이상 완료 학생 <span className="text-xs text-gray-400">(컨설턴트별 · {end} 기준 누적)</span>
+          </div>
+          {twoDoneByConsultant.length === 0 ? (
+            <div className="p-4 text-center text-sm text-gray-400">아직 미팅보고서 2회 완료된 학생이 없습니다. (보통 3~4주차부터 표시됩니다)</div>
+          ) : (
+            <div className="divide-y">
+              {twoDoneByConsultant.map(c => (
+                <div key={c.name} className="px-4 py-3">
+                  <div className="font-medium text-sm mb-1.5">{c.name} <span className="text-xs text-gray-400">({c.students.length}명)</span></div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {c.students.map(s => (
+                      <span key={s.id} className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs">
+                        {s.label} · {s.count}회
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Risks, Issues & Escalations (from meeting diary critical issue) */}
