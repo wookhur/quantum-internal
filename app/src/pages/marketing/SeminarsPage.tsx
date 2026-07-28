@@ -659,18 +659,25 @@ function SeminarCalendar({ seminars, onSelect }: { seminars: Seminar[]; onSelect
   const days = calMonthGrid(anchor)
   const curMonth = anchor.slice(0, 7)
   const goToday = () => { const d = new Date(); setAnchor(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`) }
+  const [collapsed, setCollapsed] = useState(false)
 
   return (
     <Card>
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-semibold flex items-center gap-2"><CalendarDays className="size-5 text-primary" />{anchor.slice(0, 4)}년 {Number(anchor.slice(5, 7))}월 세미나·웨비나</div>
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="outline" className="size-8" onClick={() => setAnchor(a => calAddMonths(a, -1))}><ChevronLeft className="size-4" /></Button>
-            <Button size="sm" variant="ghost" onClick={goToday}>오늘</Button>
-            <Button size="icon" variant="outline" className="size-8" onClick={() => setAnchor(a => calAddMonths(a, 1))}><ChevronRight className="size-4" /></Button>
-          </div>
+          <button type="button" onClick={() => setCollapsed(v => !v)} className="font-semibold flex items-center gap-2 hover:opacity-80" title={collapsed ? '펼치기' : '접기'}>
+            <CalendarDays className="size-5 text-primary" />{anchor.slice(0, 4)}년 {Number(anchor.slice(5, 7))}월 세미나·웨비나
+            {collapsed ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronUp className="size-4 text-muted-foreground" />}
+          </button>
+          {!collapsed && (
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="outline" className="size-8" onClick={() => setAnchor(a => calAddMonths(a, -1))}><ChevronLeft className="size-4" /></Button>
+              <Button size="sm" variant="ghost" onClick={goToday}>오늘</Button>
+              <Button size="icon" variant="outline" className="size-8" onClick={() => setAnchor(a => calAddMonths(a, 1))}><ChevronRight className="size-4" /></Button>
+            </div>
+          )}
         </div>
+        {!collapsed && (<>
         <div className="grid grid-cols-7 gap-1 mb-1">
           {CAL_WEEKDAYS.map(w => <div key={w} className="text-center text-[11px] text-muted-foreground">{w}</div>)}
         </div>
@@ -705,6 +712,7 @@ function SeminarCalendar({ seminars, onSelect }: { seminars: Seminar[]; onSelect
           <span className="flex items-center gap-1"><span className="inline-block size-2.5 rounded-sm bg-indigo-100 border border-indigo-200" /> 예정</span>
           <span className="flex items-center gap-1"><span className="inline-block size-2.5 rounded-sm bg-gray-100 border border-gray-200" /> 지난 세미나</span>
         </div>
+        </>)}
       </CardContent>
     </Card>
   )
