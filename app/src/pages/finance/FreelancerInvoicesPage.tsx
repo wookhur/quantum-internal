@@ -865,6 +865,52 @@ function useConsultantBillable(month: string) {
   }, [students, meetings, consultantName])
 }
 
+/** 관리자용: 컨설턴트별 청구가능(미팅리포트 2회↑) 학생을 한눈에. 존킴으로 로그인 안 해도 확인 가능. */
+function AdminBillableOverview({ month }: { month: string }) {
+  const byConsultant = useConsultantBillable(month)
+  const rows = useMemo(() => {
+    const out: { name: string; students: BillableStudent[] }[] = []
+    byConsultant.forEach(entry => {
+      if (entry.students.length) out.push({ name: entry.name, students: [...entry.students].sort((a, b) => b.done - a.done) })
+    })
+    return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }, [byConsultant])
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b">
+          <span className="font-semibold text-sm">컨설턴트별 청구 가능 학생 (관리자)</span>
+          <Badge variant="outline" className="text-xs">{month} · 미팅리포트 2회↑ = 청구가능</Badge>
+        </div>
+        {rows.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">대상 학생이 없습니다.</div>
+        ) : (
+          <div className="divide-y">
+            {rows.map(r => {
+              const billableCount = r.students.filter(s => s.billable).length
+              return (
+                <div key={r.name} className="px-4 py-3">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="font-medium text-sm">{r.name}</span>
+                    <Badge variant="outline" className={billableCount > 0 ? 'text-emerald-700 border-emerald-300 bg-emerald-50' : 'text-muted-foreground'}>청구가능 {billableCount}명</Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {r.students.map(s => (
+                      <span key={s.id} className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs ${s.billable ? 'border-emerald-200 bg-emerald-50 text-emerald-700 font-medium' : 'border-gray-200 text-muted-foreground'}`}>
+                        {s.label} · 리포트 {s.done}회
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export interface IncentiveLine { id: string; label: string; amount: number; month: string; source: 'contract' | 'service'; sourceDetail: string }
 
 /** Per person NAME → ALL their sales-incentive lines (with settlement month).
@@ -920,6 +966,7 @@ export function FreelancerInvoicesPage(
   const canEdit = useCanEdit(useLocation().pathname)
   const { user } = useAuth()
   const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
+  const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
   const isIncentive = kind === 'sales_incentive'
   const isPartner = kind === 'partner'
   // Distinct storage kind so each list is separate (e.g. 'freelancer_business')
@@ -1407,6 +1454,9 @@ export function FreelancerInvoicesPage(
                 : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
         </p>
       </div>
+
+      {/* 관리자: 컨설턴트별 청구가능 학생 확인 (프리랜서 개인 정산) */}
+      {isAdmin && kind === 'freelancer' && !business && <AdminBillableOverview month={issueMonth} />}
 
       {isAccounting ? (
         isAuto ? (
