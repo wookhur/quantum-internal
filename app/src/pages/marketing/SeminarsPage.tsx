@@ -637,11 +637,11 @@ function RegistrationsPanel({ seminar, canEdit }: { seminar: Seminar; canEdit: b
 }
 
 // ─── 세미나 달력 ───────────────────────────────────────────────────────────
-const CAL_WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
+const CAL_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 function calYmd(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 function calAddDays(iso: string, n: number) { const [y, m, d] = iso.split('-').map(Number); return calYmd(new Date(y, m - 1, d + n)) }
-function calWeekStartMon(iso: string) { const [y, m, d] = iso.split('-').map(Number); const dow = new Date(y, m - 1, d).getDay(); return calAddDays(iso, -((dow + 6) % 7)) }
-function calMonthGrid(anchor: string): string[] { const [y, m] = anchor.split('-').map(Number); const first = `${y}-${String(m).padStart(2, '0')}-01`; const start = calWeekStartMon(first); return Array.from({ length: 42 }, (_, i) => calAddDays(start, i)) }
+function calWeekStartSun(iso: string) { const [y, m, d] = iso.split('-').map(Number); const dow = new Date(y, m - 1, d).getDay(); return calAddDays(iso, -dow) }
+function calMonthGrid(anchor: string): string[] { const [y, m] = anchor.split('-').map(Number); const first = `${y}-${String(m).padStart(2, '0')}-01`; const start = calWeekStartSun(first); return Array.from({ length: 42 }, (_, i) => calAddDays(start, i)) }
 function calAddMonths(iso: string, n: number) { const [y, m] = iso.split('-').map(Number); const dt = new Date(y, m - 1 + n, 1); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-01` }
 
 function SeminarCalendar({ seminars, onSelect }: { seminars: Seminar[]; onSelect: (id: string) => void }) {
