@@ -31,6 +31,9 @@ import {
   EyeOff,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
   Download,
   Pencil,
   X,
@@ -633,6 +636,80 @@ function RegistrationsPanel({ seminar, canEdit }: { seminar: Seminar; canEdit: b
   )
 }
 
+// ─── 세미나 달력 ───────────────────────────────────────────────────────────
+const CAL_WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
+function calYmd(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+function calAddDays(iso: string, n: number) { const [y, m, d] = iso.split('-').map(Number); return calYmd(new Date(y, m - 1, d + n)) }
+function calWeekStartMon(iso: string) { const [y, m, d] = iso.split('-').map(Number); const dow = new Date(y, m - 1, d).getDay(); return calAddDays(iso, -((dow + 6) % 7)) }
+function calMonthGrid(anchor: string): string[] { const [y, m] = anchor.split('-').map(Number); const first = `${y}-${String(m).padStart(2, '0')}-01`; const start = calWeekStartMon(first); return Array.from({ length: 42 }, (_, i) => calAddDays(start, i)) }
+function calAddMonths(iso: string, n: number) { const [y, m] = iso.split('-').map(Number); const dt = new Date(y, m - 1 + n, 1); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-01` }
+
+function SeminarCalendar({ seminars, onSelect }: { seminars: Seminar[]; onSelect: (id: string) => void }) {
+  const [anchor, setAnchor] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` })
+  const today = calYmd(new Date())
+  const byDate = useMemo(() => {
+    const m = new Map<string, Seminar[]>()
+    for (const s of seminars) {
+      const d = (s.date || '').split(' ')[0]
+      if (!d) continue
+      const arr = m.get(d) || []; arr.push(s); m.set(d, arr)
+    }
+    return m
+  }, [seminars])
+  const days = calMonthGrid(anchor)
+  const curMonth = anchor.slice(0, 7)
+  const goToday = () => { const d = new Date(); setAnchor(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`) }
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-semibold flex items-center gap-2"><CalendarDays className="size-5 text-primary" />{anchor.slice(0, 4)}년 {Number(anchor.slice(5, 7))}월 세미나·웨비나</div>
+          <div className="flex items-center gap-1">
+            <Button size="icon" variant="outline" className="size-8" onClick={() => setAnchor(a => calAddMonths(a, -1))}><ChevronLeft className="size-4" /></Button>
+            <Button size="sm" variant="ghost" onClick={goToday}>오늘</Button>
+            <Button size="icon" variant="outline" className="size-8" onClick={() => setAnchor(a => calAddMonths(a, 1))}><ChevronRight className="size-4" /></Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-7 gap-1 mb-1">
+          {CAL_WEEKDAYS.map(w => <div key={w} className="text-center text-[11px] text-muted-foreground">{w}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {days.map(d => {
+            const inMonth = d.slice(0, 7) === curMonth
+            const list = byDate.get(d) || []
+            const isToday = d === today
+            return (
+              <div key={d} className={`rounded border p-1 min-h-[84px] ${inMonth ? '' : 'opacity-40'} ${isToday ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                <div className={`text-[11px] font-medium mb-0.5 ${isToday ? 'text-primary' : ''}`}>{Number(d.slice(8, 10))}</div>
+                <div className="space-y-0.5">
+                  {list.map(s => {
+                    const past = d < today
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => onSelect(s.id)}
+                        title={`${s.title} — 클릭 시 세미나 카드로 이동`}
+                        className={`w-full text-left text-[10px] leading-tight truncate rounded px-1 py-0.5 hover:opacity-80 ${past ? 'bg-gray-100 text-gray-500' : 'bg-indigo-100 text-indigo-700'}`}
+                      >
+                        {s.title}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="inline-block size-2.5 rounded-sm bg-indigo-100 border border-indigo-200" /> 예정</span>
+          <span className="flex items-center gap-1"><span className="inline-block size-2.5 rounded-sm bg-gray-100 border border-gray-200" /> 지난 세미나</span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function SeminarsPage() {
   const { t } = useLanguage()
   const canEdit = useCanEdit(useLocation().pathname)
@@ -671,6 +748,15 @@ export function SeminarsPage() {
   const resetForm = () => setForm({
     title: '', description: '', date: '', time: '', location: '', maxCapacity: '', sessions: [],
   })
+
+  // 달력 일정 클릭 → 해당 세미나 카드로 스크롤 + 펼침
+  const handleSelectSeminar = (id: string) => {
+    setExpandedId(id)
+    setTimeout(() => {
+      const el = document.getElementById(`seminar-card-${id}`)
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); el.classList.add('ring-2', 'ring-primary'); setTimeout(() => el.classList.remove('ring-2', 'ring-primary'), 1600) }
+    }, 60)
+  }
 
   const openEdit = (s: Seminar) => {
     if (!canEdit) return
@@ -753,16 +839,21 @@ export function SeminarsPage() {
         <div className="flex justify-center py-12">
           <Loader2 className="size-8 animate-spin text-muted-foreground" />
         </div>
-      ) : seminars.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            아직 등록된 세미나가 없습니다. 새 세미나를 만들어보세요.
-          </CardContent>
-        </Card>
       ) : (
-        <div className="space-y-4">
-          {seminars.map(s => (
-            <Card key={s.id}>
+        <>
+          {/* 월 달력 — 세미나·웨비나 일정 (과거·예정) */}
+          <SeminarCalendar seminars={seminars} onSelect={handleSelectSeminar} />
+
+          {seminars.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                아직 등록된 세미나가 없습니다. 새 세미나를 만들어보세요.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {seminars.map(s => (
+                <Card key={s.id} id={`seminar-card-${s.id}`} className="transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
@@ -862,8 +953,10 @@ export function SeminarsPage() {
                 {expandedId === s.id && <RegistrationsPanel seminar={s} canEdit={canEdit} />}
               </CardContent>
             </Card>
-          ))}
-        </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Create Dialog */}
