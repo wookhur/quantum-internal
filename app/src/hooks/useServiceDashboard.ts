@@ -292,7 +292,8 @@ export function useStudentStatusFlags() {
         .select('student_id, meeting_date, meeting_type')
         .neq('report_status', 'submitted')
         .is('report_url', null)
-        .lte('meeting_date', oneDayAgo)   // 미팅 후 24시간(다음날)부터 리마인드
+        .ilike('meeting_type', 'regular')  // Regular 미팅만 보고서 리마인드 대상 (Complain 등 제외)
+        .lte('meeting_date', oneDayAgo)     // 미팅 후 24시간(다음날)부터 리마인드
         .gte('meeting_date', thirtyDaysAgo)
       if (error) return []
       return (data || []) as Record<string, unknown>[]

@@ -171,7 +171,9 @@ function missingReportTitle(items: { date?: string; type?: string }[] | undefine
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
     .map(it => {
       const d = it.date ? `${Number(it.date.slice(5, 7))}/${Number(it.date.slice(8, 10))}` : '날짜미상'
-      return `· ${d}${it.type ? ` ${it.type}` : ''}`
+      const elapsed = it.date ? Math.max(0, Math.floor((Date.now() - new Date(`${it.date}T00:00:00`).getTime()) / 86400000)) : null
+      const ago = elapsed != null ? ` — ${elapsed}일 경과` : ''
+      return `· ${d}${it.type ? ` ${it.type}` : ''}${ago}`
     })
   return `${header} (${items.length})\n${lines.join('\n')}`
 }
