@@ -611,6 +611,11 @@ export function ContractsPage() {
                     : 0
                   const hasOverdue = contract.installments?.some(i => i.status === 'overdue') || false
                   const hasInstallments = (contract.installments?.length || 0) > 0
+                  // 환불: 신청중(처리 대기)이 있으면 우선, 없고 완료만 있으면 완료
+                  const refundState: 'requested' | 'completed' | null =
+                    contract.installments?.some(i => i.refundStatus === 'requested') ? 'requested'
+                    : contract.installments?.some(i => i.refundStatus === 'completed') ? 'completed'
+                    : null
 
                   return (
                     <>
@@ -633,11 +638,16 @@ export function ContractsPage() {
                           ) : null}
                         </TableCell>
                         <TableCell className="font-medium">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {contract.contractorName}
                             {isCancelled && (
                               <Badge variant="outline" className="text-[10px] h-4 bg-gray-100 text-gray-500 border-gray-300">
                                 {t('contracts.cancelled')}
+                              </Badge>
+                            )}
+                            {refundState && (
+                              <Badge variant="outline" className={`text-[10px] h-4 ${refundState === 'completed' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>
+                                {refundState === 'completed' ? '환불완료' : '환불신청중'}
                               </Badge>
                             )}
                           </div>
