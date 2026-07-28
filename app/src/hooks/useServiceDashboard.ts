@@ -270,6 +270,13 @@ export function useStudentStatusFlags() {
     return d.toISOString().slice(0, 10)
   }, [])
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  // follow-up 경고는 미팅리포트(리포트일=entry_date, 없으면 생성일) 기준 7일 경과 후부터 표시.
+  // 미팅 직후 바로 완료할 수 없는 현실을 고려한 리마인드 유예 기간.
+  const sevenDaysAgo = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    return d.toISOString().slice(0, 10)
+  }, [])
 
   const { data: missingReportRows = [] } = useQuery({
     queryKey: ['student_status_missing_reports', thirtyDaysAgo],
@@ -288,18 +295,26 @@ export function useStudentStatusFlags() {
   })
 
   const { data: pendingFollowupIds = [] } = useQuery({
-    queryKey: ['student_status_pending_followups'],
+    queryKey: ['student_status_pending_followups', sevenDaysAgo],
     refetchInterval: 5 * 60 * 1000,
     queryFn: async () => {
       // Only follow-up commitments count toward the warning — assignments are
       // student tasks (no completion toggle) and must not keep the flag red.
+      // 리포트일(연결된 service_diaries.entry_date, 없으면 followup 생성일)이
+      // 7일 이상 지난 미완료 항목만 경고 대상. (미팅 직후 유예)
       const { data, error } = await supabase
         .from('service_followups')
-        .select('student_id')
+        .select('student_id, created_at, service_diaries(entry_date)')
         .eq('done', false)
         .or('category.is.null,category.eq.followup')
       if (error) return []
-      return (data || []).map((r: Record<string, unknown>) => r.student_id as string)
+      return (data || [])
+        .filter((r: Record<string, unknown>) => {
+          const diary = r.service_diaries as { entry_date?: string } | null
+          const refDate = diary?.entry_date || (r.created_at ? String(r.created_at).slice(0, 10) : '')
+          return refDate !== '' && refDate <= sevenDaysAgo
+        })
+        .map((r: Record<string, unknown>) => r.student_id as string)
     },
   })
 
