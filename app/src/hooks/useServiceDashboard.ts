@@ -269,7 +269,12 @@ export function useStudentStatusFlags() {
     d.setDate(d.getDate() - 30)
     return d.toISOString().slice(0, 10)
   }, [])
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  // 미팅리포트 모래시계 리마인드: 미팅 후 24시간(=다음날)까지는 유예, 그 뒤 리포트 미제출이면 표시.
+  const oneDayAgo = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 1)
+    return d.toISOString().slice(0, 10)
+  }, [])
   // follow-up 경고는 미팅리포트(리포트일=entry_date, 없으면 생성일) 기준 7일 경과 후부터 표시.
   // 미팅 직후 바로 완료할 수 없는 현실을 고려한 리마인드 유예 기간.
   const sevenDaysAgo = useMemo(() => {
@@ -279,7 +284,7 @@ export function useStudentStatusFlags() {
   }, [])
 
   const { data: missingReportRows = [] } = useQuery({
-    queryKey: ['student_status_missing_reports', thirtyDaysAgo],
+    queryKey: ['student_status_missing_reports', thirtyDaysAgo, oneDayAgo],
     refetchInterval: 5 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -287,7 +292,7 @@ export function useStudentStatusFlags() {
         .select('student_id, meeting_date, meeting_type')
         .neq('report_status', 'submitted')
         .is('report_url', null)
-        .lte('meeting_date', today)
+        .lte('meeting_date', oneDayAgo)   // 미팅 후 24시간(다음날)부터 리마인드
         .gte('meeting_date', thirtyDaysAgo)
       if (error) return []
       return (data || []) as Record<string, unknown>[]
