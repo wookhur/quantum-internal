@@ -57,8 +57,6 @@ export function WeeklyReportPage() {
   const { data: students = [] } = useServiceStudents()
   const activeStudents = useMemo(() => students.filter(s => !isArchivedStatus(s.status)), [students])
   const { data: meetings = [] } = useAllServiceMeetings(start, end)
-  // 선택 주차 말일 기준 누적 미팅(리포트 2회 완료 학생 집계용)
-  const { data: cumMeetings = [] } = useAllServiceMeetings('2000-01-01', end)
   const { data: diaries = [] } = useAllServiceDiaryInRange(start, end)
   const { data: contracts = [] } = useContracts()
 
@@ -90,11 +88,11 @@ export function WeeklyReportPage() {
     return cn && nameToBucket.has(cn) ? nameToBucket.get(cn)! : OTHER_ID
   }
 
-  // ── 미팅보고서 2회 이상 완료 학생 (컨설턴트별, 선택 주차 말일 기준 누적) ──
+  // ── 미팅보고서 2회 이상 완료 학생 (컨설턴트별, 조회 기간 내) ──
   const twoDoneByConsultant = useMemo(() => {
-    // 학생별 완료 리포트 수 (제출완료 or 리포트URL, 취소 제외)
+    // 학생별 이 기간 완료 리포트 수 (제출완료 or 리포트URL, 취소 제외)
     const doneCount = new Map<string, number>()
-    for (const mt of cumMeetings) {
+    for (const mt of meetings) {
       if ((mt.reportStatus === 'submitted' || !!mt.reportUrl) && mt.status !== 'cancelled') {
         doneCount.set(mt.studentId, (doneCount.get(mt.studentId) || 0) + 1)
       }
@@ -111,7 +109,7 @@ export function WeeklyReportPage() {
     }
     byC.forEach(e => e.students.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'ko')))
     return Array.from(byC.values()).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [cumMeetings, activeStudents, consultantName])
+  }, [meetings, activeStudents, consultantName])
 
   // Critical issues (risks/escalations) from diaries in the period
   const criticalIssues = useMemo(
@@ -340,10 +338,10 @@ export function WeeklyReportPage() {
         {/* 미팅보고서 2회 이상 완료 학생 (컨설턴트별) */}
         <div className="border rounded-lg overflow-hidden mb-5">
           <div className="bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-600">
-            미팅보고서 2회 이상 완료 학생 <span className="text-xs text-gray-400">(컨설턴트별 · {end} 기준 누적)</span>
+            미팅보고서 2회 이상 완료 학생 <span className="text-xs text-gray-400">(컨설턴트별 · 이 기간 {start} ~ {end})</span>
           </div>
           {twoDoneByConsultant.length === 0 ? (
-            <div className="p-4 text-center text-sm text-gray-400">아직 미팅보고서 2회 완료된 학생이 없습니다. (보통 3~4주차부터 표시됩니다)</div>
+            <div className="p-4 text-center text-sm text-gray-400">이 기간에 미팅보고서를 2회 완료한 학생이 없습니다.</div>
           ) : (
             <div className="divide-y">
               {twoDoneByConsultant.map(c => (
