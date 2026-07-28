@@ -358,7 +358,7 @@ function InstallmentCard({
                 ) : (
                   <Button size="sm" variant="outline" className="gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50"
                     disabled={updateInst.isPending} onClick={openRefund}>
-                    <Undo2 className="size-3.5" /> 환불
+                    <Undo2 className="size-3.5" /> 환불신청
                   </Button>
                 )
               )}
