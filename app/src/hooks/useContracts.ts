@@ -371,6 +371,11 @@ export function useContract(id: string | undefined) {
         category: (r.category as 'base' | 'extra') || 'base',
         paymentMethod: r.payment_method as PaymentInstallment['paymentMethod'],
         notes: r.notes as string | undefined,
+        refundStatus: (r.refund_status as PaymentInstallment['refundStatus']) || undefined,
+        refundAmount: r.refund_amount != null ? (r.refund_amount as number) : undefined,
+        refundDate: (r.refund_date as string) || undefined,
+        refundAccount: (r.refund_account as string) || undefined,
+        refundReason: (r.refund_reason as string) || undefined,
         createdAt: r.created_at as string,
         updatedAt: r.updated_at as string,
       }))
