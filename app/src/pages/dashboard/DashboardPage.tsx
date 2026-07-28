@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   Loader2, Megaphone, Plus, Pencil, Trash2, Pin, Building2, Globe, Smartphone, Landmark,
-  Phone, Mail, Users, ExternalLink,
+  Phone, Mail, Users, ExternalLink, MonitorSmartphone, MessageCircle,
 } from 'lucide-react'
 import { todayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
@@ -132,8 +132,10 @@ export function DashboardPage() {
           {infoRow(<Landmark className="size-4" />, '은행계좌', company?.bankInfo)}
           {infoRow(<Globe className="size-4" />, '홈페이지', company?.website, toUrl(company?.website))}
           {infoRow(<Smartphone className="size-4" />, '학생관리 앱', company?.studentAppUrl, toUrl(company?.studentAppUrl))}
+          {infoRow(<MonitorSmartphone className="size-4" />, '인터널 관리앱', company?.internalAppUrl, toUrl(company?.internalAppUrl))}
           {infoRow(<Phone className="size-4" />, '대표 전화', company?.companyPhone)}
           {infoRow(<Mail className="size-4" />, '대표 이메일', company?.companyEmail)}
+          {infoRow(<MessageCircle className="size-4" />, '카카오채널', company?.kakaoChannel, toUrl(company?.kakaoChannel))}
           {company?.notes && (
             <div className="sm:col-span-2 text-sm border-t pt-3 whitespace-pre-wrap text-muted-foreground">{company.notes}</div>
           )}
@@ -243,6 +245,7 @@ export function DashboardPage() {
             {([
               ['address', '주소'], ['bankInfo', '은행계좌 (예: 국민은행 123-45-6789 (주)퀀텀어드미션즈)'],
               ['website', '홈페이지 주소'], ['studentAppUrl', '학생관리 앱 주소'],
+              ['internalAppUrl', '인터널 관리앱 주소'], ['kakaoChannel', '카카오채널 주소'],
               ['companyPhone', '대표 전화'], ['companyEmail', '대표 이메일'],
             ] as const).map(([key, label]) => (
               <div key={key} className="space-y-1">

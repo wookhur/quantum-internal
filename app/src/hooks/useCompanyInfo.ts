@@ -5,6 +5,8 @@ export interface CompanyInfo {
   address?: string
   website?: string
   studentAppUrl?: string
+  internalAppUrl?: string
+  kakaoChannel?: string
   bankInfo?: string
   companyPhone?: string
   companyEmail?: string
@@ -22,6 +24,8 @@ export function useCompanyInfo() {
         address: (r.address as string) || undefined,
         website: (r.website as string) || undefined,
         studentAppUrl: (r.student_app_url as string) || undefined,
+        internalAppUrl: (r.internal_app_url as string) || undefined,
+        kakaoChannel: (r.kakao_channel as string) || undefined,
         bankInfo: (r.bank_info as string) || undefined,
         companyPhone: (r.company_phone as string) || undefined,
         companyEmail: (r.company_email as string) || undefined,
@@ -40,6 +44,8 @@ export function useUpdateCompanyInfo() {
         address: info.address || null,
         website: info.website || null,
         student_app_url: info.studentAppUrl || null,
+        internal_app_url: info.internalAppUrl || null,
+        kakao_channel: info.kakaoChannel || null,
         bank_info: info.bankInfo || null,
         company_phone: info.companyPhone || null,
         company_email: info.companyEmail || null,
