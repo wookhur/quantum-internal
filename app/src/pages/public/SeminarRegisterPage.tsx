@@ -176,14 +176,14 @@ export function SeminarRegisterPage() {
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-lg mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center space-y-2">
+        <div className="text-left space-y-2">
           <h1 className="text-2xl font-bold text-gray-900">
             {seminar.title}
           </h1>
           {seminar.description && (
-            <p className="text-gray-600 text-sm whitespace-pre-wrap">{seminar.description}</p>
+            <p className="text-gray-600 text-sm whitespace-pre-wrap leading-relaxed">{seminar.description}</p>
           )}
-          <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
             {!hasSessions && seminar.date && (
               <span className="flex items-center gap-1">
                 <CalendarDays className="size-4" />
