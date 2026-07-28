@@ -24,8 +24,8 @@ export interface ServiceProgramFee {
   paidDate?: string
   contributor1Percentage?: number
   contributor2Percentage?: number
-  contributor1Team?: 'sales' | 'service'
-  contributor2Team?: 'sales' | 'service'
+  contributor1Team?: 'sales' | 'service' | 'none'
+  contributor2Team?: 'sales' | 'service' | 'none'
   // 환불(건별)
   refundStatus?: RefundStatus
   refundAmount?: number

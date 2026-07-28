@@ -19,8 +19,8 @@ export interface ECActivity {
   paidDate?: string
   contributor1Percentage?: number
   contributor2Percentage?: number
-  contributor1Team?: 'sales' | 'service' | null
-  contributor2Team?: 'sales' | 'service' | null
+  contributor1Team?: 'sales' | 'service' | 'none' | null
+  contributor2Team?: 'sales' | 'service' | 'none' | null
   // 환불(건별)
   refundStatus?: RefundStatus | null
   refundAmount?: number | null

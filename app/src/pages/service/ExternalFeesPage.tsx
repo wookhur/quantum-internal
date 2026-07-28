@@ -36,7 +36,7 @@ type TeamResolver = (name: string | undefined) => ContributorTeam | undefined
 interface ContribRow {
   name: string
   slot: 0 | 1                  // which contributor slot (for saving the override)
-  override?: ContributorTeam | null  // manually-set team (null/undefined = auto)
+  override?: ContributorTeam | 'none' | null  // manually-set team (null/undefined = auto, 'none' = 인센티브 없음)
   team?: ContributorTeam       // effective team (override first, else auto)
   source: 'manual' | 'auto' | 'none'
   rate: number                 // % applied (from this partner's team rate)
@@ -53,15 +53,20 @@ function contributorRows(
   serviceRate: number,
 ): ContribRow[] {
   const billed = f.billedAmount || 0
-  const slots: { slot: 0 | 1; name?: string; override?: ContributorTeam | null }[] = [
+  const slots: { slot: 0 | 1; name?: string; override?: ContributorTeam | 'none' | null }[] = [
     { slot: 0, name: f.contributor1, override: f.contributor1Team },
     { slot: 1, name: f.contributor2, override: f.contributor2Team },
   ]
   const out: ContribRow[] = []
   for (const s of slots) {
     if (!s.name?.trim()) continue
+    // '없음' = 명시적으로 인센티브 없음 (팀 미지정 경고 대상 아님)
+    if (s.override === 'none') {
+      out.push({ name: s.name, slot: s.slot, override: 'none', team: undefined, source: 'manual', rate: 0, inc: 0 })
+      continue
+    }
     const auto = autoTeam(s.name)
-    const team = s.override ?? auto
+    const team = (s.override as ContributorTeam | null | undefined) ?? auto
     const source: ContribRow['source'] = s.override ? 'manual' : auto ? 'auto' : 'none'
     const rate = rateForTeam(team, salesRate, serviceRate)
     out.push({ name: s.name, slot: s.slot, override: s.override, team, source, rate, inc: rate ? Math.round((billed * rate) / 100) : 0 })
@@ -88,7 +93,7 @@ export function ExternalFeesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // set a contributor's team inline from the list (auto = clear override → null)
-  const setTeam = (f: ServiceProgramFee, slot: 0 | 1, choice: 'auto' | ContributorTeam) => {
+  const setTeam = (f: ServiceProgramFee, slot: 0 | 1, choice: 'auto' | ContributorTeam | 'none') => {
     const val = choice === 'auto' ? null : choice
     const base = { id: f.id, studentId: f.studentId }
     const payload = slot === 0 ? { ...base, contributor1Team: val } : { ...base, contributor2Team: val }
@@ -213,7 +218,7 @@ export function ExternalFeesPage() {
                   const er = ratesFor(f.label)
                   const rows = contributorRows(f, autoTeam, er.salesRate, er.serviceRate)
                   const inc = rows.reduce((s, c) => s + c.inc, 0)
-                  const needsTeam = rows.some(c => !c.team)
+                  const needsTeam = rows.some(c => !c.team && c.override !== 'none')
                   const isPaid = f.collectionStatus === 'paid'
                   return (
                     <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(f.id)}>
@@ -239,15 +244,18 @@ export function ExternalFeesPage() {
                                 <span className="min-w-[64px]">{c.name}</span>
                                 {isAdmin ? (
                                   <>
-                                    <Select value={c.override || 'auto'} onValueChange={v => setTeam(f, c.slot, (v as 'auto' | ContributorTeam) || 'auto')}>
-                                      <SelectTrigger className={`h-6 w-[86px] text-xs px-2 ${!c.team ? 'text-amber-600 border-amber-300' : ''}`}><SelectValue /></SelectTrigger>
+                                    <Select value={c.override || 'auto'} onValueChange={v => setTeam(f, c.slot, (v as 'auto' | ContributorTeam | 'none') || 'auto')}>
+                                      <SelectTrigger className={`h-6 w-[86px] text-xs px-2 ${!c.team && c.override !== 'none' ? 'text-amber-600 border-amber-300' : ''}`}>
+                                        <span className="truncate text-left">{c.override === 'none' ? '없음' : c.team ? teamLabel(c.team) : (c.source === 'auto' && c.team ? teamLabel(c.team) : t('svcpay.auto'))}</span>
+                                      </SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="auto">{c.source === 'auto' && c.team ? t('svcpay.autoDetected', { team: teamLabel(c.team) }) : t('svcpay.auto')}</SelectItem>
                                         <SelectItem value="sales">{teamLabel('sales')}</SelectItem>
                                         <SelectItem value="service">{teamLabel('service')}</SelectItem>
+                                        <SelectItem value="none">없음</SelectItem>
                                       </SelectContent>
                                     </Select>
-                                    <span className="text-[10px] text-muted-foreground w-8">{c.team ? `${c.rate}%` : ''}</span>
+                                    <span className="text-[10px] text-muted-foreground w-8">{c.override === 'none' ? '없음' : c.team ? `${c.rate}%` : ''}</span>
                                   </>
                                 ) : c.team ? (
                                   <Badge variant="outline" className={c.team === 'sales' ? 'text-blue-600 border-blue-200 px-1 py-0 text-[10px]' : 'text-emerald-600 border-emerald-200 px-1 py-0 text-[10px]'}>
@@ -374,7 +382,7 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
 }
 
 // ─── Detail / edit dialog ─────────────────────────────────────────────
-type TeamChoice = 'auto' | 'sales' | 'service'
+type TeamChoice = 'auto' | 'sales' | 'service' | 'none'
 
 function ProgramFeeDialog({
   fee,
@@ -415,6 +423,7 @@ function ProgramFeeDialog({
   // effective team + rate + incentive per contributor (from current form state)
   const resolve = (name: string, choice: TeamChoice): { team?: ContributorTeam; rate: number; inc: number; auto?: ContributorTeam } => {
     const auto = autoTeam(name)
+    if (choice === 'none') return { team: undefined, rate: 0, inc: 0, auto }  // 인센티브 없음
     const team = choice === 'auto' ? auto : choice
     const rate = rateForTeam(team, salesRate, serviceRate)
     return { team, rate, inc: rate ? Math.round((billedNum * rate) / 100) : 0, auto }
@@ -515,11 +524,14 @@ function ProgramFeeDialog({
                   disabled={!isAdmin}
                 />
                 <Select value={c.team} onValueChange={v => c.setTeam((v as TeamChoice) || 'auto')} disabled={!isAdmin || !c.name.trim()}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs">
+                    <span className="truncate text-left">{c.team === 'none' ? '없음' : c.team === 'sales' ? teamLabel('sales') : c.team === 'service' ? teamLabel('service') : detected}</span>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="auto">{detected}</SelectItem>
                     <SelectItem value="sales">{teamLabel('sales')} ({salesRate}%)</SelectItem>
                     <SelectItem value="service">{teamLabel('service')} ({serviceRate}%)</SelectItem>
+                    <SelectItem value="none">없음</SelectItem>
                   </SelectContent>
                 </Select>
                 <span className="text-sm font-mono w-24 text-right">

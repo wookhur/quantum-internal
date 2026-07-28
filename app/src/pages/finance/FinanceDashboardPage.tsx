@@ -4,9 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Loader2, Users, Receipt, Lock, Clock, CheckCircle2, XCircle, Wallet } from 'lucide-react'
+import { useInstallments, useUpdateInstallment } from '@/hooks/useInstallments'
+import { todayKST } from '@/lib/date'
 import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
@@ -190,6 +194,17 @@ export function FinanceDashboardPage() {
     return { requested, completed, completedTotal }
   }, [programFees])
 
+  // ─── 환불 현황: 계약(분납금) 환불신청·완료 ───
+  const { data: allInstallments = [] } = useInstallments()
+  const contractRefunds = useMemo(() => {
+    const who = (i: typeof allInstallments[number]) => i.contract?.studentName || i.contract?.contractorName || '—'
+    const requested = allInstallments.filter(i => i.refundStatus === 'requested').map(i => ({ ...i, who: who(i) }))
+    const completed = allInstallments.filter(i => i.refundStatus === 'completed').map(i => ({ ...i, who: who(i) }))
+    const completedTotal = completed.reduce((s, i) => s + (i.refundAmount || 0), 0)
+    return { requested, completed, completedTotal }
+  }, [allInstallments])
+  const refundTotalCount = refunds.requested.length + refunds.completed.length + contractRefunds.requested.length + contractRefunds.completed.length
+
   const ecDoubleEntry = useMemo(() => {
     const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
     const canonByName = new Map<string, string>()
@@ -353,15 +368,15 @@ export function FinanceDashboardPage() {
           <div className="flex items-center gap-2 px-4 py-3 border-b">
             <Wallet className="size-4 text-rose-500" />
             <span className="font-semibold text-sm">환불 현황</span>
-            <Badge variant="outline" className="text-orange-700 border-orange-300 bg-orange-50">신청중 {refunds.requested.length}건</Badge>
-            <Badge variant="outline" className="text-rose-700 border-rose-300 bg-rose-50">완료 {refunds.completed.length}건 · {formatCurrency(refunds.completedTotal)}</Badge>
+            <Badge variant="outline" className="text-orange-700 border-orange-300 bg-orange-50">신청중 {refunds.requested.length + contractRefunds.requested.length}건</Badge>
+            <Badge variant="outline" className="text-rose-700 border-rose-300 bg-rose-50">완료 {refunds.completed.length + contractRefunds.completed.length}건 · {formatCurrency(refunds.completedTotal + contractRefunds.completedTotal)}</Badge>
           </div>
-          {refunds.requested.length === 0 && refunds.completed.length === 0 ? (
+          {refundTotalCount === 0 ? (
             <div className="py-10 text-center text-sm text-muted-foreground">환불 신청·완료 내역이 없습니다.</div>
           ) : (
             <div className="p-3 space-y-4">
               {/* 환불신청중 — 처리 대기 */}
-              {refunds.requested.length > 0 && (
+              {(refunds.requested.length > 0 || contractRefunds.requested.length > 0) && (
                 <div>
                   <div className="text-xs font-semibold text-orange-700 mb-1.5">환불신청중 (처리 대기)</div>
                   <div className="space-y-1.5">
@@ -374,12 +389,21 @@ export function FinanceDashboardPage() {
                         {f.refundReason && <p className="text-xs text-orange-700 mt-1 whitespace-pre-wrap">사유: {f.refundReason}</p>}
                       </div>
                     ))}
+                    {contractRefunds.requested.map(i => (
+                      <div key={i.id} className="rounded-md border border-orange-200 bg-orange-50/50 px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="font-medium">{i.who} <span className="text-xs text-muted-foreground">· {i.label} (계약)</span></span>
+                          <span className="text-xs text-muted-foreground">신청일 {i.refundDate || '—'} · 환불금액 {i.refundAmount != null ? formatCurrency(i.refundAmount, i.currency) : '—'}</span>
+                        </div>
+                        {isAccounting || isAdmin ? <div className="mt-1.5"><ContractRefundComplete inst={i} /></div> : null}
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1.5">서비스입금관리에서 금액 확인 후 &lsquo;완료 처리&rsquo;하세요.</p>
+                  <p className="text-[11px] text-muted-foreground mt-1.5">서비스(EC/학습지원)는 서비스입금관리에서, 계약은 위 &lsquo;환불완료 처리&rsquo;로 완료하세요.</p>
                 </div>
               )}
               {/* 환불완료 */}
-              {refunds.completed.length > 0 && (
+              {(refunds.completed.length > 0 || contractRefunds.completed.length > 0) && (
                 <div>
                   <div className="text-xs font-semibold text-rose-700 mb-1.5">환불완료</div>
                   <div className="space-y-1.5">
@@ -390,6 +414,15 @@ export function FinanceDashboardPage() {
                           <span className="text-sm font-mono font-medium text-rose-700">{f.refundAmount != null ? formatCurrency(f.refundAmount, f.currency as 'KRW' | 'USD') : '—'}</span>
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">완료일 {f.refundDate || '—'}{f.refundReason ? ` · 사유: ${f.refundReason}` : ''}</div>
+                      </div>
+                    ))}
+                    {contractRefunds.completed.map(i => (
+                      <div key={i.id} className="rounded-md border border-rose-200 bg-rose-50/40 px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="font-medium">{i.who} <span className="text-xs text-muted-foreground">· {i.label} (계약)</span></span>
+                          <span className="text-sm font-mono font-medium text-rose-700">{i.refundAmount != null ? formatCurrency(i.refundAmount, i.currency) : '—'}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">완료일 {i.refundDate || '—'}</div>
                       </div>
                     ))}
                   </div>
@@ -623,6 +656,35 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── 계약 분납금 환불완료 처리 (재무 대시보드에서) ─────────────────────────────
+function ContractRefundComplete({ inst }: { inst: { id: string; refundAmount?: number | null; currency?: 'KRW' | 'USD' } }) {
+  const update = useUpdateInstallment()
+  const [open, setOpen] = useState(false)
+  const [dt, setDt] = useState(todayKST())
+  const complete = () => update.mutate(
+    { id: inst.id, refundStatus: 'completed', refundDate: dt || todayKST() },
+    { onSuccess: () => setOpen(false) },
+  )
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger className="inline-flex h-7 items-center rounded-md border border-rose-300 bg-transparent px-2.5 text-xs font-medium text-rose-600 hover:bg-rose-50">
+        환불완료 처리
+      </PopoverTrigger>
+      <PopoverContent className="w-56 space-y-2" align="start">
+        <div className="text-xs font-medium">환불 완료 처리</div>
+        {inst.refundAmount != null && (
+          <div className="text-[11px] text-muted-foreground">환불 금액: <span className="font-mono">{formatCurrency(inst.refundAmount, inst.currency)}</span></div>
+        )}
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">환불 완료일</label>
+          <Input type="date" value={dt} onChange={e => setDt(e.target.value)} className="h-8 text-sm" />
+        </div>
+        <Button size="sm" className="w-full h-8" disabled={update.isPending} onClick={complete}>환불완료</Button>
+      </PopoverContent>
+    </Popover>
   )
 }
 
