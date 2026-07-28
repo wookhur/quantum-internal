@@ -19,7 +19,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
-import { useConsultantName, canonicalConsultantName } from '@/lib/consultants'
+import { useConsultantName, canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
 import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
@@ -851,13 +851,15 @@ function useConsultantBillable(month: string) {
         completed.set(mt.studentId, (completed.get(mt.studentId) || 0) + 1)
       }
     }
-    const byConsultant = new Map<string, BillableStudent[]>()
+    // 이름 매칭을 대소문자·공백에 견고하게: 정규화 키로 그룹핑, 표시용 이름은 함께 보관
+    const byConsultant = new Map<string, { name: string; students: BillableStudent[] }>()
     students.filter(s => isActiveStudent(s.status) && s.assignedConsultant).forEach(s => {
-      const nm = consultantName(s.assignedConsultant)
+      const display = consultantName(s.assignedConsultant)
+      const key = consultantNameKey(display)
       const done = completed.get(s.id) || 0
-      const arr = byConsultant.get(nm) || []
-      arr.push({ id: s.id, label: studentLabel(s.name, s.koreanName), done, billable: done >= 2 })
-      byConsultant.set(nm, arr)
+      const entry = byConsultant.get(key) || { name: display, students: [] }
+      entry.students.push({ id: s.id, label: studentLabel(s.name, s.koreanName), done, billable: done >= 2 })
+      byConsultant.set(key, entry)
     })
     return byConsultant
   }, [students, meetings, consultantName])
@@ -1004,7 +1006,7 @@ export function FreelancerInvoicesPage(
       }
       return out
     }
-    return (byConsultant.get(myName) || []).filter(r => r.billable).map(r => ({ id: r.label, label: r.label, amount: 0, received: false }))
+    return (byConsultant.get(consultantNameKey(user?.name))?.students || []).filter(r => r.billable).map(r => ({ id: r.label, label: r.label, amount: 0, received: false }))
   }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus])
 
   // 발행 대상 = 아직 수령완료 안 된 항목
@@ -1466,9 +1468,9 @@ function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: strin
         if (c) source.set(name, c)
       })
     } else {
-      byConsultant.forEach((students, name) => {
-        const c = students.filter(s => s.billable).length
-        if (c > 0) source.set(name, c)
+      byConsultant.forEach((entry) => {
+        const c = entry.students.filter(s => s.billable).length
+        if (c > 0) source.set(entry.name, c)
       })
     }
     const out: { name: string; count: number; status: 'none' | 'submitted' | 'approved' }[] = []
