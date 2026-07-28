@@ -41,13 +41,14 @@ export function useServiceIncentiveLines(): ServiceIncentiveLine[] {
       const billed = f.billedAmount || 0
       if (!billed) continue
       const er = partnerRateMap.get(normalizePartner(f.label)) || { salesRate: defSales, serviceRate: defService }
-      const slots: { name?: string; override?: ContributorTeam | null }[] = [
+      const slots: { name?: string; override?: ContributorTeam | 'none' | null }[] = [
         { name: f.contributor1, override: f.contributor1Team },
         { name: f.contributor2, override: f.contributor2Team },
       ]
       slots.forEach((s, idx) => {
         if (!s.name?.trim()) return
-        const team = s.override ?? autoTeam(s.name)
+        if (s.override === 'none') return  // '없음' = 인센티브 제외
+        const team = (s.override as ContributorTeam | null | undefined) ?? autoTeam(s.name)
         const rate = rateForTeam(team, er.salesRate, er.serviceRate)
         if (!rate) return
         const amount = Math.round((billed * rate) / 100)
