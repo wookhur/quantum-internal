@@ -309,6 +309,10 @@ export function useAddProgramComment() {
           metadata: { source: 'partner_program', entryId: input.entryId, programCommentId: (inserted as { id: string }).id, contactMethod: at },
           created_by: user?.id ?? null,
         })
+        // 담당자 미지정이면 기록한 사람을 담당자로 자동 지정 (기존 담당자는 유지)
+        if (user?.id) {
+          await supabase.from('leads').update({ assigned_to: user.id }).eq('id', input.leadId).is('assigned_to', null)
+        }
       }
     },
     onSuccess: (_d, v) => {
