@@ -280,20 +280,44 @@ export function useProgramComments(entryId: string | undefined) {
   })
 }
 
+// 프로그램 소통기록 방식 → 콜드콜 연락기록(lead_activities) 활동유형
+const COMMENT_METHOD_TO_ACTIVITY: Record<ProgramCommentMethod, 'call' | 'katalk' | 'sms' | 'note'> = {
+  call: 'call', katalk: 'katalk', sms: 'sms', other: 'note',
+}
+
 export function useAddProgramComment() {
   const qc = useQueryClient()
   const { user } = useAuth()
   return useMutation({
-    mutationFn: async (input: { entryId: string; method: ProgramCommentMethod; content: string }) => {
-      const { error } = await supabase.from('partner_program_comments').insert({
+    mutationFn: async (input: { entryId: string; method: ProgramCommentMethod; content: string; leadId?: string; programName?: string }) => {
+      const { data: inserted, error } = await supabase.from('partner_program_comments').insert({
         entry_id: input.entryId,
         method: input.method,
         content: input.content,
         created_by: user?.id ?? null,
-      })
+      }).select('id').single()
       if (error) throw error
+      // 콜드콜 연락기록(lead_activities)에도 미러링 → 통화/카톡 기록이 콜드콜에 자동 반영
+      if (input.leadId) {
+        const at = COMMENT_METHOD_TO_ACTIVITY[input.method]
+        const label = PROGRAM_COMMENT_METHODS.find((m) => m.key === input.method)?.ko || input.method
+        await supabase.from('lead_activities').insert({
+          lead_id: input.leadId,
+          activity_type: at,
+          title: `${label} · ${input.programName || '파트너 프로그램'}`,
+          content: input.content,
+          metadata: { source: 'partner_program', entryId: input.entryId, programCommentId: (inserted as { id: string }).id, contactMethod: at },
+          created_by: user?.id ?? null,
+        })
+      }
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['partner-program-comments', v.entryId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['partner-program-comments', v.entryId] })
+      if (v.leadId) {
+        qc.invalidateQueries({ queryKey: ['lead-activities', v.leadId] })
+        qc.invalidateQueries({ queryKey: ['leads'] })
+      }
+    },
   })
 }
 
@@ -303,7 +327,13 @@ export function useDeleteProgramComment() {
     mutationFn: async (input: { id: string; entryId: string }) => {
       const { error } = await supabase.from('partner_program_comments').delete().eq('id', input.id)
       if (error) throw error
+      // 미러링된 콜드콜 연락기록도 함께 제거
+      await supabase.from('lead_activities').delete().eq('metadata->>programCommentId', input.id)
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['partner-program-comments', v.entryId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['partner-program-comments', v.entryId] })
+      qc.invalidateQueries({ queryKey: ['lead-activities'] })
+      qc.invalidateQueries({ queryKey: ['leads'] })
+    },
   })
 }

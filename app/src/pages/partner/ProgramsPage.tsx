@@ -80,7 +80,7 @@ function EntryComments({ entry, canEdit }: { entry: ProgramEntry; canEdit: boole
     if (!canEdit) return
     if (!content.trim()) return
     addComment.mutate(
-      { entryId: entry.id, method, content: content.trim() },
+      { entryId: entry.id, method, content: content.trim(), leadId: entry.leadId },
       { onSuccess: () => setContent('') },
     )
   }
