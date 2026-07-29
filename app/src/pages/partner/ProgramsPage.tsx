@@ -21,6 +21,7 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useLeads, useCreateLead, useUpdateLead } from '@/hooks/useLeads'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAuth } from '@/contexts/AuthContext'
 import { leadLevelConfig } from '@/lib/leadLevels'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
@@ -28,7 +29,7 @@ import { EC_PARTNERS } from '@/lib/ecPartners'
 import {
   usePartnerPrograms, useCreateProgram, useUpdateProgram, useDeleteProgram,
   useUploadBrochure, useProgramEntries, useAddProgramEntry, useUpdateProgramEntry,
-  useRemoveProgramEntry, useProgramComments, useAddProgramComment, useDeleteProgramComment,
+  useRemoveProgramEntry, useProgramComments, useAddProgramComment, useDeleteProgramComment, useTutoringEntrySync,
   PROGRAM_STAGES, PROGRAM_COMMENT_METHODS,
   type PartnerProgram, type ProgramEntry, type ProgramStage, type ProgramCommentMethod,
 } from '@/hooks/usePartnerPrograms'
@@ -149,13 +150,32 @@ function EntryComments({ entry, canEdit }: { entry: ProgramEntry; canEdit: boole
 }
 
 // ── One linked-lead row ─────────────────────────────────────────
-function EntryRow({ entry, canEdit }: { entry: ProgramEntry; canEdit: boolean }) {
+function EntryRow({ entry, canEdit, tutorName }: { entry: ProgramEntry; canEdit: boolean; tutorName?: string }) {
   const { language: lang } = useLanguage()
   const updateEntry = useUpdateProgramEntry()
   const removeEntry = useRemoveProgramEntry()
   const updateLead = useUpdateLead()
   const { data: profiles = [] } = useProfiles()
+  const { data: svcStudents = [] } = useServiceStudents()
+  const syncTutoring = useTutoringEntrySync()
   const qc = useQueryClient()
+
+  // 과외: 단계가 '신청' 이상이면 학생 Student360 academic support 연동, 아니면 해제
+  const handleStage = (stage: ProgramStage) => {
+    if (!canEdit) return
+    updateEntry.mutate({ id: entry.id, programId: entry.programId, stage })
+    if (!tutorName) return
+    const active = stage === 'application' || stage === 'completed'
+    if (active && !entry.academicSupportId) {
+      const norm = (s?: string | null) => (s || '').replace(/\s+/g, '').toLowerCase()
+      const key = norm(entry.studentName)
+      const st = key ? svcStudents.find(s => norm(s.name) === key || norm(s.koreanName) === key) : undefined
+      const today = new Date().toISOString().slice(0, 10)
+      syncTutoring.mutate({ entry, tutorName, studentId: st?.id, startDate: today, active: true })
+    } else if (!active && entry.academicSupportId) {
+      syncTutoring.mutate({ entry, tutorName, active: false })
+    }
+  }
 
   // 담당자 변경 → 같은 리드 레코드(assigned_to) 갱신 → 리드관리·콜드콜에 자동 연동
   const changeAssignee = (assignedTo: string) => {
@@ -223,6 +243,7 @@ function EntryRow({ entry, canEdit }: { entry: ProgramEntry; canEdit: boolean })
             {entry.phone && <span>{entry.phone}</span>}
             {entry.sourceChannel && <span>· {lang === 'en' ? 'Source' : '유입'}: {entry.sourceChannel}</span>}
             {!canEdit && entry.assigneeName && <span>· {lang === 'en' ? 'Assignee' : '담당'}: {entry.assigneeName}</span>}
+            {tutorName && entry.academicSupportId && <span className="text-emerald-600">· Academic Support 연동됨</span>}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -242,7 +263,7 @@ function EntryRow({ entry, canEdit }: { entry: ProgramEntry; canEdit: boolean })
           )}
           <select
             value={entry.stage}
-            onChange={(e) => updateEntry.mutate({ id: entry.id, programId: entry.programId, stage: e.target.value as ProgramStage })}
+            onChange={(e) => handleStage(e.target.value as ProgramStage)}
             disabled={!canEdit}
             className="h-7 w-[110px] rounded-lg border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
@@ -436,7 +457,7 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
 }
 
 // ── Program detail ──────────────────────────────────────────────
-function ProgramDetail({ program, canEdit }: { program: PartnerProgram; canEdit: boolean }) {
+function ProgramDetail({ program, canEdit, tutoring }: { program: PartnerProgram; canEdit: boolean; tutoring?: boolean }) {
   const { language: lang } = useLanguage()
   const { data: entries = [], isLoading } = useProgramEntries(program.id)
   const partnerOptions = usePartnerOptions()
@@ -657,7 +678,7 @@ function ProgramDetail({ program, canEdit }: { program: PartnerProgram; canEdit:
                       <span className="text-xs text-muted-foreground">{list.length}</span>
                     </div>
                     <div className="space-y-2">
-                      {list.map((e) => <EntryRow key={e.id} entry={e} canEdit={canEdit} />)}
+                      {list.map((e) => <EntryRow key={e.id} entry={e} canEdit={canEdit} tutorName={tutoring ? program.name : undefined} />)}
                     </div>
                   </div>
                 )
@@ -671,10 +692,39 @@ function ProgramDetail({ program, canEdit }: { program: PartnerProgram; canEdit:
 }
 
 // ── Page ────────────────────────────────────────────────────────
-export function ProgramsPage() {
+export interface ProgramsVariant {
+  category: string
+  titleKo: string; titleEn: string
+  descKo: string; descEn: string
+  newKo: string; newEn: string
+  nameLabelKo: string; nameLabelEn: string
+  namePlaceholderKo: string; namePlaceholderEn: string
+  tutoring: boolean
+}
+const PARTNER_VARIANT: ProgramsVariant = {
+  category: 'partner',
+  titleKo: '프로그램 관리', titleEn: 'Program Management',
+  descKo: '파트너사 프로그램을 문의 → 관심 → 신청 → 참여완료 단계로 관리합니다.', descEn: 'Manage partner programs through Inquiry → Interested → Signed-up → Participated.',
+  newKo: '새 프로그램', newEn: 'New Program',
+  nameLabelKo: '프로그램명', nameLabelEn: 'Program name',
+  namePlaceholderKo: '예: 여름 보딩 준비 캠프', namePlaceholderEn: 'e.g. Summer Boarding Prep',
+  tutoring: false,
+}
+export const TUTORING_VARIANT: ProgramsVariant = {
+  category: 'tutoring',
+  titleKo: '과외강사관리', titleEn: 'Private Tutor Management',
+  descKo: '과외선생님을 등록(브로셔·안내문 업로드/AI 정리)하고 문의 → 관심 → 신청 단계로 관리합니다. 신청 시 학생 Student360 Academic Support에 자동 연동됩니다(수업제목 = 과외선생님 이름 + 1:1).',
+  descEn: 'Register tutors (brochure/AI) and manage Inquiry → Interested → Signed-up. On sign-up, links to the student\'s Student360 Academic Support (title = tutor + 1:1).',
+  newKo: '새 과외선생님', newEn: 'New Tutor',
+  nameLabelKo: '과외선생님 이름', nameLabelEn: 'Tutor name',
+  namePlaceholderKo: '예: 박성원', namePlaceholderEn: 'e.g. John',
+  tutoring: true,
+}
+
+export function ProgramsPage({ variant = PARTNER_VARIANT }: { variant?: ProgramsVariant } = {}) {
   const { language: lang } = useLanguage()
   const canEdit = useCanEdit(useLocation().pathname)
-  const { data: programs = [], isLoading } = usePartnerPrograms()
+  const { data: programs = [], isLoading } = usePartnerPrograms(variant.category)
   const partnerOptions = usePartnerOptions()
   const createProgram = useCreateProgram()
   const deleteProgram = useDeleteProgram()
@@ -696,6 +746,7 @@ export function ProgramsPage() {
     const created = await createProgram.mutateAsync({
       name: form.name.trim(),
       partnerName: form.partnerName || null,
+      category: variant.category,
     })
     setForm({ name: '', partnerName: '' })
     setShowCreate(false)
@@ -706,21 +757,18 @@ export function ProgramsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{lang === 'en' ? 'Program Management' : '프로그램 관리'}</h1>
-          <p className="text-muted-foreground text-sm">
-            {lang === 'en'
-              ? 'Manage partner programs through Inquiry → Interested → Signed-up → Participated.'
-              : '파트너사 프로그램을 문의 → 관심 → 신청 → 참여완료 단계로 관리합니다.'}
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">{lang === 'en' ? variant.titleEn : variant.titleKo}</h1>
+          <p className="text-muted-foreground text-sm">{lang === 'en' ? variant.descEn : variant.descKo}</p>
         </div>
         {canEdit && (
           <Button className="gap-2" onClick={() => setShowCreate(true)}>
-            <Plus className="size-4" /> {lang === 'en' ? 'New Program' : '새 프로그램'}
+            <Plus className="size-4" /> {lang === 'en' ? variant.newEn : variant.newKo}
           </Button>
         )}
       </div>
 
-      {/* Company filter */}
+      {/* Company filter — 과외는 파트너사 개념이 없어 숨김 */}
+      {!variant.tutoring && (
       <Card>
         <CardContent className="py-3">
           <div className="flex items-center gap-2">
@@ -735,6 +783,7 @@ export function ProgramsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Loader2 className="size-7 animate-spin text-muted-foreground" /></div>
@@ -786,7 +835,7 @@ export function ProgramsPage() {
                     </Button>
                   )}
                 </div>
-                <ProgramDetail program={selected} canEdit={canEdit} />
+                <ProgramDetail program={selected} canEdit={canEdit} tutoring={variant.tutoring} />
               </div>
             ) : (
               <Card><CardContent className="py-16 text-center text-sm text-muted-foreground">
@@ -801,23 +850,25 @@ export function ProgramsPage() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{lang === 'en' ? 'New Program' : '새 프로그램'}</DialogTitle>
+            <DialogTitle>{lang === 'en' ? variant.newEn : variant.newKo}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {!variant.tutoring && (
+              <div>
+                <Label>{lang === 'en' ? 'Partner' : '파트너사'}</Label>
+                <select
+                  value={form.partnerName}
+                  onChange={(e) => setForm((f) => ({ ...f, partnerName: e.target.value }))}
+                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <option value="">{lang === 'en' ? 'Select partner (optional)' : '파트너사 선택 (선택사항)'}</option>
+                  {partnerOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            )}
             <div>
-              <Label>{lang === 'en' ? 'Partner' : '파트너사'}</Label>
-              <select
-                value={form.partnerName}
-                onChange={(e) => setForm((f) => ({ ...f, partnerName: e.target.value }))}
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <option value="">{lang === 'en' ? 'Select partner (optional)' : '파트너사 선택 (선택사항)'}</option>
-                {partnerOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-            <div>
-              <Label>{lang === 'en' ? 'Program name' : '프로그램명'} *</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder={lang === 'en' ? 'e.g. Summer Boarding Prep' : '예: 여름 보딩 준비 캠프'} />
+              <Label>{lang === 'en' ? variant.nameLabelEn : variant.nameLabelKo} *</Label>
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder={lang === 'en' ? variant.namePlaceholderEn : variant.namePlaceholderKo} />
             </div>
           </div>
           <DialogFooter>

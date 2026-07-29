@@ -27,6 +27,7 @@ export interface PartnerProgram {
   name: string
   guide: string | null
   brochureUrl: string | null
+  category: string  // 'partner'(프로그램관리) | 'tutoring'(과외강사관리)
   createdAt: string
   updatedAt: string
 }
@@ -49,6 +50,7 @@ export interface ProgramEntry {
   pipelineStage: string | null
   assignedTo: string | null
   assigneeName: string | null
+  academicSupportId: string | null   // 과외: '신청' 시 연동된 academic support
 }
 
 export interface ProgramComment {
@@ -69,18 +71,20 @@ function mapProgram(row: Record<string, unknown>): PartnerProgram {
     name: row.name as string,
     guide: (row.guide as string) ?? null,
     brochureUrl: (row.brochure_url as string) ?? null,
+    category: (row.category as string) || 'partner',
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
 }
 
-export function usePartnerPrograms() {
+export function usePartnerPrograms(category: string = 'partner') {
   return useQuery({
-    queryKey: ['partner-programs'],
+    queryKey: ['partner-programs', category],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('partner_programs')
         .select('*')
+        .eq('category', category)
         .order('created_at', { ascending: false })
       if (error) throw error
       return (data || []).map((r) => mapProgram(r as Record<string, unknown>))
@@ -92,13 +96,14 @@ export function useCreateProgram() {
   const qc = useQueryClient()
   const { user } = useAuth()
   return useMutation({
-    mutationFn: async (input: { name: string; partnerName: string | null; guide?: string | null }) => {
+    mutationFn: async (input: { name: string; partnerName: string | null; guide?: string | null; category?: string }) => {
       const { data, error } = await supabase
         .from('partner_programs')
         .insert({
           name: input.name,
           partner_name: input.partnerName,
           guide: input.guide ?? null,
+          category: input.category || 'partner',
           created_by: user?.id ?? null,
         })
         .select('*')
@@ -180,6 +185,7 @@ function mapEntry(row: Record<string, unknown>): ProgramEntry {
     pipelineStage: (lead?.pipeline_stage as string) ?? null,
     assignedTo: (lead?.assigned_to as string) ?? null,
     assigneeName: ((lead?.assignee as Record<string, unknown> | null)?.name as string) ?? null,
+    academicSupportId: (row.academic_support_id as string) ?? null,
   }
 }
 
@@ -228,6 +234,38 @@ export function useUpdateProgramEntry() {
       if (error) throw error
     },
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['partner-program-entries', v.programId] }),
+  })
+}
+
+/** 과외: 엔트리가 '신청' 이상이 되면 학생 Student360 academic support에 연동(수업제목='{과외선생님} 1:1', 시작일).
+ *  이전 단계로 되돌리면 연동 레코드 삭제. */
+export function useTutoringEntrySync() {
+  const qc = useQueryClient()
+  const { user } = useAuth()
+  return useMutation({
+    mutationFn: async (input: { entry: ProgramEntry; tutorName: string; studentId?: string; startDate?: string; active: boolean }) => {
+      if (input.active) {
+        if (input.entry.academicSupportId || !input.studentId) return  // 이미 연동됨 or 학생 매칭 실패
+        const { data, error } = await supabase.from('service_academic_support').insert({
+          student_id: input.studentId,
+          academy_name: `${(input.tutorName || '').trim()} 1:1`,   // 수업제목
+          period_start: input.startDate || null,
+          notes: '과외 (과외강사관리 연동)',
+          created_by: user?.id ?? null,
+        }).select('id').single()
+        if (error) throw error
+        await supabase.from('partner_program_entries').update({ academic_support_id: (data as { id: string }).id }).eq('id', input.entry.id)
+      } else {
+        if (!input.entry.academicSupportId) return
+        await supabase.from('service_academic_support').delete().eq('id', input.entry.academicSupportId)
+        await supabase.from('partner_program_entries').update({ academic_support_id: null }).eq('id', input.entry.id)
+      }
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['partner-program-entries', v.entry.programId] })
+      qc.invalidateQueries({ queryKey: ['academic_support'] })
+      qc.invalidateQueries({ queryKey: ['service-program-fees'] })
+    },
   })
 }
 
