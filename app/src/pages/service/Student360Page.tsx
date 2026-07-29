@@ -17,6 +17,7 @@ import {
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
   Lock, Unlock, MessageSquare, Send, Flag,
+  PenTool, BookText, FolderArchive,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -2613,7 +2614,7 @@ function EditorMeetingsSection({ studentId, createdBy, defaultEditor, canEdit }:
     <Card className="border-teal-200">
       <CardHeader className="bg-teal-50/40 rounded-t-xl">
         <CardTitle className="flex items-center gap-2 text-base">
-          <NotebookPen className="size-5 text-teal-600" />
+          <PenTool className="size-5 text-teal-600" />
           에세이 에디터 미팅 <span className="text-muted-foreground font-normal">({items.length})</span>
         </CardTitle>
       </CardHeader>
@@ -2826,7 +2827,7 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
-          <NotebookPen className="size-5 text-primary" />
+          <BookText className="size-5 text-primary" />
           {t('student360.diary')} <span className="text-muted-foreground font-normal">({entries.length})</span>
         </CardTitle>
         <div className="flex items-center gap-2">
@@ -3066,7 +3067,7 @@ function ArchiveSection({ studentId, createdBy, canEdit }: { studentId: string; 
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <FileText className="size-5 text-primary" />
+          <FolderArchive className="size-5 text-primary" />
           {t('archive.title')}
         </CardTitle>
       </CardHeader>
