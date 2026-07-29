@@ -153,7 +153,17 @@ function EntryRow({ entry, canEdit }: { entry: ProgramEntry; canEdit: boolean })
   const updateEntry = useUpdateProgramEntry()
   const removeEntry = useRemoveProgramEntry()
   const updateLead = useUpdateLead()
+  const { data: profiles = [] } = useProfiles()
   const qc = useQueryClient()
+
+  // 담당자 변경 → 같은 리드 레코드(assigned_to) 갱신 → 리드관리·콜드콜에 자동 연동
+  const changeAssignee = (assignedTo: string) => {
+    if (!canEdit) return
+    updateLead.mutate(
+      { id: entry.leadId, data: { assignedTo: (assignedTo || null) as unknown as string } },
+      { onSuccess: () => qc.invalidateQueries({ queryKey: ['partner-program-entries', entry.programId] }) },
+    )
+  }
   const [showComments, setShowComments] = useState(false)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
@@ -211,10 +221,24 @@ function EntryRow({ entry, canEdit }: { entry: ProgramEntry; canEdit: boolean })
             {entry.grade && <span>{entry.grade}</span>}
             {entry.phone && <span>{entry.phone}</span>}
             {entry.sourceChannel && <span>· {lang === 'en' ? 'Source' : '유입'}: {entry.sourceChannel}</span>}
-            {entry.assigneeName && <span>· {lang === 'en' ? 'Assignee' : '담당'}: {entry.assigneeName}</span>}
+            {!canEdit && entry.assigneeName && <span>· {lang === 'en' ? 'Assignee' : '담당'}: {entry.assigneeName}</span>}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
+          {canEdit && (
+            <select
+              value={entry.assignedTo || ''}
+              onChange={(e) => changeAssignee(e.target.value)}
+              disabled={updateLead.isPending}
+              title={lang === 'en' ? 'Assignee' : '담당자'}
+              className="h-7 w-[92px] rounded-lg border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="">{lang === 'en' ? 'Assignee' : '담당자'}</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          )}
           <select
             value={entry.stage}
             onChange={(e) => updateEntry.mutate({ id: entry.id, programId: entry.programId, stage: e.target.value as ProgramStage })}
