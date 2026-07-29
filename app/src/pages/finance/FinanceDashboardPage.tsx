@@ -16,7 +16,7 @@ import { useAllExtraInstallments } from '@/hooks/useExternalFees'
 import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
 import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
-import { Banknote } from 'lucide-react'
+import { Banknote, RefreshCw } from 'lucide-react'
 import { useIncentiveLinesByPerson, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
 import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -798,11 +798,25 @@ function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, ca
   const personCount = new Set(rows.map(r => r.person)).size
   const pendingRows = rows.filter(r => !r.received)
 
+  // 전체 라인(이미 지급완료 포함)을 각 발생월로 재정렬 — 현재 월 필터와 무관하게 전 기간 대상
+  const allLineRows = useMemo(() => {
+    const out: { key: string; month: string }[] = []
+    linesByPerson.forEach(lines => lines.forEach(l => out.push({ key: l.id, month: l.month })))
+    return out
+  }, [linesByPerson])
+
   // 미지급 전체를 각 라인의 발생월 기준으로 일괄 지급완료
   const bulkPayByOrigin = () => {
     if (!pendingRows.length) return
     if (!confirm(`미지급 ${pendingRows.length}건을 각 항목의 발생월 기준으로 지급완료 처리할까요?\n(예: 2026-06 발생분 → 2026-06 지급완료)`)) return
     onBulk(pendingRows.map(r => ({ key: r.line.id, received: true, month: r.line.month })))
+  }
+
+  // 전체(이미 지급완료 포함)를 발생월로 재정렬 — 잘못 찍힌 월 정리용
+  const realignAll = () => {
+    if (!allLineRows.length) return
+    if (!confirm(`전체 ${allLineRows.length}건을 각 항목의 발생월로 지급완료 재정렬할까요?\n이미 지급완료된 건의 월도 발생월로 덮어씁니다. (잘못된 월 정리용)`)) return
+    onBulk(allLineRows.map(r => ({ key: r.key, received: true, month: r.month })))
   }
 
   return (
@@ -816,6 +830,12 @@ function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, ca
             <Button size="sm" variant="outline" className="h-8 gap-1 text-violet-700 border-violet-300 hover:bg-violet-50"
               disabled={toggling} onClick={bulkPayByOrigin}>
               <Banknote className="size-4" /> 발생월 기준 일괄 지급완료 ({pendingRows.length}건)
+            </Button>
+          )}
+          {canToggle && allLineRows.length > 0 && (
+            <Button size="sm" variant="ghost" className="h-8 gap-1 text-muted-foreground hover:text-violet-700"
+              disabled={toggling} onClick={realignAll} title="이미 지급완료된 건 포함, 전체를 발생월로 다시 맞춤(잘못된 월 정리)">
+              <RefreshCw className="size-3.5" /> 전체 발생월로 재정렬
             </Button>
           )}
           <div className="ml-auto flex items-center gap-2">
