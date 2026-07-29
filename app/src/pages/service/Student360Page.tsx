@@ -452,9 +452,9 @@ export function Student360Page() {
           <div className="space-y-4">
             <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} canEdit={canEdit} />
             <ContractSection student={selected} canEdit={canEdit} />
+            <EssayServiceSection studentId={selected.id} defaultConsultant={consultantName(selected.assignedConsultant)} createdBy={user?.id} canEdit={canEdit} />
             <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
-            <EssayServiceSection studentId={selected.id} defaultConsultant={consultantName(selected.assignedConsultant)} createdBy={user?.id} canEdit={canEdit} />
             <CoachingSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} canEdit={canEdit} />
             <IssueReportSection studentId={selected.id} studentName={selected.name} userId={user?.id} userName={user?.name} isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit} />
@@ -1223,7 +1223,7 @@ function EssayServiceSection({ studentId, defaultConsultant, createdBy, canEdit 
     <Card>
       <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <CardTitle className="flex items-center gap-2 text-base">
-          <FileText className="size-5 text-primary" />
+          <NotebookPen className="size-5 text-primary" />
           원서·에세이 서비스
           <span className="text-muted-foreground font-normal">({plans.length})</span>
         </CardTitle>
