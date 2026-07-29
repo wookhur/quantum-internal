@@ -19,6 +19,7 @@ export interface FreelancerInvoice {
   invoiceDate: string
   invoiceMonth: string
   status: 'draft' | 'submitted' | 'approved' | 'rejected'
+  paidDate?: string | null   // 지급완료일 (설정되면 지급완료로 표시)
   residentNumber: string | null
   phone: string | null
   bankAccount: string | null
@@ -40,6 +41,7 @@ function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
     invoiceDate: r.invoice_date as string,
     invoiceMonth: r.invoice_month as string,
     status: r.status as FreelancerInvoice['status'],
+    paidDate: (r.paid_date as string) || null,
     residentNumber: r.resident_number as string | null,
     phone: r.phone as string | null,
     bankAccount: r.bank_account as string | null,
@@ -279,6 +281,25 @@ export function useUpdateInvoiceStatus() {
       qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
+      qc.invalidateQueries({ queryKey: ['all-invoices'] })
+    },
+  })
+}
+
+/** 지급완료 처리(지급일 기록) / 지급취소(null). status는 그대로 approved 유지. */
+export function useSetInvoicePaidDate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, paidDate }: { id: string; paidDate: string | null }) => {
+      const { error } = await supabase
+        .from('freelancer_invoices')
+        .update({ paid_date: paidDate, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
+      qc.invalidateQueries({ queryKey: ['my-invoices'] })
       qc.invalidateQueries({ queryKey: ['all-invoices'] })
     },
   })

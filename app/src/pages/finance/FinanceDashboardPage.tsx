@@ -13,7 +13,10 @@ import { formatCurrency } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useIncentivesByInstallment, type IncentiveType } from '@/hooks/useIncentives'
 import { useAllExtraInstallments } from '@/hooks/useExternalFees'
-import { useAllInvoices, useUpdateInvoiceStatus, useInvoiceItems, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
+import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
+import { todayKST } from '@/lib/date'
+import { Input } from '@/components/ui/input'
+import { Banknote } from 'lucide-react'
 import { useIncentiveLinesByPerson } from '@/pages/finance/FreelancerInvoicesPage'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
@@ -74,12 +77,19 @@ export function FinanceDashboardPage() {
 
   const { data: invoices = [], isLoading: invLoading } = useAllInvoices(month === 'all' ? undefined : month)
   const updateStatus = useUpdateInvoiceStatus()
+  const setPaidDate = useSetInvoicePaidDate()
   const [detailInv, setDetailInv] = useState<FreelancerInvoice | null>(null)
 
   const { data: allIncentives = [], isLoading: incLoading } = useIncentivesByInstallment()
   const { data: allExtras = [], isLoading: extLoading } = useAllExtraInstallments()
 
   const pending = useMemo(() => invoices.filter(i => i.status === 'submitted'), [invoices])
+  // 지급 원장: 승인완료 인보이스(미지급 먼저, 그다음 지급일 최신)
+  const approvedList = useMemo(() =>
+    invoices.filter(i => i.status === 'approved').sort((a, b) => {
+      if (!!a.paidDate !== !!b.paidDate) return a.paidDate ? 1 : -1
+      return (b.paidDate || b.invoiceDate || '').localeCompare(a.paidDate || a.invoiceDate || '')
+    }), [invoices])
 
   const invoiceSummary = useMemo(() => {
     const byKind = new Map<string, { count: number; total: number }>()
@@ -90,9 +100,12 @@ export function FinanceDashboardPage() {
       byKind.set(k, e)
     }
     const grandTotal = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0)
-    const approvedTotal = invoices.filter(i => i.status === 'approved').reduce((s, i) => s + (i.totalAmount || 0), 0)
+    // 승인완료·미지급(=지급 예정) vs 지급완료(paidDate 있음)
+    const approvedTotal = invoices.filter(i => i.status === 'approved' && !i.paidDate).reduce((s, i) => s + (i.totalAmount || 0), 0)
     const pendingTotal = invoices.filter(i => i.status === 'submitted').reduce((s, i) => s + (i.totalAmount || 0), 0)
-    return { byKind, grandTotal, approvedTotal, pendingTotal }
+    const paidTotal = invoices.filter(i => !!i.paidDate).reduce((s, i) => s + (i.totalAmount || 0), 0)
+    const paidCount = invoices.filter(i => !!i.paidDate).length
+    return { byKind, grandTotal, approvedTotal, pendingTotal, paidTotal, paidCount }
   }, [invoices])
 
   // ─── 미지급 현황 (기존): 프리랜서 커미션 + 서비스 수수료 ───
@@ -283,16 +296,9 @@ export function FinanceDashboardPage() {
           <div className="text-xl font-bold mt-1 text-emerald-600">{formatCurrency(invoiceSummary.approvedTotal)}</div>
         </CardContent></Card>
         <Card><CardContent className="py-4">
-          <div className="text-xs text-muted-foreground">종류별 신청</div>
-          <div className="mt-1 space-y-0.5">
-            {[...invoiceSummary.byKind.entries()].map(([k, e]) => (
-              <div key={k} className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground truncate">{kindLabel(k)}</span>
-                <span className="font-medium tabular-nums">{formatCurrency(e.total)} · {e.count}건</span>
-              </div>
-            ))}
-            {invoiceSummary.byKind.size === 0 && <div className="text-[11px] text-muted-foreground">없음</div>}
-          </div>
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Banknote className="size-4 text-indigo-500" /> 지급 완료</div>
+          <div className="text-xl font-bold mt-1 text-indigo-600">{formatCurrency(invoiceSummary.paidTotal)}</div>
+          <div className="text-[11px] text-muted-foreground">{invoiceSummary.paidCount}건</div>
         </CardContent></Card>
       </div>
 
@@ -371,6 +377,58 @@ export function FinanceDashboardPage() {
                           <XCircle className="size-4" /> 반려
                         </Button>
                       </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 지급 원장 (승인완료 → 지급완료) */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex items-center gap-2 px-4 py-3 border-b">
+            <Banknote className="size-4 text-indigo-500" />
+            <span className="font-semibold text-sm">지급 원장 (승인완료 · 지급완료)</span>
+            <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50">{approvedList.length}건</Badge>
+            <span className="text-[11px] text-muted-foreground ml-auto">지급이 나간 인보이스는 "지급완료 처리"로 지급일을 기록하세요. 중복·이월 판단 근거가 됩니다.</span>
+          </div>
+          {invLoading ? (
+            <div className="py-14 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+          ) : approvedList.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">승인완료된 인보이스가 없습니다.</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-36">제출자</TableHead>
+                  <TableHead className="w-36">종류</TableHead>
+                  <TableHead className="w-24">정산월</TableHead>
+                  <TableHead className="text-right w-32">금액</TableHead>
+                  <TableHead className="w-24">상태</TableHead>
+                  <TableHead className="text-right w-80">지급완료 처리</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {approvedList.map(inv => (
+                  <TableRow key={inv.id} className={inv.paidDate ? 'bg-indigo-50/30' : ''}>
+                    <TableCell className="text-sm font-medium">{inv.freelancerName || inv.freelancerEmail || '-'}</TableCell>
+                    <TableCell className="text-sm"><Badge variant="outline">{kindLabel(inv.kind)}</Badge></TableCell>
+                    <TableCell className="text-sm tabular-nums">{inv.invoiceMonth}</TableCell>
+                    <TableCell className="text-sm text-right font-semibold tabular-nums">
+                      <button type="button" onClick={() => setDetailInv(inv)} className="text-primary hover:underline underline-offset-2 tabular-nums" title="인보이스 상세 보기">
+                        {formatCurrency(inv.totalAmount)}
+                      </button>
+                    </TableCell>
+                    <TableCell>
+                      {inv.paidDate
+                        ? <StatusBadge status="paid" />
+                        : <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-200 bg-emerald-50">지급예정</Badge>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <PaidActionCell inv={inv} disabled={setPaidDate.isPending} onSet={(id, d) => setPaidDate.mutate({ id, paidDate: d })} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -688,6 +746,7 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   submitted: { label: '승인대기', cls: 'text-amber-700 border-amber-200 bg-amber-50' },
   approved: { label: '승인완료', cls: 'text-emerald-700 border-emerald-200 bg-emerald-50' },
+  paid: { label: '지급완료', cls: 'text-indigo-700 border-indigo-200 bg-indigo-50' },
   rejected: { label: '반려', cls: 'text-red-700 border-red-200 bg-red-50' },
   draft: { label: '작성중', cls: 'text-muted-foreground' },
 }
@@ -733,7 +792,7 @@ function CategoryBoard({ label, invoices, onSelect }: {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <StatusBadge status={inv.status} />
+                  <StatusBadge status={inv.paidDate ? 'paid' : inv.status} />
                   <button
                     type="button"
                     onClick={() => onSelect(inv)}
@@ -749,6 +808,44 @@ function CategoryBoard({ label, invoices, onSelect }: {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// ─── 지급완료 처리 셀 (지급일 기록/수정/취소) ────────────────────────────────
+function PaidActionCell({ inv, disabled, onSet }: {
+  inv: FreelancerInvoice
+  disabled: boolean
+  onSet: (id: string, paidDate: string | null) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [d, setD] = useState(inv.paidDate || todayKST())
+
+  if (editing) {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <Input type="date" value={d} onChange={e => setD(e.target.value)} className="h-8 w-36 text-sm" />
+        <Button size="sm" className="h-8" disabled={disabled} onClick={() => { onSet(inv.id, d || todayKST()); setEditing(false) }}>저장</Button>
+        <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditing(false)}>취소</Button>
+        {inv.paidDate && (
+          <Button size="sm" variant="ghost" className="h-8 text-red-600" disabled={disabled}
+            onClick={() => { onSet(inv.id, null); setEditing(false) }}>지급취소</Button>
+        )}
+      </div>
+    )
+  }
+  if (inv.paidDate) {
+    return (
+      <div className="flex items-center justify-end gap-2">
+        <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50 gap-1"><Banknote className="size-3" /> 지급 {inv.paidDate}</Badge>
+        <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => { setD(inv.paidDate || todayKST()); setEditing(true) }}>수정</Button>
+      </div>
+    )
+  }
+  return (
+    <Button size="sm" variant="outline" className="h-8 gap-1 text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+      disabled={disabled} onClick={() => { setD(todayKST()); setEditing(true) }}>
+      <Banknote className="size-4" /> 지급완료 처리
+    </Button>
   )
 }
 
