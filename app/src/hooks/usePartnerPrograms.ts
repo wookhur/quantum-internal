@@ -47,6 +47,8 @@ export interface ProgramEntry {
   sourceChannel: string | null
   leadLevel: string | null
   pipelineStage: string | null
+  assignedTo: string | null
+  assigneeName: string | null
 }
 
 export interface ProgramComment {
@@ -176,6 +178,8 @@ function mapEntry(row: Record<string, unknown>): ProgramEntry {
     sourceChannel: (lead?.source_channel as string) ?? null,
     leadLevel: (lead?.lead_level as string) ?? null,
     pipelineStage: (lead?.pipeline_stage as string) ?? null,
+    assignedTo: (lead?.assigned_to as string) ?? null,
+    assigneeName: ((lead?.assignee as Record<string, unknown> | null)?.name as string) ?? null,
   }
 }
 
@@ -186,7 +190,7 @@ export function useProgramEntries(programId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('partner_program_entries')
-        .select('*, leads(parent_name, student_name, phone, current_school, grade, source_channel, lead_level, pipeline_stage)')
+        .select('*, leads(parent_name, student_name, phone, current_school, grade, source_channel, lead_level, pipeline_stage, assigned_to, assignee:profiles!leads_assigned_to_fkey(name))')
         .eq('program_id', programId)
         .order('created_at', { ascending: true })
       if (error) throw error

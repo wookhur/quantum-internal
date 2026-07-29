@@ -1704,6 +1704,8 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
     const m = new Map<string, Map<string, ServiceStudent[]>>()
     const seen = new Map<string, Set<string>>() // programId → studentIds (중복 제거)
     for (const f of fees) {
+      // 환불완료된 프로그램은 해당 학생을 그 파트너 보드에서 제외(그 서비스를 하지 않는 것으로 처리)
+      if (f.refundStatus === 'completed') continue
       const st = studentById.get(f.studentId)
       if (!st) continue
       const vals = [f.label, f.detail].filter(Boolean).map(v => norm(v as string))

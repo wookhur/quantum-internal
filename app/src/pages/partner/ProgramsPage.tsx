@@ -20,6 +20,7 @@ import { useLocation } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useLeads, useCreateLead, useUpdateLead } from '@/hooks/useLeads'
+import { useProfiles } from '@/hooks/useProfiles'
 import { leadLevelConfig } from '@/lib/leadLevels'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { EC_PARTNERS } from '@/lib/ecPartners'
@@ -209,7 +210,8 @@ function EntryRow({ entry, canEdit }: { entry: ProgramEntry; canEdit: boolean })
             {entry.currentSchool && <span>{entry.currentSchool}</span>}
             {entry.grade && <span>{entry.grade}</span>}
             {entry.phone && <span>{entry.phone}</span>}
-            {entry.sourceChannel && <span>· {entry.sourceChannel}</span>}
+            {entry.sourceChannel && <span>· {lang === 'en' ? 'Source' : '유입'}: {entry.sourceChannel}</span>}
+            {entry.assigneeName && <span>· {lang === 'en' ? 'Assignee' : '담당'}: {entry.assigneeName}</span>}
           </div>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -269,11 +271,12 @@ function EntryRow({ entry, canEdit }: { entry: ProgramEntry; canEdit: boolean })
 }
 
 // ── Lead search-to-add ──────────────────────────────────────────
-const EMPTY_MANUAL = { studentName: '', parentName: '', currentSchool: '', grade: '', phone: '', sourceChannel: '' }
+const EMPTY_MANUAL = { studentName: '', parentName: '', currentSchool: '', grade: '', phone: '', sourceChannel: '', assignedTo: '' }
 
 function AddLeadBox({ programId, existingLeadIds }: { programId: string; existingLeadIds: Set<string> }) {
   const { language: lang } = useLanguage()
   const { data: allLeads = [] } = useLeads()
+  const { data: profiles = [] } = useProfiles()
   const addEntry = useAddProgramEntry()
   const createLead = useCreateLead()
   const [q, setQ] = useState('')
@@ -309,6 +312,7 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
         grade: manual.grade.trim(),
         phone: manual.phone.trim(),
         sourceChannel: manual.sourceChannel.trim() || '프로그램 직접 추가',
+        assignedTo: manual.assignedTo || undefined,
         pipelineStage: 'new_lead',
         leadDate: today,
       })
@@ -379,7 +383,15 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
             <Input value={manual.currentSchool} onChange={(e) => setManual((m) => ({ ...m, currentSchool: e.target.value }))} placeholder={lang === 'en' ? 'School' : '학교 이름'} className="h-8 text-sm bg-white" />
             <Input value={manual.grade} onChange={(e) => setManual((m) => ({ ...m, grade: e.target.value }))} placeholder={lang === 'en' ? 'Grade' : '학년'} className="h-8 text-sm bg-white" />
             <Input value={manual.phone} onChange={(e) => setManual((m) => ({ ...m, phone: e.target.value }))} placeholder={lang === 'en' ? 'Parent phone' : '학부모 전화번호'} className="h-8 text-sm bg-white" />
-            <Input value={manual.sourceChannel} onChange={(e) => setManual((m) => ({ ...m, sourceChannel: e.target.value }))} placeholder={lang === 'en' ? 'Source / memo' : '상담 유입경로 메모'} className="h-8 text-sm bg-white" />
+            <Input value={manual.sourceChannel} onChange={(e) => setManual((m) => ({ ...m, sourceChannel: e.target.value }))} placeholder={lang === 'en' ? 'Source channel (e.g. Instagram, seminar)' : '유입채널 (예: 인스타, 세미나)'} className="h-8 text-sm bg-white" />
+            <Select value={manual.assignedTo || undefined} onValueChange={(v) => setManual((m) => ({ ...m, assignedTo: v || '' }))}>
+              <SelectTrigger className="h-8 text-sm bg-white">
+                <span className="truncate">{manual.assignedTo ? (profiles.find((p) => p.id === manual.assignedTo)?.name || (lang === 'en' ? 'Assignee' : '담당자')) : (lang === 'en' ? 'Assignee' : '담당자 선택')}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           {manualErr && <p className="text-xs text-destructive">{manualErr}</p>}
           <div className="flex justify-end gap-2">

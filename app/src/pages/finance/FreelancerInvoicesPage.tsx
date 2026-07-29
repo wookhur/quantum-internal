@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -157,6 +157,19 @@ function InvoiceFormDialog({
   )
   const [saving, setSaving] = useState(false)
   const [downloading, setDownloading] = useState(false)
+
+  // 발행/업로드로 사전 채워진 데이터가 있으면 폼이 열릴 때 확실히 반영(이름 자동 채움 보장)
+  useEffect(() => {
+    if (!open || !initialData) return
+    if (initialData.items?.length) setItems(initialData.items.map(it => ({ ...it })))
+    if (initialData.invoiceDate) setInvoiceDate(initialData.invoiceDate)
+    setResidentNumber(initialData.residentNumber || '')
+    setPhone(initialData.phone || '')
+    setNote(initialData.note || '')
+    const b = splitBank(initialData.bankAccount || '')
+    setBankName(b.bankName); setAccountNumber(b.accountNumber); setAccountHolder(b.accountHolder)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialData])
 
   const totalAmount = useMemo(() => items.reduce((s, it) => s + it.quantity * it.unitPrice, 0), [items])
 

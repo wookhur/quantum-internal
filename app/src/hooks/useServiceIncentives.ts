@@ -37,6 +37,7 @@ export function useServiceIncentiveLines(): ServiceIncentiveLine[] {
     const lines: ServiceIncentiveLine[] = []
     for (const f of fees) {
       if (f.collectionStatus !== 'paid' || !f.paidDate) continue
+      if (f.refundStatus === 'completed') continue  // 환불완료 건은 인센티브 제외
       const paidMonth = f.paidDate.slice(0, 7)
       const billed = f.billedAmount || 0
       if (!billed) continue
