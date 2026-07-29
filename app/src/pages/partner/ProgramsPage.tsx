@@ -160,21 +160,15 @@ function EntryRow({ entry, canEdit, tutorName }: { entry: ProgramEntry; canEdit:
   const syncTutoring = useTutoringEntrySync()
   const qc = useQueryClient()
 
-  // 과외: 단계가 '신청' 이상이면 학생 Student360 academic support 연동, 아니면 해제
+  const [linkOpen, setLinkOpen] = useState(false)
   const handleStage = (stage: ProgramStage) => {
     if (!canEdit) return
     updateEntry.mutate({ id: entry.id, programId: entry.programId, stage })
+  }
+  // 과외 '수업중' 해제 → 연동된 academic support 삭제
+  const unlinkTutoring = () => {
     if (!tutorName) return
-    const active = stage === 'application' || stage === 'completed'
-    if (active && !entry.academicSupportId) {
-      const norm = (s?: string | null) => (s || '').replace(/\s+/g, '').toLowerCase()
-      const key = norm(entry.studentName)
-      const st = key ? svcStudents.find(s => norm(s.name) === key || norm(s.koreanName) === key) : undefined
-      const today = new Date().toISOString().slice(0, 10)
-      syncTutoring.mutate({ entry, tutorName, studentId: st?.id, startDate: today, active: true })
-    } else if (!active && entry.academicSupportId) {
-      syncTutoring.mutate({ entry, tutorName, active: false })
-    }
+    syncTutoring.mutate({ entry, tutorName, active: false })
   }
 
   // 담당자 변경 → 같은 리드 레코드(assigned_to) 갱신 → 리드관리·콜드콜에 자동 연동
@@ -261,6 +255,19 @@ function EntryRow({ entry, canEdit, tutorName }: { entry: ProgramEntry; canEdit:
               ))}
             </select>
           )}
+          {/* 과외: 수업중 연동(학생검색+시작일 → Student360 Academic Support) */}
+          {tutorName && canEdit && (
+            entry.academicSupportId ? (
+              <div className="flex items-center gap-1">
+                <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-200 bg-emerald-50">수업중</Badge>
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={unlinkTutoring} disabled={syncTutoring.isPending}>해제</Button>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1 text-indigo-700 border-indigo-200 hover:bg-indigo-50" onClick={() => setLinkOpen(true)}>
+                수업중 연동
+              </Button>
+            )
+          )}
           <select
             value={entry.stage}
             onChange={(e) => handleStage(e.target.value as ProgramStage)}
@@ -312,6 +319,87 @@ function EntryRow({ entry, canEdit, tutorName }: { entry: ProgramEntry; canEdit:
       )}
 
       {showComments && <EntryComments entry={entry} canEdit={canEdit} />}
+      {linkOpen && tutorName && (
+        <TutoringLinkModal
+          students={svcStudents}
+          defaultName={entry.studentName}
+          tutorName={tutorName}
+          pending={syncTutoring.isPending}
+          onClose={() => setLinkOpen(false)}
+          onConfirm={(studentId, startDate) => {
+            syncTutoring.mutate(
+              { entry, tutorName, studentId, startDate, active: true },
+              { onSuccess: () => { setLinkOpen(false); if (entry.stage !== 'application' && entry.stage !== 'completed') handleStage('application') } },
+            )
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── 과외: 학생 검색 + 시작일(달력) → Student360 Academic Support 연동 ──────────
+function TutoringLinkModal({ students, defaultName, tutorName, pending, onClose, onConfirm }: {
+  students: { id: string; name?: string; koreanName?: string; grade?: string; school?: string }[]
+  defaultName?: string | null
+  tutorName: string
+  pending: boolean
+  onClose: () => void
+  onConfirm: (studentId: string, startDate: string) => void
+}) {
+  const norm = (s?: string | null) => (s || '').replace(/\s+/g, '').toLowerCase()
+  const initial = students.find(s => norm(s.name) === norm(defaultName) || norm(s.koreanName) === norm(defaultName))
+  const [sel, setSel] = useState<string | null>(initial?.id ?? null)
+  const [q, setQ] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const matches = q.trim()
+    ? students.filter(s => norm(s.name).includes(norm(q)) || norm(s.koreanName).includes(norm(q)) || norm(s.school).includes(norm(q))).slice(0, 8)
+    : []
+  const selStudent = students.find(s => s.id === sel)
+  const label = (s?: { name?: string; koreanName?: string }) => [s?.koreanName, s?.name].filter(Boolean).join(' ') || s?.name || '—'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-xl bg-white p-4 space-y-3" onClick={e => e.stopPropagation()}>
+        <div className="font-semibold">수업중 연동 <span className="text-xs font-normal text-muted-foreground">· {tutorName} 1:1</span></div>
+        <div>
+          <div className="text-xs text-muted-foreground mb-1">서비스 학생 검색 (Student360)</div>
+          {selStudent ? (
+            <div className="flex items-center justify-between gap-2 h-9 px-3 rounded-md border bg-muted/30 text-sm">
+              <span className="font-medium">{label(selStudent)}</span>
+              <button onClick={() => { setSel(null); setQ('') }}><X className="size-4 text-muted-foreground" /></button>
+            </div>
+          ) : (
+            <div className="relative">
+              <div className="flex items-center gap-2">
+                <Search className="size-4 text-muted-foreground shrink-0" />
+                <Input value={q} onChange={e => setQ(e.target.value)} placeholder="학생 이름·학교 검색..." className="h-9 text-sm" autoFocus />
+              </div>
+              {matches.length > 0 && (
+                <div className="absolute z-20 mt-1 w-full rounded-lg border bg-white shadow-lg max-h-56 overflow-y-auto">
+                  {matches.map(s => (
+                    <button key={s.id} className="w-full text-left px-3 py-2 hover:bg-muted/50 border-b last:border-0" onClick={() => { setSel(s.id); setQ('') }}>
+                      <div className="text-sm font-medium">{label(s)}</div>
+                      <div className="text-xs text-muted-foreground">{[s.school, s.grade].filter(Boolean).join(' · ')}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div>
+          <div className="text-xs text-muted-foreground mb-1">시작일</div>
+          <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9 text-sm" />
+        </div>
+        <p className="text-[11px] text-muted-foreground">학생 Academic Support에 <b>{tutorName} 1:1</b> · 시작일로 기록됩니다.</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>취소</Button>
+          <Button size="sm" disabled={!sel || !startDate || pending} onClick={() => sel && onConfirm(sel, startDate)}>
+            {pending && <Loader2 className="size-3.5 animate-spin mr-1" />}수업중 연동
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -548,19 +636,21 @@ function ProgramDetail({ program, canEdit, tutoring }: { program: PartnerProgram
 
   return (
     <div className="space-y-4">
-      {/* Partner assignment */}
-      <div className="flex items-center gap-2">
-        <Label className="text-xs text-muted-foreground shrink-0">{lang === 'en' ? 'Partner' : '파트너사'}</Label>
-        <select
-          value={program.partnerName || ''}
-          onChange={(e) => updateProgram.mutate({ id: program.id, partnerName: e.target.value || null })}
-          disabled={!canEdit}
-          className="h-8 w-[240px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <option value="">{lang === 'en' ? 'No partner' : '파트너사 미지정'}</option>
-          {partnerOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-      </div>
+      {/* Partner assignment — 과외강사관리에서는 숨김(파트너사 개념 없음) */}
+      {!tutoring && (
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground shrink-0">{lang === 'en' ? 'Partner' : '파트너사'}</Label>
+          <select
+            value={program.partnerName || ''}
+            onChange={(e) => updateProgram.mutate({ id: program.id, partnerName: e.target.value || null })}
+            disabled={!canEdit}
+            className="h-8 w-[240px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="">{lang === 'en' ? 'No partner' : '파트너사 미지정'}</option>
+            {partnerOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+      )}
 
       {/* Brochure + guide */}
       <div className="grid md:grid-cols-2 gap-4">
@@ -804,7 +894,7 @@ export function ProgramsPage({ variant = PARTNER_VARIANT }: { variant?: Programs
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{p.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{p.partnerName || (lang === 'en' ? 'No partner' : '파트너사 미지정')}</p>
+                    {!variant.tutoring && <p className="text-xs text-muted-foreground truncate">{p.partnerName || (lang === 'en' ? 'No partner' : '파트너사 미지정')}</p>}
                   </div>
                   <ChevronRight className={`size-4 shrink-0 ${selected?.id === p.id ? 'text-primary' : 'text-muted-foreground'}`} />
                 </div>
@@ -819,7 +909,7 @@ export function ProgramsPage({ variant = PARTNER_VARIANT }: { variant?: Programs
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold">{selected.name}</h2>
-                    <p className="text-xs text-muted-foreground">{selected.partnerName || (lang === 'en' ? 'No partner assigned' : '파트너사 미지정')}</p>
+                    {!variant.tutoring && <p className="text-xs text-muted-foreground">{selected.partnerName || (lang === 'en' ? 'No partner assigned' : '파트너사 미지정')}</p>}
                   </div>
                   {canEdit && (
                     <Button
