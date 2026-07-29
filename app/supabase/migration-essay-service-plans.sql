@@ -7,12 +7,16 @@ create table if not exists public.essay_service_plans (
   consultant_name text,               -- 담당 컨설턴트(급여 대상). 기본 = 학생 담당 컨설턴트
   total_amount numeric not null default 0,
   start_month text not null,          -- 신청월 'YYYY-MM' (종료월은 그해 12월 자동)
+  package_label text,                 -- 선택한 패키지(자동 총액 근거)
   currency text default 'KRW',
   notes text,
   created_by uuid,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+-- 이미 테이블을 만든 경우를 위한 컬럼 추가(idempotent)
+alter table public.essay_service_plans add column if not exists package_label text;
 
 create index if not exists idx_essay_plans_student on public.essay_service_plans(student_id);
 

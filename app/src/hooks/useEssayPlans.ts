@@ -10,6 +10,7 @@ export interface EssayPlan {
   consultantName?: string
   totalAmount: number
   startMonth: string      // 'YYYY-MM' (신청월)
+  packageLabel?: string   // 선택한 원서/에세이 패키지 (자동 총액 근거)
   currency?: string
   notes?: string
   createdBy?: string
@@ -59,6 +60,7 @@ function mapRow(row: Record<string, unknown>): EssayPlan {
     consultantName: (row.consultant_name as string) || undefined,
     totalAmount: row.total_amount != null ? Number(row.total_amount) : 0,
     startMonth: (row.start_month as string) || '',
+    packageLabel: (row.package_label as string) || undefined,
     currency: (row.currency as string) || 'KRW',
     notes: (row.notes as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
@@ -108,6 +110,7 @@ export function useCreateEssayPlan() {
         consultant_name: p.consultantName || null,
         total_amount: p.totalAmount ?? 0,
         start_month: p.startMonth,
+        package_label: p.packageLabel || null,
         currency: p.currency || 'KRW',
         notes: p.notes || null,
         created_by: p.createdBy || null,
@@ -130,6 +133,7 @@ export function useUpdateEssayPlan() {
       if (p.consultantName !== undefined) row.consultant_name = p.consultantName || null
       if (p.totalAmount !== undefined) row.total_amount = p.totalAmount ?? 0
       if (p.startMonth !== undefined) row.start_month = p.startMonth
+      if (p.packageLabel !== undefined) row.package_label = p.packageLabel || null
       if (p.currency !== undefined) row.currency = p.currency || 'KRW'
       if (p.notes !== undefined) row.notes = p.notes || null
       row.updated_at = new Date().toISOString()
