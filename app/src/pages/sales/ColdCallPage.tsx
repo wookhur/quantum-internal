@@ -1191,8 +1191,10 @@ function ColdCallDetail({
   // Split the activity feed: contact logs (calls / messages) show inside the
   // contact-log card; everything else (pipeline stage / status changes) shows
   // in the separate 활동기록 card.
-  const contactLogs = activities.filter((a: LeadActivity) => CONTACT_TYPES.includes(a.activityType))
-  const statusLogs = activities.filter((a: LeadActivity) => !CONTACT_TYPES.includes(a.activityType))
+  // 연락기록 = 콜/문자/카톡/이메일 + 파트너 프로그램에서 미러링된 소통기록(기타 포함)
+  const isContactLog = (a: LeadActivity) => CONTACT_TYPES.includes(a.activityType) || a.metadata?.source === 'partner_program'
+  const contactLogs = activities.filter(isContactLog)
+  const statusLogs = activities.filter((a: LeadActivity) => !isContactLog(a))
 
   const handleLogCall = useCallback(() => {
     if (!canEdit) return

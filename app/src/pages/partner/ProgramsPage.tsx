@@ -21,6 +21,7 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { useLanguage } from '@/i18n/LanguageContext'
 import { useLeads, useCreateLead, useUpdateLead } from '@/hooks/useLeads'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useAuth } from '@/contexts/AuthContext'
 import { leadLevelConfig } from '@/lib/leadLevels'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { EC_PARTNERS } from '@/lib/ecPartners'
@@ -299,6 +300,7 @@ const EMPTY_MANUAL = { studentName: '', parentName: '', currentSchool: '', grade
 
 function AddLeadBox({ programId, existingLeadIds }: { programId: string; existingLeadIds: Set<string> }) {
   const { language: lang } = useLanguage()
+  const { user } = useAuth()
   const { data: allLeads = [] } = useLeads()
   const { data: profiles = [] } = useProfiles()
   const addEntry = useAddProgramEntry()
@@ -336,7 +338,7 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
         grade: manual.grade.trim(),
         phone: manual.phone.trim(),
         sourceChannel: manual.sourceChannel.trim() || '프로그램 직접 추가',
-        assignedTo: manual.assignedTo || undefined,
+        assignedTo: manual.assignedTo || user?.id || undefined,
         pipelineStage: 'new_lead',
         leadDate: today,
       })
@@ -408,9 +410,9 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
             <Input value={manual.grade} onChange={(e) => setManual((m) => ({ ...m, grade: e.target.value }))} placeholder={lang === 'en' ? 'Grade' : '학년'} className="h-8 text-sm bg-white" />
             <Input value={manual.phone} onChange={(e) => setManual((m) => ({ ...m, phone: e.target.value }))} placeholder={lang === 'en' ? 'Parent phone' : '학부모 전화번호'} className="h-8 text-sm bg-white" />
             <Input value={manual.sourceChannel} onChange={(e) => setManual((m) => ({ ...m, sourceChannel: e.target.value }))} placeholder={lang === 'en' ? 'Source channel (e.g. Instagram, seminar)' : '유입채널 (예: 인스타, 세미나)'} className="h-8 text-sm bg-white" />
-            <Select value={manual.assignedTo || undefined} onValueChange={(v) => setManual((m) => ({ ...m, assignedTo: v || '' }))}>
+            <Select value={(manual.assignedTo || user?.id) || undefined} onValueChange={(v) => setManual((m) => ({ ...m, assignedTo: v || '' }))}>
               <SelectTrigger className="h-8 text-sm bg-white">
-                <span className="truncate">{manual.assignedTo ? (profiles.find((p) => p.id === manual.assignedTo)?.name || (lang === 'en' ? 'Assignee' : '담당자')) : (lang === 'en' ? 'Assignee' : '담당자 선택')}</span>
+                <span className="truncate">{(() => { const id = manual.assignedTo || user?.id; return id ? (profiles.find((p) => p.id === id)?.name || (lang === 'en' ? 'Assignee' : '담당자')) : (lang === 'en' ? 'Assignee' : '담당자 선택') })()}</span>
               </SelectTrigger>
               <SelectContent>
                 {profiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
