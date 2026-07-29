@@ -871,24 +871,31 @@ function ECServicesSection({ studentId, createdBy, canEdit }: { studentId: strin
   const { data: activities = [] } = useECActivities(studentId)
   const del = useDeleteECActivity()
   const t = useT()
+  const [expanded, setExpanded] = useState(false)
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <CardTitle className="flex items-center gap-2 text-base">
           <Star className="size-5 text-primary" />
           {t('student360.ecService')}
           <span className="text-muted-foreground font-normal">({activities.length})</span>
         </CardTitle>
-        {canEdit && (
-          <ECActivityDialog
-            studentId={studentId}
-            createdBy={createdBy}
-            canEdit={canEdit}
-            trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
-          />
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <span onClick={e => e.stopPropagation()}>
+              <ECActivityDialog
+                studentId={studentId}
+                createdBy={createdBy}
+                canEdit={canEdit}
+                trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
+              />
+            </span>
+          )}
+          {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+        </div>
       </CardHeader>
+      {expanded && (
       <CardContent className="space-y-3">
         {activities.length === 0 && (
           <p className="text-sm text-muted-foreground">{t('student360.noEcServices')}</p>
@@ -952,6 +959,7 @@ function ECServicesSection({ studentId, createdBy, canEdit }: { studentId: strin
           </div>
         ))}
       </CardContent>
+      )}
     </Card>
   )
 }
@@ -1191,24 +1199,31 @@ function AcademicSupportSection({ studentId, createdBy, canEdit }: { studentId: 
   const { data: items = [] } = useAcademicSupport(studentId)
   const del = useDeleteAcademicSupport()
   const t = useT()
+  const [expanded, setExpanded] = useState(false)
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <CardTitle className="flex items-center gap-2 text-base">
           <BookOpen className="size-5 text-primary" />
           {t('student360.academicSupport')}
           <span className="text-muted-foreground font-normal">({items.length})</span>
         </CardTitle>
-        {canEdit && (
-          <AcademicSupportDialog
-            studentId={studentId}
-            createdBy={createdBy}
-            canEdit={canEdit}
-            trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
-          />
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <span onClick={e => e.stopPropagation()}>
+              <AcademicSupportDialog
+                studentId={studentId}
+                createdBy={createdBy}
+                canEdit={canEdit}
+                trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
+              />
+            </span>
+          )}
+          {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+        </div>
       </CardHeader>
+      {expanded && (
       <CardContent className="space-y-3">
         {items.length === 0 && (
           <p className="text-sm text-muted-foreground">{t('student360.noAcademicSupport')}</p>
@@ -1281,6 +1296,7 @@ function AcademicSupportSection({ studentId, createdBy, canEdit }: { studentId: 
           </div>
         ))}
       </CardContent>
+      )}
     </Card>
   )
 }
