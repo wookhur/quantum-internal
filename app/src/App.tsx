@@ -54,6 +54,7 @@ import { CommissionRatesPage } from '@/pages/partner/CommissionRatesPage'
 import { PartnerStudentsPage } from '@/pages/partner/PartnerStudentsPage'
 import { PartnerInstructorsPage } from '@/pages/partner/PartnerInstructorsPage'
 import { MentorsPage } from '@/pages/partner/MentorsPage'
+import { TutorsPage } from '@/pages/partner/TutorsPage'
 import { PartnerCompaniesPage } from '@/pages/partner/PartnerCompaniesPage'
 import { ProgramsPage } from '@/pages/partner/ProgramsPage'
 import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
@@ -130,6 +131,7 @@ export default function App() {
                 <Route path="/partner/contracts" element={<CommissionRatesPage />} />
                 <Route path="/partner/students" element={<PartnerStudentsPage />} />
                 <Route path="/partner/instructors" element={<PartnerInstructorsPage />} />
+                <Route path="/partner/tutors" element={<TutorsPage />} />
                 <Route path="/partner/mentors" element={<MentorsPage />} />
                 <Route path="/partner/companies" element={<PartnerCompaniesPage />} />
                 <Route path="/partner/programs" element={<ProgramsPage />} />
