@@ -17,7 +17,8 @@ import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoi
 import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote } from 'lucide-react'
-import { useIncentiveLinesByPerson } from '@/pages/finance/FreelancerInvoicesPage'
+import { useIncentiveLinesByPerson, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
+import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { AlertTriangle } from 'lucide-react'
@@ -131,6 +132,8 @@ export function FinanceDashboardPage() {
 
   // ─── 이름 표기 불일치 진단: 같은 학생이 인센티브에서 여러 이름으로 분산 ───
   const linesByPerson = useIncentiveLinesByPerson()
+  const incentiveStatus = useIncentiveStatus()
+  const setIncentiveReceived = useSetIncentiveReceived()
   const { data: students = [] } = useServiceStudents()
   const nameDiagnostics = useMemo(() => {
     const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
@@ -386,12 +389,23 @@ export function FinanceDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* 지급 원장 (승인완료 → 지급완료) */}
+      {/* 인센티브 지급 원장 (월 선택 · 계약·서비스 인센티브) */}
+      <IncentivePayoutLedger
+        linesByPerson={linesByPerson}
+        status={incentiveStatus}
+        months={months}
+        defaultMonth={month === 'all' ? months[0] : month}
+        canToggle={allowed}
+        onToggle={(id, received, m) => setIncentiveReceived.mutate({ key: id, received, month: m })}
+        toggling={setIncentiveReceived.isPending}
+      />
+
+      {/* 인보이스 지급 원장 (승인완료 → 지급완료) */}
       <Card>
         <CardContent className="p-0">
           <div className="flex items-center gap-2 px-4 py-3 border-b">
             <Banknote className="size-4 text-indigo-500" />
-            <span className="font-semibold text-sm">지급 원장 (승인완료 · 지급완료)</span>
+            <span className="font-semibold text-sm">인보이스 지급 원장 (승인완료 · 지급완료)</span>
             <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50">{approvedList.length}건</Badge>
             <span className="text-[11px] text-muted-foreground ml-auto">지급이 나간 인보이스는 "지급완료 처리"로 지급일을 기록하세요. 중복·이월 판단 근거가 됩니다.</span>
           </div>
@@ -739,6 +753,137 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── 인센티브 지급 원장 (월 선택 · 전사) ──────────────────────────────────────
+function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, canToggle, onToggle, toggling }: {
+  linesByPerson: Map<string, IncentiveLine[]>
+  status: Map<string, { received: boolean; receivedMonth?: string }>
+  months: string[]
+  defaultMonth: string
+  canToggle: boolean
+  onToggle: (id: string, received: boolean, month: string) => void
+  toggling: boolean
+}) {
+  const [m, setM] = useState(defaultMonth)
+
+  // 선택 월 M 기준 라인 수집:
+  //  · 지급완료(당월): received && receivedMonth === M
+  //  · 미지급(누적): !received && origin월 <= M  (미수령분은 이월되어 누적 표시)
+  //  · 전체(all): 모든 라인
+  const rows = useMemo(() => {
+    const out: { person: string; line: IncentiveLine; received: boolean; receivedMonth?: string }[] = []
+    linesByPerson.forEach((lines, person) => {
+      for (const l of lines) {
+        const st = status.get(l.id)
+        const received = !!st?.received
+        if (m === 'all') {
+          out.push({ person, line: l, received, receivedMonth: st?.receivedMonth })
+        } else if (received && st?.receivedMonth === m) {
+          out.push({ person, line: l, received: true, receivedMonth: st?.receivedMonth })
+        } else if (!received && l.month <= m) {
+          out.push({ person, line: l, received: false })
+        }
+      }
+    })
+    return out.sort((a, b) => a.person.localeCompare(b.person) || (b.line.amount - a.line.amount))
+  }, [linesByPerson, status, m])
+
+  const paidTotal = rows.filter(r => r.received).reduce((s, r) => s + r.line.amount, 0)
+  const pendingTotal = rows.filter(r => !r.received).reduce((s, r) => s + r.line.amount, 0)
+  const personCount = new Set(rows.map(r => r.person)).size
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="flex items-center gap-2 px-4 py-3 border-b flex-wrap">
+          <Banknote className="size-4 text-violet-500" />
+          <span className="font-semibold text-sm">인센티브 지급 원장</span>
+          <Badge variant="outline" className="text-violet-700 border-violet-200 bg-violet-50">{rows.length}건 · {personCount}명</Badge>
+          <div className="ml-auto flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground">정산월</Label>
+            <Select value={m} onValueChange={v => v && setM(v)}>
+              <SelectTrigger className="h-8 w-36"><span>{m === 'all' ? '전체 기간' : m}</span></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체 기간</SelectItem>
+                {months.map(mm => <SelectItem key={mm} value={mm}>{mm}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* 요약 */}
+        <div className="grid grid-cols-3 divide-x border-b text-center">
+          <div className="py-2">
+            <div className="text-[11px] text-muted-foreground">{m === 'all' ? '지급완료(전체)' : `${m} 지급완료`}</div>
+            <div className="text-sm font-bold text-violet-600 tabular-nums">{formatCurrency(paidTotal)}</div>
+          </div>
+          <div className="py-2">
+            <div className="text-[11px] text-muted-foreground">미지급(누적)</div>
+            <div className="text-sm font-bold text-amber-600 tabular-nums">{formatCurrency(pendingTotal)}</div>
+          </div>
+          <div className="py-2">
+            <div className="text-[11px] text-muted-foreground">대상 인원</div>
+            <div className="text-sm font-bold tabular-nums">{personCount}명</div>
+          </div>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            해당 월 인센티브 내역이 없습니다. {m !== 'all' && '상단에서 다른 월(예: 6월)을 선택해 보세요.'}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-32">대상자</TableHead>
+                <TableHead>인센티브 항목</TableHead>
+                <TableHead className="w-20">출처</TableHead>
+                <TableHead className="w-20">발생월</TableHead>
+                <TableHead className="text-right w-28">금액</TableHead>
+                <TableHead className="w-44 text-right">지급 처리</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(r => (
+                <TableRow key={`${r.person}:${r.line.id}`} className={r.received ? 'bg-violet-50/30' : ''}>
+                  <TableCell className="text-sm font-medium">{r.person}</TableCell>
+                  <TableCell className="text-sm">
+                    <div className="truncate max-w-[280px]" title={r.line.sourceDetail}>{r.line.label}</div>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{r.line.source === 'contract' ? '계약' : '서비스'}</TableCell>
+                  <TableCell className="text-xs tabular-nums text-muted-foreground">{r.line.month}</TableCell>
+                  <TableCell className="text-sm text-right font-semibold tabular-nums">{formatCurrency(r.line.amount)}</TableCell>
+                  <TableCell className="text-right">
+                    {r.received ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <Badge variant="outline" className="text-violet-700 border-violet-200 bg-violet-50 gap-1"><Banknote className="size-3" /> 지급 {r.receivedMonth || ''}</Badge>
+                        {canToggle && (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-red-600" disabled={toggling}
+                            onClick={() => onToggle(r.line.id, false, r.receivedMonth || m)}>취소</Button>
+                        )}
+                      </div>
+                    ) : canToggle ? (
+                      <Button size="sm" variant="outline" className="h-8 gap-1 text-violet-700 border-violet-200 hover:bg-violet-50" disabled={toggling || m === 'all'}
+                        title={m === 'all' ? '월을 선택한 뒤 처리하세요' : `${m}에 지급완료로 기록`}
+                        onClick={() => onToggle(r.line.id, true, m)}>
+                        <Banknote className="size-4" /> {m} 지급완료
+                      </Button>
+                    ) : (
+                      <Badge variant="outline" className="text-amber-600 border-amber-200">미지급</Badge>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        <p className="px-4 py-2 text-[11px] text-muted-foreground border-t">
+          "지급완료"는 선택한 월에 실제 지급된 것으로 기록합니다(그 달 인센티브로 집계). 미수령분은 다음 달로 자동 이월되며 발생월 태그는 유지됩니다. 과거(6·7월) 지급분은 해당 월을 선택해 소급 기록하세요.
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 
