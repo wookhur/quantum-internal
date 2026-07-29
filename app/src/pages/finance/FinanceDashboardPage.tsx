@@ -296,6 +296,27 @@ export function FinanceDashboardPage() {
         </CardContent></Card>
       </div>
 
+      {/* 종류별 전사 현황판 */}
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          종류별 인보이스 현황 <span className="font-normal">({month === 'all' ? '전체 기간' : month})</span>
+        </h2>
+        {invLoading ? (
+          <div className="py-12 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
+            {KIND_META.map(km => (
+              <CategoryBoard
+                key={km.key}
+                label={km.label}
+                invoices={invoices.filter(i => (i.kind || 'etc') === km.key)}
+                onSelect={setDetailInv}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* ① 승인 대기함 */}
       <Card>
         <CardContent className="p-0">
@@ -660,6 +681,74 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── 종류별 현황판 카드 ────────────────────────────────────────────────────────
+const STATUS_META: Record<string, { label: string; cls: string }> = {
+  submitted: { label: '승인대기', cls: 'text-amber-700 border-amber-200 bg-amber-50' },
+  approved: { label: '승인완료', cls: 'text-emerald-700 border-emerald-200 bg-emerald-50' },
+  rejected: { label: '반려', cls: 'text-red-700 border-red-200 bg-red-50' },
+  draft: { label: '작성중', cls: 'text-muted-foreground' },
+}
+
+function StatusBadge({ status }: { status?: string }) {
+  const m = STATUS_META[status || ''] || { label: status || '-', cls: '' }
+  return <Badge variant="outline" className={`text-[10px] shrink-0 ${m.cls}`}>{m.label}</Badge>
+}
+
+function CategoryBoard({ label, invoices, onSelect }: {
+  label: string
+  invoices: FreelancerInvoice[]
+  onSelect: (inv: FreelancerInvoice) => void
+}) {
+  const total = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0)
+  const pendingCount = invoices.filter(i => i.status === 'submitted').length
+  // 제출일 최신순
+  const rows = [...invoices].sort((a, b) => (b.invoiceDate || '').localeCompare(a.invoiceDate || ''))
+  return (
+    <Card className="flex flex-col">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center justify-between gap-2">
+          <span className="truncate">{label}</span>
+          <span className="text-xs font-normal text-muted-foreground shrink-0 tabular-nums">
+            {invoices.length}건 · {formatCurrency(total)}
+          </span>
+        </CardTitle>
+        {pendingCount > 0 && (
+          <div className="text-[11px] text-amber-600">승인대기 {pendingCount}건</div>
+        )}
+      </CardHeader>
+      <CardContent className="pt-0 flex-1">
+        {rows.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-6 text-center">해당 기간 인보이스 없음</p>
+        ) : (
+          <div className="space-y-0.5 max-h-72 overflow-y-auto">
+            {rows.map(inv => (
+              <div key={inv.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate">{inv.freelancerName || inv.freelancerEmail || '-'}</div>
+                  <div className="text-[11px] text-muted-foreground tabular-nums">
+                    {inv.invoiceMonth}{inv.invoiceDate ? ` · 제출 ${inv.invoiceDate}` : ''}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <StatusBadge status={inv.status} />
+                  <button
+                    type="button"
+                    onClick={() => onSelect(inv)}
+                    className="text-sm font-semibold tabular-nums text-primary hover:underline underline-offset-2"
+                    title="인보이스 상세 보기"
+                  >
+                    {formatCurrency(inv.totalAmount)}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
