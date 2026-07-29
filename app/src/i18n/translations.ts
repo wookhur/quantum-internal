@@ -1888,7 +1888,7 @@ const koTranslations = {
   'fInvoice.phone': '전화번호',
   'fInvoice.bankAccount': '입금계좌',
   'fInvoice.note': '비고',
-  'fInvoice.itemName': '품명',
+  'fInvoice.itemName': '이름',
   'fInvoice.quantity': '수량',
   'fInvoice.unitPrice': '단가',
   'fInvoice.supplyAmount': '공급가액',
@@ -1904,7 +1904,7 @@ const koTranslations = {
   'fInvoice.searchPlaceholder': '이름 검색...',
   'fInvoice.count': '건',
   'fInvoice.cannotReadFile': '파일을 읽을 수 없습니다',
-  'fInvoice.itemPlaceholder': '예: 영상편집',
+  'fInvoice.itemPlaceholder': '이름 입력',
   'fInvoice.bankPlaceholder': '은행명 계좌번호 예금주',
 
   // ── Coupang Orders ──
@@ -4521,7 +4521,7 @@ const enTranslations: Record<string, string> = {
   'fInvoice.phone': 'Phone',
   'fInvoice.bankAccount': 'Bank Account',
   'fInvoice.note': 'Note',
-  'fInvoice.itemName': 'Item Name',
+  'fInvoice.itemName': 'Name',
   'fInvoice.quantity': 'Qty',
   'fInvoice.unitPrice': 'Unit Price',
   'fInvoice.supplyAmount': 'Amount',
@@ -4537,7 +4537,7 @@ const enTranslations: Record<string, string> = {
   'fInvoice.searchPlaceholder': 'Search by name...',
   'fInvoice.count': 'items',
   'fInvoice.cannotReadFile': 'Cannot read the file',
-  'fInvoice.itemPlaceholder': 'e.g. Video editing',
+  'fInvoice.itemPlaceholder': 'Name',
   'fInvoice.bankPlaceholder': 'Bank name, account number, holder',
 
   // ── Coupang Orders ──

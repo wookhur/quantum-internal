@@ -95,6 +95,20 @@ function emptyItem(): ItemRow {
   return { itemName: '', quantity: 1, unitPrice: 0, remark: '' }
 }
 
+// 입금계좌 문자열 ↔ 은행명/계좌번호/예금주 (저장은 " / "로 결합)
+function splitBank(s: string): { bankName: string; accountNumber: string; accountHolder: string } {
+  if (!s) return { bankName: '', accountNumber: '', accountHolder: '' }
+  if (s.includes(' / ')) {
+    const [bankName = '', accountNumber = '', accountHolder = ''] = s.split(' / ')
+    return { bankName: bankName.trim(), accountNumber: accountNumber.trim(), accountHolder: accountHolder.trim() }
+  }
+  return { bankName: '', accountNumber: s.trim(), accountHolder: '' }
+}
+function joinBank(bankName: string, accountNumber: string, accountHolder: string): string {
+  if (!bankName && !accountNumber && !accountHolder) return ''
+  return `${bankName.trim()} / ${accountNumber.trim()} / ${accountHolder.trim()}`
+}
+
 // ─── Invoice Form Dialog ──────────────────────────────────────────────────
 
 function InvoiceFormDialog({
@@ -128,7 +142,11 @@ function InvoiceFormDialog({
   const [invoiceMonth, setInvoiceMonth] = useState(invoice?.invoiceMonth || getCurrentMonth())
   const [residentNumber, setResidentNumber] = useState(initialData?.residentNumber || invoice?.residentNumber || '')
   const [phone, setPhone] = useState(initialData?.phone || invoice?.phone || '')
-  const [bankAccount, setBankAccount] = useState(initialData?.bankAccount || invoice?.bankAccount || '')
+  const initBank = splitBank(initialData?.bankAccount || invoice?.bankAccount || '')
+  const [bankName, setBankName] = useState(initBank.bankName)
+  const [accountNumber, setAccountNumber] = useState(initBank.accountNumber)
+  const [accountHolder, setAccountHolder] = useState(initBank.accountHolder)
+  const bankAccount = joinBank(bankName, accountNumber, accountHolder)
   const [note, setNote] = useState(initialData?.note || invoice?.note || '')
   const [items, setItems] = useState<ItemRow[]>(
     initialData?.items?.length
@@ -239,7 +257,11 @@ function InvoiceFormDialog({
 
           <div className="space-y-1.5">
             <Label className="text-xs">{t('fInvoice.bankAccount')}</Label>
-            <Input value={bankAccount} onChange={e => setBankAccount(e.target.value)} placeholder={t('fInvoice.bankPlaceholder')} className="h-9" />
+            <div className="grid grid-cols-3 gap-2">
+              <Input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="은행명 (예: 국민)" className="h-9" />
+              <Input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="계좌번호" className="h-9" />
+              <Input value={accountHolder} onChange={e => setAccountHolder(e.target.value)} placeholder="예금주" className="h-9" />
+            </div>
           </div>
 
           {/* Items Table (fixed to authorized students — no manual add) */}
@@ -1305,7 +1327,7 @@ export function FreelancerInvoicesPage(
           <Plus className="size-4" />인보이스 추가
         </Button>
       )}
-      <p className="text-[12px] text-muted-foreground">품목을 직접 입력해 인보이스를 발행합니다.</p>
+      <p className="text-[12px] text-muted-foreground">이름을 직접 입력해 인보이스를 발행합니다.</p>
     </div>
   ) : (
     <>
@@ -1379,8 +1401,8 @@ export function FreelancerInvoicesPage(
           )}
           <p className="text-[11px] text-muted-foreground">
             {isIncentive
-              ? `수령완료(초록) 표시는 회계 계정만 변경할 수 있습니다${canToggleReceived ? '' : ' — 현재 계정은 조회만 가능'}. 미수령 건은 다음 달로 자동 이월되어 (원래 달) 태그로 계속 표시되고, "인보이스 발행"은 미수령 건을 품명·금액에 채웁니다.`
-              : '"인보이스 발행"을 누르면 위 학생이 품명에 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.'}
+              ? `수령완료(초록) 표시는 회계 계정만 변경할 수 있습니다${canToggleReceived ? '' : ' — 현재 계정은 조회만 가능'}. 미수령 건은 다음 달로 자동 이월되어 (원래 달) 태그로 계속 표시되고, "인보이스 발행"은 미수령 건을 이름·금액에 채웁니다.`
+              : '"인보이스 발행"을 누르면 위 학생이 이름에 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.'}
           </p>
           {isIncentive && displayItems.length > 0 && (
             <details className="mt-1 rounded-md border bg-muted/20 p-2">
@@ -1450,7 +1472,7 @@ export function FreelancerInvoicesPage(
             : (business
                 ? '엑셀 양식을 내려받아 작성한 뒤 업로드하여 인보이스를 제출합니다.'
                 : isIncentive ? '이 달 발생한 세일즈 인센티브로 정산 인보이스를 발행하세요.'
-                : isPartner ? '품목을 직접 입력해 인보이스를 발행합니다.'
+                : isPartner ? '이름을 직접 입력해 인보이스를 발행합니다.'
                 : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
         </p>
       </div>

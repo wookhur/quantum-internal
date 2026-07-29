@@ -1398,9 +1398,9 @@ export function TaskBoardPage() {
         {isLoading ? (
           <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
         ) : viewMode === 'board' ? (
-          /* Board View */
-          <div className="grid grid-cols-4 gap-4">
-            {STATUS_ORDER.filter(s => s !== 'cancelled').map(status => {
+          /* Board View — 취소 컬럼은 취소된 업무가 있을 때만 표시 */
+          <div className={`grid gap-4 ${boardColumns.cancelled.length > 0 ? 'grid-cols-5' : 'grid-cols-4'}`}>
+            {STATUS_ORDER.filter(s => s !== 'cancelled' || boardColumns.cancelled.length > 0).map(status => {
               const col = boardColumns[status]
               const scfg = statusCfg[status]
               const SIcon = scfg.icon
