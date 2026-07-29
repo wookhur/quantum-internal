@@ -7,7 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog'
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger,
 } from '@/components/ui/select'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -274,6 +274,11 @@ export function ExternalFeesPage() {
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
                         {f.billedAmount ? formatCurrency(f.billedAmount, f.currency as 'KRW' | 'USD') : '-'}
+                        {f.paidAmount != null && f.paidAmount !== f.billedAmount && (
+                          <div className="text-[10px] text-muted-foreground font-normal" title="실제 입금금액(페이백 반영)">
+                            실입금 {formatCurrency(f.paidAmount, f.currency as 'KRW' | 'USD')}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -410,8 +415,8 @@ function ProgramFeeDialog({
   const updateAC = useUpdateAcademicSupport()
 
   const [billed, setBilled] = useState(fee.billedAmount ? String(fee.billedAmount) : '')
-  const [status, setStatus] = useState<'pending' | 'paid'>(fee.collectionStatus)
-  const [paidDt, setPaidDt] = useState(fee.paidDate || todayKST())
+  const [paidAmt, setPaidAmt] = useState(fee.paidAmount != null ? String(fee.paidAmount) : '')
+  const [paidDt, setPaidDt] = useState(fee.paidDate || '')
   const [name1, setName1] = useState(fee.contributor1 || '')
   const [name2, setName2] = useState(fee.contributor2 || '')
   const [team1, setTeam1] = useState<TeamChoice>(fee.contributor1Team || 'auto')
@@ -419,6 +424,9 @@ function ProgramFeeDialog({
 
   const saving = updateEC.isPending || updateAC.isPending
   const billedNum = Number(billed) || 0
+  const paidAmtNum = Number(paidAmt) || 0
+  // 입금금액 + 입금일이 모두 기록되면 자동 수금완료. 인센티브는 청구금액(billedNum) 기준.
+  const isPaid = paidAmtNum > 0 && !!paidDt
 
   const slots = [
     { name: name1, setName: setName1, team: team1, setTeam: setTeam1 },
@@ -439,9 +447,10 @@ function ProgramFeeDialog({
       id: fee.id,
       studentId: fee.studentId,
       billedAmount: billed ? Number(billed) : undefined,
-      collectionStatus: status,
-      // 입금일: 수금완료면 선택한 날짜(기본 오늘), 미수금이면 초기화
-      paidDate: status === 'paid' ? (paidDt || todayKST()) : '',
+      paidAmount: paidAmt ? paidAmtNum : undefined,
+      // 입금금액·입금일이 모두 있으면 수금완료로 자동 처리(그 달 인센티브 반영).
+      collectionStatus: (isPaid ? 'paid' : 'pending') as 'pending' | 'paid',
+      paidDate: isPaid ? paidDt : '',
       salesContributor1: name1.trim() || undefined,
       salesContributor2: name2.trim() || undefined,
       contributor1Team: team1 === 'auto' ? null : team1,
@@ -472,37 +481,44 @@ function ProgramFeeDialog({
           </Link>
         </div>
 
-        {/* Billing (admin editable) */}
+        {/* Billing (admin editable): 청구금액 + 입금금액 */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">{t('svcpay.colBilled')}</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              {t('svcpay.colBilled')} <span className="text-[10px] font-normal text-purple-600">(인센티브 기준)</span>
+            </label>
             {isAdmin ? (
               <Input type="number" value={billed} onChange={e => setBilled(e.target.value)} placeholder="0" className="h-8 text-sm" />
             ) : <div className="text-sm font-mono">{fee.billedAmount ? formatCurrency(fee.billedAmount, fee.currency as 'KRW' | 'USD') : '-'}</div>}
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground">{t('svcpay.status')}</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              입금금액 <span className="text-[10px] font-normal">(실입금·페이백 반영)</span>
+            </label>
             {isAdmin ? (
-              <Select value={status} onValueChange={v => setStatus((v as 'pending' | 'paid') ?? 'pending')}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">{t('svcpay.unpaid')}</SelectItem>
-                  <SelectItem value="paid">{t('svcpay.paid')}</SelectItem>
-                </SelectContent>
-              </Select>
-            ) : <div className="text-sm">{fee.collectionStatus === 'paid' ? t('svcpay.paid') : t('svcpay.unpaid')}</div>}
+              <Input type="number" value={paidAmt} onChange={e => setPaidAmt(e.target.value)} placeholder="0" className="h-8 text-sm" />
+            ) : <div className="text-sm font-mono">{fee.paidAmount != null ? formatCurrency(fee.paidAmount, fee.currency as 'KRW' | 'USD') : '-'}</div>}
           </div>
         </div>
 
-        {/* 입금일 — 수금완료일 때만 */}
-        {status === 'paid' && (
+        {/* 입금일 + 자동 수금상태 */}
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">입금일</label>
             {isAdmin ? (
-              <Input type="date" value={paidDt} onChange={e => setPaidDt(e.target.value)} className="h-8 text-sm w-44" />
+              <Input type="date" value={paidDt} onChange={e => setPaidDt(e.target.value)} className="h-8 text-sm" />
             ) : <div className="text-sm">{fee.paidDate || '-'}</div>}
           </div>
-        )}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">{t('svcpay.status')}</label>
+            <div className="h-8 flex items-center">
+              {isPaid
+                ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">{t('svcpay.paid')}</Badge>
+                : <Badge variant="outline" className="text-muted-foreground">{t('svcpay.unpaid')}</Badge>}
+            </div>
+            {isAdmin && <p className="text-[10px] text-muted-foreground">입금금액·입금일 입력 시 자동 수금완료</p>}
+          </div>
+        </div>
 
         {/* 환불 상태 (읽기전용 · 환불신청은 Student360에서, 완료 처리는 표의 배지에서) */}
         {fee.refundStatus && (

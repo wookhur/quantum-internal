@@ -15,6 +15,7 @@ export interface ECActivity {
   salesContributor2?: string
   // Billing / incentive (set by admins in External Service Fees)
   billedAmount?: number
+  paidAmount?: number      // 실제 입금금액(페이백 반영)
   currency?: string
   collectionStatus?: 'pending' | 'paid'
   paidDate?: string
@@ -44,6 +45,7 @@ function mapRow(row: Record<string, unknown>): ECActivity {
     salesContributor1: (row.sales_contributor_1 as string) || undefined,
     salesContributor2: (row.sales_contributor_2 as string) || undefined,
     billedAmount: row.billed_amount != null ? Number(row.billed_amount) : undefined,
+    paidAmount: row.paid_amount != null ? Number(row.paid_amount) : undefined,
     currency: (row.currency as string) || 'KRW',
     collectionStatus: (row.collection_status as 'pending' | 'paid') || 'pending',
     paidDate: (row.paid_date as string) || undefined,
@@ -115,6 +117,7 @@ export function useUpdateECActivity() {
       if (a.salesContributor1 !== undefined) row.sales_contributor_1 = a.salesContributor1 || null
       if (a.salesContributor2 !== undefined) row.sales_contributor_2 = a.salesContributor2 || null
       if (a.billedAmount !== undefined) row.billed_amount = a.billedAmount ?? null
+      if (a.paidAmount !== undefined) row.paid_amount = a.paidAmount ?? null
       if (a.currency !== undefined) row.currency = a.currency || 'KRW'
       if (a.collectionStatus !== undefined) row.collection_status = a.collectionStatus
       if (a.paidDate !== undefined) row.paid_date = a.paidDate || null

@@ -1428,16 +1428,6 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }:
               onChange={e => set('subject', e.target.value)}
             />
           </div>
-          {/* 교육 월 (교육비 처리 월) */}
-          <div>
-            <Label className="text-xs">교육 월 <span className="text-muted-foreground font-normal">(서비스입금관리에서 몇월 교육비인지 표시)</span></Label>
-            <Select value={form.serviceMonth || null} onValueChange={v => set('serviceMonth', v)}>
-              <SelectTrigger className="mt-1"><SelectValue placeholder="선택" /></SelectTrigger>
-              <SelectContent>
-                {SERVICE_MONTH_OPTIONS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
           {/* 금액 */}
           <div>
             <Label className="text-xs">금액 (원)</Label>
@@ -1487,15 +1477,26 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }:
               )}
             </div>
           )}
-          {/* 시기 + 기간 */}
-          <div>
-            <Label className="text-xs">{t('student360.season')}</Label>
-            <Select value={form.season || null} onValueChange={v => set('season', v)}>
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                {SEASON_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          {/* 교육 월 + 시기 (같은 라인) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">교육 월 <span className="text-muted-foreground font-normal">(입금관리 표시)</span></Label>
+              <Select value={form.serviceMonth || null} onValueChange={v => set('serviceMonth', v)}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="선택" /></SelectTrigger>
+                <SelectContent>
+                  {SERVICE_MONTH_OPTIONS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">{t('student360.season')}</Label>
+              <Select value={form.season || null} onValueChange={v => set('season', v)}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {SEASON_OPTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div>
             <Label className="text-xs">{t('student360.period')}</Label>

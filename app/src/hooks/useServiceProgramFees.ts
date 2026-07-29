@@ -20,6 +20,7 @@ export interface ServiceProgramFee {
   contributor1?: string
   contributor2?: string
   billedAmount?: number
+  paidAmount?: number      // 실제 입금금액(페이백 반영). 인센티브는 청구금액 기준.
   currency: string
   collectionStatus: 'pending' | 'paid'
   paidDate?: string
@@ -73,6 +74,7 @@ export function useAllServiceProgramFees() {
           contributor1: (r.sales_contributor_1 as string) || undefined,
           contributor2: (r.sales_contributor_2 as string) || undefined,
           billedAmount: num(r.billed_amount),
+          paidAmount: num(r.paid_amount),
           currency: (r.currency as string) || 'KRW',
           collectionStatus: (r.collection_status as 'pending' | 'paid') || 'pending',
           paidDate: (r.paid_date as string) || undefined,
@@ -102,6 +104,7 @@ export function useAllServiceProgramFees() {
           contributor1: (r.sales_contributor_1 as string) || undefined,
           contributor2: (r.sales_contributor_2 as string) || undefined,
           billedAmount: num(r.billed_amount),
+          paidAmount: num(r.paid_amount),
           currency: (r.currency as string) || 'KRW',
           collectionStatus: (r.collection_status as 'pending' | 'paid') || 'pending',
           paidDate: (r.paid_date as string) || undefined,
