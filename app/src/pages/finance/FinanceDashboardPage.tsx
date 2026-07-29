@@ -18,7 +18,7 @@ import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote, RefreshCw, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useIncentiveLinesByPerson, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
+import { useIncentiveLinesByPerson, downloadInvoiceExcel, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
 import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
@@ -255,16 +255,32 @@ export function FinanceDashboardPage() {
     return flagged.sort((a, b) => b.contractAmount - a.contractAmount)
   }, [allExtras, programFees, students])
 
+  // 항목 조회 → 회사 양식(견적서)으로 인보이스 1건 다운로드 (파일명 = 직원 이름)
+  const downloadOne = async (inv: FreelancerInvoice) => {
+    const { data: itemRows } = await supabase
+      .from('freelancer_invoice_items')
+      .select('*')
+      .eq('invoice_id', inv.id)
+      .order('item_order', { ascending: true })
+    const items = ((itemRows || []) as Record<string, unknown>[]).map(r => ({
+      itemName: (r.item_name as string) || '',
+      quantity: Number(r.quantity) || 0,
+      unitPrice: Number(r.unit_price) || 0,
+      supplyAmount: Number(r.supply_amount) || 0,
+      remark: (r.remark as string) || null,
+    }))
+    await downloadInvoiceExcel(inv, items)
+  }
+
+  // 승인건 전체를 회사 양식으로 각각 다운로드 (직원 이름 파일명)
   const handleExportApproved = async () => {
     if (!approvedList.length || exporting) return
     setExporting(true)
     try {
-      const ids = approvedList.map(i => i.id)
-      const { data: itemRows } = await supabase
-        .from('freelancer_invoice_items')
-        .select('*')
-        .in('invoice_id', ids)
-      await exportApprovedInvoicesExcel(approvedList, (itemRows || []) as Record<string, unknown>[], month === 'all' ? '전체' : month)
+      for (const inv of approvedList) {
+        await downloadOne(inv)
+        await new Promise(r => setTimeout(r, 500))
+      }
     } catch (e) {
       alert('엑셀 생성 중 오류가 발생했습니다. 다시 시도해 주세요.')
       console.error(e)
@@ -296,11 +312,11 @@ export function FinanceDashboardPage() {
             variant="outline"
             className="h-9 gap-1.5"
             disabled={approvedList.length === 0 || exporting}
-            title={approvedList.length === 0 ? '승인완료된 인보이스가 없습니다' : '승인 인보이스를 종류별 엑셀로 다운로드'}
+            title={approvedList.length === 0 ? '승인완료된 인보이스가 없습니다' : '승인 인보이스를 회사 양식(견적서)으로 각각 다운로드 · 파일명=직원이름'}
             onClick={handleExportApproved}
           >
             {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-            승인 인보이스 엑셀 ({approvedList.length})
+            승인건 회사양식 ({approvedList.length})
           </Button>
           <div className="space-y-1">
             <Label className="text-xs">정산월</Label>
@@ -719,7 +735,36 @@ export function FinanceDashboardPage() {
 // ─── Invoice detail popup (제출된 인보이스 내역) ─────────────────────────────
 function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice | null; onClose: () => void }) {
   const { data: items = [], isLoading } = useInvoiceItems(invoice?.id)
+  const updateStatus = useUpdateInvoiceStatus()
+  const setPaid = useSetInvoicePaidDate()
+  const [downloading, setDownloading] = useState(false)
   const open = !!invoice
+  const busy = updateStatus.isPending || setPaid.isPending
+
+  // 회사 양식(견적서)으로 다운로드 — 파일명 = 직원 이름
+  const downloadForm = async () => {
+    if (!invoice) return
+    setDownloading(true)
+    try {
+      await downloadInvoiceExcel(invoice, items.map(it => ({
+        itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice, supplyAmount: it.supplyAmount, remark: it.remark,
+      })))
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  // 승인/반려를 실수로 눌렀을 때 대기(제출) 상태로 되돌림. 지급완료였다면 지급일도 해제.
+  const revertToSubmitted = () => {
+    if (!invoice) return
+    const label = invoice.status === 'approved' ? '승인' : '반려'
+    if (!confirm(`이 인보이스의 ${label}을(를) 취소하고 '승인 대기'로 되돌릴까요?${invoice.paidDate ? '\n(지급완료 기록도 함께 해제됩니다.)' : ''}`)) return
+    if (invoice.paidDate) setPaid.mutate({ id: invoice.id, paidDate: null })
+    updateStatus.mutate({ id: invoice.id, status: 'submitted' }, { onSuccess: onClose })
+  }
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -732,6 +777,7 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
               <div className="flex justify-between"><span className="text-muted-foreground">종류</span><span className="font-medium">{kindLabel(invoice.kind)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">정산월</span><span className="font-medium tabular-nums">{invoice.invoiceMonth}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">제출일</span><span className="font-medium tabular-nums">{invoice.invoiceDate}</span></div>
+              <div className="flex justify-between items-center"><span className="text-muted-foreground">상태</span><StatusBadge status={invoice.paidDate ? 'paid' : invoice.status} /></div>
               {invoice.bankAccount && <div className="flex justify-between col-span-2"><span className="text-muted-foreground">입금 계좌</span><span className="font-medium">{invoice.bankAccount}</span></div>}
               {invoice.phone && <div className="flex justify-between"><span className="text-muted-foreground">연락처</span><span className="font-medium">{invoice.phone}</span></div>}
               {invoice.residentNumber && <div className="flex justify-between"><span className="text-muted-foreground">주민/사업자번호</span><span className="font-medium">{invoice.residentNumber}</span></div>}
@@ -783,145 +829,26 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
                 <p className="whitespace-pre-wrap">{invoice.note}</p>
               </div>
             )}
+
+            {/* 액션: 회사 양식 다운로드 + 승인/반려 되돌리기 */}
+            <div className="flex items-center justify-between gap-2 border-t pt-3 flex-wrap">
+              <Button variant="outline" size="sm" className="gap-1.5"
+                disabled={downloading} onClick={downloadForm}>
+                {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                회사 양식 다운로드
+              </Button>
+              {(invoice.status === 'approved' || invoice.status === 'rejected') && (
+                <Button variant="outline" size="sm" className="gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
+                  disabled={busy} onClick={revertToSubmitted}>
+                  <RefreshCw className="size-3.5" /> {invoice.status === 'approved' ? '승인' : '반려'} 취소 · 대기로
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </DialogContent>
     </Dialog>
   )
-}
-
-// ─── 승인 인보이스 엑셀 (세무사무실 제출용) ───────────────────────────────────
-async function exportApprovedInvoicesExcel(
-  invoices: FreelancerInvoice[],
-  items: Record<string, unknown>[],
-  monthLabel: string,
-) {
-  const { default: ExcelJS } = await import('exceljs')
-  const wb = new ExcelJS.Workbook()
-  const statusMap: Record<string, string> = { approved: '승인', submitted: '제출', rejected: '반려', draft: '임시' }
-
-  // 종류별 그룹
-  const byKind = new Map<string, FreelancerInvoice[]>()
-  for (const inv of invoices) {
-    const k = inv.kind || 'etc'
-    const arr = byKind.get(k) || []
-    arr.push(inv)
-    byKind.set(k, arr)
-  }
-
-  const styleHeader = (ws: import('exceljs').Worksheet) => {
-    const h = ws.getRow(1)
-    h.font = { bold: true, size: 11 }
-    h.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
-  }
-
-  // 요약 시트
-  const summary = wb.addWorksheet('요약')
-  summary.columns = [
-    { header: '종류', key: 'kind', width: 18 },
-    { header: '건수', key: 'count', width: 8 },
-    { header: '합계(공급가)', key: 'total', width: 16 },
-    { header: '지급완료', key: 'paid', width: 10 },
-    { header: '지급예정', key: 'unpaid', width: 10 },
-  ]
-  styleHeader(summary)
-  let grand = 0
-  for (const [k, arr] of byKind) {
-    const total = arr.reduce((s, i) => s + (i.totalAmount || 0), 0)
-    grand += total
-    summary.addRow({
-      kind: kindLabel(k),
-      count: arr.length,
-      total,
-      paid: arr.filter(i => i.paidDate).length,
-      unpaid: arr.filter(i => !i.paidDate).length,
-    })
-  }
-  summary.addRow({ kind: '합계', count: invoices.length, total: grand })
-  summary.getColumn('total').numFmt = '#,##0'
-  summary.getRow(summary.rowCount).font = { bold: true }
-
-  // 종류별 상세 시트
-  for (const [k, arr] of byKind) {
-    const ws = wb.addWorksheet(kindLabel(k).replace(/[\\/*?:[\]]/g, ' ').slice(0, 28))
-    ws.columns = [
-      { header: 'No', key: 'no', width: 5 },
-      { header: '제출자', key: 'name', width: 14 },
-      { header: '이메일', key: 'email', width: 24 },
-      { header: '주민/사업자번호', key: 'resident', width: 18 },
-      { header: '연락처', key: 'phone', width: 15 },
-      { header: '정산월', key: 'month', width: 10 },
-      { header: '제출일', key: 'date', width: 12 },
-      { header: '상태', key: 'status', width: 8 },
-      { header: '지급일', key: 'paid', width: 12 },
-      { header: '합계(공급가)', key: 'total', width: 15 },
-      { header: '입금계좌', key: 'bank', width: 28 },
-      { header: '비고', key: 'note', width: 20 },
-    ]
-    styleHeader(ws)
-    arr.forEach((inv, i) => {
-      ws.addRow({
-        no: i + 1,
-        name: inv.freelancerName || '',
-        email: inv.freelancerEmail || '',
-        resident: inv.residentNumber || '',
-        phone: inv.phone || '',
-        month: inv.invoiceMonth,
-        date: inv.invoiceDate,
-        status: statusMap[inv.status] || inv.status,
-        paid: inv.paidDate || '',
-        total: inv.totalAmount || 0,
-        bank: inv.bankAccount || '',
-        note: inv.note || '',
-      })
-    })
-    ws.getColumn('total').numFmt = '#,##0'
-  }
-
-  // 항목 상세 시트 (전체 인보이스 품목)
-  if (items.length) {
-    const invById = new Map(invoices.map(i => [i.id, i]))
-    const detail = wb.addWorksheet('항목상세')
-    detail.columns = [
-      { header: '종류', key: 'kind', width: 18 },
-      { header: '제출자', key: 'name', width: 14 },
-      { header: '정산월', key: 'month', width: 10 },
-      { header: '항목명', key: 'item', width: 30 },
-      { header: '수량', key: 'qty', width: 8 },
-      { header: '단가', key: 'unit', width: 14 },
-      { header: '공급가', key: 'supply', width: 14 },
-      { header: '비고', key: 'remark', width: 20 },
-    ]
-    styleHeader(detail)
-    const sorted = [...items].sort((a, b) => {
-      const ia = invById.get(a.invoice_id as string), ib = invById.get(b.invoice_id as string)
-      return (ia?.freelancerName || '').localeCompare(ib?.freelancerName || '') || (Number(a.item_order) - Number(b.item_order))
-    })
-    for (const it of sorted) {
-      const inv = invById.get(it.invoice_id as string)
-      detail.addRow({
-        kind: kindLabel(inv?.kind),
-        name: inv?.freelancerName || '',
-        month: inv?.invoiceMonth || '',
-        item: (it.item_name as string) || '',
-        qty: Number(it.quantity) || 0,
-        unit: Number(it.unit_price) || 0,
-        supply: Number(it.supply_amount) || 0,
-        remark: (it.remark as string) || '',
-      })
-    }
-    detail.getColumn('unit').numFmt = '#,##0'
-    detail.getColumn('supply').numFmt = '#,##0'
-  }
-
-  const buf = await wb.xlsx.writeBuffer()
-  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `승인인보이스_${monthLabel}.xlsx`
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 // ─── 인센티브 지급 원장 (월 선택 · 전사) ──────────────────────────────────────

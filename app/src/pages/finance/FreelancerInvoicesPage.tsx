@@ -380,7 +380,7 @@ function InvoiceFormDialog({
 // ─── Invoice Detail Dialog ────────────────────────────────────────────────
 
 /** Download a single invoice as the uploaded 견적서 template, filled in. */
-async function downloadInvoiceExcel(
+export async function downloadInvoiceExcel(
   invoice: FreelancerInvoice,
   items: { itemName: string; quantity: number; unitPrice: number; supplyAmount: number; remark?: string | null }[],
 ) {
@@ -391,6 +391,9 @@ async function downloadInvoiceExcel(
   await wb.xlsx.load(await res.arrayBuffer())
   const ws = wb.worksheets[0]
   for (let i = wb.worksheets.length - 1; i >= 1; i--) wb.removeWorksheet(wb.worksheets[i].id)
+  // 시트명을 해당 정산월로 (템플릿 기본은 특정 월로 고정돼 있음)
+  const mn = monthNum(invoice.invoiceMonth)
+  if (mn) { try { ws.name = `${mn}월` } catch { /* ignore */ } }
 
   const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
   // Date + supplier (freelancer) info
@@ -399,6 +402,10 @@ async function downloadInvoiceExcel(
   set('H6', invoice.residentNumber)
   set('F7', invoice.phone)
   set('F8', invoice.freelancerEmail)
+  // 입금 정보(헤더): 은행명 F9, 계좌번호 H9 (bankAccount = "은행명 / 계좌번호 / 예금주")
+  const bank = splitBank(invoice.bankAccount || '')
+  set('F9', bank.bankName)
+  set('H9', bank.accountNumber || invoice.bankAccount || '')
 
   // Find the 합계(total) row so item rows don't overwrite it.
   let sumRow = 23
@@ -442,7 +449,8 @@ async function downloadInvoiceExcel(
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `견적서_${invoice.freelancerName || 'invoice'}_${invoice.invoiceMonth}.xlsx`
+  // 파일명 = 직원(제출자) 이름
+  a.download = `${invoice.freelancerName || invoice.freelancerEmail || 'invoice'}.xlsx`
   document.body.appendChild(a); a.click(); a.remove()
   URL.revokeObjectURL(url)
 }
