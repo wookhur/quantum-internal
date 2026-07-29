@@ -8,6 +8,7 @@ export interface AcademicSupportItem {
   studentId: string
   academyName?: string
   subject?: string
+  serviceMonth?: string   // 교육비 처리 월 (1월..12월 / 여름특강 / 겨울특강)
   season?: string
   periodStart?: string
   periodEnd?: string
@@ -39,6 +40,7 @@ function mapRow(row: Record<string, unknown>): AcademicSupportItem {
     studentId: row.student_id as string,
     academyName: canonicalPartnerName(row.academy_name as string) || undefined,
     subject: (row.subject as string) || undefined,
+    serviceMonth: (row.service_month as string) || undefined,
     season: (row.season as string) || undefined,
     periodStart: (row.period_start as string) || undefined,
     periodEnd: (row.period_end as string) || undefined,
@@ -87,6 +89,7 @@ export function useCreateAcademicSupport() {
         student_id: a.studentId,
         academy_name: a.academyName || null,
         subject: a.subject || null,
+        service_month: a.serviceMonth || null,
         season: a.season || null,
         period_start: a.periodStart || null,
         period_end: a.periodEnd || null,
@@ -112,6 +115,7 @@ export function useUpdateAcademicSupport() {
       const row: Record<string, unknown> = {}
       if (a.academyName !== undefined) row.academy_name = a.academyName || null
       if (a.subject !== undefined) row.subject = a.subject || null
+      if (a.serviceMonth !== undefined) row.service_month = a.serviceMonth || null
       if (a.season !== undefined) row.season = a.season || null
       if (a.periodStart !== undefined) row.period_start = a.periodStart || null
       if (a.periodEnd !== undefined) row.period_end = a.periodEnd || null

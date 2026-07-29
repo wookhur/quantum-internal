@@ -226,7 +226,10 @@ export function ExternalFeesPage() {
                         <div className="flex items-center gap-2">
                           <HandCoins className="size-4 text-purple-500 shrink-0" />
                           <div>
-                            <div className="font-medium text-sm">{f.label}</div>
+                            <div className="font-medium text-sm flex items-center gap-1.5">
+                              {f.label}
+                              {f.serviceMonth && <Badge variant="outline" className="text-[10px] h-4 bg-purple-50 text-purple-700 border-purple-200">{f.serviceMonth}</Badge>}
+                            </div>
                             <div className="text-xs text-muted-foreground">
                               {f.source === 'ec' ? 'EC' : 'Academic'}
                             </div>
@@ -457,7 +460,7 @@ function ProgramFeeDialog({
             {fee.label}
           </DialogTitle>
           <DialogDescription>
-            {fee.studentName}{fee.studentKoreanName && fee.studentKoreanName !== fee.studentName ? ` · ${fee.studentKoreanName}` : ''} · {fee.source === 'ec' ? 'Extra Curricular' : 'Academic Support'}
+            {fee.studentName}{fee.studentKoreanName && fee.studentKoreanName !== fee.studentName ? ` · ${fee.studentKoreanName}` : ''} · {fee.source === 'ec' ? 'Extra Curricular' : 'Academic Support'}{fee.serviceMonth ? ` · ${fee.serviceMonth} 교육비` : ''}
           </DialogDescription>
         </DialogHeader>
 

@@ -10,6 +10,7 @@ export interface ECActivity {
   periodStart?: string
   periodEnd?: string
   program?: string
+  serviceMonth?: string   // 교육비 처리 월 (1월..12월 / 여름특강 / 겨울특강)
   salesContributor1?: string
   salesContributor2?: string
   // Billing / incentive (set by admins in External Service Fees)
@@ -39,6 +40,7 @@ function mapRow(row: Record<string, unknown>): ECActivity {
     periodStart: (row.period_start as string) || undefined,
     periodEnd: (row.period_end as string) || undefined,
     program: (row.program as string) || undefined,
+    serviceMonth: (row.service_month as string) || undefined,
     salesContributor1: (row.sales_contributor_1 as string) || undefined,
     salesContributor2: (row.sales_contributor_2 as string) || undefined,
     billedAmount: row.billed_amount != null ? Number(row.billed_amount) : undefined,
@@ -85,6 +87,7 @@ export function useCreateECActivity() {
         period_start: a.periodStart || null,
         period_end: a.periodEnd || null,
         program: a.program || null,
+        service_month: a.serviceMonth || null,
         billed_amount: a.billedAmount ?? null,
         sales_contributor_1: a.salesContributor1 || null,
         sales_contributor_2: a.salesContributor2 || null,
@@ -108,6 +111,7 @@ export function useUpdateECActivity() {
       if (a.periodStart !== undefined) row.period_start = a.periodStart || null
       if (a.periodEnd !== undefined) row.period_end = a.periodEnd || null
       if (a.program !== undefined) row.program = a.program || null
+      if (a.serviceMonth !== undefined) row.service_month = a.serviceMonth || null
       if (a.salesContributor1 !== undefined) row.sales_contributor_1 = a.salesContributor1 || null
       if (a.salesContributor2 !== undefined) row.sales_contributor_2 = a.salesContributor2 || null
       if (a.billedAmount !== undefined) row.billed_amount = a.billedAmount ?? null

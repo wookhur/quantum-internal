@@ -14,6 +14,7 @@ export interface ServiceProgramFee {
   studentKoreanName?: string
   label: string          // EC: partner / Academic: academy name
   detail?: string        // EC: program / Academic: subject
+  serviceMonth?: string  // 교육비 처리 월 (1월..12월 / 여름특강 / 겨울특강)
   periodStart?: string
   periodEnd?: string
   contributor1?: string
@@ -66,6 +67,7 @@ export function useAllServiceProgramFees() {
           studentKoreanName: (s?.korean_name as string) || undefined,
           label: canonicalPartnerName(r.partner as string) || 'EC',
           detail: (r.program as string) || undefined,
+          serviceMonth: (r.service_month as string) || undefined,
           periodStart: (r.period_start as string) || undefined,
           periodEnd: (r.period_end as string) || undefined,
           contributor1: (r.sales_contributor_1 as string) || undefined,
@@ -94,6 +96,7 @@ export function useAllServiceProgramFees() {
           studentKoreanName: (s?.korean_name as string) || undefined,
           label: canonicalPartnerName(r.academy_name as string) || 'Academic',
           detail: (r.subject as string) || undefined,
+          serviceMonth: (r.service_month as string) || undefined,
           periodStart: (r.period_start as string) || undefined,
           periodEnd: (r.period_end as string) || undefined,
           contributor1: (r.sales_contributor_1 as string) || undefined,

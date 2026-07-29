@@ -111,6 +111,7 @@ const ACADEMY_PRESETS = [
 ] as const
 
 const SEASON_OPTIONS = ['방학', '학기중'] as const
+const SERVICE_MONTH_OPTIONS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월', '여름특강', '겨울특강'] as const
 
 /** Student statuses. finished/canceled = archived (hidden from active list). */
 const STUDENT_STATUS_OPTIONS = [
@@ -905,6 +906,7 @@ function ECServicesSection({ studentId, createdBy, canEdit }: { studentId: strin
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">{a.partner || '—'}</span>
+                {a.serviceMonth && <Badge variant="outline" className="text-[10px] h-4 bg-purple-50 text-purple-700 border-purple-200">{a.serviceMonth}</Badge>}
                 {a.refundStatus && (
                   <Badge variant="outline" className={a.refundStatus === 'completed' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-orange-100 text-orange-700 border-orange-200'}>
                     {a.refundStatus === 'completed' ? '환불완료' : '환불신청중'}{a.refundDate ? ` · ${a.refundStatus === 'completed' ? '완료' : '신청'} ${a.refundDate}` : ''}
@@ -1002,6 +1004,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
 
   const buildForm = () => ({
     partner: activity?.partner || '',
+    serviceMonth: activity?.serviceMonth || '',
     periodStart: activity?.periodStart || '',
     periodEnd: activity?.periodEnd || '',
     program: activity?.program || '',
@@ -1031,6 +1034,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
     const payload = {
       studentId,
       partner: form.partner || undefined,
+      serviceMonth: form.serviceMonth || undefined,
       periodStart: form.periodStart || undefined,
       periodEnd: form.periodEnd || undefined,
       program: form.program || undefined,
@@ -1068,6 +1072,16 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
                 {EC_PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {/* 교육 월 (교육비 처리 월) */}
+          <div>
+            <Label className="text-xs">교육 월 <span className="text-muted-foreground font-normal">(서비스입금관리에서 몇월 교육비인지 표시)</span></Label>
+            <Select value={form.serviceMonth || null} onValueChange={v => set('serviceMonth', v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="선택" /></SelectTrigger>
+              <SelectContent>
+                {SERVICE_MONTH_OPTIONS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -1233,6 +1247,7 @@ function AcademicSupportSection({ studentId, createdBy, canEdit }: { studentId: 
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">{item.academyName || '—'}</span>
+                {item.serviceMonth && <Badge variant="outline" className="text-[10px] h-4 bg-purple-50 text-purple-700 border-purple-200">{item.serviceMonth}</Badge>}
                 {item.refundStatus && (
                   <Badge variant="outline" className={item.refundStatus === 'completed' ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-orange-100 text-orange-700 border-orange-200'}>
                     {item.refundStatus === 'completed' ? '환불완료' : '환불신청중'}{item.refundDate ? ` · ${item.refundStatus === 'completed' ? '완료' : '신청'} ${item.refundDate}` : ''}
@@ -1321,6 +1336,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }:
     academyCustom: item?.academyName && !(ACADEMY_PRESETS as readonly string[]).includes(item.academyName)
       ? item.academyName : '',
     subject: item?.subject || '',
+    serviceMonth: item?.serviceMonth || '',
     season: item?.season || '',
     periodStart: item?.periodStart || '',
     periodEnd: item?.periodEnd || '',
@@ -1352,6 +1368,7 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }:
       studentId,
       academyName: resolvedAcademy,
       subject: form.subject || undefined,
+      serviceMonth: form.serviceMonth || undefined,
       season: form.season || undefined,
       periodStart: form.periodStart || undefined,
       periodEnd: form.periodEnd || undefined,
@@ -1410,6 +1427,16 @@ function AcademicSupportDialog({ studentId, item, trigger, createdBy, canEdit }:
               value={form.subject}
               onChange={e => set('subject', e.target.value)}
             />
+          </div>
+          {/* 교육 월 (교육비 처리 월) */}
+          <div>
+            <Label className="text-xs">교육 월 <span className="text-muted-foreground font-normal">(서비스입금관리에서 몇월 교육비인지 표시)</span></Label>
+            <Select value={form.serviceMonth || null} onValueChange={v => set('serviceMonth', v)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="선택" /></SelectTrigger>
+              <SelectContent>
+                {SERVICE_MONTH_OPTIONS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           {/* 금액 */}
           <div>
