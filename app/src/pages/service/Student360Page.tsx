@@ -53,6 +53,10 @@ import {
   type ECActivity,
 } from '@/hooks/useECActivities'
 import {
+  useEssayPlans, useCreateEssayPlan, useUpdateEssayPlan, useDeleteEssayPlan,
+  essayEndMonth, essayMonthCount, type EssayPlan,
+} from '@/hooks/useEssayPlans'
+import {
   useAcademicSupport, useCreateAcademicSupport, useUpdateAcademicSupport, useDeleteAcademicSupport,
   type AcademicSupportItem,
 } from '@/hooks/useAcademicSupport'
@@ -450,6 +454,7 @@ export function Student360Page() {
             <ContractSection student={selected} canEdit={canEdit} />
             <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
+            <EssayServiceSection studentId={selected.id} defaultConsultant={consultantName(selected.assignedConsultant)} createdBy={user?.id} canEdit={canEdit} />
             <CoachingSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} canEdit={canEdit} />
             <IssueReportSection studentId={selected.id} studentName={selected.name} userId={user?.id} userName={user?.name} isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit} />
@@ -1205,6 +1210,164 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ────────────────────────── 원서·에세이 서비스 (컨설턴트 월 급여) ──────────────────────────
+function EssayServiceSection({ studentId, defaultConsultant, createdBy, canEdit }: { studentId: string; defaultConsultant?: string; createdBy?: string; canEdit: boolean }) {
+  const { data: plans = [] } = useEssayPlans(studentId)
+  const del = useDeleteEssayPlan()
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FileText className="size-5 text-primary" />
+          원서·에세이 서비스
+          <span className="text-muted-foreground font-normal">({plans.length})</span>
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          {canEdit && (
+            <span onClick={e => e.stopPropagation()}>
+              <EssayServiceDialog
+                studentId={studentId}
+                defaultConsultant={defaultConsultant}
+                createdBy={createdBy}
+                canEdit={canEdit}
+                trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />추가</Button>}
+              />
+            </span>
+          )}
+          {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+        </div>
+      </CardHeader>
+      {expanded && (
+      <CardContent className="space-y-3">
+        {plans.length === 0 && (
+          <p className="text-sm text-muted-foreground">등록된 원서·에세이 서비스가 없습니다. 총액과 시작월을 등록하면 인보이스 발행 시 매월 자동 계산됩니다.</p>
+        )}
+        {plans.map(p => {
+          const count = essayMonthCount(p.startMonth)
+          const monthly = count > 0 ? Math.floor((p.totalAmount || 0) / count) : 0
+          return (
+            <div key={p.id} className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-sm">{p.consultantName || '담당 미지정'}</span>
+                  <Badge variant="outline" className="text-[10px] h-4 bg-indigo-50 text-indigo-700 border-indigo-200">
+                    {p.startMonth} ~ {essayEndMonth(p.startMonth)} · {count}개월
+                  </Badge>
+                </div>
+                {canEdit && (
+                  <div className="flex gap-1">
+                    <EssayServiceDialog studentId={studentId} plan={p} defaultConsultant={defaultConsultant} createdBy={createdBy} canEdit={canEdit}
+                      trigger={<Button size="sm" variant="ghost"><Pencil className="size-3.5" /></Button>} />
+                    <Button size="sm" variant="ghost" onClick={() => { if (!canEdit) return; if (confirm('이 원서·에세이 서비스를 삭제할까요?')) del.mutate({ id: p.id, studentId }) }}>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">총 급여</p>
+                  <p className="font-medium">{formatCurrency(p.totalAmount, (p.currency as 'KRW' | 'USD') || 'KRW')}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">월 지급액 (÷{count})</p>
+                  <p className="font-medium text-indigo-700">{formatCurrency(monthly, (p.currency as 'KRW' | 'USD') || 'KRW')}<span className="text-xs text-muted-foreground">/월</span></p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">비고</p>
+                  <p className="whitespace-pre-wrap">{p.notes || '—'}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">인보이스 발행 시 {p.consultantName || '담당 컨설턴트'}의 해당 월 인보이스에 자동 추가됩니다(시작월~12월).</p>
+            </div>
+          )
+        })}
+      </CardContent>
+      )}
+    </Card>
+  )
+}
+
+const SERVICE_YEAR = new Date().getFullYear()
+
+function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, canEdit, trigger }: {
+  studentId: string
+  plan?: EssayPlan
+  defaultConsultant?: string
+  createdBy?: string
+  canEdit: boolean
+  trigger: ReactNode
+}) {
+  const create = useCreateEssayPlan()
+  const update = useUpdateEssayPlan()
+  const [open, setOpen] = useState(false)
+  const [consultant, setConsultant] = useState(plan?.consultantName || defaultConsultant || '')
+  const [total, setTotal] = useState(plan?.totalAmount != null ? String(plan.totalAmount) : '')
+  const [startMonth, setStartMonth] = useState(plan?.startMonth || `${SERVICE_YEAR}-06`)
+  const [notes, setNotes] = useState(plan?.notes || '')
+
+  const totalNum = Number(total) || 0
+  const count = essayMonthCount(startMonth)
+  const monthly = count > 0 ? Math.floor(totalNum / count) : 0
+  const lastMonthly = count > 0 ? totalNum - monthly * (count - 1) : 0
+
+  const save = () => {
+    if (!canEdit || !startMonth || totalNum <= 0) return
+    if (plan) {
+      update.mutate({ id: plan.id, studentId, consultantName: consultant.trim() || undefined, totalAmount: totalNum, startMonth, notes: notes.trim() || undefined },
+        { onSuccess: () => setOpen(false) })
+    } else {
+      create.mutate({ studentId, consultantName: consultant.trim() || undefined, totalAmount: totalNum, startMonth, currency: 'KRW', notes: notes.trim() || undefined, createdBy },
+        { onSuccess: () => setOpen(false) })
+    }
+  }
+
+  return (
+    <>
+    <span onClick={() => setOpen(true)}>{trigger}</span>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>{plan ? '원서·에세이 서비스 수정' : '원서·에세이 서비스 등록'}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs">담당 컨설턴트 <span className="text-muted-foreground font-normal">(월 급여 대상)</span></Label>
+            <Input className="mt-1" value={consultant} onChange={e => setConsultant(e.target.value)} placeholder="예: John Kim" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">총 급여 (원)</Label>
+              <Input className="mt-1" type="number" min={0} value={total} onChange={e => setTotal(e.target.value)} placeholder="예: 10000000" />
+            </div>
+            <div>
+              <Label className="text-xs">시작월 (신청월)</Label>
+              <Input className="mt-1" type="month" value={startMonth} onChange={e => setStartMonth(e.target.value)} />
+            </div>
+          </div>
+          {/* 계산 미리보기 */}
+          <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800 space-y-0.5">
+            <div>서비스 기간: <b>{startMonth}</b> ~ <b>{essayEndMonth(startMonth)}</b> (그해 12월 종료) · <b>{count}개월</b></div>
+            <div>월 지급액: <b>{formatCurrency(monthly, 'KRW')}</b>{count > 1 && <> · 마지막 달(12월) <b>{formatCurrency(lastMonthly, 'KRW')}</b> (잔액 보정)</>}</div>
+            <div className="text-indigo-500">인보이스 발행 시 시작월~12월 매월 자동 추가됩니다(미팅 조건과 무관).</div>
+          </div>
+          <div>
+            <Label className="text-xs">비고</Label>
+            <Textarea className="mt-1" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>취소</Button>
+          <Button onClick={save} disabled={!startMonth || totalNum <= 0 || create.isPending || update.isPending}>
+            {(create.isPending || update.isPending) && <Loader2 className="size-4 mr-1 animate-spin" />}저장
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 

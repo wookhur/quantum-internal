@@ -22,6 +22,7 @@ import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useConsultantName, canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
 import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
+import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
 import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
@@ -1030,6 +1031,7 @@ export function FreelancerInvoicesPage(
   const issueMonth = selectedMonth === 'all' ? getCurrentMonth() : selectedMonth
   const byConsultant = useConsultantBillable(issueMonth)
   const linesByPerson = useIncentiveLinesByPerson()
+  const { data: essayPlans = [] } = useAllEssayPlans()
   const myName = canonicalConsultantName(user?.name)
   // 수령 상태: 클릭한 것만 그 달에 수령완료. 미수령 건은 다음 달로 자동 이월(원래 달 태그 유지).
   const incentiveStatus = useIncentiveStatus()
@@ -1049,8 +1051,23 @@ export function FreelancerInvoicesPage(
       }
       return out
     }
-    return (byConsultant.get(consultantNameKey(user?.name))?.students || []).filter(r => r.billable).map(r => ({ id: r.label, label: r.label, amount: 0, received: false }))
-  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus])
+    // 관리비: 2회 미팅 완료 학생 (단가는 발행 시 수기입력 → amount 0)
+    const mgmt: DItem[] = (byConsultant.get(consultantNameKey(user?.name))?.students || [])
+      .filter(r => r.billable)
+      .map(r => ({ id: r.label, label: r.label, amount: 0, received: false }))
+    // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산 (미팅 조건 무관)
+    const myKey = consultantNameKey(user?.name)
+    const essay: DItem[] = essayPlans
+      .filter(p => consultantNameKey(p.consultantName || '') === myKey)
+      .map(p => {
+        const line = essayLineForMonth(p, issueMonth)
+        if (!line) return null
+        const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ') || p.studentName || '학생'
+        return { id: `essay:${p.id}:${issueMonth}`, label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, amount: line.amount, received: false }
+      })
+      .filter((x): x is DItem => x !== null)
+    return [...mgmt, ...essay]
+  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, user?.name])
 
   // 발행 대상 = 아직 수령완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
@@ -1340,14 +1357,18 @@ export function FreelancerInvoicesPage(
                 </>
               )
             })()}
-            {!isIncentive && <span className="text-muted-foreground"> · 미팅리포트 월 2회 업로드 완료 학생만 발행 가능</span>}
+            {!isIncentive && <span className="text-muted-foreground"> · 관리비: 미팅리포트 2회 완료 학생 · 원서·에세이: 시작월~12월 매월 자동(금액 자동)</span>}
           </div>
           {renderedItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">{agedOnly ? '이월된 미수령 인센티브가 없습니다.' : (isIncentive ? '이 달에 정산할(수금 완료) 세일즈 인센티브가 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)')}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {renderedItems.map((r) => {
-                if (!isIncentive) return <Badge key={r.id} variant="outline">{r.label}</Badge>
+                if (!isIncentive) return (
+                  <Badge key={r.id} variant="outline" className={r.amount > 0 ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}>
+                    {r.label}{r.amount > 0 ? ` · ${formatKRW(r.amount)}` : ''}
+                  </Badge>
+                )
                 const carried = !!r.originMonth && r.originMonth < issueMonth
                 const delay = carried ? monthsBetween(r.originMonth, issueMonth) : 0
                 return (
