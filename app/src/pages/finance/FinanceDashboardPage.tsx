@@ -18,7 +18,7 @@ import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote } from 'lucide-react'
 import { useIncentiveLinesByPerson, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
-import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
+import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { AlertTriangle } from 'lucide-react'
@@ -134,6 +134,7 @@ export function FinanceDashboardPage() {
   const linesByPerson = useIncentiveLinesByPerson()
   const incentiveStatus = useIncentiveStatus()
   const setIncentiveReceived = useSetIncentiveReceived()
+  const bulkSetIncentiveReceived = useBulkSetIncentiveReceived()
   const { data: students = [] } = useServiceStudents()
   const nameDiagnostics = useMemo(() => {
     const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
@@ -397,7 +398,8 @@ export function FinanceDashboardPage() {
         defaultMonth={month === 'all' ? months[0] : month}
         canToggle={allowed}
         onToggle={(id, received, m) => setIncentiveReceived.mutate({ key: id, received, month: m })}
-        toggling={setIncentiveReceived.isPending}
+        onBulk={rows => bulkSetIncentiveReceived.mutate(rows)}
+        toggling={setIncentiveReceived.isPending || bulkSetIncentiveReceived.isPending}
       />
 
       {/* 인보이스 지급 원장 (승인완료 → 지급완료) */}
@@ -757,13 +759,14 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
 }
 
 // ─── 인센티브 지급 원장 (월 선택 · 전사) ──────────────────────────────────────
-function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, canToggle, onToggle, toggling }: {
+function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, canToggle, onToggle, onBulk, toggling }: {
   linesByPerson: Map<string, IncentiveLine[]>
   status: Map<string, { received: boolean; receivedMonth?: string }>
   months: string[]
   defaultMonth: string
   canToggle: boolean
   onToggle: (id: string, received: boolean, month: string) => void
+  onBulk: (rows: { key: string; received: boolean; month: string }[]) => void
   toggling: boolean
 }) {
   const [m, setM] = useState(defaultMonth)
@@ -793,6 +796,14 @@ function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, ca
   const paidTotal = rows.filter(r => r.received).reduce((s, r) => s + r.line.amount, 0)
   const pendingTotal = rows.filter(r => !r.received).reduce((s, r) => s + r.line.amount, 0)
   const personCount = new Set(rows.map(r => r.person)).size
+  const pendingRows = rows.filter(r => !r.received)
+
+  // 미지급 전체를 각 라인의 발생월 기준으로 일괄 지급완료
+  const bulkPayByOrigin = () => {
+    if (!pendingRows.length) return
+    if (!confirm(`미지급 ${pendingRows.length}건을 각 항목의 발생월 기준으로 지급완료 처리할까요?\n(예: 2026-06 발생분 → 2026-06 지급완료)`)) return
+    onBulk(pendingRows.map(r => ({ key: r.line.id, received: true, month: r.line.month })))
+  }
 
   return (
     <Card>
@@ -801,6 +812,12 @@ function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, ca
           <Banknote className="size-4 text-violet-500" />
           <span className="font-semibold text-sm">인센티브 지급 원장</span>
           <Badge variant="outline" className="text-violet-700 border-violet-200 bg-violet-50">{rows.length}건 · {personCount}명</Badge>
+          {canToggle && pendingRows.length > 0 && (
+            <Button size="sm" variant="outline" className="h-8 gap-1 text-violet-700 border-violet-300 hover:bg-violet-50"
+              disabled={toggling} onClick={bulkPayByOrigin}>
+              <Banknote className="size-4" /> 발생월 기준 일괄 지급완료 ({pendingRows.length}건)
+            </Button>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <Label className="text-xs text-muted-foreground">정산월</Label>
             <Select value={m} onValueChange={v => v && setM(v)}>
@@ -842,7 +859,7 @@ function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, ca
                 <TableHead className="w-20">출처</TableHead>
                 <TableHead className="w-20">발생월</TableHead>
                 <TableHead className="text-right w-28">금액</TableHead>
-                <TableHead className="w-44 text-right">지급 처리</TableHead>
+                <TableHead className="w-56 text-right">지급 처리</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -865,11 +882,8 @@ function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, ca
                         )}
                       </div>
                     ) : canToggle ? (
-                      <Button size="sm" variant="outline" className="h-8 gap-1 text-violet-700 border-violet-200 hover:bg-violet-50" disabled={toggling || m === 'all'}
-                        title={m === 'all' ? '월을 선택한 뒤 처리하세요' : `${m}에 지급완료로 기록`}
-                        onClick={() => onToggle(r.line.id, true, m)}>
-                        <Banknote className="size-4" /> {m} 지급완료
-                      </Button>
+                      <PayLineCell line={r.line} months={months} disabled={toggling}
+                        onPay={(month) => onToggle(r.line.id, true, month)} />
                     ) : (
                       <Badge variant="outline" className="text-amber-600 border-amber-200">미지급</Badge>
                     )}
@@ -880,10 +894,36 @@ function IncentivePayoutLedger({ linesByPerson, status, months, defaultMonth, ca
           </Table>
         )}
         <p className="px-4 py-2 text-[11px] text-muted-foreground border-t">
-          "지급완료"는 선택한 월에 실제 지급된 것으로 기록합니다(그 달 인센티브로 집계). 미수령분은 다음 달로 자동 이월되며 발생월 태그는 유지됩니다. 과거(6·7월) 지급분은 해당 월을 선택해 소급 기록하세요.
+          지급완료 버튼은 각 항목의 <b>발생월</b>로 기본 설정됩니다(예: 2026-06 발생분 → 2026-06 지급완료). 실제 지급월이 다르면 옆 드롭다운으로 바꿔 기록하세요.
+          미지급 전체를 한 번에 소급 처리하려면 상단 <b>발생월 기준 일괄 지급완료</b>를 쓰세요. 처리 후 남는 미지급분이 곧 이월분입니다.
         </p>
       </CardContent>
     </Card>
+  )
+}
+
+// 라인별 지급완료: 발생월을 기본으로 하되 실제 지급월을 바꿔 기록할 수 있음
+function PayLineCell({ line, months, disabled, onPay }: {
+  line: IncentiveLine
+  months: string[]
+  disabled: boolean
+  onPay: (month: string) => void
+}) {
+  const [pm, setPm] = useState(line.month)
+  const opts = months.includes(line.month) ? months : [line.month, ...months]
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <Select value={pm} onValueChange={v => v && setPm(v)}>
+        <SelectTrigger className="h-8 w-24 text-xs"><span>{pm}</span></SelectTrigger>
+        <SelectContent>
+          {opts.map(mm => <SelectItem key={mm} value={mm}>{mm}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Button size="sm" variant="outline" className="h-8 gap-1 text-violet-700 border-violet-200 hover:bg-violet-50"
+        disabled={disabled} onClick={() => onPay(pm)}>
+        <Banknote className="size-4" /> 지급완료
+      </Button>
+    </div>
   )
 }
 

@@ -40,3 +40,22 @@ export function useSetIncentiveReceived() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['incentive_status'] }),
   })
 }
+
+/** 여러 라인 수령 상태 일괄 upsert (소급 일괄 기록용). */
+export function useBulkSetIncentiveReceived() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (rows: { key: string; received: boolean; month: string }[]) => {
+      if (!rows.length) return
+      const payload = rows.map(r => ({
+        key: r.key,
+        received: r.received,
+        received_month: r.received ? r.month : null,
+        updated_at: new Date().toISOString(),
+      }))
+      const { error } = await supabase.from('incentive_status').upsert(payload, { onConflict: 'key' })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['incentive_status'] }),
+  })
+}
