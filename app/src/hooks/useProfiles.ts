@@ -190,6 +190,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   // ── Partner ──
   { path: '/partner/students', labelKey: 'nav.partnerStudents', module: 'partner' },
   { path: '/partner/instructors', labelKey: 'nav.partnerInstructors', module: 'partner' },
+  { path: '/partner/tutors', labelKey: 'nav.partnerTutors', module: 'partner' },
   { path: '/partner/mentors', labelKey: 'nav.mentors', module: 'partner' },
   { path: '/finance/dashboard', labelKey: 'nav.financeDashboard', module: 'finance' },
   { path: '/partner/companies', labelKey: 'nav.partnerCompanies', module: 'partner' },
@@ -229,6 +230,9 @@ export function canManageServiceFinance(user: { role?: string; email?: string } 
 
 /** 파트너 게시판 3종 — 서비스팀(department='service') 소속에게 열람 허용 */
 export const PARTNER_BOARD_ROUTES: string[] = ['/partner/students', '/partner/companies', '/partner/contracts']
+
+/** 전 직원에게 열람·편집 오픈되는 게시판(역할·모듈·커스텀 설정과 무관하게 항상 허용) */
+export const OPEN_TO_ALL_ROUTES: string[] = ['/partner/tutors']
 
 /** Get all route paths for a module */
 export function getRoutesForModule(mod: FeatureModule): string[] {
@@ -361,6 +365,12 @@ export function getEffectiveRoutes(
     for (const r of PARTNER_BOARD_ROUTES) set.add(r)
     result = [...set]
   }
+  // 전 직원 오픈 게시판은 항상 추가(잠금 해제)
+  {
+    const set = new Set(result)
+    for (const r of OPEN_TO_ALL_ROUTES) set.add(r)
+    result = [...set]
+  }
   return result
 }
 
@@ -380,6 +390,8 @@ export function getEffectiveEditRoutes(
   const custom = featureAccessRecords.find(r => r.userId === user.id)
   if (custom && custom.editRoutes !== undefined) {
     const editable = new Set(custom.editRoutes)
+    // 전 직원 오픈 게시판은 편집도 항상 허용
+    for (const r of OPEN_TO_ALL_ROUTES) editable.add(r)
     return viewable.filter(r => editable.has(r))
   }
   // 레거시/기본: 보이는 게시판 전부 편집 허용
