@@ -553,7 +553,7 @@ function ProgramDetail({ program, canEdit, tutoring }: { program: PartnerProgram
   const uploadBrochure = useUploadBrochure()
   const fileRef = useRef<HTMLInputElement>(null)
   const [guide, setGuide] = useState(program.guide || '')
-  const [guideDirty, setGuideDirty] = useState(false)
+  const [editingGuide, setEditingGuide] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [uploadErr, setUploadErr] = useState<string | null>(null)
   const [extractErr, setExtractErr] = useState<string | null>(null)
@@ -572,10 +572,9 @@ function ProgramDetail({ program, canEdit, tutoring }: { program: PartnerProgram
     setExtractErr(null)
     setExtracting(true)
     try {
-      const { guide: extracted } = await extractProgramGuideFromImage(b64)
+      const { guide: extracted } = await extractProgramGuideFromImage(b64, tutoring ? 'tutor' : undefined)
       if (extracted) {
         setGuide(extracted)
-        setGuideDirty(false)
         await updateProgram.mutateAsync({ id: program.id, guide: extracted })
       } else if (showError) {
         setExtractErr(lang === 'en' ? 'Could not read the brochure.' : '브로셔에서 내용을 읽지 못했습니다.')
@@ -631,7 +630,7 @@ function ProgramDetail({ program, canEdit, tutoring }: { program: PartnerProgram
 
   const saveGuide = () => {
     if (!canEdit) return
-    updateProgram.mutate({ id: program.id, guide }, { onSuccess: () => setGuideDirty(false) })
+    updateProgram.mutate({ id: program.id, guide })
   }
 
   return (
@@ -704,7 +703,7 @@ function ProgramDetail({ program, canEdit, tutoring }: { program: PartnerProgram
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center justify-between gap-2">
-              <span>{lang === 'en' ? 'Program Guide' : '프로그램 안내'}</span>
+              <span>{lang === 'en' ? 'Program Guide' : (tutoring ? '선생님 안내' : '프로그램 안내')}</span>
               <div className="flex items-center gap-1.5">
                 {canEdit && program.brochureUrl && (
                   <Button
@@ -715,10 +714,21 @@ function ProgramDetail({ program, canEdit, tutoring }: { program: PartnerProgram
                     {lang === 'en' ? 'Generate from brochure' : '브로셔에서 자동 생성'}
                   </Button>
                 )}
-                {canEdit && guideDirty && (
-                  <Button size="sm" className="h-7 text-xs gap-1" onClick={saveGuide} disabled={updateProgram.isPending}>
-                    <Save className="size-3" /> {lang === 'en' ? 'Save' : '저장'}
+                {canEdit && !editingGuide && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+                    onClick={() => { setGuide(program.guide || guide); setEditingGuide(true) }}>
+                    <Pencil className="size-3" /> {lang === 'en' ? 'Edit' : '수정'}
                   </Button>
+                )}
+                {canEdit && editingGuide && (
+                  <>
+                    <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { saveGuide(); setEditingGuide(false) }} disabled={updateProgram.isPending}>
+                      <Save className="size-3" /> {lang === 'en' ? 'Save' : '저장'}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setGuide(program.guide || ''); setEditingGuide(false) }}>
+                      {lang === 'en' ? 'Cancel' : '취소'}
+                    </Button>
+                  </>
                 )}
               </div>
             </CardTitle>
@@ -729,16 +739,25 @@ function ProgramDetail({ program, canEdit, tutoring }: { program: PartnerProgram
                 {lang === 'en' ? 'Auto-generate failed: ' : '자동 생성 실패: '}{extractErr}
               </p>
             )}
-            <Textarea
-              value={guide}
-              onChange={(e) => { setGuide(e.target.value); setGuideDirty(true) }}
-              readOnly={!canEdit}
-              rows={16}
-              className="text-sm resize-none"
-              placeholder={lang === 'en'
-                ? 'Upload a brochure to auto-fill, or write the program details here...'
-                : '브로셔를 업로드하면 자동으로 정리되거나, 여기에 직접 프로그램 내용을 작성하세요...'}
-            />
+            {editingGuide ? (
+              <Textarea
+                value={guide}
+                onChange={(e) => setGuide(e.target.value)}
+                rows={16}
+                className="text-sm resize-none"
+                placeholder={lang === 'en'
+                  ? 'Upload a brochure to auto-fill, or write the details here...'
+                  : (tutoring ? '브로셔를 업로드하면 6개 항목으로 자동 정리되거나, 여기에 직접 작성하세요...' : '브로셔를 업로드하면 자동으로 정리되거나, 여기에 직접 프로그램 내용을 작성하세요...')}
+              />
+            ) : (
+              guide.trim() ? (
+                <div className="text-sm whitespace-pre-wrap min-h-[8rem] rounded-md border bg-muted/20 p-3">{guide}</div>
+              ) : (
+                <div className="text-sm text-muted-foreground min-h-[8rem] rounded-md border border-dashed p-3 flex items-center justify-center text-center">
+                  {tutoring ? '브로셔(이미지/PDF)를 업로드하고 "브로셔에서 자동 생성"을 누르거나, "수정"으로 직접 작성하세요.' : '브로셔를 업로드해 자동 정리하거나 "수정"으로 직접 작성하세요.'}
+                </div>
+              )
+            )}
           </CardContent>
         </Card>
       </div>
@@ -925,7 +944,7 @@ export function ProgramsPage({ variant = PARTNER_VARIANT }: { variant?: Programs
                     </Button>
                   )}
                 </div>
-                <ProgramDetail program={selected} canEdit={canEdit} tutoring={variant.tutoring} />
+                <ProgramDetail key={selected.id} program={selected} canEdit={canEdit} tutoring={variant.tutoring} />
               </div>
             ) : (
               <Card><CardContent className="py-16 text-center text-sm text-muted-foreground">

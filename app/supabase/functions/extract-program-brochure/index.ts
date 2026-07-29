@@ -23,6 +23,24 @@ const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 파트너 프
 3. 한국어 텍스트를 정확히 읽어주세요.
 4. 결과는 순수 텍스트(마크다운)로만 반환하고, 다른 설명은 붙이지 마세요.`
 
+// 과외강사관리 전용: 과외 선생님 프로필을 6개 항목으로 정리
+const TUTOR_SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 과외 선생님 프로필(브로셔·이력서) 정리 전문가입니다.
+주어진 이미지를 읽고, 학부모에게 안내할 과외 선생님 소개를 아래 6개 항목으로 정리하세요.
+
+정리 형식(한국어, 각 항목을 아래 번호·제목 그대로 사용):
+1. 선생님 이름
+2. 학력 및 전공
+3. 과외경력
+4. 과외가능한 과목
+5. 수업방식 및 장점
+6. 과목별 시간당 비용
+
+규칙:
+1. 이미지에 실제로 적힌 내용만 사용하세요. 없는 정보는 지어내지 마세요.
+2. 정보가 없는 항목도 6개 제목은 모두 유지하고, 내용은 "정보 없음"으로 적으세요.
+3. 한국어 텍스트를 정확히 읽어주세요.
+4. 결과는 순수 텍스트(마크다운)로만 반환하고, 다른 설명은 붙이지 마세요.`
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -51,6 +69,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json()
     const image: string | undefined = body?.image
+    const variant: string | undefined = body?.variant   // 'tutor' → 과외 6개 항목 템플릿
     if (!image || typeof image !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Missing "image" field in request body' }),
@@ -66,18 +85,19 @@ Deno.serve(async (req) => {
       )
     }
 
+    const isTutor = variant === 'tutor'
     const userContent = [
       {
         type: 'image',
         source: { type: 'base64', media_type: detectMediaType(image), data: image },
       },
-      { type: 'text', text: '위 브로셔 이미지를 읽고 프로그램 안내를 정리해주세요.' },
+      { type: 'text', text: isTutor ? '위 이미지를 읽고 과외 선생님 프로필을 6개 항목으로 정리해주세요.' : '위 브로셔 이미지를 읽고 프로그램 안내를 정리해주세요.' },
     ]
 
     const apiBody = JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
+      system: isTutor ? TUTOR_SYSTEM_PROMPT : SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userContent }],
     })
 

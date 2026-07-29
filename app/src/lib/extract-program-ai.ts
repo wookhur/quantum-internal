@@ -11,11 +11,11 @@ export interface ExtractedProgramInfo {
  * organized program guide. Falls back gracefully — callers should treat a
  * thrown error as "auto-summary unavailable, edit manually".
  */
-export async function extractProgramGuideFromImage(imageBase64: string): Promise<ExtractedProgramInfo> {
+export async function extractProgramGuideFromImage(imageBase64: string, variant?: 'tutor'): Promise<ExtractedProgramInfo> {
   if (!imageBase64) throw new Error('브로셔 이미지를 읽을 수 없습니다.')
 
   const { data, error } = await supabase.functions.invoke('extract-program-brochure', {
-    body: { image: imageBase64 },
+    body: { image: imageBase64, variant },
   })
 
   if (error) {
