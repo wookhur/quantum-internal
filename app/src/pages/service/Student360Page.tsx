@@ -158,7 +158,7 @@ function ecSalesFinal(select: string, custom: string): string | undefined {
   return select === '직접입력' ? (custom.trim() || undefined) : select
 }
 
-const ESSAY_EDITORS = ['Somee Park', 'Danny Kim', '한상범+양은영'] as const
+const ESSAY_EDITORS = ['Somee Park', 'Danny Kim', '한상범+양은영', 'John Kim', '남연서'] as const
 
 // KPI dot color legend, expressed as % of KPI_MAX so it always matches kpiDotColor().
 const KPI_LEGEND = [
