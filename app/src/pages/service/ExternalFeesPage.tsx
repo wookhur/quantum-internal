@@ -74,9 +74,8 @@ function contributorRows(
   return out
 }
 
-/** Total incentive for an item across all contributors. 환불완료 건은 0. */
+/** Total incentive for an item across all contributors. */
 function incentiveOf(f: ServiceProgramFee, autoTeam: TeamResolver, salesRate: number, serviceRate: number): number {
-  if (f.refundStatus === 'completed') return 0
   return contributorRows(f, autoTeam, salesRate, serviceRate).reduce((s, c) => s + c.inc, 0)
 }
 
