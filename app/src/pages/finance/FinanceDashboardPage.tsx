@@ -16,7 +16,8 @@ import { useAllExtraInstallments } from '@/hooks/useExternalFees'
 import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
 import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
-import { Banknote, RefreshCw } from 'lucide-react'
+import { Banknote, RefreshCw, Download } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { useIncentiveLinesByPerson, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
 import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -80,6 +81,7 @@ export function FinanceDashboardPage() {
   const updateStatus = useUpdateInvoiceStatus()
   const setPaidDate = useSetInvoicePaidDate()
   const [detailInv, setDetailInv] = useState<FreelancerInvoice | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const { data: allIncentives = [], isLoading: incLoading } = useIncentivesByInstallment()
   const { data: allExtras = [], isLoading: extLoading } = useAllExtraInstallments()
@@ -253,6 +255,24 @@ export function FinanceDashboardPage() {
     return flagged.sort((a, b) => b.contractAmount - a.contractAmount)
   }, [allExtras, programFees, students])
 
+  const handleExportApproved = async () => {
+    if (!approvedList.length || exporting) return
+    setExporting(true)
+    try {
+      const ids = approvedList.map(i => i.id)
+      const { data: itemRows } = await supabase
+        .from('freelancer_invoice_items')
+        .select('*')
+        .in('invoice_id', ids)
+      await exportApprovedInvoicesExcel(approvedList, (itemRows || []) as Record<string, unknown>[], month === 'all' ? '전체' : month)
+    } catch (e) {
+      alert('엑셀 생성 중 오류가 발생했습니다. 다시 시도해 주세요.')
+      console.error(e)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   if (!allowed) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
@@ -271,15 +291,27 @@ export function FinanceDashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t('financeDash.title')}</h1>
           <p className="text-muted-foreground text-sm">각 인원이 제출한 인보이스를 한곳에서 승인·관리하고, 지급 예정·미지급을 파악합니다.</p>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs">정산월</Label>
-          <Select value={month} onValueChange={v => v && setMonth(v)}>
-            <SelectTrigger className="h-9 w-40"><span>{month === 'all' ? '전체' : month}</span></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">전체</SelectItem>
-              {months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="flex items-end gap-2">
+          <Button
+            variant="outline"
+            className="h-9 gap-1.5"
+            disabled={approvedList.length === 0 || exporting}
+            title={approvedList.length === 0 ? '승인완료된 인보이스가 없습니다' : '승인 인보이스를 종류별 엑셀로 다운로드'}
+            onClick={handleExportApproved}
+          >
+            {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            승인 인보이스 엑셀 ({approvedList.length})
+          </Button>
+          <div className="space-y-1">
+            <Label className="text-xs">정산월</Label>
+            <Select value={month} onValueChange={v => v && setMonth(v)}>
+              <SelectTrigger className="h-9 w-40"><span>{month === 'all' ? '전체' : month}</span></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체</SelectItem>
+                {months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -756,6 +788,140 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
       </DialogContent>
     </Dialog>
   )
+}
+
+// ─── 승인 인보이스 엑셀 (세무사무실 제출용) ───────────────────────────────────
+async function exportApprovedInvoicesExcel(
+  invoices: FreelancerInvoice[],
+  items: Record<string, unknown>[],
+  monthLabel: string,
+) {
+  const { default: ExcelJS } = await import('exceljs')
+  const wb = new ExcelJS.Workbook()
+  const statusMap: Record<string, string> = { approved: '승인', submitted: '제출', rejected: '반려', draft: '임시' }
+
+  // 종류별 그룹
+  const byKind = new Map<string, FreelancerInvoice[]>()
+  for (const inv of invoices) {
+    const k = inv.kind || 'etc'
+    const arr = byKind.get(k) || []
+    arr.push(inv)
+    byKind.set(k, arr)
+  }
+
+  const styleHeader = (ws: import('exceljs').Worksheet) => {
+    const h = ws.getRow(1)
+    h.font = { bold: true, size: 11 }
+    h.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
+  }
+
+  // 요약 시트
+  const summary = wb.addWorksheet('요약')
+  summary.columns = [
+    { header: '종류', key: 'kind', width: 18 },
+    { header: '건수', key: 'count', width: 8 },
+    { header: '합계(공급가)', key: 'total', width: 16 },
+    { header: '지급완료', key: 'paid', width: 10 },
+    { header: '지급예정', key: 'unpaid', width: 10 },
+  ]
+  styleHeader(summary)
+  let grand = 0
+  for (const [k, arr] of byKind) {
+    const total = arr.reduce((s, i) => s + (i.totalAmount || 0), 0)
+    grand += total
+    summary.addRow({
+      kind: kindLabel(k),
+      count: arr.length,
+      total,
+      paid: arr.filter(i => i.paidDate).length,
+      unpaid: arr.filter(i => !i.paidDate).length,
+    })
+  }
+  summary.addRow({ kind: '합계', count: invoices.length, total: grand })
+  summary.getColumn('total').numFmt = '#,##0'
+  summary.getRow(summary.rowCount).font = { bold: true }
+
+  // 종류별 상세 시트
+  for (const [k, arr] of byKind) {
+    const ws = wb.addWorksheet(kindLabel(k).replace(/[\\/*?:[\]]/g, ' ').slice(0, 28))
+    ws.columns = [
+      { header: 'No', key: 'no', width: 5 },
+      { header: '제출자', key: 'name', width: 14 },
+      { header: '이메일', key: 'email', width: 24 },
+      { header: '주민/사업자번호', key: 'resident', width: 18 },
+      { header: '연락처', key: 'phone', width: 15 },
+      { header: '정산월', key: 'month', width: 10 },
+      { header: '제출일', key: 'date', width: 12 },
+      { header: '상태', key: 'status', width: 8 },
+      { header: '지급일', key: 'paid', width: 12 },
+      { header: '합계(공급가)', key: 'total', width: 15 },
+      { header: '입금계좌', key: 'bank', width: 28 },
+      { header: '비고', key: 'note', width: 20 },
+    ]
+    styleHeader(ws)
+    arr.forEach((inv, i) => {
+      ws.addRow({
+        no: i + 1,
+        name: inv.freelancerName || '',
+        email: inv.freelancerEmail || '',
+        resident: inv.residentNumber || '',
+        phone: inv.phone || '',
+        month: inv.invoiceMonth,
+        date: inv.invoiceDate,
+        status: statusMap[inv.status] || inv.status,
+        paid: inv.paidDate || '',
+        total: inv.totalAmount || 0,
+        bank: inv.bankAccount || '',
+        note: inv.note || '',
+      })
+    })
+    ws.getColumn('total').numFmt = '#,##0'
+  }
+
+  // 항목 상세 시트 (전체 인보이스 품목)
+  if (items.length) {
+    const invById = new Map(invoices.map(i => [i.id, i]))
+    const detail = wb.addWorksheet('항목상세')
+    detail.columns = [
+      { header: '종류', key: 'kind', width: 18 },
+      { header: '제출자', key: 'name', width: 14 },
+      { header: '정산월', key: 'month', width: 10 },
+      { header: '항목명', key: 'item', width: 30 },
+      { header: '수량', key: 'qty', width: 8 },
+      { header: '단가', key: 'unit', width: 14 },
+      { header: '공급가', key: 'supply', width: 14 },
+      { header: '비고', key: 'remark', width: 20 },
+    ]
+    styleHeader(detail)
+    const sorted = [...items].sort((a, b) => {
+      const ia = invById.get(a.invoice_id as string), ib = invById.get(b.invoice_id as string)
+      return (ia?.freelancerName || '').localeCompare(ib?.freelancerName || '') || (Number(a.item_order) - Number(b.item_order))
+    })
+    for (const it of sorted) {
+      const inv = invById.get(it.invoice_id as string)
+      detail.addRow({
+        kind: kindLabel(inv?.kind),
+        name: inv?.freelancerName || '',
+        month: inv?.invoiceMonth || '',
+        item: (it.item_name as string) || '',
+        qty: Number(it.quantity) || 0,
+        unit: Number(it.unit_price) || 0,
+        supply: Number(it.supply_amount) || 0,
+        remark: (it.remark as string) || '',
+      })
+    }
+    detail.getColumn('unit').numFmt = '#,##0'
+    detail.getColumn('supply').numFmt = '#,##0'
+  }
+
+  const buf = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `승인인보이스_${monthLabel}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ─── 인센티브 지급 원장 (월 선택 · 전사) ──────────────────────────────────────
