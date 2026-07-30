@@ -697,6 +697,19 @@ export function ContractDetailPage() {
     () => [...new Set(contractIncentives.map((ci) => ci.displayName).filter((n): n is string => !!n))],
     [contractIncentives],
   )
+  // 인센티브 설정에서 바로 환불 차감 입력(환불처리 여부와 무관)
+  const createClawbacks = useCreateClawbacks()
+  const [clawOpen, setClawOpen] = useState(false)
+  const [clawAmts, setClawAmts] = useState<Record<string, string>>({})
+  const [clawMonth, setClawMonth] = useState(nextMonthKey())
+  const [clawReason, setClawReason] = useState('')
+  const submitClawbacks = () => {
+    const items: ClawbackInput[] = incentiveContributorNames
+      .filter((n) => Number(clawAmts[n]) > 0)
+      .map((n) => ({ source: 'contract', sourceId: id, studentName: contract?.studentName, contributorName: n, amount: Number(clawAmts[n]), reason: clawReason.trim() || undefined, deductMonth: clawMonth }))
+    if (!items.length) return
+    createClawbacks.mutate({ items, createdBy: user?.id }, { onSuccess: () => { setClawOpen(false); setClawAmts({}); setClawReason('') } })
+  }
   const createIncentive = useCreateIncentive()
   const deleteIncentive = useDeleteIncentive()
   const { data: allProfiles = [] } = useProfiles()
@@ -1292,7 +1305,45 @@ export function ContractDetailPage() {
               </Badge>
             )}
           </h2>
+          {canEdit && incentiveContributorNames.length > 0 && (
+            <Button size="sm" variant="outline" className="gap-1.5 text-rose-700 border-rose-200 hover:bg-rose-50"
+              onClick={() => { setClawMonth(nextMonthKey(todayLocalISO())); setClawAmts({}); setClawReason(''); setClawOpen(true) }}>
+              <DollarSign className="size-3.5" /> 환불 차감 입력
+            </Button>
+          )}
         </div>
+
+        {/* 환불 인센티브 차감 입력 다이얼로그 */}
+        <Dialog open={clawOpen} onOpenChange={setClawOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>세일즈 인센티브 차감</DialogTitle>
+              <DialogDescription>{contract?.studentName} · 환불로 회수할 인센티브를 담당자별로 입력하세요. 다음달 급여에서 차감되며 담당자에게 알림이 갑니다.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              {incentiveContributorNames.map((n) => (
+                <div key={n} className="flex items-center gap-2">
+                  <span className="text-sm w-24 truncate" title={n}>{n}</span>
+                  <Input type="number" value={clawAmts[n] || ''} onChange={(e) => setClawAmts((m) => ({ ...m, [n]: e.target.value }))} placeholder="차감액 (원)" className="h-9 text-sm" />
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <span className="text-sm w-24 text-muted-foreground">차감월</span>
+                <Input type="month" value={clawMonth} onChange={(e) => setClawMonth(e.target.value)} className="h-9 text-sm w-40" />
+              </div>
+              <div>
+                <Label className="text-xs">사유 (차등 근거)</Label>
+                <Input value={clawReason} onChange={(e) => setClawReason(e.target.value)} placeholder="예: 5주차 중단 → 7주분 환불" className="h-9 text-sm mt-1" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setClawOpen(false)}>취소</Button>
+              <Button onClick={submitClawbacks} disabled={createClawbacks.isPending || !incentiveContributorNames.some((n) => Number(clawAmts[n]) > 0)}>
+                차감 저장 · 알림
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <Card>
           <CardContent className="py-4 space-y-4">
             {/* ── Base contract incentives ── */}
