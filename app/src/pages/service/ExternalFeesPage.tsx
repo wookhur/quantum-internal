@@ -26,7 +26,7 @@ import { useDefaultRates, usePartnerRateMap, normalizePartner, rateForTeam, type
 import { useProfiles, canManageServiceFinance } from '@/hooks/useProfiles'
 import { consultantNameKey } from '@/lib/consultants'
 import { useAuth } from '@/contexts/AuthContext'
-import { useCreateClawbacks, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
+import { useCreateClawbacks, useAllClawbacks, useSetClawbackStatus, useDeleteClawback, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
 import { useT } from '@/i18n/LanguageContext'
 import { todayKST } from '@/lib/date'
 import { formatCurrency, type RefundStatus } from '@/types'
@@ -448,9 +448,29 @@ function ProgramFeeDialog({
   onClose: () => void
 }) {
   const t = useT()
+  const { user } = useAuth()
   const teamLabel = (team: ContributorTeam) => t(team === 'sales' ? 'svcpay.teamSales' : 'svcpay.teamService')
   const updateEC = useUpdateECActivity()
   const updateAC = useUpdateAcademicSupport()
+  // 인센티브 환급(신청→완료)
+  const createClawbacks = useCreateClawbacks()
+  const { data: allClawbacks = [] } = useAllClawbacks()
+  const setClawbackStatus = useSetClawbackStatus()
+  const deleteClawback = useDeleteClawback()
+  const feeClawbacks = allClawbacks.filter(c => c.source === 'service' && c.sourceId === fee.id)
+  const [refundOpen, setRefundOpen] = useState(false)
+  const [rcb1, setRcb1] = useState('')
+  const [rcb2, setRcb2] = useState('')
+  const [rMonth, setRMonth] = useState(nextMonthKey())
+  const [rReason, setRReason] = useState('')
+  const sName = fee.studentKoreanName || fee.studentName
+  const submitFeeClawbacks = () => {
+    const items: ClawbackInput[] = []
+    if (fee.contributor1?.trim() && Number(rcb1) > 0) items.push({ source: 'service', sourceId: fee.id, studentName: sName, contributorName: fee.contributor1, amount: Number(rcb1), reason: rReason.trim() || undefined, deductMonth: rMonth })
+    if (fee.contributor2?.trim() && Number(rcb2) > 0) items.push({ source: 'service', sourceId: fee.id, studentName: sName, contributorName: fee.contributor2, amount: Number(rcb2), reason: rReason.trim() || undefined, deductMonth: rMonth })
+    if (!items.length) return
+    createClawbacks.mutate({ items, createdBy: user?.id }, { onSuccess: () => { setRefundOpen(false); setRcb1(''); setRcb2(''); setRReason('') } })
+  }
 
   const [billed, setBilled] = useState(fee.billedAmount ? String(fee.billedAmount) : '')
   const [paidAmt, setPaidAmt] = useState(fee.paidAmount != null ? String(fee.paidAmount) : '')
@@ -565,6 +585,65 @@ function ProgramFeeDialog({
             {fee.refundAmount != null && <> · <span className="font-mono">{formatCurrency(fee.refundAmount, fee.currency as 'KRW' | 'USD')}</span></>}
             {fee.refundDate && <> · {fee.refundStatus === 'completed' ? '완료일' : '신청일'} {fee.refundDate}</>}
             {fee.refundReason && <div className="mt-1 whitespace-pre-wrap">사유: {fee.refundReason}</div>}
+          </div>
+        )}
+
+        {/* 세일즈 인센티브 환급 (신청→완료) */}
+        {isAdmin && (fee.contributor1 || fee.contributor2) && (
+          <div className="rounded-md border border-rose-200 bg-rose-50/40 px-3 py-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-rose-700">세일즈 인센티브 환급</span>
+              <Button size="sm" variant="outline" className="h-6 text-[11px] gap-1 text-rose-700 border-rose-200 hover:bg-rose-100"
+                onClick={() => { if (!refundOpen) { setRMonth(nextMonthKey(fee.refundDate || undefined)); setRcb1(''); setRcb2(''); setRReason('') } setRefundOpen(v => !v) }}>
+                {refundOpen ? '닫기' : '환급금 신청'}
+              </Button>
+            </div>
+            {refundOpen && (
+              <div className="space-y-1.5">
+                {fee.contributor1 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] w-16 truncate" title={fee.contributor1}>{fee.contributor1}</span>
+                    <Input type="number" value={rcb1} onChange={e => setRcb1(e.target.value)} placeholder="환급액" className="h-7 text-xs" />
+                  </div>
+                )}
+                {fee.contributor2 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] w-16 truncate" title={fee.contributor2}>{fee.contributor2}</span>
+                    <Input type="number" value={rcb2} onChange={e => setRcb2(e.target.value)} placeholder="환급액" className="h-7 text-xs" />
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">반영월</label>
+                    <Input type="month" value={rMonth} onChange={e => setRMonth(e.target.value)} className="h-7 text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">사유</label>
+                    <Input value={rReason} onChange={e => setRReason(e.target.value)} placeholder="차등 근거" className="h-7 text-xs" />
+                  </div>
+                </div>
+                <Button size="sm" className="w-full h-7 bg-rose-600 hover:bg-rose-700" disabled={createClawbacks.isPending} onClick={submitFeeClawbacks}>환급 신청 저장 · 알림</Button>
+              </div>
+            )}
+            {/* 환급 현황 */}
+            {feeClawbacks.map(c => (
+              <div key={c.id} className="flex items-center justify-between gap-2 rounded border bg-white px-2 py-1.5 text-[11px] flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Badge variant="outline" className={c.status === 'deducted' ? 'text-emerald-700 border-emerald-200 bg-emerald-50 text-[10px] h-4' : 'text-rose-700 border-rose-200 bg-rose-50 text-[10px] h-4'}>{c.status === 'deducted' ? '환급완료' : '환급신청'}</Badge>
+                  <span className="font-medium">{c.contributorName}</span>
+                  <span className="font-mono text-rose-600">−{formatCurrency(c.amount, 'KRW')}</span>
+                  <span className="text-muted-foreground">· {c.deductMonth}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <select value={c.status} onChange={e => setClawbackStatus.mutate({ id: c.id, status: e.target.value as 'pending' | 'deducted' })} disabled={setClawbackStatus.isPending}
+                    className="h-6 rounded border border-input bg-transparent px-1 text-[11px] outline-none">
+                    <option value="pending">환급신청</option>
+                    <option value="deducted">환급완료</option>
+                  </select>
+                  <button onClick={() => { if (confirm('이 환급 건을 삭제할까요?')) deleteClawback.mutate(c.id) }} className="text-gray-300 hover:text-destructive"><X className="size-3" /></button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
