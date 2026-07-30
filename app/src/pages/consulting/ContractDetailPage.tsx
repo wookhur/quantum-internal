@@ -1306,44 +1306,49 @@ export function ContractDetailPage() {
             )}
           </h2>
           {canEdit && incentiveContributorNames.length > 0 && (
-            <Button size="sm" variant="outline" className="gap-1.5 text-rose-700 border-rose-200 hover:bg-rose-50"
-              onClick={() => { setClawMonth(nextMonthKey(todayLocalISO())); setClawAmts({}); setClawReason(''); setClawOpen(true) }}>
-              <DollarSign className="size-3.5" /> 환불 차감 입력
+            <Button size="sm" variant="outline" className={`gap-1.5 ${clawOpen ? 'text-muted-foreground' : 'text-rose-700 border-rose-200 hover:bg-rose-50'}`}
+              onClick={() => { if (!clawOpen) { setClawMonth(nextMonthKey(todayLocalISO())); setClawAmts({}); setClawReason('') } setClawOpen((v) => !v) }}>
+              <DollarSign className="size-3.5" /> {clawOpen ? '차감 입력 닫기' : '환불 차감 입력'}
             </Button>
           )}
         </div>
 
-        {/* 환불 인센티브 차감 입력 다이얼로그 */}
-        <Dialog open={clawOpen} onOpenChange={setClawOpen}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>세일즈 인센티브 차감</DialogTitle>
-              <DialogDescription>{contract?.studentName} · 환불로 회수할 인센티브를 담당자별로 입력하세요. 다음달 급여에서 차감되며 담당자에게 알림이 갑니다.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-2">
-              {incentiveContributorNames.map((n) => (
-                <div key={n} className="flex items-center gap-2">
-                  <span className="text-sm w-24 truncate" title={n}>{n}</span>
-                  <Input type="number" value={clawAmts[n] || ''} onChange={(e) => setClawAmts((m) => ({ ...m, [n]: e.target.value }))} placeholder="차감액 (원)" className="h-9 text-sm" />
+        {/* 환불 인센티브 차감 — 담당자별 인라인 입력 */}
+        {clawOpen && incentiveContributorNames.length > 0 && (
+          <Card className="mb-3 border-rose-200 bg-rose-50/40">
+            <CardContent className="py-4 space-y-3">
+              <div className="text-sm font-semibold text-rose-700">환불 세일즈 인센티브 차감</div>
+              <p className="text-xs text-muted-foreground">환불로 회수할 금액을 <b>담당자별로</b> 입력하세요. 저장하면 담당자 알림 + 다음달 급여 차감 + 인보이스·지급원장에 (−) 반영됩니다.</p>
+              <div className="space-y-2">
+                {incentiveContributorNames.map((n) => (
+                  <div key={n} className="flex items-center gap-3 rounded-lg border bg-white px-3 py-2">
+                    <span className="text-sm font-medium w-28 truncate" title={n}>{n}</span>
+                    <span className="text-xs text-muted-foreground">차감액</span>
+                    <Input type="number" min={0} value={clawAmts[n] || ''} onChange={(e) => setClawAmts((m) => ({ ...m, [n]: e.target.value }))} placeholder="0" className="h-9 text-sm flex-1" />
+                    <span className="text-xs text-muted-foreground">원</span>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">차감월</Label>
+                  <Input type="month" value={clawMonth} onChange={(e) => setClawMonth(e.target.value)} className="h-9 text-sm mt-1" />
                 </div>
-              ))}
-              <div className="flex items-center gap-2">
-                <span className="text-sm w-24 text-muted-foreground">차감월</span>
-                <Input type="month" value={clawMonth} onChange={(e) => setClawMonth(e.target.value)} className="h-9 text-sm w-40" />
+                <div>
+                  <Label className="text-xs">사유 (차등 근거)</Label>
+                  <Input value={clawReason} onChange={(e) => setClawReason(e.target.value)} placeholder="예: 5주차 중단 → 7주분 환불" className="h-9 text-sm mt-1" />
+                </div>
               </div>
-              <div>
-                <Label className="text-xs">사유 (차등 근거)</Label>
-                <Input value={clawReason} onChange={(e) => setClawReason(e.target.value)} placeholder="예: 5주차 중단 → 7주분 환불" className="h-9 text-sm mt-1" />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setClawOpen(false)}>취소</Button>
+                <Button size="sm" className="bg-rose-600 hover:bg-rose-700" onClick={submitClawbacks}
+                  disabled={createClawbacks.isPending || !incentiveContributorNames.some((n) => Number(clawAmts[n]) > 0)}>
+                  차감 저장 · 알림
+                </Button>
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setClawOpen(false)}>취소</Button>
-              <Button onClick={submitClawbacks} disabled={createClawbacks.isPending || !incentiveContributorNames.some((n) => Number(clawAmts[n]) > 0)}>
-                차감 저장 · 알림
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </CardContent>
+          </Card>
+        )}
         <Card>
           <CardContent className="py-4 space-y-4">
             {/* ── Base contract incentives ── */}
