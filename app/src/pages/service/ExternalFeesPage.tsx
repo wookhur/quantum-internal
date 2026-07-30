@@ -26,6 +26,7 @@ import { useDefaultRates, usePartnerRateMap, normalizePartner, rateForTeam, type
 import { useProfiles, canManageServiceFinance } from '@/hooks/useProfiles'
 import { consultantNameKey } from '@/lib/consultants'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCreateClawbacks, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
 import { useT } from '@/i18n/LanguageContext'
 import { todayKST } from '@/lib/date'
 import { formatCurrency, type RefundStatus } from '@/types'
@@ -325,20 +326,35 @@ export function ExternalFeesPage() {
 
 // ─── 환불 셀 (Student360에서 들어온 환불신청만 표시 · 재무는 완료 처리) ────────
 function RefundCell({ fee }: { fee: ServiceProgramFee }) {
+  const { user } = useAuth()
   const updateEC = useUpdateECActivity()
   const updateAC = useUpdateAcademicSupport()
+  const createClawbacks = useCreateClawbacks()
   const saving = updateEC.isPending || updateAC.isPending
   const mut = fee.source === 'ec' ? updateEC : updateAC
   const [open, setOpen] = useState(false)
   const [amt, setAmt] = useState(fee.refundAmount ? String(fee.refundAmount) : (fee.billedAmount ? String(fee.billedAmount) : ''))
   const [dt, setDt] = useState(todayKST())
+  const [cb1, setCb1] = useState('')
+  const [cb2, setCb2] = useState('')
+  const [deductM, setDeductM] = useState(nextMonthKey(todayKST()))
+  const sName = fee.studentKoreanName || fee.studentName
 
   const save = (patch: { refundStatus: RefundStatus | null; refundAmount?: number | null; refundDate?: string | null; refundReason?: string | null }) =>
     mut.mutate({ id: fee.id, studentId: fee.studentId, ...patch }, { onSuccess: () => setOpen(false) })
   const submitComplete = () => {
     const n = Number(amt)
     if (!n || n <= 0) return
-    save({ refundStatus: 'completed', refundAmount: n, refundDate: dt || todayKST() })
+    mut.mutate(
+      { id: fee.id, studentId: fee.studentId, refundStatus: 'completed', refundAmount: n, refundDate: dt || todayKST() },
+      { onSuccess: () => {
+          const items: ClawbackInput[] = []
+          if (fee.contributor1?.trim() && Number(cb1) > 0) items.push({ source: 'service', sourceId: fee.id, studentName: sName, contributorName: fee.contributor1, amount: Number(cb1), reason: fee.refundReason, deductMonth: deductM })
+          if (fee.contributor2?.trim() && Number(cb2) > 0) items.push({ source: 'service', sourceId: fee.id, studentName: sName, contributorName: fee.contributor2, amount: Number(cb2), reason: fee.refundReason, deductMonth: deductM })
+          if (items.length) createClawbacks.mutate({ items, createdBy: user?.id })
+          setOpen(false)
+        } },
+    )
   }
   const rs = fee.refundStatus
 
@@ -378,6 +394,28 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
               <label className="text-[11px] text-muted-foreground">환불 완료일</label>
               <Input type="date" value={dt} onChange={e => setDt(e.target.value)} className="h-8 text-sm" />
             </div>
+            {(fee.contributor1 || fee.contributor2) && (
+              <div className="space-y-1.5 border-t pt-2">
+                <div className="text-[11px] font-medium text-violet-700">세일즈 인센티브 차감 (다음달 급여)</div>
+                {fee.contributor1 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] w-14 truncate" title={fee.contributor1}>{fee.contributor1}</span>
+                    <Input type="number" value={cb1} onChange={e => setCb1(e.target.value)} placeholder="차감액" className="h-7 text-xs" />
+                  </div>
+                )}
+                {fee.contributor2 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] w-14 truncate" title={fee.contributor2}>{fee.contributor2}</span>
+                    <Input type="number" value={cb2} onChange={e => setCb2(e.target.value)} placeholder="차감액" className="h-7 text-xs" />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] w-14 text-muted-foreground">차감월</span>
+                  <Input type="month" value={deductM} onChange={e => setDeductM(e.target.value)} className="h-7 text-xs" />
+                </div>
+                <p className="text-[10px] text-muted-foreground">입력 시 담당자 알림 + 인보이스·지급원장에 (−) 자동 반영. 사유에 따라 차등 입력하세요.</p>
+              </div>
+            )}
             <Button size="sm" className="w-full h-8" disabled={saving || !Number(amt)} onClick={submitComplete}>환불완료 처리</Button>
             <button disabled={saving} onClick={() => { if (confirm('환불신청을 취소(삭제)할까요?')) save({ refundStatus: null, refundAmount: null, refundDate: null, refundReason: null }) }} className="w-full text-[11px] text-muted-foreground hover:text-destructive">환불신청 취소</button>
           </PopoverContent>

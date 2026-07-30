@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -26,6 +26,7 @@ import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCreateClawbacks, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
 
@@ -216,6 +217,8 @@ function InstallmentCard({
   revenueShares,
   onToggleSharePaid,
   onDeleteShare,
+  contributors,
+  studentName,
 }: {
   installment: PaymentInstallment
   currency: 'KRW' | 'USD'
@@ -227,8 +230,14 @@ function InstallmentCard({
   revenueShares?: import('@/types').RevenueShare[]
   onToggleSharePaid?: (shareId: string, isPaid: boolean) => void
   onDeleteShare?: (shareId: string) => void
+  contributors?: string[]
+  studentName?: string
 }) {
   const t = useT()
+  const { user } = useAuth()
+  const createClawbacks = useCreateClawbacks()
+  const [cbAmts, setCbAmts] = useState<Record<string, string>>({})
+  const [deductM, setDeductM] = useState(nextMonthKey())
   const pmLabel = usePaymentMethodLabel()
   const INSTALLMENT_STATUS_CONFIG = useInstallmentStatusConfig()
   // Derive actual status from amounts — DB status may be stale
@@ -269,10 +278,16 @@ function InstallmentCard({
       { onSuccess: () => setRefundOpen(false) },
     )
   }
-  const openComplete = () => { setCompleteDt(todayLocalISO()); setCompleteOpen(true) }
+  const openComplete = () => { setCompleteDt(todayLocalISO()); setDeductM(nextMonthKey(todayLocalISO())); setCbAmts({}); setCompleteOpen(true) }
   const submitComplete = () => updateInst.mutate(
     { id: installment.id, refundStatus: 'completed', refundDate: completeDt || todayLocalISO() },
-    { onSuccess: () => setCompleteOpen(false) },
+    { onSuccess: () => {
+        const items: ClawbackInput[] = (contributors || [])
+          .filter(name => Number(cbAmts[name]) > 0)
+          .map(name => ({ source: 'contract', sourceId: installment.id, studentName, contributorName: name, amount: Number(cbAmts[name]), reason: installment.refundReason || undefined, deductMonth: deductM }))
+        if (items.length) createClawbacks.mutate({ items, createdBy: user?.id })
+        setCompleteOpen(false)
+      } },
   )
   const clearRefund = () => updateInst.mutate({ id: installment.id, refundStatus: null, refundAmount: null, refundDate: null, refundAccount: null, refundReason: null })
 
@@ -513,6 +528,22 @@ function InstallmentCard({
               <Label className="text-xs">환불 완료일</Label>
               <Input type="date" value={completeDt} onChange={(e) => setCompleteDt(e.target.value)} />
             </div>
+            {contributors && contributors.length > 0 && (
+              <div className="space-y-1.5 border-t pt-3">
+                <div className="text-xs font-medium text-violet-700">세일즈 인센티브 차감 (다음달 급여)</div>
+                {contributors.map((name) => (
+                  <div key={name} className="flex items-center gap-2">
+                    <span className="text-xs w-20 truncate" title={name}>{name}</span>
+                    <Input type="number" value={cbAmts[name] || ''} onChange={(e) => setCbAmts((m) => ({ ...m, [name]: e.target.value }))} placeholder="차감액 (원)" className="h-8 text-sm" />
+                  </div>
+                ))}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs w-20 text-muted-foreground">차감월</span>
+                  <Input type="month" value={deductM} onChange={(e) => setDeductM(e.target.value)} className="h-8 text-sm w-40" />
+                </div>
+                <p className="text-[11px] text-muted-foreground">입력 시 담당자 알림 + 인보이스·지급원장에 (−) 자동 반영. 사유에 따라 차등 입력하세요.</p>
+              </div>
+            )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setCompleteOpen(false)}>취소</Button>
               <Button onClick={submitComplete} disabled={updateInst.isPending}>환불완료</Button>
@@ -661,6 +692,11 @@ export function ContractDetailPage() {
   const extraInstIds = (contract?.installments || []).filter(i => i.category === 'extra').map(i => i.id)
   const { data: revenueShares = [] } = useRevenueSharesByInstallments(extraInstIds)
   const { data: contractIncentives = [] } = useContractIncentives(id)
+  // 이 계약의 세일즈 인센티브 담당자(중복 제거) — 환불완료 시 차감 입력 대상
+  const incentiveContributorNames = useMemo(
+    () => [...new Set(contractIncentives.map((ci) => ci.displayName).filter((n): n is string => !!n))],
+    [contractIncentives],
+  )
   const createIncentive = useCreateIncentive()
   const deleteIncentive = useDeleteIncentive()
   const { data: allProfiles = [] } = useProfiles()
@@ -1136,6 +1172,8 @@ export function ContractDetailPage() {
                 onRevertPaid={handleRevertPaid}
                 onEdit={openEditInstDialog}
                 onDelete={handleDeleteInstallment}
+                contributors={incentiveContributorNames}
+                studentName={contract.studentName}
               />
             ))}
           </div>
@@ -1197,6 +1235,8 @@ export function ContractDetailPage() {
                   })
                 }}
                 onDeleteShare={(shareId) => deleteRevenueShare.mutate(shareId)}
+                contributors={incentiveContributorNames}
+                studentName={contract.studentName}
               />
             ))}
           </div>

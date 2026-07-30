@@ -20,6 +20,7 @@ import { Banknote, RefreshCw, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useIncentiveLinesByPerson, downloadInvoiceExcel, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
 import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
+import { useAllClawbacks, useSetClawbackStatus, useDeleteClawback } from '@/hooks/useClawbacks'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { AlertTriangle } from 'lucide-react'
@@ -450,6 +451,9 @@ export function FinanceDashboardPage() {
         toggling={setIncentiveReceived.isPending || bulkSetIncentiveReceived.isPending}
       />
 
+      {/* 인센티브 차감(환불) 현황 */}
+      <ClawbackSection />
+
       {/* 인보이스 지급 원장 (승인완료 → 지급완료) */}
       <Card>
         <CardContent className="p-0">
@@ -848,6 +852,73 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─── 인센티브 차감(환불) 현황 ────────────────────────────────────────────────
+function ClawbackSection() {
+  const { data: clawbacks = [] } = useAllClawbacks()
+  const setStatus = useSetClawbackStatus()
+  const del = useDeleteClawback()
+  if (clawbacks.length === 0) return null
+  const rows = [...clawbacks].sort((a, b) =>
+    (a.status === b.status ? 0 : a.status === 'pending' ? -1 : 1) ||
+    (b.deductMonth || '').localeCompare(a.deductMonth || ''))
+  const pending = clawbacks.filter(c => c.status === 'pending')
+  const pendingTotal = pending.reduce((s, c) => s + c.amount, 0)
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="flex items-center gap-2 px-4 py-3 border-b flex-wrap">
+          <RefreshCw className="size-4 text-rose-500" />
+          <span className="font-semibold text-sm">인센티브 차감(환불) 현황</span>
+          <Badge variant="outline" className="text-rose-700 border-rose-200 bg-rose-50">차감대기 {pending.length}건 · {formatCurrency(pendingTotal)}</Badge>
+          <span className="text-[11px] text-muted-foreground ml-auto">환불로 회수할 세일즈 인센티브. 급여에서 차감 후 "차감완료"로 표시. 인보이스·지급원장에는 (−)로 자동 반영됩니다.</span>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-28">담당자</TableHead>
+              <TableHead>학생/사유</TableHead>
+              <TableHead className="w-20">출처</TableHead>
+              <TableHead className="w-24">차감월</TableHead>
+              <TableHead className="text-right w-28">차감액</TableHead>
+              <TableHead className="w-40 text-right">상태</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map(c => (
+              <TableRow key={c.id} className={c.status === 'deducted' ? 'bg-muted/30' : ''}>
+                <TableCell className="text-sm font-medium">{c.contributorName}</TableCell>
+                <TableCell className="text-sm">
+                  <div>{c.studentName || '—'}</div>
+                  {c.reason && <div className="text-[11px] text-muted-foreground">{c.reason}</div>}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">{c.source === 'contract' ? '계약' : '서비스'}</TableCell>
+                <TableCell className="text-sm tabular-nums">{c.deductMonth}</TableCell>
+                <TableCell className="text-sm text-right font-semibold tabular-nums text-rose-600">−{formatCurrency(c.amount)}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1.5">
+                    {c.status === 'deducted' ? (
+                      <>
+                        <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">차감완료</Badge>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ id: c.id, status: 'pending' })}>되돌리기</Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ id: c.id, status: 'deducted' })}>차감완료 처리</Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" disabled={del.isPending}
+                      onClick={() => { if (confirm('이 차감 기록을 삭제할까요? (인보이스/지급원장의 (−)반영도 사라집니다)')) del.mutate(c.id) }}>
+                      <XCircle className="size-3.5" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   )
 }
 

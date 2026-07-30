@@ -22,6 +22,7 @@ import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useConsultantName, canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
 import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
+import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
 import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useProfiles } from '@/hooks/useProfiles'
@@ -918,6 +919,7 @@ export function useIncentiveLinesByPerson() {
   const { data: entries = [] } = useIncentivesByInstallment()
   const serviceLines = useServiceIncentiveLines()
   const { data: students = [] } = useServiceStudents()
+  const { data: clawbacks = [] } = useAllClawbacks()
   return useMemo(() => {
     // 계약서 학생명(자유 텍스트)을 Student360 학생기록 기준 한글+영어 이름으로 해소
     const normName = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
@@ -951,8 +953,23 @@ export function useIncentiveLinesByPerson() {
       arr.push({ id: sl.id, label: sl.label, amount: sl.amount, month: sl.month, source: 'service', sourceDetail: `서비스(EC) · ${partner} · 수금 ${sl.month}` })
       map.set(sl.name, arr)
     })
+    // 환불 인센티브 차감: (−)라인으로 반영 → 지급원장·인보이스에서 순액 자동 반영
+    for (const cb of clawbacks) {
+      const name = canonicalConsultantName(cb.contributorName)
+      if (!name || !cb.amount) continue
+      const arr = map.get(name) || []
+      arr.push({
+        id: `cb:${cb.id}`,
+        label: `${cb.studentName || ''} 환불 차감`.trim(),
+        amount: -Math.abs(cb.amount),
+        month: cb.deductMonth,
+        source: cb.source,
+        sourceDetail: `환불 인센티브 차감${cb.reason ? ' · ' + cb.reason : ''}`,
+      })
+      map.set(name, arr)
+    }
     return map
-  }, [entries, serviceLines, students])
+  }, [entries, serviceLines, students, clawbacks])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
