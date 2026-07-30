@@ -871,9 +871,9 @@ function ClawbackSection() {
       <CardContent className="p-0">
         <div className="flex items-center gap-2 px-4 py-3 border-b flex-wrap">
           <RefreshCw className="size-4 text-rose-500" />
-          <span className="font-semibold text-sm">인센티브 차감(환불) 현황</span>
-          <Badge variant="outline" className="text-rose-700 border-rose-200 bg-rose-50">차감대기 {pending.length}건 · {formatCurrency(pendingTotal)}</Badge>
-          <span className="text-[11px] text-muted-foreground ml-auto">환불로 회수할 세일즈 인센티브. 급여에서 차감 후 "차감완료"로 표시. 인보이스·지급원장에는 (−)로 자동 반영됩니다.</span>
+          <span className="font-semibold text-sm">인센티브 환급 현황</span>
+          <Badge variant="outline" className="text-rose-700 border-rose-200 bg-rose-50">환급신청 {pending.length}건 · {formatCurrency(pendingTotal)}</Badge>
+          <span className="text-[11px] text-muted-foreground ml-auto">환불로 회수할 세일즈 인센티브. 급여 지급 후 "환급완료"로 표시. 인보이스·지급원장에는 (−)로 자동 반영됩니다.</span>
         </div>
         <Table>
           <TableHeader>
@@ -901,11 +901,11 @@ function ClawbackSection() {
                   <div className="flex items-center justify-end gap-1.5">
                     {c.status === 'deducted' ? (
                       <>
-                        <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">차감완료</Badge>
+                        <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">환급완료</Badge>
                         <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ id: c.id, status: 'pending' })}>되돌리기</Button>
                       </>
                     ) : (
-                      <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ id: c.id, status: 'deducted' })}>차감완료 처리</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs text-emerald-700 border-emerald-200 hover:bg-emerald-50" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ id: c.id, status: 'deducted' })}>환급완료 처리</Button>
                     )}
                     <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" disabled={del.isPending}
                       onClick={() => { if (confirm('이 차감 기록을 삭제할까요? (인보이스/지급원장의 (−)반영도 사라집니다)')) del.mutate(c.id) }}>

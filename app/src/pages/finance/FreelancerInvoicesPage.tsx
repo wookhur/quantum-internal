@@ -960,11 +960,11 @@ export function useIncentiveLinesByPerson() {
       const arr = map.get(name) || []
       arr.push({
         id: `cb:${cb.id}`,
-        label: `${cb.studentName || ''} 환불 차감`.trim(),
+        label: `${cb.studentName || ''} 환급(차감)`.trim(),
         amount: -Math.abs(cb.amount),
         month: cb.deductMonth,
         source: cb.source,
-        sourceDetail: `환불 인센티브 차감${cb.reason ? ' · ' + cb.reason : ''}`,
+        sourceDetail: `환불 인센티브 환급${cb.reason ? ' · ' + cb.reason : ''}`,
       })
       map.set(name, arr)
     }

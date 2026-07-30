@@ -96,8 +96,8 @@ export function useCreateClawbacks() {
         if (!prof) continue
         await createNotificationsForUsers([prof.id], {
           type: 'incentive_clawback',
-          title: '인센티브 차감 예정',
-          message: `${i.studentName ? i.studentName + ' ' : ''}환불 처리로 세일즈 인센티브 ₩${Math.round(i.amount).toLocaleString()}이(가) ${i.deductMonth} 급여에서 차감됩니다.`,
+          title: '인센티브 환급 신청',
+          message: `${i.studentName ? i.studentName + ' ' : ''}환불로 세일즈 인센티브 ₩${Math.round(i.amount).toLocaleString()}이(가) ${i.deductMonth} 급여에서 환급(차감)됩니다.`,
           link: '/finance/dashboard',
           metadata: { source: i.source, sourceId: i.sourceId, amount: i.amount, deductMonth: i.deductMonth },
         }).catch(() => {})

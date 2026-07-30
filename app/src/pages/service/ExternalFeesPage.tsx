@@ -396,7 +396,7 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
             </div>
             {(fee.contributor1 || fee.contributor2) && (
               <div className="space-y-1.5 border-t pt-2">
-                <div className="text-[11px] font-medium text-violet-700">세일즈 인센티브 차감 (다음달 급여)</div>
+                <div className="text-[11px] font-medium text-violet-700">세일즈 인센티브 환급 (다음달 급여 차감)</div>
                 {fee.contributor1 && (
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] w-14 truncate" title={fee.contributor1}>{fee.contributor1}</span>

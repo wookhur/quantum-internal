@@ -26,7 +26,7 @@ import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
 import { formatCurrency, formatPhone } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { useCreateClawbacks, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
+import { useCreateClawbacks, useAllClawbacks, useSetClawbackStatus, useDeleteClawback, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
 
@@ -697,8 +697,15 @@ export function ContractDetailPage() {
     () => [...new Set(contractIncentives.map((ci) => ci.displayName).filter((n): n is string => !!n))],
     [contractIncentives],
   )
-  // 인센티브 설정에서 바로 환불 차감 입력(환불처리 여부와 무관)
+  // 인센티브 환급(신청→완료) — 계약자 환불 프로세스와 동일 흐름
   const createClawbacks = useCreateClawbacks()
+  const { data: allClawbacks = [] } = useAllClawbacks()
+  const setClawbackStatus = useSetClawbackStatus()
+  const deleteClawback = useDeleteClawback()
+  const contractClawbacks = useMemo(
+    () => allClawbacks.filter((c) => c.source === 'contract' && (c.studentName || '') === (contract?.studentName || '')),
+    [allClawbacks, contract?.studentName],
+  )
   const [clawOpen, setClawOpen] = useState(false)
   const [clawAmts, setClawAmts] = useState<Record<string, string>>({})
   const [clawMonth, setClawMonth] = useState(nextMonthKey())
@@ -1308,22 +1315,22 @@ export function ContractDetailPage() {
           {canEdit && incentiveContributorNames.length > 0 && (
             <Button size="sm" variant="outline" className={`gap-1.5 ${clawOpen ? 'text-muted-foreground' : 'text-rose-700 border-rose-200 hover:bg-rose-50'}`}
               onClick={() => { if (!clawOpen) { setClawMonth(nextMonthKey(todayLocalISO())); setClawAmts({}); setClawReason('') } setClawOpen((v) => !v) }}>
-              <DollarSign className="size-3.5" /> {clawOpen ? '차감 입력 닫기' : '환불 차감 입력'}
+              <DollarSign className="size-3.5" /> {clawOpen ? '닫기' : '환급금 신청'}
             </Button>
           )}
         </div>
 
-        {/* 환불 인센티브 차감 — 담당자별 인라인 입력 */}
+        {/* 환급금 신청 — 담당자별 인라인 입력 */}
         {clawOpen && incentiveContributorNames.length > 0 && (
           <Card className="mb-3 border-rose-200 bg-rose-50/40">
             <CardContent className="py-4 space-y-3">
-              <div className="text-sm font-semibold text-rose-700">환불 세일즈 인센티브 차감</div>
-              <p className="text-xs text-muted-foreground">환불로 회수할 금액을 <b>담당자별로</b> 입력하세요. 저장하면 담당자 알림 + 다음달 급여 차감 + 인보이스·지급원장에 (−) 반영됩니다.</p>
+              <div className="text-sm font-semibold text-rose-700">환급금 신청 (세일즈 인센티브 회수)</div>
+              <p className="text-xs text-muted-foreground">환불로 회수할 금액을 <b>담당자별로</b> 입력하세요. 신청 시 담당자 알림 + 인보이스·지급원장에 (−) 반영, 급여 지급 후 아래에서 <b>환급완료</b>로 바꾸면 됩니다.</p>
               <div className="space-y-2">
                 {incentiveContributorNames.map((n) => (
                   <div key={n} className="flex items-center gap-3 rounded-lg border bg-white px-3 py-2">
                     <span className="text-sm font-medium w-28 truncate" title={n}>{n}</span>
-                    <span className="text-xs text-muted-foreground">차감액</span>
+                    <span className="text-xs text-muted-foreground">환급액</span>
                     <Input type="number" min={0} value={clawAmts[n] || ''} onChange={(e) => setClawAmts((m) => ({ ...m, [n]: e.target.value }))} placeholder="0" className="h-9 text-sm flex-1" />
                     <span className="text-xs text-muted-foreground">원</span>
                   </div>
@@ -1331,7 +1338,7 @@ export function ContractDetailPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">차감월</Label>
+                  <Label className="text-xs">반영월(급여 차감월)</Label>
                   <Input type="month" value={clawMonth} onChange={(e) => setClawMonth(e.target.value)} className="h-9 text-sm mt-1" />
                 </div>
                 <div>
@@ -1343,9 +1350,47 @@ export function ContractDetailPage() {
                 <Button variant="outline" size="sm" onClick={() => setClawOpen(false)}>취소</Button>
                 <Button size="sm" className="bg-rose-600 hover:bg-rose-700" onClick={submitClawbacks}
                   disabled={createClawbacks.isPending || !incentiveContributorNames.some((n) => Number(clawAmts[n]) > 0)}>
-                  차감 저장 · 알림
+                  환급 신청 저장 · 알림
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 환급 현황 — 신청된 건: 환급신청/환급완료 드롭다운(계약 환불 프로세스와 동일) */}
+        {contractClawbacks.length > 0 && (
+          <Card className="mb-3">
+            <CardContent className="py-3 space-y-2">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">인센티브 환급 현황</div>
+              {contractClawbacks.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className={c.status === 'deducted' ? 'text-emerald-700 border-emerald-200 bg-emerald-50' : 'text-rose-700 border-rose-200 bg-rose-50'}>
+                      {c.status === 'deducted' ? '환급완료' : '환급신청'}
+                    </Badge>
+                    <span className="text-sm font-medium">{c.contributorName}</span>
+                    <span className="text-sm font-mono font-semibold text-rose-600">−{formatCurrency(c.amount, 'KRW')}</span>
+                    <span className="text-xs text-muted-foreground">· 반영월 {c.deductMonth}{c.reason ? ` · ${c.reason}` : ''}</span>
+                  </div>
+                  {canEdit && (
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={c.status}
+                        onChange={(e) => setClawbackStatus.mutate({ id: c.id, status: e.target.value as 'pending' | 'deducted' })}
+                        disabled={setClawbackStatus.isPending}
+                        className="h-7 rounded-md border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      >
+                        <option value="pending">환급신청</option>
+                        <option value="deducted">환급완료</option>
+                      </select>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => { if (confirm('이 환급 건을 삭제할까요? (인보이스·지급원장 (−)반영도 사라집니다)')) deleteClawback.mutate(c.id) }}>
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </CardContent>
           </Card>
         )}
