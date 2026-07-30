@@ -39,6 +39,8 @@ import {
   Video,
   Save,
   XCircle,
+  Pause,
+  Play,
   UserCheck,
   CalendarCheck,
   Trash2,
@@ -208,6 +210,7 @@ const COLD_CALL_FILTER_STAGES: PipelineStage[] = [
   'on_hold',
   'consultation_scheduled',
   'first_consultation',
+  'paused',   // 보류(연락불가)만 모아보기
 ]
 
 /** 콜드콜 화면 전용 단계 라벨 오버라이드 (전역 파이프라인 라벨은 건드리지 않음). */
@@ -1312,6 +1315,16 @@ function ColdCallDetail({
     [canEdit, lead, updateLead, onClose],
   )
 
+  // 보류(Pause) 토글: 연락불가 리드를 콜드콜에서 제외(paused). 다시 누르면 신규 리드로 복귀.
+  const isPaused = lead.pipelineStage === 'paused'
+  const handlePauseToggle = useCallback(() => {
+    if (!canEdit) return
+    updateLead.mutate(
+      { id: lead.id, data: { pipelineStage: isPaused ? 'new_lead' : 'paused' }, previousStage: lead.pipelineStage },
+      { onSuccess: () => { if (!isPaused) onClose() } },
+    )
+  }, [canEdit, lead, updateLead, isPaused, onClose])
+
   const handleAdvanceStage = useCallback(
     (targetStage: PipelineStage) => {
       if (!canEdit) return
@@ -1922,6 +1935,18 @@ function ColdCallDetail({
               </div>
             ) : (
               <div className="flex gap-2">
+                {/* 보류(Pause): 전화번호 오류 등 연락불가 리드를 콜드콜에서 제외해 따로 관리. 다시 누르면 복귀. */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`h-8 text-xs gap-1.5 flex-1 ${isPaused ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-amber-200 text-amber-700 hover:bg-amber-50'}`}
+                  onClick={handlePauseToggle}
+                  disabled={updateLead.isPending}
+                  title={isPaused ? '전화번호 수정 후 콜드콜 리드로 복귀' : '전화번호 오류 등 연락불가 리드를 보류 처리'}
+                >
+                  {isPaused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+                  {isPaused ? '보류 해제' : '보류(Pause)'}
+                </Button>
                 {/* 거절만 파이프라인 '거절'로 제외. 부재중/콜백요청은 콜드콜에 남겨 드롭다운으로 관리. */}
                 <Button
                   size="sm"

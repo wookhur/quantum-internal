@@ -427,6 +427,7 @@ const koTranslations = {
   'stage.on_hold': '보류',
   'stage.no_response': '부재중',
   'stage.rejected': '거절',
+  'stage.paused': '보류(연락불가)',
   'stage.lost': '이탈',
 
   // ── Leads page ──
@@ -3063,6 +3064,7 @@ const enTranslations: Record<string, string> = {
   'stage.on_hold': 'On Hold',
   'stage.no_response': 'No Answer',
   'stage.rejected': 'Rejected',
+  'stage.paused': 'Paused (bad contact)',
   'stage.lost': 'Lost',
 
   // ── Leads page ──

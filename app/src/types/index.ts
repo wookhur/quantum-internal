@@ -40,6 +40,7 @@ export type PipelineStage =
   | 'on_hold'
   | 'no_response'
   | 'rejected'
+  | 'paused'
   | 'lost'
 
 // Stage config with label, color (for status pills), and column grouping
@@ -57,6 +58,8 @@ export const PIPELINE_STAGES: { key: PipelineStage; label: string; color: string
   // 부재중은 '비활성'이 아니라 콜드콜에서 계속 관리하는 활성 상태 (전화 한 번 안 받았다고 이탈 처리하지 않음)
   { key: 'no_response', label: '부재중', color: 'stage-no-response', group: 'active' },
   { key: 'rejected', label: '거절', color: 'stage-rejected', group: 'inactive' },
+  // 보류(연락불가): 전화번호 오류 등으로 연락 불가 → 콜드콜에서 제외해 따로 관리. 수정 후 해제하면 복귀.
+  { key: 'paused', label: '보류(연락불가)', color: 'stage-on-hold', group: 'inactive' },
   { key: 'lost', label: '이탈', color: 'stage-lost', group: 'inactive' },
 ]
 
