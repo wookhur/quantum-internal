@@ -382,7 +382,7 @@ export function Student360Page() {
             onClick={() => setPausedOnly(v => !v)}
             className={`mb-2 w-full py-1.5 rounded-md border text-xs font-medium transition-colors ${pausedOnly ? 'bg-amber-500 border-amber-500 text-white' : 'text-amber-700 border-amber-200 bg-amber-50 hover:bg-amber-100'}`}
           >
-            💤 휴면만 보기 ({pausedCount}){pausedOnly ? ' ✕' : ''}
+            💤 {t('student360.onLeaveOnly')} ({pausedCount}){pausedOnly ? ' ✕' : ''}
           </button>
         )}
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-muted-foreground">
@@ -412,7 +412,7 @@ export function Student360Page() {
                     {studentPickerLabel(s)}
                   </span>
                   {s.paused && (
-                    <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0 bg-amber-50 text-amber-700 border-amber-200">💤 휴면</Badge>
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0 bg-amber-50 text-amber-700 border-amber-200">💤 {t('student360.onLeave')}</Badge>
                   )}
                   {statusFlags.missingReports.has(s.id) && (
                     <span title={missingReportTitle(statusFlags.missingReportDetails.get(s.id), t('student360.missingReportTooltip'))}>
@@ -556,7 +556,7 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
     update.mutate({ id: student.id, paused: true, pauseReason: pReason.trim() || undefined, pauseReturnDate: pReturn || undefined }, { onSuccess: () => setPauseOpen(false) })
   }
   const resume = () => {
-    if (!confirm('휴면을 해제하고 복귀 처리할까요? (다시 청구·미팅 대상에 포함됩니다)')) return
+    if (!confirm(t('student360.resumeConfirm'))) return
     update.mutate({ id: student.id, paused: false, pauseReason: '', pauseReturnDate: '' })
   }
 
@@ -570,7 +570,7 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
           {student.status && <Badge variant="outline" className={isArchivedStatus(student.status) ? (normalizeStatus(student.status) === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}>{statusLabelFor(t, student.status)}</Badge>}
           {student.paused && (
             <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
-              💤 휴면{student.pauseReturnDate ? ` · 복귀예정 ${student.pauseReturnDate}` : ''}
+              💤 {t('student360.onLeave')}{student.pauseReturnDate ? ` · ${t('student360.returnExpected')} ${student.pauseReturnDate}` : ''}
             </Badge>
           )}
         </CardTitle>
@@ -578,12 +578,12 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
           <div className="flex gap-2">
             {student.paused ? (
               <Button variant="outline" size="sm" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50" disabled={update.isPending} onClick={resume}>
-                <Power className="size-4 mr-1" />복귀
+                <Power className="size-4 mr-1" />{t('student360.resume')}
               </Button>
             ) : (
               <Button variant="outline" size="sm" className="text-amber-700 border-amber-200 hover:bg-amber-50"
                 onClick={() => { setPReturn(''); setPReason(''); setPauseOpen(true) }}>
-                💤 휴면 처리
+                💤 {t('student360.setOnLeave')}
               </Button>
             )}
             <StudentDialog
@@ -638,31 +638,31 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
         )}
         {student.paused && (
           <div className="col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            💤 <b>휴면 중</b> — 월 2회 미팅 요건·관리비 청구에서 제외됩니다.
-            {student.pauseReturnDate && <> · 복귀예정 <b>{student.pauseReturnDate}</b></>}
-            {student.pauseReason && <div className="text-xs text-amber-700 mt-0.5 whitespace-pre-wrap">사유: {student.pauseReason}</div>}
+            💤 {t('student360.onLeaveBanner')}
+            {student.pauseReturnDate && <> · {t('student360.returnExpected')} <b>{student.pauseReturnDate}</b></>}
+            {student.pauseReason && <div className="text-xs text-amber-700 mt-0.5 whitespace-pre-wrap">{t('student360.reasonOptional')}: {student.pauseReason}</div>}
           </div>
         )}
       </CardContent>
 
-      {/* 휴면 처리 다이얼로그 */}
+      {/* 휴면(On Leave) 처리 다이얼로그 */}
       <Dialog open={pauseOpen} onOpenChange={setPauseOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>휴면 처리</DialogTitle></DialogHeader>
-          <p className="text-xs text-muted-foreground">여행·휴가 등으로 일시 부재 시 휴면 처리합니다. 휴면 동안 <b>월 2회 미팅 요건과 관리비 청구에서 제외</b>되어 담당 컨설턴트가 불이익을 받지 않습니다.</p>
+          <DialogHeader><DialogTitle>{t('student360.setOnLeave')}</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">{t('student360.onLeaveDesc')}</p>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs">복귀 예정일 (선택)</Label>
+              <Label className="text-xs">{t('student360.returnDateOptional')}</Label>
               <Input type="date" value={pReturn} onChange={e => setPReturn(e.target.value)} className="mt-1" />
             </div>
             <div>
-              <Label className="text-xs">사유 (선택)</Label>
-              <Input value={pReason} onChange={e => setPReason(e.target.value)} placeholder="예: 2주 가족 여행" className="mt-1" />
+              <Label className="text-xs">{t('student360.reasonOptional')}</Label>
+              <Input value={pReason} onChange={e => setPReason(e.target.value)} placeholder={t('student360.onLeaveReasonPh')} className="mt-1" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPauseOpen(false)}>취소</Button>
-            <Button className="bg-amber-600 hover:bg-amber-700" disabled={update.isPending} onClick={applyPause}>휴면 처리</Button>
+            <Button variant="outline" onClick={() => setPauseOpen(false)}>{t('common.cancel')}</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700" disabled={update.isPending} onClick={applyPause}>{t('student360.setOnLeave')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
