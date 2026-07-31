@@ -505,6 +505,8 @@ export interface ServiceStudent {
   paused?: boolean          // 휴면(여행·휴가 등 일시 부재) — 2회 미팅 요건·관리비 청구 제외
   pauseReason?: string
   pauseReturnDate?: string   // 복귀예정일(안내용)
+  contractLocked?: boolean   // 계약사항 섹션 잠금(실수 수정 방지)
+  essayLocked?: boolean      // 원서·에세이 섹션 잠금
   notes?: string
   acceptedUni?: string
   address?: string

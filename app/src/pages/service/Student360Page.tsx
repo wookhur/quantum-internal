@@ -467,7 +467,7 @@ export function Student360Page() {
           <div className="space-y-4">
             <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} canEdit={canEdit} />
             <ContractSection student={selected} canEdit={canEdit} />
-            <EssayServiceSection studentId={selected.id} defaultConsultant={consultantName(selected.assignedConsultant)} createdBy={user?.id} canEdit={canEdit} />
+            <EssayServiceSection studentId={selected.id} defaultConsultant={consultantName(selected.assignedConsultant)} createdBy={user?.id} canEdit={canEdit} locked={!!selected.essayLocked} />
             <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <CoachingSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
@@ -772,10 +772,12 @@ const CONTRACT_SERVICES: { id: string; label: string; unit?: string; totalPrefix
   { id: 'admissions_review', label: '전입학사정관 리뷰 서비스', unit: '회' },
 ]
 
-function ContractSection({ student, canEdit }: { student: ServiceStudent; canEdit: boolean }) {
+function ContractSection({ student, canEdit: canEditProp }: { student: ServiceStudent; canEdit: boolean }) {
   const t = useT()
   const update = useUpdateServiceStudent()
   const [expanded, setExpanded] = useState(false)
+  const locked = !!student.contractLocked
+  const canEdit = canEditProp && !locked   // 잠금 시 편집 불가
 
   // 편집 중 원격 갱신이 입력값을 덮어쓰지 않도록 학생이 바뀔 때만 초기화
   const [local, setLocal] = useState<ContractDetails>(() => student.contractDetails || {})
@@ -832,10 +834,20 @@ function ContractSection({ student, canEdit }: { student: ServiceStudent; canEdi
             <FileText className="size-4 text-primary" />
             {t('student360.contractSection')}
             {student.contractType && <Badge variant="outline">{t('student360.contractType')} {student.contractType}</Badge>}
+            {locked && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1"><Lock className="size-3" />{t('student360.sectionLocked')}</Badge>}
           </CardTitle>
-          <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v) }}>
-            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            {canEditProp && (
+              <Button size="sm" variant="ghost" className={`size-7 ${locked ? 'text-amber-600' : 'text-muted-foreground'}`}
+                title={locked ? t('student360.unlockToEdit') : t('student360.lockToEdit')}
+                onClick={(e) => { e.stopPropagation(); update.mutate({ id: student.id, contractLocked: !locked }) }}>
+                {locked ? <Lock className="size-4" /> : <Unlock className="size-4" />}
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v) }}>
+              {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+            </Button>
+          </div>
         </div>
       </CardHeader>
       {expanded && (
@@ -1284,10 +1296,13 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
 }
 
 // ────────────────────────── 원서·에세이 서비스 (컨설턴트 월 급여) ──────────────────────────
-function EssayServiceSection({ studentId, defaultConsultant, createdBy, canEdit }: { studentId: string; defaultConsultant?: string; createdBy?: string; canEdit: boolean }) {
+function EssayServiceSection({ studentId, defaultConsultant, createdBy, canEdit: canEditProp, locked }: { studentId: string; defaultConsultant?: string; createdBy?: string; canEdit: boolean; locked?: boolean }) {
+  const t = useT()
   const { data: plans = [] } = useEssayPlans(studentId)
   const del = useDeleteEssayPlan()
+  const update = useUpdateServiceStudent()
   const [expanded, setExpanded] = useState(false)
+  const canEdit = canEditProp && !locked   // 잠금 시 편집 불가
 
   return (
     <Card>
@@ -1296,6 +1311,7 @@ function EssayServiceSection({ studentId, defaultConsultant, createdBy, canEdit 
           <NotebookPen className="size-5 text-primary" />
           원서·에세이 서비스
           <span className="text-muted-foreground font-normal">({plans.length})</span>
+          {locked && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1"><Lock className="size-3" />{t('student360.sectionLocked')}</Badge>}
         </CardTitle>
         <div className="flex items-center gap-2">
           {canEdit && (
@@ -1308,6 +1324,13 @@ function EssayServiceSection({ studentId, defaultConsultant, createdBy, canEdit 
                 trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />추가</Button>}
               />
             </span>
+          )}
+          {canEditProp && (
+            <Button size="sm" variant="ghost" className={`size-7 ${locked ? 'text-amber-600' : 'text-muted-foreground'}`}
+              title={locked ? t('student360.unlockToEdit') : t('student360.lockToEdit')}
+              onClick={e => { e.stopPropagation(); update.mutate({ id: studentId, essayLocked: !locked }) }}>
+              {locked ? <Lock className="size-4" /> : <Unlock className="size-4" />}
+            </Button>
           )}
           {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
         </div>
