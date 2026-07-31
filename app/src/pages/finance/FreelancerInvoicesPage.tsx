@@ -898,7 +898,7 @@ function useConsultantBillable(month: string) {
     }
     // 이름 매칭을 대소문자·공백에 견고하게: 정규화 키로 그룹핑, 표시용 이름은 함께 보관
     const byConsultant = new Map<string, { name: string; students: BillableStudent[] }>()
-    students.filter(s => isActiveStudent(s.status) && s.assignedConsultant).forEach(s => {
+    students.filter(s => isActiveStudent(s.status) && !s.paused && s.assignedConsultant).forEach(s => {
       const display = consultantName(s.assignedConsultant)
       const key = consultantNameKey(display)
       const done = completed.get(s.id) || 0

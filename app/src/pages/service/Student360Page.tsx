@@ -219,6 +219,7 @@ export function Student360Page() {
   const [consultantFilter, setConsultantFilter] = useState('')
   const [gradeFilter, setGradeFilter] = useState('all')
   const [showArchive, setShowArchive] = useState(false)
+  const [pausedOnly, setPausedOnly] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('student'))
 
   // Keep ?student= in the URL in sync so links from the KPI page (and back/forward) work.
@@ -283,10 +284,12 @@ export function Student360Page() {
     return ['G12', 'G11', 'G10', 'G9', 'G8', 'G7', 'G6', '기타'].filter(g => present.has(g))
   }, [students])
 
+  const pausedCount = useMemo(() => students.filter(s => s.paused && !isArchivedStatus(s.status)).length, [students])
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return students.filter(s => {
       if (showArchive ? !isArchivedStatus(s.status) : isArchivedStatus(s.status)) return false
+      if (pausedOnly && !s.paused) return false
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
       if (gradeFilter !== 'all' && gradeBucket(s.grade) !== gradeFilter) return false
       if (!q) return true
@@ -297,7 +300,7 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     }).sort(compareStudentsKo)
-  }, [students, search, filterName, consultantName, showArchive, gradeFilter])
+  }, [students, search, filterName, consultantName, showArchive, gradeFilter, pausedOnly])
 
   const selected = students.find(s => s.id === selectedId) || null
   const statusLabel = (status?: string) => {
@@ -374,6 +377,14 @@ export function Student360Page() {
             {t('student360.archiveTab')} ({archiveCount})
           </button>
         </div>
+        {!showArchive && pausedCount > 0 && (
+          <button
+            onClick={() => setPausedOnly(v => !v)}
+            className={`mb-2 w-full py-1.5 rounded-md border text-xs font-medium transition-colors ${pausedOnly ? 'bg-amber-500 border-amber-500 text-white' : 'text-amber-700 border-amber-200 bg-amber-50 hover:bg-amber-100'}`}
+          >
+            💤 휴면만 보기 ({pausedCount}){pausedOnly ? ' ✕' : ''}
+          </button>
+        )}
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-muted-foreground">
           <span className="font-medium">KPI</span>
           {KPI_LEGEND.map(l => (
@@ -400,6 +411,9 @@ export function Student360Page() {
                   <span className="font-medium text-sm truncate">
                     {studentPickerLabel(s)}
                   </span>
+                  {s.paused && (
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0 bg-amber-50 text-amber-700 border-amber-200">💤 휴면</Badge>
+                  )}
                   {statusFlags.missingReports.has(s.id) && (
                     <span title={missingReportTitle(statusFlags.missingReportDetails.get(s.id), t('student360.missingReportTooltip'))}>
                       <Hourglass className="size-3.5 text-red-500 shrink-0" />
@@ -534,18 +548,44 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
 }) {
   const t = useT()
   const del = useDeleteServiceStudent()
+  const update = useUpdateServiceStudent()
+  const [pauseOpen, setPauseOpen] = useState(false)
+  const [pReturn, setPReturn] = useState('')
+  const [pReason, setPReason] = useState('')
+  const applyPause = () => {
+    update.mutate({ id: student.id, paused: true, pauseReason: pReason.trim() || undefined, pauseReturnDate: pReturn || undefined }, { onSuccess: () => setPauseOpen(false) })
+  }
+  const resume = () => {
+    if (!confirm('휴면을 해제하고 복귀 처리할까요? (다시 청구·미팅 대상에 포함됩니다)')) return
+    update.mutate({ id: student.id, paused: false, pauseReason: '', pauseReturnDate: '' })
+  }
 
   return (
-    <Card>
+    <Card className={student.paused ? 'border-amber-300' : ''}>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 flex-wrap">
           <UserIcon className="size-5 text-primary" />
           {student.name}
           {student.koreanName && <span className="text-muted-foreground font-normal">· {student.koreanName}</span>}
           {student.status && <Badge variant="outline" className={isArchivedStatus(student.status) ? (normalizeStatus(student.status) === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}>{statusLabelFor(t, student.status)}</Badge>}
+          {student.paused && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+              💤 휴면{student.pauseReturnDate ? ` · 복귀예정 ${student.pauseReturnDate}` : ''}
+            </Badge>
+          )}
         </CardTitle>
         {canEdit && (
           <div className="flex gap-2">
+            {student.paused ? (
+              <Button variant="outline" size="sm" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50" disabled={update.isPending} onClick={resume}>
+                <Power className="size-4 mr-1" />복귀
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" className="text-amber-700 border-amber-200 hover:bg-amber-50"
+                onClick={() => { setPReturn(''); setPReason(''); setPauseOpen(true) }}>
+                💤 휴면 처리
+              </Button>
+            )}
             <StudentDialog
               student={student}
               createdBy={createdBy}
@@ -596,7 +636,36 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
             <p className="whitespace-pre-wrap">{student.notes}</p>
           </div>
         )}
+        {student.paused && (
+          <div className="col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            💤 <b>휴면 중</b> — 월 2회 미팅 요건·관리비 청구에서 제외됩니다.
+            {student.pauseReturnDate && <> · 복귀예정 <b>{student.pauseReturnDate}</b></>}
+            {student.pauseReason && <div className="text-xs text-amber-700 mt-0.5 whitespace-pre-wrap">사유: {student.pauseReason}</div>}
+          </div>
+        )}
       </CardContent>
+
+      {/* 휴면 처리 다이얼로그 */}
+      <Dialog open={pauseOpen} onOpenChange={setPauseOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>휴면 처리</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">여행·휴가 등으로 일시 부재 시 휴면 처리합니다. 휴면 동안 <b>월 2회 미팅 요건과 관리비 청구에서 제외</b>되어 담당 컨설턴트가 불이익을 받지 않습니다.</p>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">복귀 예정일 (선택)</Label>
+              <Input type="date" value={pReturn} onChange={e => setPReturn(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">사유 (선택)</Label>
+              <Input value={pReason} onChange={e => setPReason(e.target.value)} placeholder="예: 2주 가족 여행" className="mt-1" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPauseOpen(false)}>취소</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700" disabled={update.isPending} onClick={applyPause}>휴면 처리</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

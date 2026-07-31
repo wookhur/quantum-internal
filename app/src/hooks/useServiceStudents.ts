@@ -41,6 +41,9 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     startDate: (row.start_date as string) || undefined,
     endDate: (row.end_date as string) || undefined,
     status: (row.status as string) || undefined,
+    paused: !!row.paused,
+    pauseReason: (row.pause_reason as string) || undefined,
+    pauseReturnDate: (row.pause_return_date as string) || undefined,
     notes: (row.notes as string) || undefined,
     acceptedUni: (row.accepted_uni as string) || undefined,
     address: (row.address as string) || undefined,
@@ -231,6 +234,9 @@ export function useUpdateServiceStudent() {
       startDate?: string | null
       endDate?: string | null
       status?: string
+      paused?: boolean
+      pauseReason?: string
+      pauseReturnDate?: string
       notes?: string
       acceptedUni?: string
       address?: string
@@ -265,6 +271,9 @@ export function useUpdateServiceStudent() {
       if (rest.startDate !== undefined) update.start_date = rest.startDate
       if (rest.endDate !== undefined) update.end_date = rest.endDate
       if (rest.status !== undefined) update.status = rest.status
+      if (rest.paused !== undefined) update.paused = rest.paused
+      if (rest.pauseReason !== undefined) update.pause_reason = rest.pauseReason || null
+      if (rest.pauseReturnDate !== undefined) update.pause_return_date = rest.pauseReturnDate || null
       if (rest.notes !== undefined) update.notes = rest.notes
       if (rest.acceptedUni !== undefined) update.accepted_uni = rest.acceptedUni
       if (rest.address !== undefined) update.address = rest.address
