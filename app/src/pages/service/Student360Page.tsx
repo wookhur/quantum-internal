@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, useEffect, useRef, type ReactNode, type ChangeEvent } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +17,7 @@ import {
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
   Lock, Unlock, MessageSquare, Send, Flag,
-  PenTool, BookText, FolderArchive,
+  PenTool, BookText, FolderArchive, Upload, Download,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -779,6 +779,30 @@ function ContractSection({ student, canEdit: canEditProp }: { student: ServiceSt
   const locked = !!student.contractLocked
   const canEdit = canEditProp && !locked   // 잠금 시 편집 불가
 
+  // 실물 계약서 PDF 업로드/다운로드 (잠금과 무관 — 권한만 있으면 첨부 가능)
+  const pdfUrl = student.contractPdfUrl
+  const pdfInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingPdf, setUploadingPdf] = useState(false)
+  const handlePickPdf = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''   // 같은 파일 다시 선택 가능하도록 초기화
+    if (!file) return
+    if (file.type && file.type !== 'application/pdf') { window.alert('PDF 파일만 업로드할 수 있습니다.'); return }
+    setUploadingPdf(true)
+    try {
+      const path = `${student.id}/${Date.now()}.pdf`
+      const { error: upErr } = await supabase.storage.from('contract-pdfs')
+        .upload(path, file, { upsert: true, contentType: 'application/pdf' })
+      if (upErr) throw upErr
+      const { data: { publicUrl } } = supabase.storage.from('contract-pdfs').getPublicUrl(path)
+      update.mutate({ id: student.id, contractPdfUrl: publicUrl })
+    } catch (err) {
+      window.alert('계약서 업로드 실패: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setUploadingPdf(false)
+    }
+  }
+
   // 편집 중 원격 갱신이 입력값을 덮어쓰지 않도록 학생이 바뀔 때만 초기화
   const [local, setLocal] = useState<ContractDetails>(() => student.contractDetails || {})
   const [appCount, setAppCount] = useState(student.applicationCount ? String(student.applicationCount) : '')
@@ -837,6 +861,20 @@ function ContractSection({ student, canEdit: canEditProp }: { student: ServiceSt
             {locked && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1"><Lock className="size-3" />{t('student360.sectionLocked')}</Badge>}
           </CardTitle>
           <div className="flex items-center gap-1">
+            {/* 실물 계약서 PDF: 업로드 / 다운로드 */}
+            <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={handlePickPdf} />
+            {canEditProp && (
+              <Button size="sm" variant="ghost" className="size-7 text-muted-foreground" disabled={uploadingPdf}
+                title={pdfUrl ? '실물 계약서 PDF 교체 업로드' : '실물 계약서 PDF 업로드'}
+                onClick={(e) => { e.stopPropagation(); pdfInputRef.current?.click() }}>
+                {uploadingPdf ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" className={`size-7 ${pdfUrl ? 'text-primary' : 'text-muted-foreground/40'}`}
+              title={pdfUrl ? '실물 계약서 PDF 다운로드' : '업로드된 계약서 PDF 없음'} disabled={!pdfUrl}
+              onClick={(e) => { e.stopPropagation(); if (pdfUrl) window.open(pdfUrl, '_blank', 'noopener') }}>
+              <Download className="size-4" />
+            </Button>
             {canEditProp && (
               <Button size="sm" variant="ghost" className={`size-7 ${locked ? 'text-amber-600' : 'text-muted-foreground'}`}
                 title={locked ? t('student360.unlockToEdit') : t('student360.lockToEdit')}

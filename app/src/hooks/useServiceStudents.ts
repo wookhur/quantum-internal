@@ -46,6 +46,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     pauseReturnDate: (row.pause_return_date as string) || undefined,
     contractLocked: !!row.contract_locked,
     essayLocked: !!row.essay_locked,
+    contractPdfUrl: (row.contract_pdf_url as string) || undefined,
     notes: (row.notes as string) || undefined,
     acceptedUni: (row.accepted_uni as string) || undefined,
     address: (row.address as string) || undefined,
@@ -241,6 +242,7 @@ export function useUpdateServiceStudent() {
       pauseReturnDate?: string
       contractLocked?: boolean
       essayLocked?: boolean
+      contractPdfUrl?: string | null
       notes?: string
       acceptedUni?: string
       address?: string
@@ -280,6 +282,7 @@ export function useUpdateServiceStudent() {
       if (rest.pauseReturnDate !== undefined) update.pause_return_date = rest.pauseReturnDate || null
       if (rest.contractLocked !== undefined) update.contract_locked = rest.contractLocked
       if (rest.essayLocked !== undefined) update.essay_locked = rest.essayLocked
+      if (rest.contractPdfUrl !== undefined) update.contract_pdf_url = rest.contractPdfUrl
       if (rest.notes !== undefined) update.notes = rest.notes
       if (rest.acceptedUni !== undefined) update.accepted_uni = rest.acceptedUni
       if (rest.address !== undefined) update.address = rest.address

@@ -28,6 +28,23 @@ export function sessionSortKey(s: SeminarSession): number {
   return Number.MAX_SAFE_INTEGER
 }
 
+/**
+ * Effective event time of a seminar for reverse-chronological ordering.
+ * Uses the latest session datetime when sessions exist, else the single
+ * `date` column ("YYYY-MM-DD[ HH:mm]"). Undated seminars sort last.
+ */
+export function seminarDateKey(s: Seminar): number {
+  if (s.sessions.length) {
+    const keys = s.sessions.map(sessionSortKey).filter(k => k !== Number.MAX_SAFE_INTEGER)
+    if (keys.length) return Math.max(...keys)
+  }
+  if (s.date) {
+    const t = Date.parse(s.date.replace(' ', 'T'))
+    if (!Number.isNaN(t)) return t
+  }
+  return -Infinity // undated → oldest → sorts last under desc
+}
+
 /** Return sessions sorted chronologically (stable for equal keys). */
 export function sortSeminarSessions(sessions: SeminarSession[]): SeminarSession[] {
   return sessions
@@ -141,7 +158,12 @@ export function useSeminars() {
         .select('*')
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data || []).map(r => mapSeminar(r as Record<string, unknown>))
+      const list = (data || []).map(r => mapSeminar(r as Record<string, unknown>))
+      // Reverse-chronological by actual event date (created_at as tiebreak).
+      return list.sort((a, b) => {
+        const ka = seminarDateKey(a), kb = seminarDateKey(b)
+        return kb === ka ? b.createdAt.localeCompare(a.createdAt) : kb - ka
+      })
     },
   })
 }

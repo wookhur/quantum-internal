@@ -1484,7 +1484,8 @@ function ColdCallDetail({
               const map = new Map<string, SeminarLite>()
               for (const s of byReg) map.set(s.id, s)
               for (const s of seminars) if (coldIds.has(s.id)) map.set(s.id, s)
-              const attended = Array.from(map.values()).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+              // Reverse-chronological: most recent seminar/webinar first.
+              const attended = Array.from(map.values()).sort((a, b) => (b.date || '').localeCompare(a.date || ''))
               return attended.map(s => (
                 <Badge key={s.id} variant="outline" className="text-xs bg-violet-50 text-violet-700 border-violet-200" title="참석 세미나/웨비나">
                   🎓 {s.title}

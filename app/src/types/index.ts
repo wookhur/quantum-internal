@@ -507,6 +507,7 @@ export interface ServiceStudent {
   pauseReturnDate?: string   // 복귀예정일(안내용)
   contractLocked?: boolean   // 계약사항 섹션 잠금(실수 수정 방지)
   essayLocked?: boolean      // 원서·에세이 섹션 잠금
+  contractPdfUrl?: string    // 실물 계약서 PDF (Supabase Storage)
   notes?: string
   acceptedUni?: string
   address?: string
