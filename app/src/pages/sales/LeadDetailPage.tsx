@@ -18,6 +18,8 @@ import type { LeadActivity } from '@/types'
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import { LeadSeminarBadges } from '@/components/LeadSeminarBadges'
+import { LeadLocalTime } from '@/components/LeadLocalTime'
 import ConsultationBookingDialog from '@/components/ConsultationBookingDialog'
 import LeadEditDialog from '@/components/LeadEditDialog'
 import { CreateContractFromLeadDialog } from '@/components/CreateContractFromLeadDialog'
@@ -362,6 +364,10 @@ export function LeadDetailPage() {
             </div>
           )}
         </div>
+
+        {/* 현지시각/시차 (전화·거주지 기반) + 세미나 참석 이력 (최신순) */}
+        <LeadLocalTime lead={lead} />
+        <LeadSeminarBadges lead={lead} label="🎓 참석 이력" />
       </div>
 
       {/* Customer Journey Summary */}
