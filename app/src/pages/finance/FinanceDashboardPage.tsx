@@ -6,14 +6,14 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Loader2, Users, Receipt, Lock, Clock, CheckCircle2, XCircle, Wallet, Pencil } from 'lucide-react'
+import { Loader2, Users, Receipt, Lock, Clock, CheckCircle2, XCircle, Wallet, Pencil, Trash2 } from 'lucide-react'
 import { useInstallments } from '@/hooks/useInstallments'
 import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useIncentivesByInstallment, type IncentiveType } from '@/hooks/useIncentives'
 import { useAllExtraInstallments } from '@/hooks/useExternalFees'
-import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
+import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, useDeleteInvoice, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
 import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote, RefreshCw, Download } from 'lucide-react'
@@ -777,12 +777,21 @@ export function FinanceDashboardPage() {
 
 // ─── Invoice detail popup (제출된 인보이스 내역) ─────────────────────────────
 function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice | null; onClose: () => void }) {
+  const { user } = useAuth()
+  const canManage = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL || user?.role === 'admin'
   const { data: items = [], isLoading } = useInvoiceItems(invoice?.id)
   const updateStatus = useUpdateInvoiceStatus()
   const setPaid = useSetInvoicePaidDate()
+  const deleteInvoice = useDeleteInvoice()
   const [downloading, setDownloading] = useState(false)
   const open = !!invoice
-  const busy = updateStatus.isPending || setPaid.isPending
+  const busy = updateStatus.isPending || setPaid.isPending || deleteInvoice.isPending
+
+  const handleDelete = () => {
+    if (!invoice) return
+    if (!confirm(`이 인보이스를 완전히 삭제할까요?\n제출자: ${invoice.freelancerName || '-'} · ${invoice.invoiceMonth} · ${formatCurrency(invoice.totalAmount)}\n(되돌릴 수 없습니다. 테스트·오입력 건 정리용)`)) return
+    deleteInvoice.mutate(invoice.id, { onSuccess: onClose })
+  }
 
   // 회사 양식(견적서)으로 다운로드 — 파일명 = 직원 이름
   const downloadForm = async () => {
@@ -882,12 +891,20 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
                 {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
                 회사 양식 다운로드
               </Button>
-              {(invoice.status === 'approved' || invoice.status === 'rejected') && (
-                <Button variant="outline" size="sm" className="gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
-                  disabled={busy} onClick={revertToSubmitted}>
-                  <RefreshCw className="size-3.5" /> {invoice.status === 'approved' ? '승인' : '반려'} 취소 · 대기로
-                </Button>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {(invoice.status === 'approved' || invoice.status === 'rejected') && (
+                  <Button variant="outline" size="sm" className="gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
+                    disabled={busy} onClick={revertToSubmitted}>
+                    <RefreshCw className="size-3.5" /> {invoice.status === 'approved' ? '승인' : '반려'} 취소 · 대기로
+                  </Button>
+                )}
+                {canManage && (
+                  <Button variant="outline" size="sm" className="gap-1.5 text-red-700 border-red-200 hover:bg-red-50"
+                    disabled={busy} onClick={handleDelete}>
+                    <Trash2 className="size-3.5" /> 삭제
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         )}
