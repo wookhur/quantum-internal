@@ -834,6 +834,7 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
               ) : items.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">등록된 항목 내역이 없습니다.</p>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -849,7 +850,7 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
                     {items.map((it, i) => (
                       <TableRow key={it.id}>
                         <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
-                        <TableCell className="text-sm">{it.itemName || '-'}</TableCell>
+                        <TableCell className="text-sm max-w-[240px] break-all whitespace-normal">{it.itemName || '-'}</TableCell>
                         <TableCell className="text-sm text-right tabular-nums">{it.quantity}</TableCell>
                         <TableCell className="text-sm text-right tabular-nums">{formatCurrency(it.unitPrice)}</TableCell>
                         <TableCell className="text-sm text-right tabular-nums font-medium">{formatCurrency(it.supplyAmount)}</TableCell>
@@ -858,6 +859,7 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </div>
 
