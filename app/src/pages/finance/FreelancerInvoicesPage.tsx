@@ -1049,7 +1049,20 @@ export function FreelancerInvoicesPage(
   const byConsultant = useConsultantBillable(issueMonth)
   const linesByPerson = useIncentiveLinesByPerson()
   const { data: essayPlans = [] } = useAllEssayPlans()
-  const myName = canonicalConsultantName(user?.name)
+  // 관리자/회계는 다른 컨설턴트의 자동반영 화면을 그대로 미리볼 수 있음 (진단·검증용)
+  const { data: previewProfiles = [] } = useProfiles()
+  const isManager = isAccounting || user?.role === 'admin'
+  const [previewName, setPreviewName] = useState<string>('')
+  const effectiveName = isManager && previewName ? previewName : (user?.name || '')
+  const previewNameOptions = useMemo(() => {
+    const names = new Set<string>()
+    for (const p of previewProfiles) {
+      const n = canonicalConsultantName(p.name)
+      if (n && !/^[0-9a-f-]{36}$/i.test(n)) names.add(n)
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [previewProfiles])
+  const myName = canonicalConsultantName(effectiveName)
   // 수령 상태: 클릭한 것만 그 달에 수령완료. 미수령 건은 다음 달로 자동 이월(원래 달 태그 유지).
   const incentiveStatus = useIncentiveStatus()
   const setIncentiveReceived = useSetIncentiveReceived()
@@ -1068,14 +1081,17 @@ export function FreelancerInvoicesPage(
       }
       return out
     }
+    const myKey = consultantNameKey(effectiveName)
     // 관리비: 2회 미팅 완료 학생 (단가는 발행 시 수기입력 → amount 0)
-    //   ⚠️ 원서·에세이 플랜이 있는 학생은 제외 → 에세이 라인으로 대체(관리비+에세이 중복 방지)
-    const essayStudentIds = new Set(essayPlans.map(p => p.studentId))
-    const mgmt: DItem[] = (byConsultant.get(consultantNameKey(user?.name))?.students || [])
-      .filter(r => r.billable && !essayStudentIds.has(r.id))
+    //   ⚠️ '내가 원서·에세이를 담당하는' 학생만 관리비에서 제외 → 에세이 라인으로 대체(같은 사람 중복 방지).
+    //   관리만 하고 에세이는 다른 사람이 하는 학생은 관리비를 그대로 유지(각자 다른 업무 대가라 중복 아님).
+    const myEssayStudentIds = new Set(
+      essayPlans.filter(p => consultantNameKey(p.consultantName || '') === myKey).map(p => p.studentId),
+    )
+    const mgmt: DItem[] = (byConsultant.get(myKey)?.students || [])
+      .filter(r => r.billable && !myEssayStudentIds.has(r.id))
       .map(r => ({ id: r.label, label: r.label, amount: 0, received: false }))
     // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산 (미팅 조건 무관)
-    const myKey = consultantNameKey(user?.name)
     const essay: DItem[] = essayPlans
       .filter(p => consultantNameKey(p.consultantName || '') === myKey)
       .map(p => {
@@ -1086,7 +1102,7 @@ export function FreelancerInvoicesPage(
       })
       .filter((x): x is DItem => x !== null)
     return [...mgmt, ...essay]
-  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, user?.name])
+  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, effectiveName])
 
   // 발행 대상 = 아직 수령완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
@@ -1349,10 +1365,25 @@ export function FreelancerInvoicesPage(
             <SelectContent>{monthOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
           </Select>
         </div>
+        {isManager && (
+          <div>
+            <Label className="text-xs">미리보기 대상</Label>
+            <Select value={previewName || '__self__'} onValueChange={v => setPreviewName(v && v !== '__self__' ? v : '')}>
+              <SelectTrigger className="h-9 w-44"><span>{previewName || '나 (본인)'}</span></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__self__">나 (본인)</SelectItem>
+                {previewNameOptions.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         {canEdit && (
-          <Button className="gap-1.5" onClick={openIssueInvoice} disabled={issueItems.length === 0}>
+          <Button className="gap-1.5" onClick={openIssueInvoice} disabled={issueItems.length === 0 || (isManager && !!previewName)}>
             <Plus className="size-4" />인보이스 발행
           </Button>
+        )}
+        {isManager && !!previewName && (
+          <p className="text-[12px] text-amber-600 self-center">👁 {previewName} 미리보기 중 — 발행하려면 대상을 ‘나’로 바꾸세요</p>
         )}
       </div>
 
