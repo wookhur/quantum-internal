@@ -353,12 +353,12 @@ export function AttendancePage() {
   const days = useMemo(() => getDaysInMonth(currentMonth), [currentMonth])
 
   const excludedSet = useMemo(() => new Set(kioskExcludedIds), [kioskExcludedIds])
-  // 근태관리는 '정규직' 고용형태인 인원만 대상으로 함
+  // 근태관리 대상 = '정규직' 또는 '인턴' 고용형태 (키오스크 제외 인원 제외)
   const activeProfiles = useMemo(
-    () => profiles.filter(p =>
-      (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') &&
-      !excludedSet.has(p.id),
-    ),
+    () => profiles.filter(p => {
+      const types = p.employmentTypes?.length ? p.employmentTypes : (p.employmentType ? [p.employmentType] : [])
+      return (types.includes('permanent') || types.includes('intern')) && !excludedSet.has(p.id)
+    }),
     [profiles, excludedSet],
   )
 
