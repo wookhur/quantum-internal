@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Loader2, Users, Receipt, Lock, Clock, CheckCircle2, XCircle, Wallet } from 'lucide-react'
+import { Loader2, Users, Receipt, Lock, Clock, CheckCircle2, XCircle, Wallet, Pencil } from 'lucide-react'
 import { useInstallments } from '@/hooks/useInstallments'
 import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
@@ -18,7 +18,7 @@ import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote, RefreshCw, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useIncentiveLinesByPerson, downloadInvoiceExcel, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
+import { useIncentiveLinesByPerson, downloadInvoiceExcel, InvoiceFormDialog, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
 import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useAllClawbacks, useSetClawbackStatus, useDeleteClawback } from '@/hooks/useClawbacks'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -82,6 +82,8 @@ export function FinanceDashboardPage() {
   const updateStatus = useUpdateInvoiceStatus()
   const setPaidDate = useSetInvoicePaidDate()
   const [detailInv, setDetailInv] = useState<FreelancerInvoice | null>(null)
+  const [editInv, setEditInv] = useState<FreelancerInvoice | null>(null)
+  const { data: editInvItems } = useInvoiceItems(editInv?.id)
   const [exporting, setExporting] = useState(false)
 
   const { data: allIncentives = [], isLoading: incLoading } = useIncentivesByInstallment()
@@ -419,6 +421,12 @@ export function FinanceDashboardPage() {
                     <TableCell className="text-xs text-muted-foreground">{inv.invoiceDate}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
+                        {allowed && (
+                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-muted-foreground hover:text-primary"
+                            onClick={() => setEditInv(inv)}>
+                            <Pencil className="size-3.5" /> 수정
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" className="h-8 gap-1 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
                           disabled={updateStatus.isPending}
                           onClick={() => updateStatus.mutate({ id: inv.id, status: 'approved' })}>
@@ -496,7 +504,14 @@ export function FinanceDashboardPage() {
                         : <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-200 bg-emerald-50">지급예정</Badge>}
                     </TableCell>
                     <TableCell className="text-right">
-                      <PaidActionCell inv={inv} disabled={setPaidDate.isPending} onSet={(id, d) => setPaidDate.mutate({ id, paidDate: d })} />
+                      <div className="flex items-center justify-end gap-1">
+                        {allowed && (
+                          <Button size="sm" variant="ghost" className="h-8 gap-1 text-muted-foreground hover:text-primary" onClick={() => setEditInv(inv)}>
+                            <Pencil className="size-3.5" /> 수정
+                          </Button>
+                        )}
+                        <PaidActionCell inv={inv} disabled={setPaidDate.isPending} onSet={(id, d) => setPaidDate.mutate({ id, paidDate: d })} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -732,6 +747,19 @@ export function FinanceDashboardPage() {
       )}
 
       <InvoiceDetailDialog invoice={detailInv} onClose={() => setDetailInv(null)} />
+
+      {editInv && (
+        <InvoiceFormDialog
+          open={!!editInv}
+          onOpenChange={(o) => { if (!o) setEditInv(null) }}
+          invoice={editInv}
+          existingItems={editInvItems || undefined}
+          userId={editInv.freelancerId}
+          kind={editInv.kind}
+          allowAddItems
+          canEdit={allowed}
+        />
+      )}
     </div>
   )
 }

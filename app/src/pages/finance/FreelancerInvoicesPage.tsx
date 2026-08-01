@@ -113,7 +113,7 @@ function joinBank(bankName: string, accountNumber: string, accountHolder: string
 
 // ─── Invoice Form Dialog ──────────────────────────────────────────────────
 
-function InvoiceFormDialog({
+export function InvoiceFormDialog({
   open,
   onOpenChange,
   invoice,
