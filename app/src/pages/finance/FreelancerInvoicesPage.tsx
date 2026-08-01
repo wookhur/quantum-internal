@@ -1069,8 +1069,10 @@ export function FreelancerInvoicesPage(
       return out
     }
     // 관리비: 2회 미팅 완료 학생 (단가는 발행 시 수기입력 → amount 0)
+    //   ⚠️ 원서·에세이 플랜이 있는 학생은 제외 → 에세이 라인으로 대체(관리비+에세이 중복 방지)
+    const essayStudentIds = new Set(essayPlans.map(p => p.studentId))
     const mgmt: DItem[] = (byConsultant.get(consultantNameKey(user?.name))?.students || [])
-      .filter(r => r.billable)
+      .filter(r => r.billable && !essayStudentIds.has(r.id))
       .map(r => ({ id: r.label, label: r.label, amount: 0, received: false }))
     // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산 (미팅 조건 무관)
     const myKey = consultantNameKey(user?.name)
@@ -1374,7 +1376,7 @@ export function FreelancerInvoicesPage(
                 </>
               )
             })()}
-            {!isIncentive && <span className="text-muted-foreground"> · 관리비: 미팅리포트 2회 완료 학생 · 원서·에세이: 시작월~12월 매월 자동(금액 자동)</span>}
+            {!isIncentive && <span className="text-muted-foreground"> · 관리비: 미팅리포트 2회 완료 학생(원서·에세이 신청 학생 제외) · 원서·에세이: 시작월~12월 매월 자동(금액 자동)</span>}
           </div>
           {renderedItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">{agedOnly ? '이월된 미수령 인센티브가 없습니다.' : (isIncentive ? '이 달에 정산할(수금 완료) 세일즈 인센티브가 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)')}</p>
