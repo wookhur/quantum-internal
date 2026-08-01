@@ -102,6 +102,11 @@ function formatTime(t: string | null | undefined): string {
 /** A shift longer than this is treated as a data-entry error, not a real shift. */
 const MAX_SHIFT_MINUTES = 16 * 60
 
+/** 점심 휴게시간(분): 근무시간 합계에서 기본 제외. (예: 10-19시 = 9h → 8h) */
+const LUNCH_BREAK_MINUTES = 60
+/** 이 시간(분) 이상 근무한 경우에만 점심 휴게를 제외 (짧은 반차 등은 과다 차감 방지). */
+const LUNCH_APPLIES_MINUTES = 6 * 60
+
 /**
  * Worked minutes for one day. A clock-out earlier than clock-in means the
  * shift ran past midnight, so it counts against the next day (+24h).
@@ -121,6 +126,8 @@ function getWorkedMinutes(
   let mins = (h2 * 60 + m2) - (h1 * 60 + m1)
   if (mins < 0) mins += 24 * 60 // crossed midnight
   if (mins <= 0 || mins > MAX_SHIFT_MINUTES) return null
+  // 점심 휴게 1시간 기본 제외 (6시간 이상 근무 시). 10-19시(9h) → 8h.
+  if (mins >= LUNCH_APPLIES_MINUTES) mins -= LUNCH_BREAK_MINUTES
   return mins
 }
 
