@@ -90,12 +90,16 @@ export function FinanceDashboardPage() {
   const { data: allExtras = [], isLoading: extLoading } = useAllExtraInstallments()
 
   const pending = useMemo(() => invoices.filter(i => i.status === 'submitted'), [invoices])
-  // 지급 원장: 승인완료 인보이스(미지급 먼저, 그다음 지급일 최신)
+  // 승인완료 지급 원장: 전역 월과 독립된 자체 월 필터(전체 포함) — 달이 바뀌어도 원하는 월 조회
+  const { data: ledgerInvoices = [] } = useAllInvoices()  // 전체 월
+  const [ledgerMonth, setLedgerMonth] = useState<string>('all')
   const approvedList = useMemo(() =>
-    invoices.filter(i => i.status === 'approved').sort((a, b) => {
-      if (!!a.paidDate !== !!b.paidDate) return a.paidDate ? 1 : -1
-      return (b.paidDate || b.invoiceDate || '').localeCompare(a.paidDate || a.invoiceDate || '')
-    }), [invoices])
+    ledgerInvoices
+      .filter(i => i.status === 'approved' && (ledgerMonth === 'all' || i.invoiceMonth === ledgerMonth))
+      .sort((a, b) => {
+        if (!!a.paidDate !== !!b.paidDate) return a.paidDate ? 1 : -1
+        return (b.paidDate || b.invoiceDate || '').localeCompare(a.paidDate || a.invoiceDate || '')
+      }), [ledgerInvoices, ledgerMonth])
 
   const invoiceSummary = useMemo(() => {
     const byKind = new Map<string, { count: number; total: number }>()
@@ -469,6 +473,13 @@ export function FinanceDashboardPage() {
             <Banknote className="size-4 text-indigo-500" />
             <span className="font-semibold text-sm">인보이스 지급 원장 (승인완료 · 지급완료)</span>
             <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50">{approvedList.length}건</Badge>
+            <Select value={ledgerMonth} onValueChange={v => v && setLedgerMonth(v)}>
+              <SelectTrigger className="h-8 w-32"><span>{ledgerMonth === 'all' ? '전체' : ledgerMonth}</span></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체</SelectItem>
+                {months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
             <span className="text-[11px] text-muted-foreground ml-auto">지급이 나간 인보이스는 "지급완료 처리"로 지급일을 기록하세요. 중복·이월 판단 근거가 됩니다.</span>
           </div>
           {invLoading ? (
