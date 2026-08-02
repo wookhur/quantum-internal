@@ -66,12 +66,16 @@ export function useAppNotifications() {
       const today = new Date().toISOString().slice(0, 10)
       const { data, error } = await supabase
         .from('payment_installments')
-        .select('id, label, due_date, amount, contracts(student_name)')
+        .select('id, label, due_date, amount, contracts(student_name, status)')
         .eq('status', 'pending')
         .lt('due_date', today)
-        .limit(10)
+        .limit(20)
       if (error) return []
-      return data || []
+      // 취소·해지 계약의 회차는 납입 알림에서 제외
+      return (data || []).filter((r) => {
+        const cs = (r.contracts as { status?: string } | null)?.status
+        return cs !== 'cancelled' && cs !== 'terminated'
+      }).slice(0, 10)
     },
   })
 

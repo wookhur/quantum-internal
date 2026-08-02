@@ -216,7 +216,9 @@ export function CashflowPage() {
   // ── Income: this month's installments ──
   const income = useMemo(() => {
     const monthInst = installments.filter(inst =>
-      inst.dueDate?.startsWith(currentMonth) || inst.paidDate?.startsWith(currentMonth),
+      // 취소·해지 계약의 미납 회차는 현금흐름 수입에서 제외 (기납부분은 유지)
+      !((inst.contract?.status === 'cancelled' || inst.contract?.status === 'terminated') && inst.status !== 'paid') &&
+      (inst.dueDate?.startsWith(currentMonth) || inst.paidDate?.startsWith(currentMonth)),
     )
 
     let paidKrw = 0, paidUsd = 0

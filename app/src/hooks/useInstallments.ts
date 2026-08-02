@@ -227,6 +227,10 @@ export function useRevenueProjection() {
         const dueDate = row.due_date as string
         if (!dueDate) continue
 
+        // 취소·해지 계약의 미납 회차는 매출 예측에서 제외 (지급될 일 없는 미래 매출)
+        const cStatus = (row.contracts as Record<string, unknown> | null)?.status as string | undefined
+        if ((cStatus === 'cancelled' || cStatus === 'terminated') && (row.status as string) !== 'paid') continue
+
         const monthKey = dueDate.slice(0, 7) // YYYY-MM
         const existing = monthMap.get(monthKey) || {
           month: monthKey,

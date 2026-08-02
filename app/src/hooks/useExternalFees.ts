@@ -40,14 +40,19 @@ export function useAllExtraInstallments() {
     queryKey: ['extra-installments-all'],
     queryFn: async () => {
       // 1. Fetch extra installments with contract info
-      const { data: instData, error: instErr } = await supabase
+      const { data: instDataRaw, error: instErr } = await supabase
         .from('payment_installments')
-        .select('*, contracts:contract_id(id, contractor_name, student_name, school_name, contract_date, currency)')
+        .select('*, contracts:contract_id(id, contractor_name, student_name, school_name, contract_date, currency, status)')
         .eq('category', 'extra')
         .order('created_at', { ascending: false })
 
       if (instErr) throw instErr
-      if (!instData || instData.length === 0) return []
+      // 취소·해지 계약의 미납 회차는 제외 (더 이상 수금/수수료 대상이 아님. 기납부분은 유지)
+      const instData = (instDataRaw || []).filter(row => {
+        const cs = (row.contracts as { status?: string } | null)?.status
+        return !((cs === 'cancelled' || cs === 'terminated') && (row.status as string) !== 'paid')
+      })
+      if (instData.length === 0) return []
 
       // 2. Fetch all revenue shares for these installments
       const instIds = instData.map(i => i.id as string)

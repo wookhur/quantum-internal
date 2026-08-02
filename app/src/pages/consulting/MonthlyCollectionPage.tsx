@@ -372,6 +372,8 @@ export function MonthlyCollectionPage() {
   const { monthItems, krw, usd, overdueCount } = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10)
     const items = installments
+      // 취소·해지 계약의 미납 회차는 수금 대상이 아님 → 예정/대기/연체에서 제외 (기납부분은 유지)
+      .filter(inst => !((inst.contract?.status === 'cancelled' || inst.contract?.status === 'terminated') && inst.status !== 'paid'))
       .filter(inst => inst.dueDate && inst.dueDate.startsWith(currentMonth))
       .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
 

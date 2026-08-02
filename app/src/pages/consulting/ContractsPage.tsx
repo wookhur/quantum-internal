@@ -227,7 +227,10 @@ export function ContractsPage() {
   const { total, totalPaid, totalOutstanding, cancelledCount, activeCount, endedCount } = useMemo(() => {
     const cnt = allContracts.length
     const paid = allContracts.reduce((s, c) => s + (c.paidAmount || 0), 0)
-    const outstanding = allContracts.reduce((s, c) => s + (c.outstandingAmount || 0), 0)
+    // 미수금 합계는 취소·해지 계약 제외 (더 이상 받을 돈이 아님)
+    const outstanding = allContracts
+      .filter(c => c.status !== 'cancelled' && c.status !== 'terminated')
+      .reduce((s, c) => s + (c.outstandingAmount || 0), 0)
     const cancelled = allContracts.filter(c => c.status === 'cancelled' || c.status === 'terminated').length
     const active = allContracts.filter(c => c.status === 'active' || c.status === 'expiring_soon').length
     const ended = allContracts.filter(c => c.status === 'expired').length

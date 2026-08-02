@@ -106,7 +106,9 @@ export function PaymentsPage() {
   const [expandedContract, setExpandedContract] = useState<string | null>(null)
 
   const { groups, totalAmount, totalPaid, totalOverdue, avgProgress } = useMemo(() => {
-    const grps = groupByContract(installments)
+    // 취소·해지 계약은 수납 관리 대상이 아님 → 목록·합계에서 제외
+    const active = installments.filter(i => i.contract?.status !== 'cancelled' && i.contract?.status !== 'terminated')
+    const grps = groupByContract(active)
     const tAmt = grps.reduce((s, g) => s + g.totalAmount, 0)
     const tPaid = grps.reduce((s, g) => s + g.paidAmount, 0)
     const tOver = grps.reduce((s, g) => s + g.overdueAmount, 0)
