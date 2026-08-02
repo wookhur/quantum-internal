@@ -372,8 +372,8 @@ export function MonthlyCollectionPage() {
   const { monthItems, krw, usd, overdueCount } = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10)
     const items = installments
-      // 취소·해지 계약의 미납 회차는 수금 대상이 아님 → 예정/대기/연체에서 제외 (기납부분은 유지)
-      .filter(inst => !((inst.contract?.status === 'cancelled' || inst.contract?.status === 'terminated') && inst.status !== 'paid'))
+      // 취소·해지 계약은 수금 대상이 아님 → 전부 제외
+      .filter(inst => inst.contract?.status !== 'cancelled' && inst.contract?.status !== 'terminated')
       .filter(inst => inst.dueDate && inst.dueDate.startsWith(currentMonth))
       .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
 
@@ -383,8 +383,10 @@ export function MonthlyCollectionPage() {
 
     for (const inst of items) {
       const s = inst.currency === 'USD' ? statsUsd : stats
+      // 환불완료분은 수금액에서 차감 (환불된 돈은 순수금 아님)
+      const refunded = inst.refundStatus === 'completed' ? (inst.refundAmount || 0) : 0
       s.expected += inst.amount
-      s.collected += inst.paidAmount
+      s.collected += Math.max(inst.paidAmount - refunded, 0)
       const remaining = inst.amount - inst.paidAmount
       const pastDue = inst.dueDate! < todayStr && inst.status !== 'paid'
       if (pastDue) {

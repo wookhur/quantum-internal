@@ -216,8 +216,8 @@ export function CashflowPage() {
   // ── Income: this month's installments ──
   const income = useMemo(() => {
     const monthInst = installments.filter(inst =>
-      // 취소·해지 계약의 미납 회차는 현금흐름 수입에서 제외 (기납부분은 유지)
-      !((inst.contract?.status === 'cancelled' || inst.contract?.status === 'terminated') && inst.status !== 'paid') &&
+      // 취소·해지 계약은 현금흐름 수입에서 제외
+      inst.contract?.status !== 'cancelled' && inst.contract?.status !== 'terminated' &&
       (inst.dueDate?.startsWith(currentMonth) || inst.paidDate?.startsWith(currentMonth)),
     )
 
@@ -230,7 +230,9 @@ export function CashflowPage() {
     for (const inst of monthInst) {
       const isPaid = inst.status === 'paid'
       const isOverdue = !isPaid && inst.dueDate! < todayStr
-      const amount = isPaid ? inst.paidAmount : inst.amount - inst.paidAmount
+      // 환불완료분은 수입에서 차감
+      const refunded = inst.refundStatus === 'completed' ? (inst.refundAmount || 0) : 0
+      const amount = isPaid ? Math.max(inst.paidAmount - refunded, 0) : inst.amount - inst.paidAmount
 
       if (inst.currency === 'USD') {
         if (isPaid) paidUsd += amount

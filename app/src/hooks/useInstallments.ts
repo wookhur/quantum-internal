@@ -227,9 +227,9 @@ export function useRevenueProjection() {
         const dueDate = row.due_date as string
         if (!dueDate) continue
 
-        // 취소·해지 계약의 미납 회차는 매출 예측에서 제외 (지급될 일 없는 미래 매출)
+        // 취소·해지 계약은 매출 예측에서 전부 제외
         const cStatus = (row.contracts as Record<string, unknown> | null)?.status as string | undefined
-        if ((cStatus === 'cancelled' || cStatus === 'terminated') && (row.status as string) !== 'paid') continue
+        if (cStatus === 'cancelled' || cStatus === 'terminated') continue
 
         const monthKey = dueDate.slice(0, 7) // YYYY-MM
         const existing = monthMap.get(monthKey) || {
@@ -246,7 +246,9 @@ export function useRevenueProjection() {
         const contract = row.contracts as Record<string, unknown> | null
 
         if (status === 'paid') {
-          existing.paid += paidAmount
+          // 환불완료분은 수금액에서 차감
+          const refunded = (row.refund_status as string) === 'completed' ? ((row.refund_amount as number) || 0) : 0
+          existing.paid += Math.max(paidAmount - refunded, 0)
         } else if (status === 'overdue') {
           existing.overdue += amount - paidAmount
         } else {
