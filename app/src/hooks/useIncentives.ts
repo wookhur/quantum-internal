@@ -248,6 +248,10 @@ export function useIncentivesByInstallment() {
         const totalAmount = Number(contract?.total_amount) || 0
         const currency = ((contract?.currency as string) || 'KRW') as 'KRW' | 'USD'
         const contractDate = (contract?.contract_date as string) || ''
+        // 계약 취소/해지 시: 미지급(미래) 회차는 지급될 일이 없으므로 인센티브 생성 제외.
+        // (이미 지급된 회차의 인센티브는 유지 — 환불 발생분은 환급(clawback)으로 별도 차감됨)
+        const contractCancelled = ((contract?.status as string) || 'active') === 'cancelled'
+          || ((contract?.status as string) || '') === 'terminated'
 
         const allInsts = instMap.get(inc.contractId) || []
         for (const pi of allInsts) {
@@ -260,6 +264,8 @@ export function useIncentivesByInstallment() {
           }
 
           const isPaid = pi.status === 'paid' || (pi.paidAmount > 0 && pi.paidAmount >= pi.amount)
+          // 취소·해지 계약의 미지급 회차는 스킵 (미래에 지급 안 될 돈 → 인센티브 없음)
+          if (contractCancelled && !isPaid) continue
           // 부가세 10% 제외 후 인센티브 계산
           // 입금 완료: paid_amount 기준, 미입금: 예정 금액(amount) 기준
           const baseAmount = isPaid ? pi.paidAmount : pi.amount
