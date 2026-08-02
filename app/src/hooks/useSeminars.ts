@@ -30,8 +30,8 @@ export function sessionSortKey(s: SeminarSession): number {
 
 /**
  * Effective event time of a seminar for reverse-chronological ordering.
- * Uses the latest session datetime when sessions exist, else the single
- * `date` column ("YYYY-MM-DD[ HH:mm]"). Undated seminars sort last.
+ * Uses the FIRST (earliest) session datetime when sessions exist, else the
+ * single `date` column ("YYYY-MM-DD[ HH:mm]"). Undated seminars sort last.
  */
 export function seminarDateKey(s: Seminar): number {
   // 세션 라벨("7/18")에는 연도가 없어 그대로 파싱하면 2000년으로 잡혀,
@@ -57,7 +57,7 @@ export function seminarDateKey(s: Seminar): number {
       }
       return NaN
     }).filter(k => !Number.isNaN(k))
-    if (keys.length) return Math.max(...keys)
+    if (keys.length) return Math.min(...keys) // 첫 세션(가장 이른 날짜) 기준으로 정렬
   }
   if (s.date) {
     const t = Date.parse(s.date.replace(' ', 'T'))
