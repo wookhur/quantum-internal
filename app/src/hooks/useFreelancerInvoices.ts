@@ -212,6 +212,7 @@ export function useCreateInvoice() {
       qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
+      qc.invalidateQueries({ queryKey: ['all-invoices'] })  // 재무대시보드 즉시 반영
     },
   })
 }
@@ -263,6 +264,7 @@ export function useUpdateInvoice() {
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
       qc.invalidateQueries({ queryKey: ['invoice-items'] })
+      qc.invalidateQueries({ queryKey: ['all-invoices'] })  // 재무대시보드 즉시 반영
     },
   })
 }
@@ -316,6 +318,7 @@ export function useDeleteInvoice() {
       qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
+      qc.invalidateQueries({ queryKey: ['all-invoices'] })  // 재무대시보드 즉시 반영
     },
   })
 }
