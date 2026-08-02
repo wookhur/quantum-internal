@@ -894,34 +894,50 @@ function studentLabel(name?: string, koreanName?: string): string {
 
 const ACCOUNTING_EMAIL = 'accounting@quantumadmissions.com'
 
-export interface BillableStudent { id: string; label: string; done: number; billable: boolean }
+export interface BillableStudent { id: string; label: string; done: number; billable: boolean; billableMonths: number }
 
-/** Per consultant NAME → their active students with billable flag (>=2 report-uploaded meetings this month). */
+/** Per consultant NAME → active students with 관리비 청구 대상 (정확방식/소급).
+ *  리포트완료(미취소) 미팅을 시간순 2개씩 짝지어, 각 짝의 '2번째 미팅이 있는 달'에 관리비 1개월치를 청구.
+ *  누적 계산이라 예: 7월 1회 + 8/2 1회 → 8월(2번째 미팅월)에 1개월치가 잡힘(소급). 짝은 달마다 1번만 청구됨. */
 function useConsultantBillable(month: string) {
   const consultantName = useConsultantName()
   const { data: students = [] } = useServiceStudents()
-  const { start, end } = monthRange(month)
-  const { data: meetings = [] } = useAllServiceMeetings(start, end)
+  const { end } = monthRange(month)
+  // 이번 달 말까지의 전체 미팅(누적) — 지난 달 미팅과 짝지어 소급 판정
+  const { data: meetings = [] } = useAllServiceMeetings('2000-01-01', end)
 
   return useMemo(() => {
-    const completed = new Map<string, number>()
+    // 학생별 리포트완료(미취소) 미팅일자 수집
+    const datesByStudent = new Map<string, string[]>()
     for (const mt of meetings) {
-      if ((mt.reportStatus === 'submitted' || !!mt.reportUrl) && mt.status !== 'cancelled') {
-        completed.set(mt.studentId, (completed.get(mt.studentId) || 0) + 1)
+      if ((mt.reportStatus === 'submitted' || !!mt.reportUrl) && mt.status !== 'cancelled' && mt.meetingDate) {
+        const arr = datesByStudent.get(mt.studentId) || []
+        arr.push(mt.meetingDate)
+        datesByStudent.set(mt.studentId, arr)
       }
     }
+    // 학생별: 시간순 정렬 후 2개씩 짝 → '2번째 미팅달'이 이번달인 짝 수 = 이번달 청구 개월수
+    const monthsDue = new Map<string, number>()
+    datesByStudent.forEach((dates, sid) => {
+      dates.sort()
+      let due = 0
+      for (let i = 1; i < dates.length; i += 2) {
+        if ((dates[i] || '').slice(0, 7) === month) due++
+      }
+      if (due > 0) monthsDue.set(sid, due)
+    })
     // 이름 매칭을 대소문자·공백에 견고하게: 정규화 키로 그룹핑, 표시용 이름은 함께 보관
     const byConsultant = new Map<string, { name: string; students: BillableStudent[] }>()
     students.filter(s => isActiveStudent(s.status) && !s.paused && s.assignedConsultant).forEach(s => {
       const display = consultantName(s.assignedConsultant)
       const key = consultantNameKey(display)
-      const done = completed.get(s.id) || 0
+      const bm = monthsDue.get(s.id) || 0
       const entry = byConsultant.get(key) || { name: display, students: [] }
-      entry.students.push({ id: s.id, label: studentLabel(s.name, s.koreanName), done, billable: done >= 2 })
+      entry.students.push({ id: s.id, label: studentLabel(s.name, s.koreanName), done: bm, billable: bm >= 1, billableMonths: bm })
       byConsultant.set(key, entry)
     })
     return byConsultant
-  }, [students, meetings, consultantName])
+  }, [students, meetings, consultantName, month])
 }
 
 export interface IncentiveLine { id: string; label: string; amount: number; month: string; source: 'contract' | 'service'; sourceDetail: string }
@@ -1104,7 +1120,13 @@ export function FreelancerInvoicesPage(
     )
     const mgmt: DItem[] = (byConsultant.get(myKey)?.students || [])
       .filter(r => r.billable && !myEssayStudentIds.has(r.id))
-      .map(r => ({ id: r.label, label: r.label, amount: 0, received: false }))
+      // 소급 등으로 이번 달에 2개월치 이상이면 그 개월수만큼 라인 생성
+      .flatMap(r => Array.from({ length: Math.max(r.billableMonths, 1) }, (_, k) => ({
+        id: r.billableMonths > 1 ? `${r.label}#${k + 1}` : r.label,
+        label: r.billableMonths > 1 ? `${r.label} (${k + 1}/${r.billableMonths}개월분·소급)` : r.label,
+        amount: 0,
+        received: false,
+      })))
     // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산 (미팅 조건 무관)
     const essay: DItem[] = essayPlans
       .filter(p => consultantNameKey(p.consultantName || '') === myKey)
