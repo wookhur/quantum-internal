@@ -1347,14 +1347,38 @@ export function FreelancerInvoicesPage(
       </CardContent>
     </Card>
   ) : isPartner ? (
-    <div className="flex items-center gap-3">
-      {canEdit && (
-        <Button className="gap-1.5" onClick={openManualInvoice}>
-          <Plus className="size-4" />인보이스 추가
-        </Button>
-      )}
-      <p className="text-[12px] text-muted-foreground">이름을 직접 입력해 인보이스를 발행합니다.</p>
-    </div>
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="text-sm font-medium">파트너사 인보이스 — 엑셀 양식 업로드 또는 직접 입력 (대리 발행)</div>
+        <p className="text-[12px] text-muted-foreground">
+          ① 양식을 내려받아 <b>파트너 성명·계좌·주민(사업자)번호·품목</b>을 작성한 뒤 ② 업로드하면 그 정보로 인보이스 폼이 열립니다. (로그인한 사람이 아닌 파트너 정보로 발행) · 또는 ‘직접 입력’으로 수기 작성.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" className="gap-1.5" onClick={() => downloadFreelancerTemplate().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
+            <Download className="size-4" />양식 다운로드
+          </Button>
+          {canEdit && (
+            <label>
+              <input
+                type="file"
+                accept=".xlsx"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseFreelancerInvoice); e.target.value = '' }}
+              />
+              <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}양식 업로드
+              </span>
+            </label>
+          )}
+          {canEdit && (
+            <Button variant="ghost" className="gap-1.5" onClick={openManualInvoice}>
+              <Plus className="size-4" />직접 입력
+            </Button>
+          )}
+        </div>
+        {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+      </CardContent>
+    </Card>
   ) : (
     <>
       <div className="flex items-end gap-3 flex-wrap">
