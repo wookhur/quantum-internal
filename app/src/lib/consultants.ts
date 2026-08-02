@@ -31,8 +31,7 @@ const CONSULTANT_NAME_ALIASES: Record<string, string> = {
   'julie kim': '김지현',
   'julie': '김지현',
   'evelyn': '남연서',
-  'somee park': '박수미',   // 에세이 에디터 목록의 영문 표기 ↔ 프로필 한글명
-  'soomee park': '박수미',
+  'somee park': 'Soomee Park',   // 과거 표기(Somee) → 통일된 표기(Soomee Park)
 }
 
 /** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현). */

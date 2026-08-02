@@ -895,7 +895,21 @@ function studentLabel(name?: string, koreanName?: string): string {
 
 const ACCOUNTING_EMAIL = 'accounting@quantumadmissions.com'
 
-export interface BillableStudent { id: string; label: string; done: number; billable: boolean; billableMonths: number }
+export interface BillableStudent { id: string; label: string; done: number; billable: boolean; billableMonths: number; pairs: [string, string][] }
+
+/** 미팅일자 배열을 시간순 2개씩 짝지어, 2번째 미팅이 해당 달(YYYY-MM)인 짝들의 [1번째, 2번째] 일자 반환. */
+function pairsClosingInMonth(dates: string[], month: string): [string, string][] {
+  const sorted = [...dates].sort()
+  const out: [string, string][] = []
+  for (let i = 1; i < sorted.length; i += 2) {
+    if ((sorted[i] || '').slice(0, 7) === month) out.push([sorted[i - 1], sorted[i]])
+  }
+  return out
+}
+/** 짝 미팅일자를 비고/툴팁용 문자열로: "미팅 2건: 2026-07-15, 2026-08-02" */
+function pairDetail(pair: [string, string]): string {
+  return `미팅 2건: ${pair[0]}, ${pair[1]}`
+}
 
 /** Per consultant NAME → active students with 관리비 청구 대상 (정확방식/소급).
  *  리포트완료(미취소) 미팅을 시간순 2개씩 짝지어, 각 짝의 '2번째 미팅이 있는 달'에 관리비 1개월치를 청구.
@@ -917,24 +931,20 @@ function useConsultantBillable(month: string) {
         datesByStudent.set(mt.studentId, arr)
       }
     }
-    // 학생별: 시간순 정렬 후 2개씩 짝 → '2번째 미팅달'이 이번달인 짝 수 = 이번달 청구 개월수
-    const monthsDue = new Map<string, number>()
+    // 학생별: 이번 달에 마감된 짝(들)과 각 짝의 미팅일자
+    const pairsByStudent = new Map<string, [string, string][]>()
     datesByStudent.forEach((dates, sid) => {
-      dates.sort()
-      let due = 0
-      for (let i = 1; i < dates.length; i += 2) {
-        if ((dates[i] || '').slice(0, 7) === month) due++
-      }
-      if (due > 0) monthsDue.set(sid, due)
+      const pairs = pairsClosingInMonth(dates, month)
+      if (pairs.length) pairsByStudent.set(sid, pairs)
     })
     // 이름 매칭을 대소문자·공백에 견고하게: 정규화 키로 그룹핑, 표시용 이름은 함께 보관
     const byConsultant = new Map<string, { name: string; students: BillableStudent[] }>()
     students.filter(s => isActiveStudent(s.status) && !s.paused && s.assignedConsultant).forEach(s => {
       const display = consultantName(s.assignedConsultant)
       const key = consultantNameKey(display)
-      const bm = monthsDue.get(s.id) || 0
+      const pairs = pairsByStudent.get(s.id) || []
       const entry = byConsultant.get(key) || { name: display, students: [] }
-      entry.students.push({ id: s.id, label: studentLabel(s.name, s.koreanName), done: bm, billable: bm >= 1, billableMonths: bm })
+      entry.students.push({ id: s.id, label: studentLabel(s.name, s.koreanName), done: pairs.length, billable: pairs.length >= 1, billableMonths: pairs.length, pairs })
       byConsultant.set(key, entry)
     })
     return byConsultant
@@ -1123,12 +1133,13 @@ export function FreelancerInvoicesPage(
     )
     const mgmt: DItem[] = (byConsultant.get(myKey)?.students || [])
       .filter(r => r.billable && !myEssayStudentIds.has(r.id))
-      // 소급 등으로 이번 달에 2개월치 이상이면 그 개월수만큼 라인 생성
-      .flatMap(r => Array.from({ length: Math.max(r.billableMonths, 1) }, (_, k) => ({
-        id: r.billableMonths > 1 ? `${r.label}#${k + 1}` : r.label,
-        label: r.billableMonths > 1 ? `${r.label} (${k + 1}/${r.billableMonths}개월분·소급)` : r.label,
+      // 짝(2회 미팅)마다 라인 1개 — 소급 등으로 2건 이상이면 각 짝의 미팅일자를 비고에 담음
+      .flatMap(r => r.pairs.map((pair, k) => ({
+        id: r.pairs.length > 1 ? `${r.label}#${k + 1}` : r.label,
+        label: r.pairs.length > 1 ? `${r.label} (${k + 1}/${r.pairs.length}개월분·소급)` : r.label,
         amount: 0,
         received: false,
+        sourceDetail: pairDetail(pair),
       })))
     // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산 (미팅 조건 무관)
     const essay: DItem[] = essayPlans
@@ -1155,20 +1166,19 @@ export function FreelancerInvoicesPage(
     const studentsById = new Map(allStudentsForEditor.map(s => [s.id, s]))
     const editorLines: DItem[] = []
     editorDates.forEach((dates, sid) => {
-      dates.sort()
-      let due = 0
-      for (let i = 1; i < dates.length; i += 2) if ((dates[i] || '').slice(0, 7) === issueMonth) due++
-      if (due < 1) return
+      const pairs = pairsClosingInMonth(dates, issueMonth)
+      if (!pairs.length) return
       const s = studentsById.get(sid)
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
-      for (let k = 0; k < due; k++) {
+      pairs.forEach((pair, k) => {
         editorLines.push({
-          id: due > 1 ? `editor:${sid}#${k + 1}` : `editor:${sid}`,
-          label: `${who} · 에세이에디터${due > 1 ? ` (${k + 1}/${due}개월분·소급)` : ''}`,
+          id: pairs.length > 1 ? `editor:${sid}#${k + 1}` : `editor:${sid}`,
+          label: `${who} · 에세이에디터${pairs.length > 1 ? ` (${k + 1}/${pairs.length}개월분·소급)` : ''}`,
           amount: 0,
           received: false,
+          sourceDetail: pairDetail(pair),
         })
-      }
+      })
     })
 
     return [...mgmt, ...essay, ...editorLines]
@@ -1179,6 +1189,7 @@ export function FreelancerInvoicesPage(
     label: d.label, amount: d.amount,
     carried: !!d.originMonth && d.originMonth < issueMonth,
     originMonth: d.originMonth,
+    sourceDetail: d.sourceDetail,   // 미팅 2건 일자 등 → 비고에 기록
   })), [displayItems, issueMonth])
 
   // 이월(원래 달 < 현재 달) 미수령만 보기 필터
@@ -1206,7 +1217,10 @@ export function FreelancerInvoicesPage(
             itemName: r.carried ? `(${monthNum(r.originMonth)}월분) ${r.label}` : r.label,
             quantity: 1,
             unitPrice: r.amount,
-            remark: r.carried ? `${monthNum(r.originMonth)}월 발생 · ${monthsBetween(r.originMonth, issueMonth)}개월 이월(소급)` : '',
+            remark: [
+              r.sourceDetail || '',
+              r.carried ? `${monthNum(r.originMonth)}월 발생 · ${monthsBetween(r.originMonth, issueMonth)}개월 이월(소급)` : '',
+            ].filter(Boolean).join(' · '),
           }))
         : [emptyItem()],
     }
@@ -1509,7 +1523,7 @@ export function FreelancerInvoicesPage(
             <div className="flex flex-wrap gap-1.5">
               {renderedItems.map((r) => {
                 if (!isIncentive) return (
-                  <Badge key={r.id} variant="outline" className={r.amount > 0 ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}>
+                  <Badge key={r.id} variant="outline" title={r.sourceDetail || undefined} className={r.amount > 0 ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}>
                     {r.label}{r.amount > 0 ? ` · ${formatKRW(r.amount)}` : ''}
                   </Badge>
                 )
