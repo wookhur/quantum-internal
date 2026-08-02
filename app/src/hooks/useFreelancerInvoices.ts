@@ -18,6 +18,7 @@ export interface FreelancerInvoice {
   kind?: string
   invoiceDate: string
   invoiceMonth: string
+  clientName?: string   // 대리작성 수령인 이름 (있으면 표시에 우선)
   status: 'draft' | 'submitted' | 'approved' | 'rejected'
   paidDate?: string | null   // 지급완료일 (설정되면 지급완료로 표시)
   residentNumber: string | null
@@ -40,6 +41,7 @@ function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
     kind: (r.kind as string) || undefined,
     invoiceDate: r.invoice_date as string,
     invoiceMonth: r.invoice_month as string,
+    clientName: (r.client_name as string) || undefined,
     status: r.status as FreelancerInvoice['status'],
     paidDate: (r.paid_date as string) || null,
     residentNumber: r.resident_number as string | null,
@@ -52,6 +54,11 @@ function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
     freelancerName: profile?.name as string | undefined,
     freelancerEmail: profile?.email as string | undefined,
   }
+}
+
+/** 표시용 이름: 대리작성 수령인(clientName)이 있으면 우선, 없으면 로그인 계정 이름. */
+export function invoiceDisplayName(inv: Pick<FreelancerInvoice, 'clientName' | 'freelancerName' | 'freelancerEmail'>): string {
+  return inv.clientName || inv.freelancerName || inv.freelancerEmail || '-'
 }
 
 function mapItem(r: Record<string, unknown>): InvoiceItem {
@@ -166,6 +173,7 @@ export function useCreateInvoice() {
       invoiceDate: string
       invoiceMonth: string
       kind?: string
+      clientName?: string   // 대리작성 시 수령인(신청인) 이름 — 로그인 계정과 별개
       residentNumber?: string
       phone?: string
       bankAccount?: string
@@ -181,6 +189,7 @@ export function useCreateInvoice() {
           invoice_month: input.invoiceMonth,
           kind: input.kind || 'freelancer',
           status: 'submitted',
+          client_name: input.clientName || null,
           resident_number: input.residentNumber || null,
           phone: input.phone || null,
           bank_account: input.bankAccount || null,
@@ -223,6 +232,7 @@ export function useUpdateInvoice() {
     mutationFn: async (input: {
       id: string
       invoiceDate?: string
+      clientName?: string
       residentNumber?: string
       phone?: string
       bankAccount?: string
@@ -231,6 +241,7 @@ export function useUpdateInvoice() {
     }) => {
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (input.invoiceDate) updates.invoice_date = input.invoiceDate
+      if (input.clientName !== undefined) updates.client_name = input.clientName || null
       if (input.residentNumber !== undefined) updates.resident_number = input.residentNumber || null
       if (input.phone !== undefined) updates.phone = input.phone || null
       if (input.bankAccount !== undefined) updates.bank_account = input.bankAccount || null

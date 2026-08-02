@@ -35,6 +35,7 @@ import {
   useUpdateInvoice,
   useUpdateInvoiceStatus,
   useDeleteInvoice,
+  invoiceDisplayName,
   type FreelancerInvoice,
   type InvoiceItem,
 } from '@/hooks/useFreelancerInvoices'
@@ -76,6 +77,7 @@ function getMonthOptions() {
 
 interface ParsedInvoice {
   invoiceDate: string
+  name?: string   // 수령인(신청인) 성명 — 대리작성 시 표시용
   residentNumber: string
   phone: string
   email: string
@@ -142,6 +144,7 @@ export function InvoiceFormDialog({
 
   const [invoiceDate, setInvoiceDate] = useState(initialData?.invoiceDate || invoice?.invoiceDate || new Date().toISOString().slice(0, 10))
   const [invoiceMonth, setInvoiceMonth] = useState(invoice?.invoiceMonth || getCurrentMonth())
+  const [clientName, setClientName] = useState(initialData?.name || invoice?.clientName || '')
   const [residentNumber, setResidentNumber] = useState(initialData?.residentNumber || invoice?.residentNumber || '')
   const [phone, setPhone] = useState(initialData?.phone || invoice?.phone || '')
   const initBank = splitBank(initialData?.bankAccount || invoice?.bankAccount || '')
@@ -165,6 +168,7 @@ export function InvoiceFormDialog({
     if (!open || !initialData) return
     if (initialData.items?.length) setItems(initialData.items.map(it => ({ ...it })))
     if (initialData.invoiceDate) setInvoiceDate(initialData.invoiceDate)
+    setClientName(initialData.name || '')
     setResidentNumber(initialData.residentNumber || '')
     setPhone(initialData.phone || '')
     setNote(initialData.note || '')
@@ -180,7 +184,7 @@ export function InvoiceFormDialog({
     setDownloading(true)
     try {
       await downloadInvoiceExcel(
-        { ...invoice, invoiceDate, residentNumber, phone, bankAccount, totalAmount },
+        { ...invoice, invoiceDate, clientName, residentNumber, phone, bankAccount, totalAmount },
         items.filter(it => it.itemName.trim() || it.unitPrice).map(it => ({
           itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice,
           supplyAmount: it.quantity * it.unitPrice, remark: it.remark,
@@ -207,6 +211,7 @@ export function InvoiceFormDialog({
         await updateInvoice.mutateAsync({
           id: invoice.id,
           invoiceDate,
+          clientName,
           residentNumber,
           phone,
           bankAccount,
@@ -219,6 +224,7 @@ export function InvoiceFormDialog({
           invoiceDate,
           invoiceMonth,
           kind,
+          clientName,
           residentNumber,
           phone,
           bankAccount,
@@ -256,6 +262,12 @@ export function InvoiceFormDialog({
               <Label className="text-xs">{t('fInvoice.month')}</Label>
               <Input type="month" value={invoiceMonth} onChange={e => setInvoiceMonth(e.target.value)} className="h-9" disabled={!!invoice} />
             </div>
+          </div>
+
+          {/* 수령인(신청인) 성명 — 대리작성 시 로그인 계정이 아닌 이 이름으로 표시 */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">성명 (수령인) <span className="text-[10px] text-muted-foreground">· 미입력 시 로그인 계정 이름으로 표시</span></Label>
+            <Input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="예: 홍길동" className="h-9" />
           </div>
 
           {/* Personal Info */}
@@ -413,7 +425,7 @@ export async function downloadInvoiceExcel(
   const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
   // Date + supplier (freelancer) info
   set('C5', invoice.invoiceDate)
-  set('F6', invoice.freelancerName)
+  set('F6', invoice.clientName || invoice.freelancerName)
   set('H6', invoice.residentNumber)
   set('F7', invoice.phone)
   set('F8', invoice.freelancerEmail)
@@ -465,7 +477,7 @@ export async function downloadInvoiceExcel(
   const a = document.createElement('a')
   a.href = url
   // 파일명 = 직원(제출자) 이름
-  a.download = `${invoice.freelancerName || invoice.freelancerEmail || 'invoice'}.xlsx`
+  a.download = `${invoiceDisplayName(invoice)}.xlsx`
   document.body.appendChild(a); a.click(); a.remove()
   URL.revokeObjectURL(url)
 }
@@ -559,6 +571,7 @@ async function parseFreelancerInvoice(file: File): Promise<ParsedInvoice> {
 
   return {
     invoiceDate,
+    name,
     residentNumber: bizNo,
     phone,
     email,
@@ -634,6 +647,7 @@ async function parseBusinessInvoice(file: File): Promise<ParsedInvoice> {
 
   return {
     invoiceDate,
+    name,
     residentNumber: bizNo,
     phone,
     email,
@@ -687,7 +701,7 @@ function InvoiceDetailDialog({
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            <div><span className="text-muted-foreground">{t('fInvoice.freelancer')}:</span> <span className="font-medium">{invoice.freelancerName}</span></div>
+            <div><span className="text-muted-foreground">{t('fInvoice.freelancer')}:</span> <span className="font-medium">{invoiceDisplayName(invoice)}</span></div>
             <div><span className="text-muted-foreground">{t('fInvoice.date')}:</span> <span className="font-medium">{invoice.invoiceDate}</span></div>
             <div><span className="text-muted-foreground">{t('fInvoice.month')}:</span> <span className="font-medium">{invoice.invoiceMonth}</span></div>
             {invoice.residentNumber && <div><span className="text-muted-foreground">{t('fInvoice.residentNumber')}:</span> <span className="font-medium">{invoice.residentNumber}</span></div>}
@@ -749,7 +763,7 @@ function InvoiceDetailDialog({
                   const isApproved = invoice.status === 'approved'
                   const confirmMsg = isApproved
                     ? t('fInvoice.deleteApprovedConfirm', {
-                        name: invoice.freelancerName || '',
+                        name: invoiceDisplayName(invoice),
                         amount: formatKRW(invoice.totalAmount),
                       })
                     : t('fInvoice.deleteConfirm')
@@ -820,7 +834,7 @@ async function exportInvoicesToExcel(invoices: FreelancerInvoice[], month: strin
   invoices.forEach((inv, i) => {
     ws.addRow({
       no: i + 1,
-      name: inv.freelancerName || '',
+      name: invoiceDisplayName(inv),
       email: inv.freelancerEmail || '',
       date: inv.invoiceDate,
       month: inv.invoiceMonth,
@@ -1024,7 +1038,7 @@ export function FreelancerInvoicesPage(
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(inv =>
-        inv.freelancerName?.toLowerCase().includes(q) ||
+        inv.freelancerName?.toLowerCase().includes(q) || inv.clientName?.toLowerCase().includes(q) ||
         inv.freelancerEmail?.toLowerCase().includes(q),
       )
     }
@@ -1254,7 +1268,7 @@ export function FreelancerInvoicesPage(
                   <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setDetailInvoice(inv)}>
                     {isAccounting && (
                       <TableCell className="font-medium">
-                        <div>{inv.freelancerName}</div>
+                        <div>{invoiceDisplayName(inv)}</div>
                         <div className="text-xs text-muted-foreground">{inv.freelancerEmail}</div>
                       </TableCell>
                     )}
@@ -1293,7 +1307,7 @@ export function FreelancerInvoicesPage(
                               const isApproved = inv.status === 'approved'
                               const confirmMsg = isApproved
                                 ? t('fInvoice.deleteApprovedConfirm', {
-                                    name: inv.freelancerName || '',
+                                    name: invoiceDisplayName(inv),
                                     amount: formatKRW(inv.totalAmount),
                                   })
                                 : t('fInvoice.deleteConfirm')

@@ -13,7 +13,7 @@ import { formatCurrency } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useIncentivesByInstallment, type IncentiveType } from '@/hooks/useIncentives'
 import { useAllExtraInstallments } from '@/hooks/useExternalFees'
-import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, useDeleteInvoice, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
+import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, useDeleteInvoice, invoiceDisplayName, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
 import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote, RefreshCw, Download } from 'lucide-react'
@@ -409,7 +409,7 @@ export function FinanceDashboardPage() {
               <TableBody>
                 {pending.map(inv => (
                   <TableRow key={inv.id}>
-                    <TableCell className="text-sm font-medium">{inv.freelancerName || inv.freelancerEmail || '-'}</TableCell>
+                    <TableCell className="text-sm font-medium">{invoiceDisplayName(inv)}</TableCell>
                     <TableCell className="text-sm"><Badge variant="outline">{kindLabel(inv.kind)}</Badge></TableCell>
                     <TableCell className="text-sm tabular-nums">{inv.invoiceMonth}</TableCell>
                     <TableCell className="text-sm text-right font-semibold tabular-nums">
@@ -501,7 +501,7 @@ export function FinanceDashboardPage() {
               <TableBody>
                 {approvedList.map(inv => (
                   <TableRow key={inv.id} className={inv.paidDate ? 'bg-indigo-50/30' : ''}>
-                    <TableCell className="text-sm font-medium">{inv.freelancerName || inv.freelancerEmail || '-'}</TableCell>
+                    <TableCell className="text-sm font-medium">{invoiceDisplayName(inv)}</TableCell>
                     <TableCell className="text-sm"><Badge variant="outline">{kindLabel(inv.kind)}</Badge></TableCell>
                     <TableCell className="text-sm tabular-nums">{inv.invoiceMonth}</TableCell>
                     <TableCell className="text-sm text-right font-semibold tabular-nums">
@@ -789,7 +789,7 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
 
   const handleDelete = () => {
     if (!invoice) return
-    if (!confirm(`이 인보이스를 완전히 삭제할까요?\n제출자: ${invoice.freelancerName || '-'} · ${invoice.invoiceMonth} · ${formatCurrency(invoice.totalAmount)}\n(되돌릴 수 없습니다. 테스트·오입력 건 정리용)`)) return
+    if (!confirm(`이 인보이스를 완전히 삭제할까요?\n제출자: ${invoiceDisplayName(invoice)} · ${invoice.invoiceMonth} · ${formatCurrency(invoice.totalAmount)}\n(되돌릴 수 없습니다. 테스트·오입력 건 정리용)`)) return
     deleteInvoice.mutate(invoice.id, { onSuccess: onClose })
   }
 
@@ -825,7 +825,7 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
           <div className="space-y-4">
             {/* 헤더 정보 */}
             <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-muted-foreground">제출자</span><span className="font-medium">{invoice.freelancerName || invoice.freelancerEmail || '-'}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">제출자</span><span className="font-medium">{invoiceDisplayName(invoice)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">종류</span><span className="font-medium">{kindLabel(invoice.kind)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">정산월</span><span className="font-medium tabular-nums">{invoice.invoiceMonth}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">제출일</span><span className="font-medium tabular-nums">{invoice.invoiceDate}</span></div>
@@ -1213,7 +1213,7 @@ function CategoryBoard({ label, invoices, onSelect }: {
             {rows.map(inv => (
               <div key={inv.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{inv.freelancerName || inv.freelancerEmail || '-'}</div>
+                  <div className="text-sm font-medium truncate">{invoiceDisplayName(inv)}</div>
                   <div className="text-[11px] text-muted-foreground tabular-nums">
                     {inv.invoiceMonth}{inv.invoiceDate ? ` · 제출 ${inv.invoiceDate}` : ''}
                   </div>
