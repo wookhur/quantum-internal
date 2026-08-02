@@ -1145,22 +1145,20 @@ function ColdCallDetail({
   const statusOf = (seminarId: string, session: string): AttendanceStatus | '' =>
     attendance.find(a => a.seminarId === seminarId && a.sessionLabel === session)?.status || ''
   // 유입채널 드롭다운 옵션: 세미나관리와 동일한 시간역순(최신 진행 세미나 먼저)·동일한 이름.
-  // 리드가 신청한 세미나는 위치는 그대로 두고 ★ 로만 표시.
   const { data: orderedSeminars = [] } = useSeminars()
   const sourceOptions = useMemo(() => {
-    const registeredIds = new Set(appliedSeminars.map(x => x.seminar.id))
     const opts: { value: string; label: string }[] = []
     const seen = new Set<string>()
     for (const s of orderedSeminars) {   // useSeminars = 시간역순 정렬 완료
       if (!s.title || seen.has(s.title)) continue
       seen.add(s.title)
-      opts.push({ value: s.title, label: registeredIds.has(s.id) ? `★ ${s.title}` : s.title })
+      opts.push({ value: s.title, label: s.title })
     }
     if (lead.sourceChannel && !seen.has(lead.sourceChannel)) {
       opts.unshift({ value: lead.sourceChannel, label: lead.sourceChannel })
     }
     return opts
-  }, [orderedSeminars, appliedSeminars, lead.sourceChannel])
+  }, [orderedSeminars, lead.sourceChannel])
   const { data: activities = [], isLoading: activitiesLoading } = useLeadActivities(lead.id)
   const { data: profiles = [] } = useProfiles()
   const createActivity = useCreateActivity()
