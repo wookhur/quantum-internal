@@ -436,8 +436,8 @@ export function computeColdCallOutcome(
  * intentionally NOT used here — Korean homonyms produce false positives.
  */
 export function leadMatchesSeminar(lead: Lead, seminar: SeminarLite): boolean {
-  if (lead.sourceChannel === seminar.title) return true
-
+  // source_channel(유입경로) 문자열은 등록을 삭제해도 리드에 남으므로 매칭 기준에서 제외.
+  // 현재 등록(전화·이메일) 기준으로만 판정 → 등록 삭제 시 필터에서도 즉시 빠짐.
   const phone = normalizePhone(lead.phone)
   if (phone.length >= 9 && seminar.phones.has(phone)) return true
 
