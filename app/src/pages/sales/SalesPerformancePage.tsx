@@ -37,6 +37,8 @@ interface PerfRow {
   id: string
   month: string
   eventName: string
+  /** Actual event date "YYYY-MM-DD" for display next to the name. Null if unknown. */
+  eventDate: string | null
   /** For a session sub-row of a multi-session seminar; null otherwise. */
   sessionLabel: string | null
   applicants: number
@@ -52,6 +54,14 @@ interface PerfRow {
   auto: boolean
   source: SalesEvent | null
   seminar: SeminarLite | null
+}
+
+/** "2026-08-08" → "2026. 8. 8." (이벤트명 옆 표기용). */
+function fmtEventDate(iso: string | null): string {
+  if (!iso) return ''
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  if (!y || !m || !d) return ''
+  return `${y}. ${Number(m)}. ${Number(d)}.`
 }
 
 const INITIAL_EVENT_FORM = {
@@ -180,10 +190,17 @@ export function SalesPerformancePage() {
       const attendees = seminar && seminar.attendees > 0 ? seminar.attendees : e.attendees
       // 세미나가 연결돼 있으면 신청자 셀도 실제 등록자 수를 써서 드릴다운(등록자 명단)과 일치시킨다.
       const applicants = seminar ? seminar.applicants : e.applicants
+      // 이벤트 날짜: 연결 세미나의 date 컬럼 → 이름에 박힌 YYMMDD(예: 260228) → 없으면 월 1일
+      let eventDate: string | null = seminar?.date ? seminar.date.slice(0, 10) : null
+      if (!eventDate) {
+        const m = e.eventName.match(/(\d{6})/)
+        if (m) eventDate = `20${m[1].slice(0, 2)}-${m[1].slice(2, 4)}-${m[1].slice(4, 6)}`
+      }
       return {
         id: e.id,
         month: e.month,
         eventName: e.eventName,
+        eventDate,
         sessionLabel: null,
         applicants,
         plannedAttendees: 0,
@@ -223,10 +240,18 @@ export function SalesPerformancePage() {
           const outcome = computeColdCallOutcome(opts.matched, contactActivities, opts.applicants)
           const matchedMeetings = meetingsForLeads(allMeetings, opts.matched)
           const byMethod = (m: string) => matchedMeetings.filter(mt => mt.meetingMethod === m).length
+          // 이벤트 날짜: 세션행은 라벨의 M/D + 세미나 연도, 단일행은 세미나 date 컬럼.
+          const yr = (s.date || s.createdAt || `${month}-01`).slice(0, 4)
+          let eventDate: string | null = s.date ? s.date.slice(0, 10) : null
+          if (opts.sessionLabel) {
+            const md = opts.sessionLabel.match(/(\d{1,2})\s*\/\s*(\d{1,2})/)
+            if (md) eventDate = `${yr}-${String(md[1]).padStart(2, '0')}-${String(md[2]).padStart(2, '0')}`
+          }
           return {
             id: `seminar-${s.id}${opts.idSuffix}`,
             month,
             eventName: opts.eventName,
+            eventDate,
             sessionLabel: opts.sessionLabel,
             applicants: opts.applicants,
             plannedAttendees: opts.planned,
@@ -370,6 +395,7 @@ export function SalesPerformancePage() {
     }
     // 월 안에서는 세미나 날짜(YYMMDD) 오름차순, 같은 날짜면 이름순 (예: 260411 1부 → 2부 → 260424 제주)
     const dateKey = (r: PerfRow): string => {
+      if (r.eventDate) return r.eventDate
       if (r.seminar?.date) return r.seminar.date
       const m = r.eventName.match(/(\d{6})/)
       if (m) return `20${m[1].slice(0, 2)}-${m[1].slice(2, 4)}-${m[1].slice(4, 6)}`
@@ -519,6 +545,11 @@ export function SalesPerformancePage() {
                         <span className="inline-flex items-center gap-1.5">
                           {row.sessionLabel && <span className="text-muted-foreground">└</span>}
                           {row.eventName}
+                          {row.eventDate && (
+                            <span className="text-[11px] font-normal text-muted-foreground tabular-nums">
+                              ({fmtEventDate(row.eventDate)})
+                            </span>
+                          )}
                           {row.auto && (
                             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 gap-0.5" title={t('salesPerf.autoTooltip')}>
                               <Zap className="size-2.5" />

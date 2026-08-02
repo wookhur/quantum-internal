@@ -34,8 +34,29 @@ export function sessionSortKey(s: SeminarSession): number {
  * `date` column ("YYYY-MM-DD[ HH:mm]"). Undated seminars sort last.
  */
 export function seminarDateKey(s: Seminar): number {
+  // 세션 라벨("7/18")에는 연도가 없어 그대로 파싱하면 2000년으로 잡혀,
+  // 세션형 세미나(전공별 웨비나 등)가 단일날짜 세미나보다 아래로 가라앉는다.
+  // 세미나 자신의 연도(date 컬럼 → created_at)를 M/D에 붙여 올바른 시점으로 계산.
+  const yearOf = (iso?: string | null): number | undefined => {
+    const y = iso ? Number(iso.slice(0, 4)) : NaN
+    return y > 1900 ? y : undefined
+  }
+  const year = yearOf(s.date) ?? yearOf(s.createdAt)
   if (s.sessions.length) {
-    const keys = s.sessions.map(sessionSortKey).filter(k => k !== Number.MAX_SAFE_INTEGER)
+    const keys = s.sessions.map(ss => {
+      if (ss.datetime) {
+        const t = Date.parse(ss.datetime.replace(' ', 'T'))
+        if (!Number.isNaN(t)) return t
+      }
+      const md = ss.label.match(/(\d{1,2})\s*\/\s*(\d{1,2})/)
+      if (md && year) {
+        const mon = Number(md[1]), day = Number(md[2])
+        const tm = ss.label.match(/(\d{1,2}):(\d{2})/)
+        const hh = tm ? Number(tm[1]) : 0, mm = tm ? Number(tm[2]) : 0
+        return new Date(year, mon - 1, day, hh, mm).getTime()
+      }
+      return NaN
+    }).filter(k => !Number.isNaN(k))
     if (keys.length) return Math.max(...keys)
   }
   if (s.date) {

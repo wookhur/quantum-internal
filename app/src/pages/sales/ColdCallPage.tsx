@@ -51,7 +51,7 @@ import { useLeads, useLeadActivities, useCreateActivity, useUpdateLead, useDelet
 import { useProfiles } from '@/hooks/useProfiles'
 import { LEAD_LEVELS, leadLevelConfig, type LeadLevel } from '@/lib/leadLevels'
 import { useAllLeadAttendance, useUpsertLeadAttendance, ATTENDANCE_OPTIONS, type AttendanceStatus } from '@/hooks/useLeadAttendance'
-import { sessionSortKey } from '@/hooks/useSeminars'
+import { sessionSortKey, useSeminars } from '@/hooks/useSeminars'
 import {
   useSeminarsWithRegistrations,
   useAllContactActivities,
@@ -1144,17 +1144,14 @@ function ColdCallDetail({
     [seminars, lead])
   const statusOf = (seminarId: string, session: string): AttendanceStatus | '' =>
     attendance.find(a => a.seminarId === seminarId && a.sessionLabel === session)?.status || ''
-  // 유입채널 드롭다운 옵션: 세미나(진행일 빠른 순) + 현재 값. 리드가 신청한 세미나는 앞에 표시.
+  // 유입채널 드롭다운 옵션: 세미나관리와 동일한 시간역순(최신 진행 세미나 먼저)·동일한 이름.
+  // 리드가 신청한 세미나는 위치는 그대로 두고 ★ 로만 표시.
+  const { data: orderedSeminars = [] } = useSeminars()
   const sourceOptions = useMemo(() => {
     const registeredIds = new Set(appliedSeminars.map(x => x.seminar.id))
-    const sorted = [...seminars].sort((a, b) => {
-      const ra = registeredIds.has(a.id) ? 0 : 1, rb = registeredIds.has(b.id) ? 0 : 1
-      if (ra !== rb) return ra - rb          // registered seminars first
-      return (a.date || '').localeCompare(b.date || '') // then earliest date
-    })
     const opts: { value: string; label: string }[] = []
     const seen = new Set<string>()
-    for (const s of sorted) {
+    for (const s of orderedSeminars) {   // useSeminars = 시간역순 정렬 완료
       if (!s.title || seen.has(s.title)) continue
       seen.add(s.title)
       opts.push({ value: s.title, label: registeredIds.has(s.id) ? `★ ${s.title}` : s.title })
@@ -1163,7 +1160,7 @@ function ColdCallDetail({
       opts.unshift({ value: lead.sourceChannel, label: lead.sourceChannel })
     }
     return opts
-  }, [seminars, appliedSeminars, lead.sourceChannel])
+  }, [orderedSeminars, appliedSeminars, lead.sourceChannel])
   const { data: activities = [], isLoading: activitiesLoading } = useLeadActivities(lead.id)
   const { data: profiles = [] } = useProfiles()
   const createActivity = useCreateActivity()
