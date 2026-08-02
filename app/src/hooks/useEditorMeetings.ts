@@ -41,6 +41,21 @@ export function useEditorMeetings(studentId?: string) {
   })
 }
 
+/** 전체 학생의 에세이 에디터 미팅 (인보이스 청구 계산용) */
+export function useAllEditorMeetings() {
+  return useQuery({
+    queryKey: ['editor_meetings_all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('service_editor_meetings')
+        .select('*')
+        .order('meeting_date', { ascending: true })
+      if (error) throw error
+      return (data || []).map(mapRow)
+    },
+  })
+}
+
 export function useCreateEditorMeeting() {
   const qc = useQueryClient()
   return useMutation({

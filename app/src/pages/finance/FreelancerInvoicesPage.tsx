@@ -19,6 +19,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
+import { useAllEditorMeetings } from '@/hooks/useEditorMeetings'
 import { useConsultantName, canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
 import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
@@ -1079,6 +1080,8 @@ export function FreelancerInvoicesPage(
   const byConsultant = useConsultantBillable(issueMonth)
   const linesByPerson = useIncentiveLinesByPerson()
   const { data: essayPlans = [] } = useAllEssayPlans()
+  const { data: allEditorMeetings = [] } = useAllEditorMeetings()  // 에세이 에디터 미팅일지(전체)
+  const { data: allStudentsForEditor = [] } = useServiceStudents()
   // 관리자/회계는 다른 컨설턴트의 자동반영 화면을 그대로 미리볼 수 있음 (진단·검증용)
   const { data: previewProfiles = [] } = useProfiles()
   const isManager = isAccounting || user?.role === 'admin'
@@ -1137,8 +1140,39 @@ export function FreelancerInvoicesPage(
         return { id: `essay:${p.id}:${issueMonth}`, label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, amount: line.amount, received: false }
       })
       .filter((x): x is DItem => x !== null)
-    return [...mgmt, ...essay]
-  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, effectiveName])
+
+    // 에세이 에디터(이원화): 본인이 진행한 에디터 미팅을 학생별 2개씩 짝 → 2번째 미팅이 있는 달에 청구(관리비와 동일 정확방식/소급).
+    //   원서·에세이 플랜(÷12월)이 있는 학생은 제외 — 그건 별도 체계(컨설턴트+에디터 동일인 케이스)라 이중청구 방지.
+    const planStudentIds = new Set(essayPlans.map(p => p.studentId))
+    const editorDates = new Map<string, string[]>()
+    for (const m of allEditorMeetings) {
+      if (!m.meetingDate || planStudentIds.has(m.studentId)) continue
+      if (consultantNameKey(m.editor || '') !== myKey) continue
+      const arr = editorDates.get(m.studentId) || []
+      arr.push(m.meetingDate)
+      editorDates.set(m.studentId, arr)
+    }
+    const studentsById = new Map(allStudentsForEditor.map(s => [s.id, s]))
+    const editorLines: DItem[] = []
+    editorDates.forEach((dates, sid) => {
+      dates.sort()
+      let due = 0
+      for (let i = 1; i < dates.length; i += 2) if ((dates[i] || '').slice(0, 7) === issueMonth) due++
+      if (due < 1) return
+      const s = studentsById.get(sid)
+      const who = s ? studentLabel(s.name, s.koreanName) : '학생'
+      for (let k = 0; k < due; k++) {
+        editorLines.push({
+          id: due > 1 ? `editor:${sid}#${k + 1}` : `editor:${sid}`,
+          label: `${who} · 에세이에디터${due > 1 ? ` (${k + 1}/${due}개월분·소급)` : ''}`,
+          amount: 0,
+          received: false,
+        })
+      }
+    })
+
+    return [...mgmt, ...essay, ...editorLines]
+  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName])
 
   // 발행 대상 = 아직 수령완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({

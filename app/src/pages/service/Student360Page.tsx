@@ -159,7 +159,7 @@ function ecSalesFinal(select: string, custom: string): string | undefined {
   return select === '직접입력' ? (custom.trim() || undefined) : select
 }
 
-const ESSAY_EDITORS = ['Somee Park', 'Danny Kim', '한상범+양은영', 'John Kim', '남연서'] as const
+const ESSAY_EDITORS = ['Danny Kim', 'Soomee Park', '한상범+양은영'] as const
 
 // KPI dot color legend, expressed as % of KPI_MAX so it always matches kpiDotColor().
 const KPI_LEGEND = [
@@ -217,6 +217,7 @@ export function Student360Page() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [consultantFilter, setConsultantFilter] = useState('')
+  const [essayEditorFilter, setEssayEditorFilter] = useState('all')
   const [gradeFilter, setGradeFilter] = useState('all')
   const [showArchive, setShowArchive] = useState(false)
   const [pausedOnly, setPausedOnly] = useState(false)
@@ -271,6 +272,13 @@ export function Student360Page() {
 
   // Selected filter resolves to a canonical name so a pick of 남연서 (live UUID)
   // also matches legacy 'yeonse' rows and vice versa.
+  // 실제 배정된 에세이 에디터 목록(필터 드롭다운용)
+  const activeEditors = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of students) if (s.essayEditor) set.add(s.essayEditor)
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [students])
+
   const filterName = consultantFilter ? consultantName(consultantFilter) : ''
 
   // Archived = 서비스 완료(finished) / 서비스 취소(canceled). Archived students keep
@@ -291,6 +299,7 @@ export function Student360Page() {
       if (showArchive ? !isArchivedStatus(s.status) : isArchivedStatus(s.status)) return false
       if (pausedOnly && !s.paused) return false
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
+      if (essayEditorFilter !== 'all' && (s.essayEditor || '') !== essayEditorFilter) return false
       if (gradeFilter !== 'all' && gradeBucket(s.grade) !== gradeFilter) return false
       if (!q) return true
       return (
@@ -300,7 +309,7 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     }).sort(compareStudentsKo)
-  }, [students, search, filterName, consultantName, showArchive, gradeFilter, pausedOnly])
+  }, [students, search, filterName, consultantName, showArchive, gradeFilter, essayEditorFilter, pausedOnly])
 
   const selected = students.find(s => s.id === selectedId) || null
   const statusLabel = (status?: string) => {
@@ -350,6 +359,15 @@ export function Student360Page() {
               {activeConsultants.map(c => (
                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={essayEditorFilter} onValueChange={v => setEssayEditorFilter(v ?? 'all')}>
+            <SelectTrigger className="flex-1">
+              <span className="truncate">{essayEditorFilter === 'all' ? '전체 에세이에디터' : essayEditorFilter}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 에세이에디터</SelectItem>
+              {activeEditors.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={gradeFilter} onValueChange={v => setGradeFilter(v ?? 'all')}>
