@@ -70,7 +70,7 @@ import type {
   ServiceReportCategory, ContractDetails,
 } from '@/types'
 import { formatCurrency } from '@/types'
-import { useProfiles, canManageServiceFinance } from '@/hooks/useProfiles'
+import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 
 // Consultant pool + helpers (shared with KPI page)
@@ -1110,10 +1110,10 @@ function ECServicesSection({ studentId, createdBy, canEdit }: { studentId: strin
 }
 
 // ── 환불신청 알림 (재무담당자에게) ──
-const ACCOUNTING_EMAIL = 'accounting@quantumadmissions.com'
-function financeRecipientIds(profiles: { id: string; email?: string; role?: string }[]): string[] {
+function financeRecipientIds(profiles: { id: string; email?: string; role?: string; isAccount?: boolean }[]): string[] {
+  // 환불 등 재무 알림 수신자 = 재무(account) 권한자
   const ids = profiles
-    .filter(p => (p.email || '').toLowerCase() === ACCOUNTING_EMAIL || canManageServiceFinance(p))
+    .filter(p => canAccessAccount(p))
     .map(p => p.id)
   return [...new Set(ids)]
 }

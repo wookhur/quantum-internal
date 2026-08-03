@@ -23,9 +23,9 @@ import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceive
 import { useAllClawbacks, useSetClawbackStatus, useDeleteClawback } from '@/hooks/useClawbacks'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
+import { canAccessAccount } from '@/hooks/useProfiles'
 import { AlertTriangle } from 'lucide-react'
 
-const ACCOUNTING_EMAIL = 'accounting@quantumadmissions.com'
 
 // Freelancer commission types (partner/freelancer)
 const FREELANCER_TYPES: IncentiveType[] = ['partner_sales', 'partner_fee']
@@ -71,7 +71,7 @@ function groupByPerson(
 export function FinanceDashboardPage() {
   const t = useT()
   const { user } = useAuth()
-  const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
+  const isAccounting = canAccessAccount(user)
   const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
   const allowed = isAccounting || isAdmin
 
@@ -778,7 +778,7 @@ export function FinanceDashboardPage() {
 // ─── Invoice detail popup (제출된 인보이스 내역) ─────────────────────────────
 function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice | null; onClose: () => void }) {
   const { user } = useAuth()
-  const canManage = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL || user?.role === 'admin'
+  const canManage = canAccessAccount(user)
   const { data: items = [], isLoading } = useInvoiceItems(invoice?.id)
   const updateStatus = useUpdateInvoiceStatus()
   const setPaid = useSetInvoicePaidDate()

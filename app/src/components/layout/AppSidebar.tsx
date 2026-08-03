@@ -46,7 +46,7 @@ import {
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
-import { useFeatureAccess, getEffectiveRoutes, getEffectiveModules, type FeatureModule } from '@/hooks/useProfiles'
+import { useFeatureAccess, getEffectiveRoutes, getEffectiveModules, canAccessAccount, type FeatureModule } from '@/hooks/useProfiles'
 import { useHiddenBoards } from '@/hooks/useHiddenBoards'
 import { useLanguage } from '@/i18n/LanguageContext'
 import type { TranslationKeys } from '@/i18n/translations'
@@ -225,9 +225,8 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
               <SidebarMenu>
                 {section.items.map((item) => {
                   if (hiddenBoards.has(item.to)) return null // 전사 숨김
-                  // 재무 대시보드는 재무담당(회계) 또는 관리자에게만 노출
-                  if (item.to === '/finance/dashboard' &&
-                      !(user?.role === 'admin' || user?.role === 'c_level' || (user?.email || '').toLowerCase() === 'accounting@quantumadmissions.com')) return null
+                  // 재무 대시보드는 account(재무) 권한자만 노출 (admin이라도 account 없으면 숨김)
+                  if (item.to === '/finance/dashboard' && !canAccessAccount(user)) return null
                   const active = isActive(item.to)
                   const Icon = item.icon
                   const hasAccess = enabledRoutes.includes(item.to)

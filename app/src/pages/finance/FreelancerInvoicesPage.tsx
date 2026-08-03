@@ -26,7 +26,7 @@ import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
 import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
-import { useProfiles } from '@/hooks/useProfiles'
+import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
 import {
   useFreelancerInvoices,
@@ -675,7 +675,7 @@ function InvoiceDetailDialog({
   const { data: items = [] } = useInvoiceItems(invoice.id)
   const updateStatus = useUpdateInvoiceStatus()
   const deleteInvoice = useDeleteInvoice()
-  const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
+  const isAccounting = canAccessAccount(user)
   const canDelete = isAccounting || (invoice.freelancerId === user?.id && invoice.status !== 'approved')
   const [downloading, setDownloading] = useState(false)
 
@@ -894,7 +894,6 @@ function studentLabel(name?: string, koreanName?: string): string {
 
 // ─── Shared: accounting access + billable students ─────────────────────────
 
-const ACCOUNTING_EMAIL = 'accounting@quantumadmissions.com'
 
 export interface BillableStudent { id: string; label: string; done: number; billable: boolean; billableMonths: number; pairs: [string, string][] }
 
@@ -1022,7 +1021,7 @@ export function FreelancerInvoicesPage(
   const t = useT()
   const canEdit = useCanEdit(useLocation().pathname)
   const { user } = useAuth()
-  const isAccounting = (user?.email || '').toLowerCase() === ACCOUNTING_EMAIL
+  const isAccounting = canAccessAccount(user)
   const isIncentive = kind === 'sales_incentive'
   const isPartner = kind === 'partner'
   // Distinct storage kind so each list is separate (e.g. 'freelancer_business')

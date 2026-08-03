@@ -25,6 +25,7 @@ function mapProfile(row: Record<string, unknown>): User {
     canApproveOrders: (row.can_approve_orders as boolean) || false,
     canApproveLeave: (row.can_approve_leave as boolean) || false,
     canEditAttendance: (row.can_edit_attendance as boolean) || false,
+    isAccount: (row.is_account as boolean) || false,
     workerType: (row.worker_type as WorkerType) || undefined,
     avatarUrl: (row.avatar_url as string) || undefined,
     createdAt: row.created_at as string,
@@ -228,6 +229,20 @@ export function canManageServiceFinance(user: { role?: string; email?: string } 
   return user.role === 'admin'
 }
 
+/** 재무(account) 화면 접근 권한 — admin과 독립. 재정대시보드·인보이스 승인/수령 게이팅에 사용.
+ *  account 등급 · is_account 플래그 · (호환)회계 공용 이메일 중 하나면 허용. */
+export function canAccessAccount(
+  user: { role?: string; email?: string; isAccount?: boolean } | null | undefined,
+): boolean {
+  if (!user) return false
+  return user.role === 'account'
+    || user.isAccount === true
+    || (user.email || '').toLowerCase() === 'accounting@quantumadmissions.com'
+}
+
+/** 재무 권한자만 열람 가능한 라우트(재정대시보드). admin이라도 account 없으면 차단. */
+export const ACCOUNT_ONLY_ROUTES: string[] = ['/finance/dashboard']
+
 /** 파트너 게시판 3종 — 서비스팀(department='service') 소속에게 열람 허용 */
 export const PARTNER_BOARD_ROUTES: string[] = ['/partner/students', '/partner/companies', '/partner/contracts']
 
@@ -248,6 +263,8 @@ function expandModulesToRoutes(modules: FeatureModule[]): string[] {
 export const ROLE_DEFAULT_ACCESS: Record<UserRole, FeatureModule[]> = {
   admin: ['dashboard', 'sales', 'marketing', 'finance', 'invoice', 'service', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
   c_level: ['dashboard', 'sales', 'marketing', 'finance', 'invoice', 'service', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
+  // 재무 전담: 재정·인보이스 중심 (영업/기획/인사 등 비재무 화면 제외)
+  account: ['dashboard', 'finance', 'invoice', 'game', 'my_incentive'],
   sales_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'invoice', 'planning', 'hr', 'partner', 'game', 'my_incentive'],
   service_manager: ['dashboard', 'sales', 'marketing', 'service', 'finance', 'hr', 'game'],
   marketing_manager: ['dashboard', 'marketing', 'game'],
@@ -333,31 +350,37 @@ export function getEffectiveRoutes(
   user: User,
   featureAccessRecords: FeatureAccessRecord[],
 ): string[] {
-  // Admin always has full access to every defined route
-  if (user.role === 'admin') {
-    return NAV_ROUTE_DEFS.map(r => r.path)
-  }
+  // Admin: 모든 라우트. (단, 아래 재정대시보드 필터는 admin에게도 적용됨)
+  const isAdmin = user.role === 'admin'
   let routes: string[]
-  const custom = featureAccessRecords.find(r => r.userId === user.id)
-  if (custom) {
-    // enabledRoutes(있으면)는 게시판별로 명시 저장된 권위 있는 목록이다.
-    // 모듈 확장과 병합하면 '없음'으로 끈 게시판이 모듈 확장으로 되살아나므로(뷰어로 복원되는 버그)
-    // 병합하지 않고 enabledRoutes를 그대로 사용한다. (없을 때만 모듈 확장으로 폴백)
-    if (custom.enabledRoutes.length > 0) {
-      routes = custom.enabledRoutes
-    } else {
-      routes = expandModulesToRoutes(custom.enabledModules)
-    }
+  if (isAdmin) {
+    routes = NAV_ROUTE_DEFS.map(r => r.path)
   } else {
-    // Role defaults
-    const defaultModules = ROLE_DEFAULT_ACCESS[user.role] || ROLE_DEFAULT_ACCESS.external
-    routes = expandModulesToRoutes(defaultModules)
+    const custom = featureAccessRecords.find(r => r.userId === user.id)
+    if (custom) {
+      // enabledRoutes(있으면)는 게시판별로 명시 저장된 권위 있는 목록이다.
+      // 모듈 확장과 병합하면 '없음'으로 끈 게시판이 모듈 확장으로 되살아나므로(뷰어로 복원되는 버그)
+      // 병합하지 않고 enabledRoutes를 그대로 사용한다. (없을 때만 모듈 확장으로 폴백)
+      if (custom.enabledRoutes.length > 0) {
+        routes = custom.enabledRoutes
+      } else {
+        routes = expandModulesToRoutes(custom.enabledModules)
+      }
+    } else {
+      // Role defaults
+      const defaultModules = ROLE_DEFAULT_ACCESS[user.role] || ROLE_DEFAULT_ACCESS.external
+      routes = expandModulesToRoutes(defaultModules)
+    }
   }
   // Non-admin users are always blocked from admin-only routes
-  let result = routes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
+  let result = isAdmin ? routes : routes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
   // 서비스입금관리는 재무 권한자(대표·부대표·재무이사)만 열람
   if (!canManageServiceFinance(user)) {
     result = result.filter(r => !SERVICE_FINANCE_ROUTES.includes(r))
+  }
+  // 재정대시보드는 account(재무) 권한자만 — admin이라도 account 없으면 제외
+  if (!canAccessAccount(user)) {
+    result = result.filter(r => !ACCOUNT_ONLY_ROUTES.includes(r))
   }
   // 서비스팀(department='service') 소속은 파트너 게시판 3종을 열람
   if (user.department === 'service') {
@@ -385,7 +408,11 @@ export function getEffectiveEditRoutes(
   user: User,
   featureAccessRecords: FeatureAccessRecord[],
 ): string[] {
-  if (user.role === 'admin') return NAV_ROUTE_DEFS.map(r => r.path)
+  if (user.role === 'admin') {
+    // 재정대시보드는 account 없으면 편집도 불가(열람과 동일 기준)
+    const all = NAV_ROUTE_DEFS.map(r => r.path)
+    return canAccessAccount(user) ? all : all.filter(r => !ACCOUNT_ONLY_ROUTES.includes(r))
+  }
   const viewable = getEffectiveRoutes(user, featureAccessRecords)
   const custom = featureAccessRecords.find(r => r.userId === user.id)
   if (custom && custom.editRoutes !== undefined) {

@@ -32,6 +32,7 @@ import type { User, UserRole, Department, EmploymentType } from '@/types'
 const ROLE_CONFIG: Record<UserRole, { label: string; className: string; icon: typeof Shield }> = {
   admin: { label: 'Admin', className: 'bg-red-50 text-red-700 border-red-200', icon: Shield },
   c_level: { label: 'C-Level', className: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: ShieldCheck },
+  account: { label: 'Account (재무)', className: 'bg-amber-50 text-amber-700 border-amber-200', icon: ShieldCheck },
   sales_manager: { label: 'Sales Mgr', className: 'bg-blue-50 text-blue-700 border-blue-200', icon: Users },
   service_manager: { label: 'Service Mgr', className: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: Users },
   marketing_manager: { label: 'Marketing Mgr', className: 'bg-purple-50 text-purple-700 border-purple-200', icon: Users },
@@ -56,6 +57,7 @@ function useRoleOptions() {
   return [
     { value: 'admin' as UserRole, label: `Admin (${t('access.roleAdmin')})` },
     { value: 'c_level' as UserRole, label: `C-Level (${t('access.roleCLevel')})` },
+    { value: 'account' as UserRole, label: 'Account (재무)' },
     { value: 'sales_manager' as UserRole, label: `Sales Mgr (${t('access.roleSalesManager')})` },
     { value: 'service_manager' as UserRole, label: `Service Mgr (${t('access.roleServiceManager')})` },
     { value: 'marketing_manager' as UserRole, label: `Marketing Mgr (${t('access.roleMarketingManager')})` },

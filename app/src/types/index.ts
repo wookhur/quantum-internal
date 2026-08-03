@@ -1,5 +1,5 @@
 // ============ USER & AUTH ============
-export type UserRole = 'admin' | 'c_level' | 'sales_manager' | 'service_manager' | 'marketing_manager' | 'consultant' | 'freelancer' | 'external'
+export type UserRole = 'admin' | 'c_level' | 'account' | 'sales_manager' | 'service_manager' | 'marketing_manager' | 'consultant' | 'freelancer' | 'external'
 export type Department = 'management' | 'sales' | 'marketing' | 'finance' | 'service'
 export type EmploymentType = 'permanent' | 'contract' | 'intern' | 'dispatch' | 'daily' | 'freelancer' | 'commissioned' | 'executive'
 export type WorkerType = 'employee' | 'freelancer' | 'business'
@@ -23,6 +23,7 @@ export interface User {
   canApproveOrders?: boolean  // 쿠팡 주문 '주문승인' 권한
   canApproveLeave?: boolean   // '연차·휴가 승인' 권한
   canEditAttendance?: boolean // '근태관리 수정' 권한 (지정된 사용자만)
+  isAccount?: boolean         // 재무(account) 화면 접근 권한 — admin과 독립적으로 부여
   avatarUrl?: string
   createdAt: string
 }
