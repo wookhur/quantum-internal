@@ -11,6 +11,7 @@ import { useAllServiceMeetings, useAllServiceDiaryInRange } from '@/hooks/useSer
 import { useServiceFollowupsForDiaries } from '@/hooks/useServiceFollowups'
 import { useContracts } from '@/hooks/useContracts'
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
+import { studentPickerLabel } from '@/lib/studentDisplay'
 
 const OTHER_ID = '__other__'
 
@@ -56,6 +57,16 @@ export function WeeklyReportPage() {
 
   const { data: students = [] } = useServiceStudents()
   const activeStudents = useMemo(() => students.filter(s => !isArchivedStatus(s.status)), [students])
+  // 학생 표시명: 한글+영문 병기 (예: "김은서 Amy Kim"). id 우선, 없으면 이름으로 한글명 해소.
+  const studentKo = useMemo(() => {
+    const byId = new Map<string, string>(), byName = new Map<string, string>()
+    for (const s of students) if (s.koreanName) { byId.set(s.id, s.koreanName); if (s.name) byName.set(s.name, s.koreanName) }
+    return { byId, byName }
+  }, [students])
+  const dispStudent = (name?: string, id?: string): string => {
+    const ko = (id ? studentKo.byId.get(id) : undefined) || (name ? studentKo.byName.get(name) : undefined)
+    return studentPickerLabel({ name: name || '—', koreanName: ko })
+  }
   const { data: meetings = [] } = useAllServiceMeetings(start, end)
   const { data: diaries = [] } = useAllServiceDiaryInRange(start, end)
   const { data: contracts = [] } = useContracts()
@@ -115,7 +126,7 @@ export function WeeklyReportPage() {
   const criticalIssues = useMemo(
     () => diaries
       .filter(d => (d.criticalIssue || '').trim().length > 0)
-      .map(d => ({ date: d.entryDate || '', student: d.studentName, consultant: consultantName(d.studentConsultant), text: (d.criticalIssue || '').trim() })),
+      .map(d => ({ date: d.entryDate || '', student: d.studentName, studentId: d.studentId, consultant: consultantName(d.studentConsultant), text: (d.criticalIssue || '').trim() })),
     [diaries],
   )
 
@@ -145,6 +156,7 @@ export function WeeklyReportPage() {
           date: d.entryDate || '',
           consultant: consultantName(d.studentConsultant),
           student: d.studentName,
+          studentId: d.studentId,
           items,
         }]
       })
@@ -290,8 +302,8 @@ export function WeeklyReportPage() {
             </thead>
             <tbody className="text-right">
               {rows.map(r => {
-                const cancelMemo = r.cancelDetails.filter(c => !c.reason.startsWith('노쇼')).map(c => `${c.student} · ${c.reason}`).join('\n')
-                const noShowMemo = r.cancelDetails.filter(c => c.reason.startsWith('노쇼')).map(c => `${c.student} · ${c.reason}`).join('\n')
+                const cancelMemo = r.cancelDetails.filter(c => !c.reason.startsWith('노쇼')).map(c => `${dispStudent(c.student)} · ${c.reason}`).join('\n')
+                const noShowMemo = r.cancelDetails.filter(c => c.reason.startsWith('노쇼')).map(c => `${dispStudent(c.student)} · ${c.reason}`).join('\n')
                 return (
                   <tr key={r.id} className="border-t">
                     <td className="text-left p-2 pl-3">{r.name}</td>
@@ -369,7 +381,7 @@ export function WeeklyReportPage() {
             <ul className="space-y-2">
               {criticalIssues.map((c, i) => (
                 <li key={i} className="text-sm border-l-2 border-red-300 pl-2.5">
-                  <div className="text-[11px] text-gray-400">{c.date} · {c.consultant} · {c.student}</div>
+                  <div className="text-[11px] text-gray-400">{c.date} · {c.consultant} · {dispStudent(c.student, c.studentId)}</div>
                   <div className="text-gray-700 whitespace-pre-wrap">{c.text}</div>
                 </li>
               ))}
@@ -389,7 +401,7 @@ export function WeeklyReportPage() {
             <ul className="space-y-2">
               {followupNotes.map((f, i) => (
                 <li key={i} className="text-sm border-l-2 border-amber-300 pl-2.5">
-                  <div className="text-[11px] text-gray-400">{f.date} · {f.consultant} · {f.student}</div>
+                  <div className="text-[11px] text-gray-400">{f.date} · {f.consultant} · {dispStudent(f.student, f.studentId)}</div>
                   <div className="space-y-0.5">
                     {f.items.map((it, j) => (
                       <div key={j} className="text-gray-700 whitespace-pre-wrap">
@@ -424,7 +436,7 @@ export function WeeklyReportPage() {
                 {detail.students.map(s => (
                   <button key={s.id} onClick={() => goStudent(s.id)}
                     className="w-full flex items-center justify-between py-2 px-1 hover:bg-muted/50 rounded text-left">
-                    <span className="text-sm font-medium">{s.name}</span>
+                    <span className="text-sm font-medium">{dispStudent(s.name, s.id)}</span>
                     <ChevronRight className="size-4 text-muted-foreground" />
                   </button>
                 ))}
@@ -438,7 +450,7 @@ export function WeeklyReportPage() {
                   <div key={`${f.studentId}-${i}`} className="rounded-lg border p-2.5">
                     <button onClick={() => goStudent(f.studentId)}
                       className="text-sm font-medium hover:underline hover:text-primary flex items-center gap-1">
-                      {f.student} <ChevronRight className="size-3.5 text-muted-foreground" />
+                      {dispStudent(f.student, f.studentId)} <ChevronRight className="size-3.5 text-muted-foreground" />
                     </button>
                     <div className="mt-1 space-y-0.5">
                       {f.items.map((it, j) => (
