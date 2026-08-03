@@ -71,6 +71,7 @@ export function useUpdateProfile() {
       canApproveOrders?: boolean
       canApproveLeave?: boolean
       canEditAttendance?: boolean
+      isAccount?: boolean
     }) => {
       const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (updates.role !== undefined) row.role = updates.role
@@ -93,6 +94,7 @@ export function useUpdateProfile() {
       if (updates.canApproveOrders !== undefined) row.can_approve_orders = updates.canApproveOrders
       if (updates.canApproveLeave !== undefined) row.can_approve_leave = updates.canApproveLeave
       if (updates.canEditAttendance !== undefined) row.can_edit_attendance = updates.canEditAttendance
+      if (updates.isAccount !== undefined) row.is_account = updates.isAccount
 
       const { data, error } = await supabase
         .from('profiles')

@@ -121,6 +121,7 @@ function UserEditDialog({
   const [canApproveOrders, setCanApproveOrders] = useState(user.canApproveOrders || false)
   const [canApproveLeave, setCanApproveLeave] = useState(user.canApproveLeave || false)
   const [canEditAttendance, setCanEditAttendance] = useState(user.canEditAttendance || false)
+  const [isAccount, setIsAccount] = useState(user.isAccount || false)
   const [enabledModules, setEnabledModules] = useState<FeatureModule[]>(effectiveModules)
   const [enabledRoutes, setEnabledRoutes] = useState<string[]>(effectiveRoutes)
   // 편집(수정) 허용 라우트. 열람(enabledRoutes) 중 편집까지 가능한 게시판.
@@ -225,6 +226,7 @@ function UserEditDialog({
         canApproveOrders,
         canApproveLeave,
         canEditAttendance,
+        isAccount,
       })
 
       if (useCustomAccess) {
@@ -262,7 +264,7 @@ function UserEditDialog({
     } finally {
       setSaving(false)
     }
-  }, [user.id, displayName, role, department, position, employmentTypes, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, canEditAttendance, useCustomAccess, enabledModules, enabledRoutes, editRoutes, updateProfile, updateFeatureAccess, onOpenChange])
+  }, [user.id, displayName, role, department, position, employmentTypes, contractStartDate, contractEndDate, hireDate, isExternal, isPartner, canApproveOrders, canApproveLeave, canEditAttendance, isAccount, useCustomAccess, enabledModules, enabledRoutes, editRoutes, updateProfile, updateFeatureAccess, onOpenChange])
 
   const selectedRoleLabel = ROLE_OPTIONS.find(o => o.value === role)?.label || role
   const selectedDeptLabel = department === '_none' || !department
@@ -599,6 +601,20 @@ function UserEditDialog({
                       </div>
                     </div>
                     <Switch checked={canEditAttendance} onCheckedChange={setCanEditAttendance} />
+                  </div>
+                </div>
+                <div className="rounded-lg border overflow-hidden">
+                  <div className="flex items-center justify-between p-2.5 bg-white">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${isAccount ? 'bg-amber-500' : 'bg-gray-300'}`} />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium">재무(account) 접근 권한</div>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          admin과 별개로, 재정대시보드·인보이스 승인/수령을 볼 수 있는 권한 (Account 등급이면 자동 포함)
+                        </div>
+                      </div>
+                    </div>
+                    <Switch checked={isAccount} onCheckedChange={setIsAccount} />
                   </div>
                 </div>
               </div>
