@@ -117,7 +117,8 @@ function formatRelativeTime(dateStr: string): string {
 
 function isOverdue(task: Task): boolean {
   if (!task.dueDate) return false
-  if (task.status === 'completed' || task.status === 'cancelled') return false
+  // 완료·취소·보류는 기한초과 대상이 아님(보류는 사유 달고 의도적으로 멈춘 건)
+  if (task.status === 'completed' || task.status === 'cancelled' || task.status === 'on_hold') return false
   return task.dueDate < new Date().toISOString().slice(0, 10)
 }
 
@@ -1293,7 +1294,8 @@ export function TaskBoardPage() {
               <CardContent className="py-3 px-4">
                 <div className="text-xs text-muted-foreground">{t('tasks.myAssigned')}</div>
                 <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-bold">{stats.assigned.total - stats.assigned.completed}</span>
+                  {/* 미완료 = 요청됨 + 진행중만. 보류·취소는 제외(사유 달고 별도 관리되는 건) */}
+                  <span className="text-2xl font-bold">{stats.assigned.requested + stats.assigned.inProgress}</span>
                   <span className="text-xs text-muted-foreground">{t('tasks.pending')}</span>
                 </div>
               </CardContent>
@@ -1303,7 +1305,8 @@ export function TaskBoardPage() {
               <CardContent className="py-3 px-4">
                 <div className="text-xs text-muted-foreground">{t('tasks.myRequested')}</div>
                 <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-bold">{stats.requested.total - stats.requested.completed}</span>
+                  {/* 미완료 = 요청됨 + 진행중만. 보류·취소 제외 */}
+                  <span className="text-2xl font-bold">{stats.requested.requested + stats.requested.inProgress}</span>
                   <span className="text-xs text-muted-foreground">{t('tasks.inProgressLabel')}</span>
                 </div>
               </CardContent>
