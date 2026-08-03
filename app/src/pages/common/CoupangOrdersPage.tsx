@@ -7,11 +7,12 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, Package, ExternalLink, Loader2, Trash2, CalendarClock } from 'lucide-react'
+import { Plus, Package, ExternalLink, Loader2, Trash2, CalendarClock, Pencil } from 'lucide-react'
 import {
   useCoupangOrders,
   useCreateCoupangOrder,
   useUpdateCoupangOrder,
+  useEditCoupangOrder,
   useDeleteCoupangOrder,
   ORDER_CATEGORIES,
   ORDER_CATEGORY_LABELS,
@@ -44,10 +45,12 @@ export function CoupangOrdersPage() {
   const { data: profiles = [] } = useProfiles()
   const createOrder = useCreateCoupangOrder()
   const updateOrder = useUpdateCoupangOrder()
+  const editOrder = useEditCoupangOrder()
   const deleteOrder = useDeleteCoupangOrder()
 
   const [tab, setTab] = useState<Tab>('all')
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({
     paymentApproverRole: '' as '' | PaymentApproverRole,
     productName: '',
@@ -82,42 +85,92 @@ export function CoupangOrdersPage() {
 
   function resetForm() {
     setForm({ paymentApproverRole: '', productName: '', productUrl: '', quantity: '1', estimatedPrice: '', category: 'office', neededBy: '', reason: '' })
+    setEditingId(null)
   }
 
-  const canSubmit = !!form.productName.trim() && !!form.productUrl.trim() && !!form.paymentApproverRole && !createOrder.isPending
+  // URL은 선택 입력 — 상품명 + 결제요청자만 있으면 제출 가능
+  const canSubmit = !!form.productName.trim() && !!form.paymentApproverRole && !createOrder.isPending && !editOrder.isPending
+
+  function startEdit(order: CoupangOrder) {
+    setForm({
+      paymentApproverRole: order.paymentApproverRole || '',
+      productName: order.productName,
+      productUrl: order.productUrl || '',
+      quantity: String(order.quantity || 1),
+      estimatedPrice: order.estimatedPrice ? String(order.estimatedPrice) : '',
+      category: order.category,
+      neededBy: order.neededBy || '',
+      reason: order.reason || '',
+    })
+    setEditingId(order.id)
+    setShowForm(true)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!user || !canSubmit) return
-    await createOrder.mutateAsync({
-      requesterId: user.id,
-      requesterName: user.name,
-      productName: form.productName.trim(),
-      productUrl: form.productUrl.trim() || undefined,
-      quantity: Number(form.quantity) || 1,
-      estimatedPrice: Number(form.estimatedPrice) || undefined,
-      category: form.category,
-      reason: form.reason.trim() || undefined,
-      neededBy: form.neededBy || undefined,
-      paymentApproverRole: (form.paymentApproverRole || undefined) as PaymentApproverRole | undefined,
-      paymentApproverId: approverIdFor(form.paymentApproverRole),
-    })
-    resetForm()
-    setShowForm(false)
+    try {
+      if (editingId) {
+        await editOrder.mutateAsync({
+          id: editingId,
+          productName: form.productName.trim(),
+          productUrl: form.productUrl.trim() || undefined,
+          quantity: Number(form.quantity) || 1,
+          estimatedPrice: Number(form.estimatedPrice) || undefined,
+          category: form.category,
+          reason: form.reason.trim() || undefined,
+          neededBy: form.neededBy || undefined,
+          paymentApproverRole: (form.paymentApproverRole || undefined) as PaymentApproverRole | undefined,
+          paymentApproverId: approverIdFor(form.paymentApproverRole),
+        })
+      } else {
+        await createOrder.mutateAsync({
+          requesterId: user.id,
+          requesterName: user.name,
+          productName: form.productName.trim(),
+          productUrl: form.productUrl.trim() || undefined,
+          quantity: Number(form.quantity) || 1,
+          estimatedPrice: Number(form.estimatedPrice) || undefined,
+          category: form.category,
+          reason: form.reason.trim() || undefined,
+          neededBy: form.neededBy || undefined,
+          paymentApproverRole: (form.paymentApproverRole || undefined) as PaymentApproverRole | undefined,
+          paymentApproverId: approverIdFor(form.paymentApproverRole),
+        })
+      }
+      resetForm()
+      setShowForm(false)
+    } catch (err) {
+      console.error('주문요청 저장 실패:', err)
+      const e2 = err as { message?: string } | null
+      alert(`주문요청 저장에 실패했습니다.\n\n${e2?.message || err}\n\n잠시 후 다시 시도해 주세요.`)
+    }
   }
 
   async function handleStatusChange(order: CoupangOrder, status: OrderStatus) {
-    await updateOrder.mutateAsync({
-      id: order.id,
-      status,
-      actorId: user?.id,
-      requesterId: order.requesterId,
-      productName: order.productName,
-    })
+    try {
+      await updateOrder.mutateAsync({
+        id: order.id,
+        status,
+        actorId: user?.id,
+        requesterId: order.requesterId,
+        productName: order.productName,
+      })
+    } catch (err) {
+      console.error('상태 변경 실패:', err)
+      alert('상태 변경에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+    }
   }
 
   async function handleDelete(id: string) {
-    await deleteOrder.mutateAsync(id)
+    if (!confirm('이 주문요청을 삭제하시겠습니까? 되돌릴 수 없습니다.')) return
+    try {
+      await deleteOrder.mutateAsync(id)
+    } catch (err) {
+      console.error('삭제 실패:', err)
+      const e2 = err as { message?: string } | null
+      alert(`삭제에 실패했습니다.\n\n${e2?.message || err}`)
+    }
   }
 
   if (isLoading) {
@@ -170,6 +223,7 @@ export function CoupangOrdersPage() {
               isOwner={order.requesterId === user?.id}
               onStatusChange={handleStatusChange}
               onDelete={handleDelete}
+              onEdit={startEdit}
             />
           ))}
         </div>
@@ -179,7 +233,7 @@ export function CoupangOrdersPage() {
       <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) resetForm() }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('coupang.title')}</DialogTitle>
+            <DialogTitle>{editingId ? '주문요청 수정' : t('coupang.title')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* 결제요청자 (맨 위) */}
@@ -203,8 +257,8 @@ export function CoupangOrdersPage() {
               <Input value={form.productName} onChange={(e) => setForm({ ...form, productName: e.target.value })} />
             </div>
             <div>
-              <Label>{t('coupang.productUrl')} <span className="text-red-500">*</span></Label>
-              <Input value={form.productUrl} onChange={(e) => setForm({ ...form, productUrl: e.target.value })} placeholder="https://" />
+              <Label>{t('coupang.productUrl')}</Label>
+              <Input value={form.productUrl} onChange={(e) => setForm({ ...form, productUrl: e.target.value })} placeholder="https:// (선택)" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -250,8 +304,8 @@ export function CoupangOrdersPage() {
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
               <Button type="submit" disabled={!canSubmit}>
-                {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                {t('coupang.submit')}
+                {(createOrder.isPending || editOrder.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                {editingId ? '수정 저장' : t('coupang.submit')}
               </Button>
             </div>
           </form>
@@ -267,12 +321,14 @@ function OrderCard({
   isOwner,
   onStatusChange,
   onDelete,
+  onEdit,
 }: {
   order: CoupangOrder
   isApprover: boolean
   isOwner: boolean
   onStatusChange: (o: CoupangOrder, s: OrderStatus) => void
   onDelete: (id: string) => void
+  onEdit: (o: CoupangOrder) => void
 }) {
   const t = useT()
   const statusCfg = ORDER_STATUS_CONFIG[order.status]
@@ -357,9 +413,14 @@ function OrderCard({
             </Button>
           )}
           {(isApprover || (isOwner && order.status === 'requested')) && (
-            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => onDelete(order.id)}>
-              <Trash2 className="h-3 w-3" />
-            </Button>
+            <>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onEdit(order)}>
+                <Pencil className="h-3 w-3 mr-0.5" /> {t('common.edit')}
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => onDelete(order.id)}>
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </>
           )}
         </div>
       </CardContent>

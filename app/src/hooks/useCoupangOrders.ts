@@ -150,19 +150,58 @@ export function useCreateCoupangOrder() {
       })
       if (error) throw error
 
-      // Notify the selected 결제요청자 (세일즈이사/재무이사); fall back to all approvers
-      const approverIds = await fetchApproverIds()
-      const targets = order.paymentApproverId
-        ? [order.paymentApproverId]
-        : (approverIds.length > 0 ? approverIds : [KWAK_JISOO_ID])
-      const urgentTag = order.neededBy ? ` (필요일: ${order.neededBy})` : ''
-      await createNotificationsForUsers(targets, {
-        type: 'coupang_order',
-        title: '주문요청 승인 요청',
-        message: `${order.requesterName}님이 "${order.productName}" 주문요청을 보냈습니다.${urgentTag}`,
-        link: '/common/coupang-orders',
-        metadata: { variant: 'request', productName: order.productName || '', requesterName: order.requesterName || '', neededBy: order.neededBy || '' },
-      })
+      // 알림 발송은 실패해도 '주문 제출'은 성공으로 처리 — 알림 오류가 제출을 막아
+      // 이미 접수된 주문을 재제출(중복)하게 만드는 문제를 방지.
+      try {
+        const approverIds = await fetchApproverIds()
+        const targets = order.paymentApproverId
+          ? [order.paymentApproverId]
+          : (approverIds.length > 0 ? approverIds : [KWAK_JISOO_ID])
+        const urgentTag = order.neededBy ? ` (필요일: ${order.neededBy})` : ''
+        await createNotificationsForUsers(targets, {
+          type: 'coupang_order',
+          title: '주문요청 승인 요청',
+          message: `${order.requesterName}님이 "${order.productName}" 주문요청을 보냈습니다.${urgentTag}`,
+          link: '/common/coupang-orders',
+          metadata: { variant: 'request', productName: order.productName || '', requesterName: order.requesterName || '', neededBy: order.neededBy || '' },
+        })
+      } catch (e) {
+        console.warn('주문요청 알림 발송 실패 (주문은 정상 접수됨):', e)
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['coupang-orders'] }),
+  })
+}
+
+/** 주문요청 내용 수정 (상태 변경과 별개 — 상품명·수량·URL·사유 등). */
+export function useEditCoupangOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (o: {
+      id: string
+      productName: string
+      productUrl?: string
+      quantity: number
+      estimatedPrice?: number
+      category: OrderCategory
+      reason?: string
+      neededBy?: string
+      paymentApproverId?: string
+      paymentApproverRole?: PaymentApproverRole
+    }) => {
+      const { error } = await supabase.from('coupang_orders').update({
+        product_name: o.productName,
+        product_url: o.productUrl || null,
+        quantity: o.quantity,
+        estimated_price: o.estimatedPrice || null,
+        category: o.category,
+        reason: o.reason || null,
+        needed_by: o.neededBy || null,
+        payment_approver_id: o.paymentApproverId || null,
+        payment_approver_role: o.paymentApproverRole || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', o.id)
+      if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['coupang-orders'] }),
   })
