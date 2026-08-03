@@ -78,6 +78,7 @@ function getMonthOptions() {
 
 interface ParsedInvoice {
   invoiceDate: string
+  invoiceMonth?: string   // 정산월 — 발행 시 화면에서 고른 정산월(issueMonth)을 그대로 사용
   name?: string   // 수령인(신청인) 성명 — 대리작성 시 표시용
   residentNumber: string
   phone: string
@@ -144,7 +145,7 @@ export function InvoiceFormDialog({
   const updateInvoice = useUpdateInvoice()
 
   const [invoiceDate, setInvoiceDate] = useState(initialData?.invoiceDate || invoice?.invoiceDate || new Date().toISOString().slice(0, 10))
-  const [invoiceMonth, setInvoiceMonth] = useState(invoice?.invoiceMonth || getCurrentMonth())
+  const [invoiceMonth, setInvoiceMonth] = useState(invoice?.invoiceMonth || initialData?.invoiceMonth || getCurrentMonth())
   const [clientName, setClientName] = useState(initialData?.name || invoice?.clientName || '')
   const [residentNumber, setResidentNumber] = useState(initialData?.residentNumber || invoice?.residentNumber || '')
   const [phone, setPhone] = useState(initialData?.phone || invoice?.phone || '')
@@ -1211,6 +1212,7 @@ export function FreelancerInvoicesPage(
     if (!canEdit) return
     const initial: ParsedInvoice = {
       invoiceDate: new Date().toISOString().slice(0, 10),
+      invoiceMonth: issueMonth,   // 라벨(정산월)을 항목 계산에 쓴 정산월과 일치시킴
       residentNumber: '', phone: '', email: user?.email || '', bankAccount: '',
       items: issueItems.length
         ? issueItems.map(r => ({
