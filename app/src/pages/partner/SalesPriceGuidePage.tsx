@@ -122,48 +122,45 @@ function PriceItemRow({ item, canEdit }: { item: PriceItem; canEdit: boolean }) 
     update.mutate({ id: item.id, ...patch })
   }
 
+  const memoRef = useRef<HTMLTextAreaElement>(null)
+  const autosize = (el: HTMLTextAreaElement | null) => {
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+  // 편집모드 진입/값 변경 시 메모 높이 맞춤
+  useEffect(() => { if (editable) autosize(memoRef.current) }, [editable, memo])
+
   return (
     <div className={`rounded-lg border px-3 py-2.5 transition-colors ${item.locked ? 'border-border/60 bg-muted/30' : 'border-border bg-background'}`}>
-      <div className="flex items-start gap-3">
-        {/* 서비스명 + 금액 */}
+      {/* 1행: 서비스명 + 금액 + 액션 */}
+      <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           {editable ? (
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={() => name !== item.serviceName && saveField({ serviceName: name })}
-              className="h-8 border-transparent bg-muted/40 px-2 text-sm font-medium focus:border-input"
+              className="h-8 w-full border-transparent bg-muted/40 px-2 text-sm font-medium focus:border-input"
               placeholder={lang === 'en' ? 'Service name' : '서비스명'}
             />
           ) : (
-            <div className="px-2 py-1 text-sm font-medium text-foreground">{item.serviceName}</div>
-          )}
-          {/* 메모 */}
-          {editable ? (
-            <Input
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              onBlur={() => memo !== (item.memo ?? '') && saveField({ memo: memo || null })}
-              className="mt-1 h-7 border-transparent bg-transparent px-2 text-xs text-muted-foreground focus:border-input focus:bg-muted/40"
-              placeholder={lang === 'en' ? 'Memo (notes)' : '메모 (특이사항)'}
-            />
-          ) : (
-            item.memo ? <div className="mt-0.5 px-2 text-xs text-muted-foreground">{item.memo}</div> : null
+            <div className="px-1 py-0.5 text-sm font-medium leading-snug text-foreground break-words">{item.serviceName}</div>
           )}
         </div>
 
-        {/* 금액 */}
-        <div className="w-40 shrink-0 text-right">
+        {/* 금액 (잘리지 않게: 보기=내용폭 nowrap, 편집=넉넉한 폭) */}
+        <div className="shrink-0">
           {editable ? (
             <Input
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               onBlur={() => price !== (item.priceText ?? '') && saveField({ priceText: price || null })}
-              className="h-8 border-transparent bg-muted/40 px-2 text-right text-sm font-bold text-primary focus:border-input"
+              className="h-8 w-56 border-transparent bg-muted/40 px-2 text-right text-sm font-bold text-primary focus:border-input"
               placeholder={lang === 'en' ? 'Price' : '금액'}
             />
           ) : (
-            <div className="px-2 py-1 text-base font-bold tabular-nums text-primary">{item.priceText || '—'}</div>
+            <div className="whitespace-nowrap px-1 py-0.5 text-right text-base font-bold tabular-nums text-primary">{item.priceText || '—'}</div>
           )}
         </div>
 
@@ -189,6 +186,21 @@ function PriceItemRow({ item, canEdit }: { item: PriceItem; canEdit: boolean }) 
           </div>
         )}
       </div>
+
+      {/* 2행: 메모 (전체 폭, 끝까지 줄바꿈) */}
+      {editable ? (
+        <textarea
+          ref={memoRef}
+          value={memo}
+          rows={1}
+          onChange={(e) => { setMemo(e.target.value); autosize(e.target) }}
+          onBlur={() => memo !== (item.memo ?? '') && saveField({ memo: memo || null })}
+          placeholder={lang === 'en' ? 'Memo (notes)' : '메모 (특이사항)'}
+          className="mt-1 w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-2 py-1 text-xs leading-relaxed text-muted-foreground focus:border-input focus:bg-muted/40 focus:outline-none"
+        />
+      ) : (
+        item.memo ? <div className="mt-1 whitespace-pre-wrap break-words px-1 text-xs leading-relaxed text-muted-foreground">{item.memo}</div> : null
+      )}
     </div>
   )
 }
