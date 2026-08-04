@@ -18,7 +18,7 @@ import { useMentors, useUpsertMentor, useDeleteMentor, type Mentor } from '@/hoo
 
 export function MentorsPage() {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
+  const isAdmin = user?.role === 'admin' || user?.role === 'c_level' || user?.role === 'account'
   const canEdit = isAdmin && useCanEdit(useLocation().pathname)
 
   const { data: mentors = [], isLoading } = useMentors()

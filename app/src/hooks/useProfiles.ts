@@ -225,10 +225,15 @@ export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info'
 /** 서비스입금관리: 관리자(admin)만 열람/편집 */
 export const SERVICE_FINANCE_ROUTES: string[] = ['/service/external-fees']
 
-/** True for 관리자(admin)만 — 서비스입금관리 열람 및 수수료 수정 권한자. */
+/** True for 관리자(admin)·재무담당(account) — 서비스입금관리 열람 및 수수료 수정 권한자. */
 export function canManageServiceFinance(user: { role?: string; email?: string } | null | undefined): boolean {
   if (!user) return false
-  return user.role === 'admin'
+  return user.role === 'admin' || user.role === 'account'
+}
+
+/** 전체 게시판 접근 등급(admin·account). account(재무담당)는 재무만이 아니라 전사 게시판을 봄. */
+export function isFullAccessRole(user: { role?: string } | null | undefined): boolean {
+  return user?.role === 'admin' || user?.role === 'account'
 }
 
 /** 재무(account) 화면 접근 권한 — admin과 독립. 재정대시보드·인보이스 승인/수령 게이팅에 사용.
@@ -352,8 +357,8 @@ export function getEffectiveRoutes(
   user: User,
   featureAccessRecords: FeatureAccessRecord[],
 ): string[] {
-  // Admin: 모든 라우트. (단, 아래 재정대시보드 필터는 admin에게도 적용됨)
-  const isAdmin = user.role === 'admin'
+  // 전체 접근(admin·account): 모든 라우트. (단, 아래 재정대시보드 필터는 이들에게도 적용됨)
+  const isAdmin = isFullAccessRole(user)
   let routes: string[]
   if (isAdmin) {
     routes = NAV_ROUTE_DEFS.map(r => r.path)
@@ -410,7 +415,7 @@ export function getEffectiveEditRoutes(
   user: User,
   featureAccessRecords: FeatureAccessRecord[],
 ): string[] {
-  if (user.role === 'admin') {
+  if (isFullAccessRole(user)) {
     // 재정대시보드는 account 없으면 편집도 불가(열람과 동일 기준)
     const all = NAV_ROUTE_DEFS.map(r => r.path)
     return canAccessAccount(user) ? all : all.filter(r => !ACCOUNT_ONLY_ROUTES.includes(r))

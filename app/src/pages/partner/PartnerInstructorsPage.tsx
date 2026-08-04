@@ -50,7 +50,7 @@ function isActiveStudent(status?: string): boolean {
 export function PartnerInstructorsPage() {
   const t = useT()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'account'
   const canEditPerm = useCanEdit(useLocation().pathname)
   const canEdit = isAdmin && canEditPerm
 

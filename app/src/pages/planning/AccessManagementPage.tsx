@@ -24,7 +24,7 @@ import {
   useFeatureAccess, useUpdateFeatureAccess,
   FEATURE_MODULES, ROLE_DEFAULT_ACCESS,
   NAV_ROUTE_DEFS, ADMIN_ONLY_ROUTES, getEffectiveEditRoutes,
-  getEffectiveModules, getEffectiveRoutes, getRoutesForModule,
+  getEffectiveModules, getEffectiveRoutes, getRoutesForModule, isFullAccessRole,
   type FeatureModule, type FeatureAccessRecord,
 } from '@/hooks/useProfiles'
 import type { User, UserRole, Department, EmploymentType } from '@/types'
@@ -852,7 +852,7 @@ export function AccessManagementPage() {
   const [editUser, setEditUser] = useState<User | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
 
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = isFullAccessRole(currentUser)
   const isLoading = profilesLoading || accessLoading
 
   const filteredProfiles = useMemo(() => {
