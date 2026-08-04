@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   Search, Plus, Loader2, DollarSign, CheckCircle2, AlertTriangle, Clock,
   Upload, Ban, ChevronRight, ChevronDown, Trash2,
-  FileText, PlayCircle, Flag,
+  FileText, PlayCircle, Flag, Download,
 } from 'lucide-react'
 import { useContractsWithInstallments, useCreateContract } from '@/hooks/useContracts'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -113,6 +113,87 @@ function getDefaultInstallments(t: (key: string) => string): InstallmentRow[] {
     { label: t('contracts.defaultInterim'), amount: '', dueDate: '' },
     { label: t('contracts.defaultBalance'), amount: '', dueDate: '' },
   ]
+}
+
+// ─── 수주현황표 엑셀 내보내기 (매출 근거용) ──────────────────────────────
+type ContractExportRow = {
+  contractorName: string; studentName: string; contractDate?: string
+  additionalServices?: string; applicationCount?: number
+  totalAmount: number; currency: string; status: string
+  installments?: { label: string; amount: number; paidAmount: number; dueDate?: string; category?: string; status?: string }[]
+  paidAmount?: number; outstandingAmount?: number; paymentProgress?: number
+}
+
+async function exportContractsToExcel(contracts: ContractExportRow[]) {
+  const { default: ExcelJS } = await import('exceljs')
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('수주현황')
+
+  ws.columns = [
+    { header: 'No', key: 'no', width: 5 },
+    { header: '계약자', key: 'contractor', width: 14 },
+    { header: '학생', key: 'student', width: 14 },
+    { header: '계약일', key: 'date', width: 12 },
+    { header: '계약내역(품목)', key: 'items', width: 32 },
+    { header: '통화', key: 'currency', width: 6 },
+    { header: '총 계약금', key: 'total', width: 14 },
+    { header: '수금액', key: 'paid', width: 14 },
+    { header: '잔금', key: 'outstanding', width: 14 },
+    { header: '수금율', key: 'rate', width: 8 },
+    { header: '수금상태', key: 'collect', width: 12 },
+    { header: '잔금일정', key: 'schedule', width: 44 },
+    { header: '계약상태', key: 'cstatus', width: 10 },
+  ]
+  const headerRow = ws.getRow(1)
+  headerRow.font = { bold: true, size: 11 }
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } }
+
+  const cStatusMap: Record<string, string> = {
+    active: '진행중', expiring_soon: '만료임박', expired: '종료', cancelled: '취소', terminated: '해지',
+  }
+
+  contracts.forEach((c, i) => {
+    const base = (c.installments || []).filter(x => x.category !== 'extra')
+    const paid = c.paidAmount ?? base.reduce((s, x) => s + (x.paidAmount || 0), 0)
+    const total = c.totalAmount > 0 ? c.totalAmount : base.reduce((s, x) => s + (x.amount || 0), 0)
+    const outstanding = c.outstandingAmount ?? Math.max(total - paid, 0)
+    const rate = c.paymentProgress ?? (total > 0 ? Math.round((paid / total) * 100) : 0)
+    const collect = total > 0 && outstanding <= 0 ? '완납' : paid <= 0 ? '미수금' : '부분수금'
+    // 잔금일정: 아직 덜 받은 base 회차의 (회차명 예정일: 남은금액)
+    const schedule = base
+      .filter(x => (x.paidAmount || 0) < x.amount)
+      .map(x => `${x.label}${x.dueDate ? ` ${x.dueDate}` : ''}: ${(x.amount - (x.paidAmount || 0)).toLocaleString()}`)
+      .join(' / ')
+    const items = [c.additionalServices, c.applicationCount ? `원서 ${c.applicationCount}개` : '']
+      .filter(Boolean).join(' · ') || c.studentName || ''
+    ws.addRow({
+      no: i + 1,
+      contractor: c.contractorName || '',
+      student: c.studentName || '',
+      date: c.contractDate || '',
+      items,
+      currency: c.currency || 'KRW',
+      total, paid, outstanding,
+      rate: rate / 100,
+      collect,
+      schedule,
+      cstatus: cStatusMap[c.status] || c.status,
+    })
+  })
+
+  ws.getColumn('total').numFmt = '#,##0'
+  ws.getColumn('paid').numFmt = '#,##0'
+  ws.getColumn('outstanding').numFmt = '#,##0'
+  ws.getColumn('rate').numFmt = '0%'
+
+  const buf = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `수주현황표_${new Date().toISOString().slice(0, 10)}.xlsx`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 export function ContractsPage() {
@@ -248,6 +329,11 @@ export function ContractsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5"
+            disabled={contracts.length === 0}
+            onClick={() => exportContractsToExcel(contracts)}>
+            <Download className="size-3.5" /> 수주현황 Excel
+          </Button>
           {canEdit && (
             <>
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPdfDialogOpen(true)}>
