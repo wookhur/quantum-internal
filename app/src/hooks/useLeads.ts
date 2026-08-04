@@ -9,6 +9,8 @@ export interface LeadFilters {
   stage?: PipelineStage | 'all'
   source?: string | 'all'
   assignedTo?: string | 'all'
+  region?: string | 'all'
+  grade?: string | 'all'
   search?: string
   dateRange?: { from: string; to: string }
 }
@@ -167,6 +169,12 @@ export function useLeads(
         }
         if (filters?.assignedTo && filters.assignedTo !== 'all') {
           query = query.eq('assigned_to', filters.assignedTo)
+        }
+        if (filters?.region && filters.region !== 'all') {
+          query = query.eq('region', filters.region)
+        }
+        if (filters?.grade && filters.grade !== 'all') {
+          query = query.eq('grade', filters.grade)
         }
         if (filters?.dateRange) {
           if (filters.dateRange.from) {

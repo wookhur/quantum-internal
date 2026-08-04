@@ -153,6 +153,8 @@ function LeadsTableView() {
   const [stageFilter, setStageFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [assignedFilter, setAssignedFilter] = useState<string>('all')
+  const [regionFilter, setRegionFilter] = useState<string>('all')
+  const [gradeFilter, setGradeFilter] = useState<string>('all')
 
   // -- Pagination state
   const [page, setPage] = useState(1)
@@ -170,6 +172,8 @@ function LeadsTableView() {
     stage: stageFilter !== 'all' ? (stageFilter as PipelineStage) : undefined,
     source: sourceFilter !== 'all' ? sourceFilter : undefined,
     assignedTo: assignedFilter !== 'all' ? assignedFilter : undefined,
+    region: regionFilter !== 'all' ? regionFilter : undefined,
+    grade: gradeFilter !== 'all' ? gradeFilter : undefined,
     search: search || undefined,
   })
 
@@ -202,6 +206,8 @@ function LeadsTableView() {
     stageFilter !== 'all',
     sourceFilter !== 'all',
     assignedFilter !== 'all',
+    regionFilter !== 'all',
+    gradeFilter !== 'all',
     !!search,
   ].filter(Boolean).length
 
@@ -235,6 +241,8 @@ function LeadsTableView() {
     setStageFilter('all')
     setSourceFilter('all')
     setAssignedFilter('all')
+    setRegionFilter('all')
+    setGradeFilter('all')
     resetPage()
   }
 
@@ -398,6 +406,38 @@ function LeadsTableView() {
                 <SelectItem key={u.id} value={u.id}>
                   {u.name}
                 </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Region filter */}
+          <Select
+            value={regionFilter}
+            onValueChange={(v) => { v && setRegionFilter(v); resetPage() }}
+          >
+            <SelectTrigger className="w-[120px]" size="sm">
+              <SelectValue placeholder="지역" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 지역</SelectItem>
+              {REGIONS.map((r) => (
+                <SelectItem key={r} value={r}>{r}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Grade filter */}
+          <Select
+            value={gradeFilter}
+            onValueChange={(v) => { v && setGradeFilter(v); resetPage() }}
+          >
+            <SelectTrigger className="w-[110px]" size="sm">
+              <SelectValue placeholder="학년" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 학년</SelectItem>
+              {GRADES.map((g) => (
+                <SelectItem key={g} value={g}>{g}</SelectItem>
               ))}
             </SelectContent>
           </Select>
