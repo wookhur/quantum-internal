@@ -1699,8 +1699,16 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
   // 각 프로그램의 이름/부제를 파트너(label)·프로그램(detail) 값과 매칭해 학생을 자동 배치.
   const grid = useMemo(() => {
     const norm = (v?: string) => (v || '').replace(/\s+/g, '').toLowerCase()
+    // "QA-밀키트사업" → ["qa-밀키트사업", "밀키트사업"] : 하이픈 뒤 프로그램명으로도 매칭
+    // (파트너를 QA-밀키트사업/QA-봉사 처럼 프로그램별로 분리해도 좌석 열과 자동 연동되게)
+    const expand = (v?: string): string[] => {
+      const n = norm(v)
+      if (!n) return []
+      const i = n.lastIndexOf('-')
+      return i > 0 && i < n.length - 1 ? [n, n.slice(i + 1)] : [n]
+    }
     const keysOf = new Map<string, string[]>()
-    for (const p of programs) keysOf.set(p.id, [p.name, p.subtitle].filter(Boolean).map(v => norm(v as string)))
+    for (const p of programs) keysOf.set(p.id, [p.name, p.subtitle].filter(Boolean).flatMap(v => expand(v as string)))
     const m = new Map<string, Map<string, ServiceStudent[]>>()
     const seen = new Map<string, Set<string>>() // programId → studentIds (중복 제거)
     for (const f of fees) {
@@ -1708,7 +1716,7 @@ function ProgramSeatBoard({ students, canEdit }: { students: ServiceStudent[]; c
       if (f.refundStatus === 'completed') continue
       const st = studentById.get(f.studentId)
       if (!st) continue
-      const vals = [f.label, f.detail].filter(Boolean).map(v => norm(v as string))
+      const vals = [f.label, f.detail].filter(Boolean).flatMap(v => expand(v as string))
       for (const p of programs) {
         if (!keysOf.get(p.id)!.some(k => vals.includes(k))) continue
         if (!seen.has(p.id)) seen.set(p.id, new Set())

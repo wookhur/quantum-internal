@@ -1214,7 +1214,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
             <Select value={form.partner || null} onValueChange={v => set('partner', v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
-                {EC_PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                {[...EC_PARTNERS].sort((a, b) => a.localeCompare(b, 'ko')).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
