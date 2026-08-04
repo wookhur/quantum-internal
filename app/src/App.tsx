@@ -57,6 +57,7 @@ import { MentorsPage } from '@/pages/partner/MentorsPage'
 import { TutorsPage } from '@/pages/partner/TutorsPage'
 import { PartnerCompaniesPage } from '@/pages/partner/PartnerCompaniesPage'
 import { ProgramsPage } from '@/pages/partner/ProgramsPage'
+import { SalesPriceGuidePage } from '@/pages/partner/SalesPriceGuidePage'
 import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
 import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
 import { SeminarsPage } from '@/pages/marketing/SeminarsPage'
@@ -135,6 +136,7 @@ export default function App() {
                 <Route path="/partner/mentors" element={<MentorsPage />} />
                 <Route path="/partner/companies" element={<PartnerCompaniesPage />} />
                 <Route path="/partner/programs" element={<ProgramsPage />} />
+                <Route path="/partner/price-guide" element={<SalesPriceGuidePage />} />
                 <Route path="/partner/calendar" element={<CalendarPage />} />
 
                 <Route path="/service/dashboard" element={<ServiceDashboardPage />} />

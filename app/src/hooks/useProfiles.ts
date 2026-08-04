@@ -198,6 +198,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/finance/dashboard', labelKey: 'nav.financeDashboard', module: 'finance' },
   { path: '/partner/companies', labelKey: 'nav.partnerCompanies', module: 'partner' },
   { path: '/partner/programs', labelKey: 'nav.partnerPrograms', module: 'partner' },
+  { path: '/partner/price-guide', labelKey: 'nav.salesPriceGuide', module: 'partner' },
   { path: '/partner/contracts', labelKey: 'nav.partnerContracts', module: 'partner' },
   { path: '/partner/calendar', labelKey: 'nav.calendar', module: 'partner', hidden: true },
   // ── Game ──

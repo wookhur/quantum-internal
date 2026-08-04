@@ -42,6 +42,7 @@ import {
   Phone,
   Kanban,
   NotebookPen,
+  Tag,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -110,6 +111,7 @@ export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; i
       { labelKey: 'nav.mentors', to: '/partner/mentors', icon: Users },
       { labelKey: 'nav.partnerCompanies', to: '/partner/companies', icon: Briefcase },
       { labelKey: 'nav.partnerPrograms', to: '/partner/programs', icon: Presentation },
+      { labelKey: 'nav.salesPriceGuide', to: '/partner/price-guide', icon: Tag },
       { labelKey: 'nav.partnerContracts', to: '/partner/contracts', icon: Percent },
     ],
   },
