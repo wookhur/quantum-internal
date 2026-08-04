@@ -122,13 +122,15 @@ function PriceItemRow({ item, canEdit }: { item: PriceItem; canEdit: boolean }) 
     update.mutate({ id: item.id, ...patch })
   }
 
+  const nameRef = useRef<HTMLTextAreaElement>(null)
   const memoRef = useRef<HTMLTextAreaElement>(null)
   const autosize = (el: HTMLTextAreaElement | null) => {
     if (!el) return
     el.style.height = 'auto'
     el.style.height = `${el.scrollHeight}px`
   }
-  // 편집모드 진입/값 변경 시 메모 높이 맞춤
+  // 편집모드 진입/값 변경 시 서비스명·메모 높이 맞춤(내용 전체 표시)
+  useEffect(() => { if (editable) autosize(nameRef.current) }, [editable, name])
   useEffect(() => { if (editable) autosize(memoRef.current) }, [editable, memo])
 
   return (
@@ -137,12 +139,14 @@ function PriceItemRow({ item, canEdit }: { item: PriceItem; canEdit: boolean }) 
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           {editable ? (
-            <Input
+            <textarea
+              ref={nameRef}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              rows={1}
+              onChange={(e) => { setName(e.target.value); autosize(e.target) }}
               onBlur={() => name !== item.serviceName && saveField({ serviceName: name })}
-              className="h-8 w-full border-transparent bg-muted/40 px-2 text-sm font-medium focus:border-input"
               placeholder={lang === 'en' ? 'Service name' : '서비스명'}
+              className="w-full resize-none overflow-hidden rounded-md border border-transparent bg-muted/40 px-2 py-1 text-sm font-medium leading-snug focus:border-input focus:outline-none"
             />
           ) : (
             <div className="px-1 py-0.5 text-sm font-medium leading-snug text-foreground break-words">{item.serviceName}</div>
