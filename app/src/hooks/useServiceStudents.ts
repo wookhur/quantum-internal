@@ -9,6 +9,7 @@ import type {
   MeetingCancelledBy,
 } from '@/types'
 import { createNotificationsForUsers } from './useUserNotifications'
+import { canonicalConsultantName } from '@/lib/consultants'
 
 // ─── Mappers ───
 function mapStudent(row: Record<string, unknown>): ServiceStudent {
@@ -25,7 +26,8 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     grade: (row.grade as string) || undefined,
     school: (row.school as string) || undefined,
     assignedConsultant: (row.assigned_consultant as string) || undefined,
-    essayEditor: (row.essay_editor as string) || undefined,
+    // 옛 표기(예: 'Somee Park') → 통일 표기('Soomee Park')로 정규화 → 표시·수정 드롭다운·필터 일치
+    essayEditor: canonicalConsultantName((row.essay_editor as string) || '') || undefined,
     partners: (row.partners as string) || undefined,
     majors: (row.majors as string) || undefined,
     majorTrack: (row.major_track as string) || undefined,
