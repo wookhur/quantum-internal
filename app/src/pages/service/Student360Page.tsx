@@ -492,8 +492,8 @@ export function Student360Page() {
             <PortalLinksSection studentId={selected.id} studentName={selected.name} createdBy={user?.id} canEdit={canEdit} />
             <IssueReportSection studentId={selected.id} studentName={selected.name} userId={user?.id} userName={user?.name} isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit} />
             <MeetingsSection student={selected} createdBy={user?.id} authorName={user?.name} canEdit={canEdit} />
-            <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} canEdit={canEdit} />
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} canEdit={canEdit} />
+            <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} canEdit={canEdit} />
             <ArchiveSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
           </div>
         )}
@@ -2620,6 +2620,8 @@ function MeetingsSection({ student, createdBy, authorName, canEdit }: {
   // 다년 계약이면 현재 연차만 기본 펼침
   const [openYears, setOpenYears] = useState<Record<number, boolean>>({})
   const isOpen = (y: MeetingYearGroup) => openYears[y.year] ?? y.isCurrent
+  // 미팅리포트: 섹션 접기(기본 접힘)
+  const [expanded, setExpanded] = useState(false)
 
   const renderMeeting = (m: ServiceMeeting) => (
     <div key={m.id} className="rounded-lg border p-3">
@@ -2677,18 +2679,24 @@ function MeetingsSection({ student, createdBy, authorName, canEdit }: {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <CardTitle className="flex items-center gap-2 text-base">
           <CalendarDays className="size-5 text-primary" />
           {t('student360.meetings')} <span className="text-muted-foreground font-normal">({meetings.length})</span>
         </CardTitle>
-        {canEdit && (
-          <MeetingDialog
-            studentId={studentId} createdBy={createdBy} canEdit={canEdit}
-            trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
-          />
-        )}
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {canEdit && (
+            <MeetingDialog
+              studentId={studentId} createdBy={createdBy} canEdit={canEdit}
+              trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
+            />
+          )}
+          <Button size="sm" variant="ghost" className="size-7" onClick={() => setExpanded(v => !v)}>
+            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </Button>
+        </div>
       </CardHeader>
+      {expanded && (
       <CardContent className="space-y-3">
         {meetings.length === 0 && <p className="text-sm text-muted-foreground">{t('student360.noMeetings')}</p>}
 
@@ -2726,6 +2734,7 @@ function MeetingsSection({ student, createdBy, authorName, canEdit }: {
           )
         })}
       </CardContent>
+      )}
     </Card>
   )
 }
@@ -2737,6 +2746,8 @@ function EditorMeetingsSection({ studentId, createdBy, defaultEditor, canEdit }:
   const update = useUpdateEditorMeeting()
   const del = useDeleteEditorMeeting()
 
+  // 에세이에디터: 섹션 접기(기본 접힘)
+  const [expanded, setExpanded] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ meetingDate: '', editor: defaultEditor || '', content: '' })
   const reset = () => { setEditingId(null); setForm({ meetingDate: '', editor: defaultEditor || '', content: '' }) }
@@ -2760,12 +2771,18 @@ function EditorMeetingsSection({ studentId, createdBy, defaultEditor, canEdit }:
 
   return (
     <Card className="border-teal-200">
-      <CardHeader className="bg-teal-50/40 rounded-t-xl">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <PenTool className="size-5 text-teal-600" />
-          에세이 에디터 미팅 <span className="text-muted-foreground font-normal">({items.length})</span>
-        </CardTitle>
+      <CardHeader className="bg-teal-50/40 rounded-t-xl py-3 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <PenTool className="size-5 text-teal-600" />
+            에세이 에디터 미팅 <span className="text-muted-foreground font-normal">({items.length})</span>
+          </CardTitle>
+          <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
+            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </Button>
+        </div>
       </CardHeader>
+      {expanded && (
       <CardContent className="space-y-2">
         {items.length === 0 && <p className="text-sm text-muted-foreground">기록이 없습니다.</p>}
         {items.map(m => (
@@ -2806,6 +2823,7 @@ function EditorMeetingsSection({ studentId, createdBy, defaultEditor, canEdit }:
           </div>
         )}
       </CardContent>
+      )}
     </Card>
   )
 }
@@ -2951,6 +2969,8 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
   const del = useDeleteServiceDiary()
   const [diarySearch, setDiarySearch] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // 미팅다이어리: 섹션 접기(기본 펼침)
+  const [expanded, setExpanded] = useState(true)
 
   const visibleEntries = useMemo(() => {
     const q = diarySearch.trim().toLowerCase()
@@ -2973,13 +2993,13 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <CardTitle className="flex items-center gap-2 text-base">
           <BookText className="size-5 text-primary" />
           {t('student360.diary')} <span className="text-muted-foreground font-normal">({entries.length})</span>
         </CardTitle>
-        <div className="flex items-center gap-2">
-          {visibleEntries.length > 1 && (
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {expanded && visibleEntries.length > 1 && (
             <Button size="sm" variant="outline" onClick={() => setAll(!allCollapsed)}>
               {allCollapsed
                 ? <><ChevronDown className="size-4 mr-1" />{t('student360.expandAll')}</>
@@ -2992,8 +3012,12 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
               trigger={<Button size="sm" variant="outline"><Plus className="size-4 mr-1" />{t('common.add')}</Button>}
             />
           )}
+          <Button size="sm" variant="ghost" className="size-7" onClick={() => setExpanded(v => !v)}>
+            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </Button>
         </div>
       </CardHeader>
+      {expanded && (
       <CardContent className="space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -3094,6 +3118,7 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
           )
         })}
       </CardContent>
+      )}
     </Card>
   )
 }
