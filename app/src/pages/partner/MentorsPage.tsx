@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,10 +11,16 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { Loader2, Plus, Pencil, Trash2, Lock, Users } from 'lucide-react'
+import { Loader2, Plus, Pencil, Trash2, Lock, Users, GraduationCap } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
-import { useMentors, useUpsertMentor, useDeleteMentor, type Mentor } from '@/hooks/useMentors'
+import {
+  useMentors, useUpsertMentor, useDeleteMentor,
+  MAJOR_TIERS, majorTierLabel, majorTierAmount, COACHING_MONTHLY,
+  type Mentor, type MentorType, type MajorTier,
+} from '@/hooks/useMentors'
+
+const wonFmt = (n: number) => `₩${n.toLocaleString('ko-KR')}`
 
 export function MentorsPage() {
   const { user } = useAuth()
@@ -22,9 +28,11 @@ export function MentorsPage() {
   const canEdit = isAdmin && useCanEdit(useLocation().pathname)
 
   const { data: mentors = [], isLoading } = useMentors()
-  const del = useDeleteMentor()
   const [editing, setEditing] = useState<Mentor | null>(null)
-  const [addOpen, setAddOpen] = useState(false)
+  const [addType, setAddType] = useState<MentorType | null>(null)
+
+  const coaching = useMemo(() => mentors.filter(m => m.type === 'coaching'), [mentors])
+  const major = useMemo(() => mentors.filter(m => m.type === 'major'), [mentors])
 
   if (!isAdmin) {
     return (
@@ -37,28 +45,85 @@ export function MentorsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">학습코칭 멘토 관리</h1>
-          <p className="text-sm text-muted-foreground">
-            학습코칭 프로그램의 대학생 멘토 풀을 관리합니다. (한국이름·영문이름·출생연도·학교·전공·연락처·가능 과목)
-          </p>
-        </div>
-        {canEdit && <Button onClick={() => setAddOpen(true)}><Plus className="size-4 mr-1" /> 멘토 추가</Button>}
+    <div className="space-y-8 max-w-6xl">
+      <div>
+        <h1 className="text-2xl font-bold">Mentor Support 관리</h1>
+        <p className="text-sm text-muted-foreground">
+          학습코칭 멘토(월 지급)와 전공별 멘토(회당 지급) 풀을 관리합니다. 여기서 추가한 멘토는 Student360의 <b>Mentor Support</b> 드롭다운에 자동 반영됩니다.
+        </p>
       </div>
 
+      {/* ── 학습코칭 멘토 ── */}
+      <MentorTable
+        title="학습코칭 멘토 관리"
+        desc={`월 지급 · 배정 학생 1인당 매월 ${wonFmt(COACHING_MONTHLY)}`}
+        icon={<Users className="size-5 text-emerald-600" />}
+        mentors={coaching}
+        isMajor={false}
+        isLoading={isLoading}
+        canEdit={canEdit}
+        onAdd={() => setAddType('coaching')}
+        onEdit={setEditing}
+      />
+
+      {/* ── 전공별 멘토 ── */}
+      <MentorTable
+        title="전공별 멘토 관리"
+        desc="회당 지급 · 등급별 단가 (대학생 5만 · 5년이하 7만 · 5년이상 10만)"
+        icon={<GraduationCap className="size-5 text-indigo-600" />}
+        mentors={major}
+        isMajor
+        isLoading={isLoading}
+        canEdit={canEdit}
+        onAdd={() => setAddType('major')}
+        onEdit={setEditing}
+      />
+
+      {(addType || editing) && (
+        <MentorDialog
+          mentor={editing}
+          defaultType={editing?.type || addType || 'coaching'}
+          canEdit={canEdit}
+          onClose={() => { setAddType(null); setEditing(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
+function MentorTable({ title, desc, icon, mentors, isMajor, isLoading, canEdit, onAdd, onEdit }: {
+  title: string
+  desc: string
+  icon: React.ReactNode
+  mentors: Mentor[]
+  isMajor: boolean
+  isLoading: boolean
+  canEdit: boolean
+  onAdd: () => void
+  onEdit: (m: Mentor) => void
+}) {
+  const del = useDeleteMentor()
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="text-lg font-bold flex items-center gap-2">{icon}{title}<span className="text-muted-foreground font-normal text-sm">({mentors.length})</span></h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+        </div>
+        {canEdit && <Button size="sm" onClick={onAdd}><Plus className="size-4 mr-1" /> 멘토 추가</Button>}
+      </div>
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
+            <div className="py-12 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
           ) : mentors.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">등록된 멘토가 없습니다. "멘토 추가"로 등록하세요.</div>
+            <div className="py-12 text-center text-sm text-muted-foreground">등록된 멘토가 없습니다. "멘토 추가"로 등록하세요.</div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-40">이름</TableHead>
+                  {isMajor && <TableHead className="w-40">등급 · 회당 단가</TableHead>}
                   <TableHead className="w-20">출생연도</TableHead>
                   <TableHead className="w-40">재학중 학교</TableHead>
                   <TableHead className="w-32">전공</TableHead>
@@ -72,15 +137,25 @@ export function MentorsPage() {
                   <TableRow key={m.id}>
                     <TableCell className="text-sm font-medium">
                       <div className="flex items-center gap-2">
-                        <Users className="size-4 text-emerald-500 shrink-0" />
+                        {isMajor ? <GraduationCap className="size-4 text-indigo-500 shrink-0" /> : <Users className="size-4 text-emerald-500 shrink-0" />}
                         <span>{[m.koreanName, m.englishName].filter(Boolean).join(' · ') || '-'}</span>
                       </div>
                     </TableCell>
+                    {isMajor && (
+                      <TableCell className="text-sm">
+                        {m.tier ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="font-medium">{majorTierLabel(m.tier)}</span>
+                            <span className="text-indigo-600 tabular-nums">{wonFmt(majorTierAmount(m.tier))}</span>
+                          </span>
+                        ) : <span className="text-muted-foreground">등급 미지정</span>}
+                      </TableCell>
+                    )}
                     <TableCell className="text-sm tabular-nums">{m.birthYear || <span className="text-muted-foreground">-</span>}</TableCell>
                     <TableCell className="text-sm">{m.school || <span className="text-muted-foreground">-</span>}</TableCell>
                     <TableCell className="text-sm">{m.major || <span className="text-muted-foreground">-</span>}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      <div className="max-w-[320px] whitespace-pre-wrap">{m.subjects || '-'}</div>
+                      <div className="max-w-[280px] whitespace-pre-wrap">{m.subjects || '-'}</div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {m.phone && <div>{m.phone}</div>}
@@ -91,7 +166,7 @@ export function MentorsPage() {
                       <div className="flex items-center justify-end gap-0.5">
                         {canEdit && (
                           <>
-                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-emerald-600" title="수정" onClick={() => setEditing(m)}>
+                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-emerald-600" title="수정" onClick={() => onEdit(m)}>
                               <Pencil className="size-4" />
                             </Button>
                             <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" title="삭제"
@@ -109,17 +184,15 @@ export function MentorsPage() {
           )}
         </CardContent>
       </Card>
-
-      {(addOpen || editing) && (
-        <MentorDialog mentor={editing} canEdit={canEdit} onClose={() => { setAddOpen(false); setEditing(null) }} />
-      )}
     </div>
   )
 }
 
-function MentorDialog({ mentor, canEdit, onClose }: { mentor: Mentor | null; canEdit: boolean; onClose: () => void }) {
+function MentorDialog({ mentor, defaultType, canEdit, onClose }: { mentor: Mentor | null; defaultType: MentorType; canEdit: boolean; onClose: () => void }) {
   const upsert = useUpsertMentor()
   const [f, setF] = useState({
+    type: (mentor?.type || defaultType) as MentorType,
+    tier: (mentor?.tier || 'college') as MajorTier,
     koreanName: mentor?.koreanName || '',
     englishName: mentor?.englishName || '',
     birthYear: mentor?.birthYear ? String(mentor.birthYear) : '',
@@ -131,13 +204,16 @@ function MentorDialog({ mentor, canEdit, onClose }: { mentor: Mentor | null; can
     notes: mentor?.notes || '',
   })
   const set = (k: keyof typeof f, v: string) => setF(p => ({ ...p, [k]: v }))
-  const canSave = canEdit && (f.koreanName.trim() || f.englishName.trim()) && !upsert.isPending
+  const isMajor = f.type === 'major'
+  const canSave = canEdit && (f.koreanName.trim() || f.englishName.trim()) && (!isMajor || !!f.tier) && !upsert.isPending
 
   const handleSave = () => {
     if (!canSave) return
     upsert.mutate(
       {
         id: mentor?.id,
+        type: f.type,
+        tier: isMajor ? f.tier : undefined,
         koreanName: f.koreanName.trim() || undefined,
         englishName: f.englishName.trim() || undefined,
         birthYear: f.birthYear ? Number(f.birthYear) : undefined,
@@ -152,11 +228,22 @@ function MentorDialog({ mentor, canEdit, onClose }: { mentor: Mentor | null; can
     )
   }
 
+  const title = `${isMajor ? '전공별' : '학습코칭'} 멘토 ${mentor ? '수정' : '추가'}`
+
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{mentor ? '멘토 수정' : '멘토 추가'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div className="space-y-3">
+          {isMajor && (
+            <div className="space-y-1">
+              <Label className="text-xs">등급 (회당 단가)</Label>
+              <select value={f.tier} onChange={e => set('tier', e.target.value)}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                {MAJOR_TIERS.map(t => <option key={t.key} value={t.key}>{t.label} · {wonFmt(t.amount)}/회</option>)}
+              </select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">한국이름</Label>
@@ -184,13 +271,13 @@ function MentorDialog({ mentor, canEdit, onClose }: { mentor: Mentor | null; can
             </div>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">이메일주소</Label>
+            <Label className="text-xs">이메일주소 <span className="text-muted-foreground font-normal">(멘토 로그인 계정과 동일하게 — Mentor Support 접근 매칭)</span></Label>
             <Input type="email" value={f.email} onChange={e => set('email', e.target.value)} placeholder="mentor@example.com" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">멘토링 가능한 과목</Label>
+            <Label className="text-xs">멘토링 가능한 과목/분야</Label>
             <Textarea value={f.subjects} onChange={e => set('subjects', e.target.value)} rows={3}
-              placeholder="예: AP Calculus BC · Statistics · Micro · Macro · Psych · Research · Chem" />
+              placeholder="예: AP Calculus BC · Statistics · Research · Chem" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">특이사항 (선택)</Label>

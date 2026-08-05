@@ -26,7 +26,12 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
 import { contractYearOf, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
-import { useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching, type StudentCoaching } from '@/hooks/useMentors'
+import {
+  useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching,
+  useMentorSessions, useAddMentorSession, useDeleteMentorSession, useAllMentorAssignments,
+  majorTierAmount, majorTierLabel, COACHING_MONTHLY,
+  type StudentCoaching, type Mentor,
+} from '@/hooks/useMentors'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, OTHER_MAJOR, gradeBucket } from '@/lib/majorTaxonomy'
 import {
@@ -242,6 +247,21 @@ export function Student360Page() {
   }, [studentParam])
 
   const { data: students = [], isLoading } = useServiceStudents()
+
+  // ── Mentor 계정 게이팅: 멘토관리에 등록된 사람(이메일 매칭)은 Mentor Support 섹션만, 배정된 학생만 열람 ──
+  const { data: gateMentors = [] } = useMentors()
+  const { data: gateAssignments = [] } = useAllMentorAssignments()
+  const mentorUser = useMemo(() => {
+    const email = (user?.email || '').trim().toLowerCase()
+    if (!email) return null
+    return gateMentors.find(m => (m.email || '').trim().toLowerCase() === email) || null
+  }, [gateMentors, user?.email])
+  const isPrivileged = user?.role === 'admin' || user?.role === 'c_level' || user?.role === 'account'
+  const isMentorOnly = !!mentorUser && !isPrivileged
+  const mentorStudentIds = useMemo(() => {
+    if (!isMentorOnly || !mentorUser) return null
+    return new Set(gateAssignments.filter(a => a.mentorId === mentorUser.id).map(a => a.studentId))
+  }, [isMentorOnly, mentorUser, gateAssignments])
   const { data: studentKpis = {} } = useStudentKpis()
   const statusFlags = useStudentStatusFlags()
   const consultantPool = useConsultantPool()
@@ -296,6 +316,7 @@ export function Student360Page() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return students.filter(s => {
+      if (mentorStudentIds && !mentorStudentIds.has(s.id)) return false   // 멘토: 배정 학생만
       if (showArchive ? !isArchivedStatus(s.status) : isArchivedStatus(s.status)) return false
       if (pausedOnly && !s.paused) return false
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
@@ -482,6 +503,12 @@ export function Student360Page() {
             {t('student360.selectHint')}
           </div>
         ) : (
+          isMentorOnly ? (
+          // 멘토 계정: 개인정보·컨설팅 내용 비공개 — Mentor Support 섹션만 노출
+          <div className="space-y-4">
+            <CoachingSection studentId={selected.id} createdBy={user?.id} canEdit={false} restrictMentorId={mentorUser?.id} />
+          </div>
+          ) : (
           <div className="space-y-4">
             <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} canEdit={canEdit} />
             <ContractSection student={selected} canEdit={canEdit} />
@@ -496,6 +523,7 @@ export function Student360Page() {
             <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} canEdit={canEdit} />
             <ArchiveSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
           </div>
+          )
         )}
       </div>
     </div>
@@ -2493,37 +2521,31 @@ function LabeledInput({ label, value, onChange, type }: { label: string; value: 
   )
 }
 
-// ─────────────────── 학습코칭 멘토 ───────────────────
-function CoachingSection({ studentId, createdBy, canEdit }: { studentId: string; createdBy?: string; canEdit: boolean }) {
+// ─────────────────── Mentor Support (학습코칭 + 전공별) ───────────────────
+const wonKR = (n: number) => `₩${n.toLocaleString('ko-KR')}`
+const mentorFullName = (m?: Pick<Mentor, 'koreanName' | 'englishName'> | null) =>
+  m ? ([m.koreanName, m.englishName].filter(Boolean).join(' ') || '멘토') : '—'
+
+function CoachingSection({ studentId, createdBy, canEdit, restrictMentorId }: {
+  studentId: string; createdBy?: string; canEdit: boolean; restrictMentorId?: string
+}) {
   const { data: mentors = [] } = useMentors()
-  const { data: items = [] } = useStudentCoaching(studentId)
-  const upsert = useUpsertCoaching()
-  const del = useDeleteCoaching()
+  const { data: allItems = [] } = useStudentCoaching(studentId)
+  const [expanded, setExpanded] = useState(!!restrictMentorId)
 
-  const [expanded, setExpanded] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ mentorId: '', startDate: '', schedule: '', fieldNotes: '' })
-  const reset = () => { setEditingId(null); setForm({ mentorId: '', startDate: '', schedule: '', fieldNotes: '' }) }
+  const mentorById = useMemo(() => new Map(mentors.map(m => [m.id, m])), [mentors])
+  const typeOf = (c: StudentCoaching) => mentorById.get(c.mentorId || '')?.type || 'coaching'
 
-  const mentorName = (m: { koreanName?: string; englishName?: string }) => [m.koreanName, m.englishName].filter(Boolean).join(' ')
-  const mentorLabel = (id?: string) => {
-    const m = mentors.find(x => x.id === id)
-    return m ? (mentorName(m) || '멘토') : (id ? '(삭제된 멘토)' : '—')
+  let coachingItems = allItems.filter(c => typeOf(c) === 'coaching')
+  let majorItems = allItems.filter(c => typeOf(c) === 'major')
+  if (restrictMentorId) {
+    coachingItems = coachingItems.filter(c => c.mentorId === restrictMentorId)
+    majorItems = majorItems.filter(c => c.mentorId === restrictMentorId)
   }
-
-  const startEdit = (c: StudentCoaching) => {
-    if (!canEdit) return
-    setEditingId(c.id)
-    setForm({ mentorId: c.mentorId || '', startDate: c.startDate || '', schedule: c.schedule || '', fieldNotes: c.fieldNotes || '' })
-  }
-  const save = () => {
-    if (!canEdit) return
-    if (!form.mentorId && !form.schedule && !form.fieldNotes) return
-    upsert.mutate(
-      { id: editingId || undefined, studentId, mentorId: form.mentorId || undefined, startDate: form.startDate || undefined, schedule: form.schedule || undefined, fieldNotes: form.fieldNotes || undefined, createdBy },
-      { onSuccess: reset },
-    )
-  }
+  const count = coachingItems.length + majorItems.length
+  const coachingPool = mentors.filter(m => m.type === 'coaching')
+  const majorPool = mentors.filter(m => m.type === 'major')
+  const showAdd = canEdit && !restrictMentorId   // 멘토 본인 화면에서는 배정 CRUD 숨김
 
   return (
     <Card className="border-emerald-200">
@@ -2531,7 +2553,7 @@ function CoachingSection({ studentId, createdBy, canEdit }: { studentId: string;
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base">
             <BookOpen className="size-5 text-emerald-600" />
-            학습코칭 멘토 <span className="text-muted-foreground font-normal">({items.length})</span>
+            Mentor Support <span className="text-muted-foreground font-normal">({count})</span>
           </CardTitle>
           <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
             {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
@@ -2539,63 +2561,199 @@ function CoachingSection({ studentId, createdBy, canEdit }: { studentId: string;
         </div>
       </CardHeader>
       {expanded && (
-      <CardContent className="space-y-2 pt-0">
-        {items.length === 0 && <p className="text-sm text-muted-foreground">배정된 학습코칭 멘토가 없습니다.</p>}
-        {items.map(c => (
-          <div key={c.id} className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm font-medium flex-wrap">
-                <span>{mentorLabel(c.mentorId)}</span>
-                {c.startDate && <Badge variant="outline">시작 {c.startDate}</Badge>}
-                {c.schedule && <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">{c.schedule}</Badge>}
-              </div>
-              {canEdit && (
-                <div className="flex items-center gap-1">
-                  <Button size="sm" variant="ghost" onClick={() => startEdit(c)}><Pencil className="size-3.5" /></Button>
-                  <Button size="sm" variant="ghost" onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: c.id, studentId }) }}><Trash2 className="size-3.5" /></Button>
-                </div>
-              )}
-            </div>
-            {c.fieldNotes && <p className="text-sm mt-2 whitespace-pre-wrap">{c.fieldNotes}</p>}
-          </div>
-        ))}
-
-        {canEdit && (
-          <div className="rounded-lg border border-dashed p-3 space-y-2">
-            <div className="text-xs font-medium text-muted-foreground">{editingId ? '코칭 수정' : '코칭 추가'}</div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">멘토</Label>
-                <select value={form.mentorId} onChange={e => setForm(f => ({ ...f, mentorId: e.target.value }))}
-                  className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-                  <option value="">멘토 선택</option>
-                  {mentors.map(m => <option key={m.id} value={m.id}>{mentorName(m) || m.id}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">시작일</Label>
-                <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="h-9" />
-              </div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">코칭 스케줄</Label>
-              <Input value={form.schedule} onChange={e => setForm(f => ({ ...f, schedule: e.target.value }))} placeholder="예: 주3회, 월/목/토" className="h-9" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">코칭 분야 (메모)</Label>
-              <Textarea value={form.fieldNotes} onChange={e => setForm(f => ({ ...f, fieldNotes: e.target.value }))} rows={2} placeholder="예: AP Calculus 단원평가 대비, 주간 학습계획 점검" className="text-sm" />
-            </div>
-            <div className="flex justify-end gap-2">
-              {editingId && <Button size="sm" variant="outline" onClick={reset}>취소</Button>}
-              <Button size="sm" onClick={save} disabled={upsert.isPending}>
-                <Plus className="size-3.5 mr-1" />{editingId ? '저장' : '추가'}
-              </Button>
-            </div>
-          </div>
-        )}
+      <CardContent className="space-y-5 pt-0">
+        <LearningCoachBlock studentId={studentId} createdBy={createdBy} items={coachingItems} pool={coachingPool} mentorById={mentorById} showAdd={showAdd} />
+        <MajorMentorBlock studentId={studentId} createdBy={createdBy} items={majorItems} pool={majorPool} mentorById={mentorById} showAdd={showAdd} canLogSessions={canEdit || !!restrictMentorId} />
       </CardContent>
       )}
     </Card>
+  )
+}
+
+// ── 학습코칭 멘토 (월 300,000원/학생) ──
+function LearningCoachBlock({ studentId, createdBy, items, pool, mentorById, showAdd }: {
+  studentId: string; createdBy?: string; items: StudentCoaching[]; pool: Mentor[]; mentorById: Map<string, Mentor>; showAdd: boolean
+}) {
+  const upsert = useUpsertCoaching()
+  const del = useDeleteCoaching()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState({ mentorId: '', startDate: '', schedule: '', fieldNotes: '' })
+  const reset = () => { setEditingId(null); setForm({ mentorId: '', startDate: '', schedule: '', fieldNotes: '' }) }
+  const startEdit = (c: StudentCoaching) => { setEditingId(c.id); setForm({ mentorId: c.mentorId || '', startDate: c.startDate || '', schedule: c.schedule || '', fieldNotes: c.fieldNotes || '' }) }
+  const save = () => {
+    if (!form.mentorId && !form.schedule && !form.fieldNotes) return
+    upsert.mutate({ id: editingId || undefined, studentId, mentorId: form.mentorId || undefined, startDate: form.startDate || undefined, schedule: form.schedule || undefined, fieldNotes: form.fieldNotes || undefined, createdBy }, { onSuccess: reset })
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-sm font-semibold text-emerald-800">학습코칭 멘토 <span className="font-normal text-xs text-muted-foreground">· 월 {wonKR(COACHING_MONTHLY)}/학생</span></div>
+      {items.length === 0 && <p className="text-sm text-muted-foreground">배정된 학습코칭 멘토가 없습니다.</p>}
+      {items.map(c => (
+        <div key={c.id} className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-medium flex-wrap">
+              <span>{mentorFullName(mentorById.get(c.mentorId || ''))}</span>
+              {c.startDate && <Badge variant="outline">시작 {c.startDate}</Badge>}
+              {c.schedule && <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">{c.schedule}</Badge>}
+            </div>
+            {showAdd && (
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="ghost" onClick={() => startEdit(c)}><Pencil className="size-3.5" /></Button>
+                <Button size="sm" variant="ghost" onClick={() => { if (confirm('삭제하시겠습니까?')) del.mutate({ id: c.id, studentId }) }}><Trash2 className="size-3.5" /></Button>
+              </div>
+            )}
+          </div>
+          {c.fieldNotes && <p className="text-sm mt-2 whitespace-pre-wrap">{c.fieldNotes}</p>}
+        </div>
+      ))}
+      {showAdd && (
+        <div className="rounded-lg border border-dashed p-3 space-y-2">
+          <div className="text-xs font-medium text-muted-foreground">{editingId ? '코칭 수정' : '코칭 추가'}</div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">멘토</Label>
+              <select value={form.mentorId} onChange={e => setForm(f => ({ ...f, mentorId: e.target.value }))}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                <option value="">멘토 선택</option>
+                {pool.map(m => <option key={m.id} value={m.id}>{mentorFullName(m)}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">시작일</Label>
+              <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="h-9" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">코칭 스케줄</Label>
+            <Input value={form.schedule} onChange={e => setForm(f => ({ ...f, schedule: e.target.value }))} placeholder="예: 주3회, 월/목/토" className="h-9" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">코칭 분야 (메모)</Label>
+            <Textarea value={form.fieldNotes} onChange={e => setForm(f => ({ ...f, fieldNotes: e.target.value }))} rows={2} placeholder="예: AP Calculus 단원평가 대비, 주간 학습계획 점검" className="text-sm" />
+          </div>
+          <div className="flex justify-end gap-2">
+            {editingId && <Button size="sm" variant="outline" onClick={reset}>취소</Button>}
+            <Button size="sm" onClick={save} disabled={upsert.isPending}><Plus className="size-3.5 mr-1" />{editingId ? '저장' : '추가'}</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── 전공별 멘토 (회당 지급 · 세션 로그) ──
+function MajorMentorBlock({ studentId, createdBy, items, pool, mentorById, showAdd, canLogSessions }: {
+  studentId: string; createdBy?: string; items: StudentCoaching[]; pool: Mentor[]; mentorById: Map<string, Mentor>; showAdd: boolean; canLogSessions: boolean
+}) {
+  const upsert = useUpsertCoaching()
+  const del = useDeleteCoaching()
+  const [form, setForm] = useState({ mentorId: '', startDate: '', fieldNotes: '' })
+  const reset = () => setForm({ mentorId: '', startDate: '', fieldNotes: '' })
+  const save = () => {
+    if (!form.mentorId) return
+    upsert.mutate({ studentId, mentorId: form.mentorId, startDate: form.startDate || undefined, fieldNotes: form.fieldNotes || undefined, createdBy }, { onSuccess: reset })
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-sm font-semibold text-indigo-800">전공별 멘토 <span className="font-normal text-xs text-muted-foreground">· 회당 지급 (세션 1회 = 등급 단가)</span></div>
+      {items.length === 0 && <p className="text-sm text-muted-foreground">배정된 전공별 멘토가 없습니다.</p>}
+      {items.map(c => {
+        const m = mentorById.get(c.mentorId || '')
+        return (
+          <div key={c.id} className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium flex-wrap">
+                <span>{mentorFullName(m)}</span>
+                {m?.tier && <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50">{majorTierLabel(m.tier)} · {wonKR(majorTierAmount(m.tier))}/회</Badge>}
+                {c.startDate && <Badge variant="outline">시작 {c.startDate}</Badge>}
+              </div>
+              {showAdd && (
+                <Button size="sm" variant="ghost" onClick={() => { if (confirm('삭제하시겠습니까? (세션 기록도 함께 삭제됩니다)')) del.mutate({ id: c.id, studentId }) }}><Trash2 className="size-3.5" /></Button>
+              )}
+            </div>
+            {c.fieldNotes && <p className="text-sm whitespace-pre-wrap">{c.fieldNotes}</p>}
+            <MajorSessionLog coachingId={c.id} tier={m?.tier} createdBy={createdBy} canLog={canLogSessions} />
+          </div>
+        )
+      })}
+      {showAdd && (
+        <div className="rounded-lg border border-dashed p-3 space-y-2">
+          <div className="text-xs font-medium text-muted-foreground">전공별 멘토 추가</div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <Label className="text-xs">멘토 (등급·단가)</Label>
+              <select value={form.mentorId} onChange={e => setForm(f => ({ ...f, mentorId: e.target.value }))}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                <option value="">멘토 선택</option>
+                {pool.map(m => <option key={m.id} value={m.id}>{mentorFullName(m)}{m.tier ? ` — ${majorTierLabel(m.tier)} ${wonKR(majorTierAmount(m.tier))}/회` : ''}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">시작일 (선택)</Label>
+              <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="h-9" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">메모 (선택)</Label>
+            <Textarea value={form.fieldNotes} onChange={e => setForm(f => ({ ...f, fieldNotes: e.target.value }))} rows={2} placeholder="예: 리서치 페이퍼 지도 · 전공 심화" className="text-sm" />
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={save} disabled={upsert.isPending}><Plus className="size-3.5 mr-1" />추가</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── 전공별 멘토 세션 로그 (날짜 + 코멘트 = 1회) ──
+function MajorSessionLog({ coachingId, tier, createdBy, canLog }: { coachingId: string; tier?: string; createdBy?: string; canLog: boolean }) {
+  const { data: sessions = [] } = useMentorSessions(coachingId)
+  const add = useAddMentorSession()
+  const del = useDeleteMentorSession()
+  const [date, setDate] = useState('')
+  const [comment, setComment] = useState('')
+  const amount = majorTierAmount(tier)
+  const save = () => {
+    if (!date) return
+    add.mutate({ coachingId, sessionDate: date, comment: comment || undefined, createdBy }, { onSuccess: () => { setDate(''); setComment('') } })
+  }
+  return (
+    <div className="rounded-md border border-indigo-100 bg-white/60 p-2.5 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-indigo-700">세션 기록 <span className="text-muted-foreground font-normal">({sessions.length}회 · 합계 {wonKR(sessions.length * amount)})</span></span>
+      </div>
+      {sessions.length === 0 && <p className="text-xs text-muted-foreground">기록된 세션이 없습니다.</p>}
+      {sessions.map(s => (
+        <div key={s.id} className="flex items-start justify-between gap-2 rounded border border-indigo-50 bg-indigo-50/40 px-2 py-1.5">
+          <div className="min-w-0 text-xs">
+            <span className="font-medium tabular-nums">{s.sessionDate}</span>
+            <span className="ml-2 text-indigo-600 tabular-nums">{wonKR(amount)}</span>
+            {s.comment && <div className="mt-0.5 whitespace-pre-wrap text-muted-foreground">{s.comment}</div>}
+          </div>
+          {canLog && (
+            <button onClick={() => { if (confirm('이 세션 기록을 삭제할까요?')) del.mutate({ id: s.id, coachingId }) }} className="shrink-0 text-muted-foreground hover:text-red-500">
+              <Trash2 className="size-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
+      {canLog && (
+        <div className="flex flex-col gap-1.5 pt-0.5 sm:flex-row sm:items-end">
+          <div className="space-y-0.5">
+            <Label className="text-[10px] text-muted-foreground">진행 날짜</Label>
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-8 w-40 text-sm" />
+          </div>
+          <div className="flex-1 space-y-0.5">
+            <Label className="text-[10px] text-muted-foreground">진행 내용 (코멘트)</Label>
+            <Input value={comment} onChange={e => setComment(e.target.value)} placeholder="예: 리서치 주제 확정 · 데이터 분석 지도" className="h-8 text-sm" />
+          </div>
+          <Button size="sm" onClick={save} disabled={add.isPending || !date}><Plus className="size-3.5 mr-1" />세션 추가</Button>
+        </div>
+      )}
+    </div>
   )
 }
 

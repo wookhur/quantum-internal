@@ -1,8 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
+// 멘토 유형: 학습코칭(월 지급) | 전공별(회당 지급)
+export type MentorType = 'coaching' | 'major'
+// 전공별멘토 등급 → 회당 단가
+export type MajorTier = 'college' | 'expert_lt5' | 'expert_gte5'
+export const MAJOR_TIERS: { key: MajorTier; label: string; amount: number }[] = [
+  { key: 'college',     label: '대학생',        amount: 50000 },
+  { key: 'expert_lt5',  label: '5년이하 전문가', amount: 70000 },
+  { key: 'expert_gte5', label: '5년이상 전문가', amount: 100000 },
+]
+export const majorTierAmount = (tier?: string | null): number =>
+  MAJOR_TIERS.find(t => t.key === tier)?.amount ?? 0
+export const majorTierLabel = (tier?: string | null): string =>
+  MAJOR_TIERS.find(t => t.key === tier)?.label ?? '-'
+// 학습코칭멘토: 학생 1인당 월 지급액
+export const COACHING_MONTHLY = 300000
+
 export interface Mentor {
   id: string
+  type: MentorType
+  tier?: MajorTier      // major 전용
   koreanName?: string
   englishName?: string
   birthYear?: number
@@ -19,6 +37,8 @@ export interface Mentor {
 function mapMentor(r: Record<string, unknown>): Mentor {
   return {
     id: r.id as string,
+    type: ((r.type as string) || 'coaching') as MentorType,
+    tier: (r.tier as MajorTier) || undefined,
     koreanName: (r.korean_name as string) || undefined,
     englishName: (r.english_name as string) || undefined,
     birthYear: r.birth_year != null ? Number(r.birth_year) : undefined,
@@ -32,6 +52,10 @@ function mapMentor(r: Record<string, unknown>): Mentor {
     updatedAt: r.updated_at as string,
   }
 }
+
+/** 멘토 표시명(한글 · 영문). */
+export const mentorName = (m?: Pick<Mentor, 'koreanName' | 'englishName'> | null): string =>
+  m ? ([m.koreanName, m.englishName].filter(Boolean).join(' · ') || '') : ''
 
 export function useMentors() {
   return useQuery({
@@ -49,6 +73,8 @@ export function useUpsertMentor() {
   return useMutation({
     mutationFn: async (m: Partial<Mentor> & { id?: string }) => {
       const row: Record<string, unknown> = {
+        type: m.type || 'coaching',
+        tier: m.type === 'major' ? (m.tier || null) : null,
         korean_name: m.koreanName || null,
         english_name: m.englishName || null,
         birth_year: m.birthYear ?? null,
@@ -150,7 +176,10 @@ export function useUpsertCoaching() {
         if (error) throw error
       }
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['student_coaching', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['student_coaching', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['all_mentor_assignments'] })
+    },
   })
 }
 
@@ -161,6 +190,141 @@ export function useDeleteCoaching() {
       const { error } = await supabase.from('student_coaching').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['student_coaching', v.studentId] }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['student_coaching', v.studentId] })
+      qc.invalidateQueries({ queryKey: ['all_mentor_assignments'] })
+      qc.invalidateQueries({ queryKey: ['all_mentor_sessions'] })
+    },
+  })
+}
+
+// ── 전공별멘토 세션 로그 (날짜 + 코멘트 = 1회, 회당 청구 근거) ──
+export interface MentorSession {
+  id: string
+  coachingId: string
+  sessionDate: string
+  comment?: string
+  createdBy?: string
+  createdAt: string
+}
+
+function mapSession(r: Record<string, unknown>): MentorSession {
+  return {
+    id: r.id as string,
+    coachingId: r.coaching_id as string,
+    sessionDate: r.session_date as string,
+    comment: (r.comment as string) || undefined,
+    createdBy: (r.created_by as string) || undefined,
+    createdAt: r.created_at as string,
+  }
+}
+
+export function useMentorSessions(coachingId?: string) {
+  return useQuery({
+    queryKey: ['mentor_sessions', coachingId],
+    enabled: !!coachingId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('mentor_sessions')
+        .select('*')
+        .eq('coaching_id', coachingId as string)
+        .order('session_date', { ascending: false })
+      if (error) throw error
+      return (data || []).map(r => mapSession(r as Record<string, unknown>))
+    },
+  })
+}
+
+export function useAddMentorSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (s: { coachingId: string; sessionDate: string; comment?: string; createdBy?: string }) => {
+      const { error } = await supabase.from('mentor_sessions').insert({
+        coaching_id: s.coachingId,
+        session_date: s.sessionDate,
+        comment: s.comment || null,
+        created_by: s.createdBy || null,
+      })
+      if (error) throw error
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['mentor_sessions', v.coachingId] })
+      qc.invalidateQueries({ queryKey: ['all_mentor_sessions'] })
+    },
+  })
+}
+
+export function useDeleteMentorSession() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id }: { id: string; coachingId: string }) => {
+      const { error } = await supabase.from('mentor_sessions').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['mentor_sessions', v.coachingId] })
+      qc.invalidateQueries({ queryKey: ['all_mentor_sessions'] })
+    },
+  })
+}
+
+// ── 인보이스/게이팅용 전체 조회 ──
+export interface MentorAssignmentRow {
+  id: string
+  studentId: string
+  mentorId?: string
+  startDate?: string
+}
+
+/** 모든 멘토 배정(student_coaching) — 인보이스 자동반영·멘토 게이팅용. */
+export function useAllMentorAssignments() {
+  return useQuery({
+    queryKey: ['all_mentor_assignments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('student_coaching')
+        .select('id, student_id, mentor_id, start_date')
+      if (error) throw error
+      return (data || []).map(r => ({
+        id: (r as Record<string, unknown>).id as string,
+        studentId: (r as Record<string, unknown>).student_id as string,
+        mentorId: ((r as Record<string, unknown>).mentor_id as string) || undefined,
+        startDate: ((r as Record<string, unknown>).start_date as string) || undefined,
+      })) as MentorAssignmentRow[]
+    },
+  })
+}
+
+export interface MentorSessionRow {
+  id: string
+  coachingId: string
+  sessionDate: string
+  comment?: string
+  studentId?: string
+  mentorId?: string
+}
+
+/** 모든 전공별멘토 세션 — 인보이스 회당 자동반영용(멘토·학생 조인). */
+export function useAllMentorSessions() {
+  return useQuery({
+    queryKey: ['all_mentor_sessions'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('mentor_sessions')
+        .select('id, session_date, comment, coaching_id, student_coaching(student_id, mentor_id)')
+      if (error) throw error
+      return (data || []).map(r => {
+        const row = r as Record<string, unknown>
+        const sc = row.student_coaching as Record<string, unknown> | null
+        return {
+          id: row.id as string,
+          coachingId: row.coaching_id as string,
+          sessionDate: row.session_date as string,
+          comment: (row.comment as string) || undefined,
+          studentId: (sc?.student_id as string) || undefined,
+          mentorId: (sc?.mentor_id as string) || undefined,
+        }
+      }) as MentorSessionRow[]
+    },
   })
 }

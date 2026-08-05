@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
+import { useMentors, useAllMentorAssignments, useAllMentorSessions, majorTierAmount, COACHING_MONTHLY } from '@/hooks/useMentors'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useAllEditorMeetings } from '@/hooks/useEditorMeetings'
 import { useConsultantName, canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
@@ -1092,6 +1093,10 @@ export function FreelancerInvoicesPage(
   const { data: essayPlans = [] } = useAllEssayPlans()
   const { data: allEditorMeetings = [] } = useAllEditorMeetings()  // 에세이 에디터 미팅일지(전체)
   const { data: allStudentsForEditor = [] } = useServiceStudents()
+  // Mentor Support(학습코칭·전공별) 자동반영 소스
+  const { data: allMentors = [] } = useMentors()
+  const { data: allMentorAssignments = [] } = useAllMentorAssignments()
+  const { data: allMentorSessions = [] } = useAllMentorSessions()
   // 관리자/회계는 다른 컨설턴트의 자동반영 화면을 그대로 미리볼 수 있음 (진단·검증용)
   const { data: previewProfiles = [] } = useProfiles()
   const isManager = isAccounting || user?.role === 'admin'
@@ -1103,8 +1108,13 @@ export function FreelancerInvoicesPage(
       const n = canonicalConsultantName(p.name)
       if (n && !/^[0-9a-f-]{36}$/i.test(n)) names.add(n)
     }
+    // 멘토(학습코칭·전공별)도 미리보기 대상에 포함 → 담당자별 자동반영 확인
+    for (const m of allMentors) {
+      const n = canonicalConsultantName(m.koreanName || m.englishName || '')
+      if (n && !/^[0-9a-f-]{36}$/i.test(n)) names.add(n)
+    }
     return Array.from(names).sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [previewProfiles])
+  }, [previewProfiles, allMentors])
   const myName = canonicalConsultantName(effectiveName)
   // 수령 상태: 클릭한 것만 그 달에 수령완료. 미수령 건은 다음 달로 자동 이월(원래 달 태그 유지).
   const incentiveStatus = useIncentiveStatus()
@@ -1181,8 +1191,38 @@ export function FreelancerInvoicesPage(
       })
     })
 
-    return [...mgmt, ...essay, ...editorLines]
-  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName])
+    // ── Mentor Support: 학습코칭(월 300,000/학생) + 전공별(회당·등급 단가) ──
+    const mentorNameKey = (m: { koreanName?: string; englishName?: string }) => consultantNameKey(m.koreanName || m.englishName || '')
+    const mentorsById = new Map(allMentors.map(m => [m.id, m]))
+    const studentsById2 = new Map(allStudentsForEditor.map(s => [s.id, s]))
+    const mentorLines: DItem[] = []
+    // 학습코칭: 배정 시작월 <= 발행월 이면 그 달치 월정액 1건
+    for (const a of allMentorAssignments) {
+      const mt = mentorsById.get(a.mentorId || '')
+      if (!mt || mt.type !== 'coaching') continue
+      if (mentorNameKey(mt) !== myKey) continue
+      const startMonth = (a.startDate || '').slice(0, 7)
+      if (startMonth && startMonth > issueMonth) continue
+      const s = studentsById2.get(a.studentId)
+      const who = s ? studentLabel(s.name, s.koreanName) : '학생'
+      mentorLines.push({ id: `coach:${a.id}:${issueMonth}`, label: `${who} · 학습코칭 (월정액)`, amount: COACHING_MONTHLY, received: false })
+    }
+    // 전공별: 발행월에 진행된 세션마다 등급 단가 1건(회당)
+    const asgById = new Map(allMentorAssignments.map(a => [a.id, a]))
+    for (const sess of allMentorSessions) {
+      const asg = asgById.get(sess.coachingId)
+      const mentorId = sess.mentorId || asg?.mentorId
+      const mt = mentorsById.get(mentorId || '')
+      if (!mt || mt.type !== 'major') continue
+      if (mentorNameKey(mt) !== myKey) continue
+      if ((sess.sessionDate || '').slice(0, 7) !== issueMonth) continue
+      const s = studentsById2.get(sess.studentId || asg?.studentId || '')
+      const who = s ? studentLabel(s.name, s.koreanName) : '학생'
+      mentorLines.push({ id: `sess:${sess.id}`, label: `${who} · 전공별멘토 (${sess.sessionDate})`, amount: majorTierAmount(mt.tier), received: false, sourceDetail: sess.comment })
+    }
+
+    return [...mgmt, ...essay, ...editorLines, ...mentorLines]
+  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions])
 
   // 발행 대상 = 아직 수령완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
