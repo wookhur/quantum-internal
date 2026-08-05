@@ -16,7 +16,7 @@ import { useAllExtraInstallments } from '@/hooks/useExternalFees'
 import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, useDeleteInvoice, invoiceDisplayName, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
 import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
-import { Banknote, RefreshCw, Download } from 'lucide-react'
+import { Banknote, RefreshCw, Download, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useIncentiveLinesByPerson, downloadInvoiceExcel, InvoiceFormDialog, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
 import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
@@ -93,6 +93,7 @@ export function FinanceDashboardPage() {
   // 승인완료 지급 원장: 전역 월과 독립된 자체 월 필터(전체 포함) — 달이 바뀌어도 원하는 월 조회
   const { data: ledgerInvoices = [] } = useAllInvoices()  // 전체 월
   const [ledgerMonth, setLedgerMonth] = useState<string>('all')
+  const [showPaidLedger, setShowPaidLedger] = useState(false)  // 지급완료 건 접기(기본 접힘)
   const approvedList = useMemo(() =>
     ledgerInvoices
       .filter(i => i.status === 'approved' && (ledgerMonth === 'all' || i.invoiceMonth === ledgerMonth))
@@ -499,8 +500,8 @@ export function FinanceDashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {approvedList.map(inv => (
-                  <TableRow key={inv.id} className={inv.paidDate ? 'bg-indigo-50/30' : ''}>
+                {approvedList.filter(inv => !inv.paidDate).map(inv => (
+                  <TableRow key={inv.id}>
                     <TableCell className="text-sm font-medium">{invoiceDisplayName(inv)}</TableCell>
                     <TableCell className="text-sm"><Badge variant="outline">{kindLabel(inv.kind)}</Badge></TableCell>
                     <TableCell className="text-sm tabular-nums">{inv.invoiceMonth}</TableCell>
@@ -510,9 +511,7 @@ export function FinanceDashboardPage() {
                       </button>
                     </TableCell>
                     <TableCell>
-                      {inv.paidDate
-                        ? <StatusBadge status="paid" />
-                        : <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-200 bg-emerald-50">지급예정</Badge>}
+                      <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-200 bg-emerald-50">지급예정</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -526,6 +525,49 @@ export function FinanceDashboardPage() {
                     </TableCell>
                   </TableRow>
                 ))}
+                {(() => {
+                  const paidRows = approvedList.filter(inv => inv.paidDate)
+                  if (paidRows.length === 0) return null
+                  return (
+                    <>
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={6} className="p-0">
+                          <button
+                            type="button"
+                            onClick={() => setShowPaidLedger(v => !v)}
+                            className="flex w-full items-center gap-2 bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted"
+                          >
+                            {showPaidLedger ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                            지급완료 {paidRows.length}건 {showPaidLedger ? '접기' : '펼치기'}
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                      {showPaidLedger && paidRows.map(inv => (
+                        <TableRow key={inv.id} className="bg-indigo-50/30">
+                          <TableCell className="text-sm font-medium">{invoiceDisplayName(inv)}</TableCell>
+                          <TableCell className="text-sm"><Badge variant="outline">{kindLabel(inv.kind)}</Badge></TableCell>
+                          <TableCell className="text-sm tabular-nums">{inv.invoiceMonth}</TableCell>
+                          <TableCell className="text-sm text-right font-semibold tabular-nums">
+                            <button type="button" onClick={() => setDetailInv(inv)} className="text-primary hover:underline underline-offset-2 tabular-nums" title="인보이스 상세 보기">
+                              {formatCurrency(inv.totalAmount)}
+                            </button>
+                          </TableCell>
+                          <TableCell><StatusBadge status="paid" /></TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {allowed && (
+                                <Button size="sm" variant="ghost" className="h-8 gap-1 text-muted-foreground hover:text-primary" onClick={() => setEditInv(inv)}>
+                                  <Pencil className="size-3.5" /> 수정
+                                </Button>
+                              )}
+                              <PaidActionCell inv={inv} disabled={setPaidDate.isPending} onSet={(id, d) => setPaidDate.mutate({ id, paidDate: d })} />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </>
+                  )
+                })()}
               </TableBody>
             </Table>
           )}
