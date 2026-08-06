@@ -85,7 +85,8 @@ import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 
 // Consultant pool + helpers (shared with KPI page)
-import { useConsultantPool, useConsultantName } from '@/lib/consultants'
+import { useConsultantPool, useConsultantName, consultantNameKey } from '@/lib/consultants'
+import { useEssayRates, essayRateForName } from '@/hooks/useEssayRates'
 import { kpiDotColor } from '@/lib/kpi'
 import { useStudentKpis, KPI_MAX } from '@/hooks/useConsultantKpis'
 import { useStudentStatusFlags } from '@/hooks/useServiceDashboard'
@@ -1168,7 +1169,9 @@ const selectCls = 'h-8 rounded-md border border-input bg-transparent px-1.5 text
 
 function ApplicationSlots({ studentId, count, canEdit }: { studentId: string; count: number; canEdit: boolean }) {
   const { data: apps = [] } = useStudentApplications(studentId)
+  const upsert = useUpsertStudentApplication()
   const emptyCount = Math.max(0, count - apps.length)
+  const addSlot = () => upsert.mutate({ studentId, university: '', sortOrder: Math.max(apps.length, count) })
   if (count === 0 && apps.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-sky-200 bg-sky-50/30 p-3 text-xs text-muted-foreground">
@@ -1183,6 +1186,11 @@ function ApplicationSlots({ studentId, count, canEdit }: { studentId: string; co
         {apps.map((a, i) => <AppRow key={a.id} studentId={studentId} app={a} index={i} canEdit={canEdit} />)}
         {Array.from({ length: emptyCount }).map((_, i) => <AppRow key={`empty-${i}`} studentId={studentId} index={apps.length + i} canEdit={canEdit} />)}
       </div>
+      {canEdit && (
+        <button onClick={addSlot} className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-sky-200 py-1.5 text-xs text-sky-700 hover:bg-sky-50">
+          <Plus className="size-3.5" /> 원서 추가
+        </button>
+      )}
     </div>
   )
 }
@@ -1239,6 +1247,11 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
   const update = useUpdateServiceStudent()
   const [expanded, setExpanded] = useState(false)
   const canEdit = canEditProp && !locked   // 잠금 시 편집 불가
+  // 금액은 관리자·회계 + 본인(담당 컨설턴트)에게만 노출
+  const { user } = useAuth()
+  const { data: essayRates } = useEssayRates()
+  const isManager = user?.role === 'admin' || user?.role === 'c_level' || canAccessAccount(user)
+  const myKey = consultantNameKey(user?.name || '')
 
   return (
     <Card>
@@ -1280,7 +1293,6 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
         )}
         {plans.map(p => {
           const count = essayMonthCount(p.startMonth)
-          const monthly = count > 0 ? Math.floor((p.totalAmount || 0) / count) : 0
           return (
             <div key={p.id} className="rounded-lg border p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -1301,21 +1313,36 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground">총 급여</p>
-                  <p className="font-medium">{formatCurrency(p.totalAmount, (p.currency as 'KRW' | 'USD') || 'KRW')}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">월 지급액 (÷{count})</p>
-                  <p className="font-medium text-indigo-700">{formatCurrency(monthly, (p.currency as 'KRW' | 'USD') || 'KRW')}<span className="text-xs text-muted-foreground">/월</span></p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">비고</p>
-                  <p className="whitespace-pre-wrap">{p.notes || '—'}</p>
-                </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground">인보이스 발행 시 {p.consultantName || '담당 컨설턴트'}의 해당 월 인보이스에 자동 추가됩니다(시작월~12월).</p>
+              {(() => {
+                const canSeeAmount = isManager || (!!p.consultantName && consultantNameKey(p.consultantName) === myKey)
+                const rate = essayRateForName(essayRates, p.consultantName)
+                return (
+                  <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-sm">
+                    {canSeeAmount ? (
+                      <>
+                        <div>
+                          <p className="text-xs text-muted-foreground">월 단가</p>
+                          <p className="font-medium text-indigo-700">{rate > 0 ? <>{formatCurrency(rate, 'KRW')}<span className="text-xs text-muted-foreground">/월</span></> : <span className="text-muted-foreground">미설정</span>}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">예상 총액 (×{count})</p>
+                          <p className="font-medium">{rate > 0 ? formatCurrency(rate * count, 'KRW') : '—'}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-2">
+                        <p className="text-xs text-muted-foreground">금액</p>
+                        <p className="text-muted-foreground">비공개</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs text-muted-foreground">비고</p>
+                      <p className="whitespace-pre-wrap">{p.notes || '—'}</p>
+                    </div>
+                  </div>
+                )
+              })()}
+              <p className="text-[11px] text-muted-foreground">인보이스 발행 시 {p.consultantName || '담당 컨설턴트'}의 해당 월 인보이스에 담당자 <b>월 단가</b>로 자동 추가됩니다(시작월~12월).</p>
             </div>
           )
         })}
@@ -1326,27 +1353,6 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
 }
 
 const SERVICE_YEAR = new Date().getFullYear()
-
-// G12 원서·에세이 패키지 (선택 시 총액 자동)
-const ESSAY_PACKAGES: { key: string; label: string; total: number | null }[] = [
-  { key: 'college_5',    label: 'College Package · 5개 지원 (₩6,000,000)',            total: 6_000_000 },
-  { key: 'college_10',   label: 'College Package · 10개 지원 (₩10,000,000)',           total: 10_000_000 },
-  { key: 'college_plus', label: 'College Package · 10개+ (초과 개당 +₩1,000,000)',       total: null },
-  { key: 'med_15',       label: 'Medical & Dental · 15개 대학 (₩13,000,000)',          total: 13_000_000 },
-  { key: 'med_20',       label: 'Medical & Dental · 20개 대학 (₩14,000,000)',          total: 14_000_000 },
-  { key: 'med_25',       label: 'Medical & Dental · 25개 대학 (₩15,000,000)',          total: 15_000_000 },
-  { key: 'custom',       label: '직접 입력',                                            total: null },
-]
-
-// 수정 시 저장된 총액으로 패키지 역추정
-function matchEssayPackage(p?: EssayPlan): { key: string; apps: number } {
-  if (!p) return { key: 'college_10', apps: 11 }
-  const t = p.totalAmount
-  const fixed = ESSAY_PACKAGES.find(x => x.total != null && x.total === t)
-  if (fixed) return { key: fixed.key, apps: 11 }
-  if (t > 10_000_000 && (t - 10_000_000) % 1_000_000 === 0) return { key: 'college_plus', apps: (t - 10_000_000) / 1_000_000 + 10 }
-  return { key: 'custom', apps: 11 }
-}
 
 function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, canEdit, trigger }: {
   studentId: string
@@ -1359,85 +1365,36 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
   const create = useCreateEssayPlan()
   const update = useUpdateEssayPlan()
   const [open, setOpen] = useState(false)
-  const init = matchEssayPackage(plan)
   const [consultant, setConsultant] = useState(plan?.consultantName || defaultConsultant || '')
-  const [pkg, setPkg] = useState(init.key)
-  const [apps, setApps] = useState(String(init.apps))
-  const [customTotal, setCustomTotal] = useState(plan && init.key === 'custom' ? String(plan.totalAmount) : '')
   const [startMonth, setStartMonth] = useState(plan?.startMonth || `${SERVICE_YEAR}-06`)
   const [notes, setNotes] = useState(plan?.notes || '')
 
-  const pkgDef = ESSAY_PACKAGES.find(x => x.key === pkg)
-  const appsNum = Number(apps) || 0
-  const totalNum = pkg === 'college_plus'
-    ? 10_000_000 + Math.max(0, appsNum - 10) * 1_000_000
-    : pkg === 'custom'
-      ? (Number(customTotal) || 0)
-      : (pkgDef?.total || 0)
-  const packageLabel = pkg === 'college_plus'
-    ? `College Package · ${appsNum}개 지원`
-    : pkg === 'custom'
-      ? (plan?.packageLabel || '직접 입력')
-      : pkgDef?.label
-
-  const count = essayMonthCount(startMonth)
-  const monthly = count > 0 ? Math.floor(totalNum / count) : 0
-  const lastMonthly = count > 0 ? totalNum - monthly * (count - 1) : 0
-
   const save = () => {
-    if (!canEdit || !startMonth || totalNum <= 0) return
-    const base = { consultantName: consultant.trim() || undefined, totalAmount: totalNum, startMonth, packageLabel: packageLabel || undefined, notes: notes.trim() || undefined }
-    if (plan) {
-      update.mutate({ id: plan.id, studentId, ...base }, { onSuccess: () => setOpen(false) })
-    } else {
-      create.mutate({ studentId, ...base, currency: 'KRW', createdBy }, { onSuccess: () => setOpen(false) })
-    }
+    if (!canEdit || !consultant.trim() || !startMonth) return
+    // 금액은 저장하지 않음 — 인보이스가 담당자별 월 단가로 자동 계산
+    const base = { consultantName: consultant.trim(), totalAmount: 0, startMonth, notes: notes.trim() || undefined }
+    if (plan) update.mutate({ id: plan.id, studentId, ...base }, { onSuccess: () => setOpen(false) })
+    else create.mutate({ studentId, ...base, currency: 'KRW', createdBy }, { onSuccess: () => setOpen(false) })
   }
-
-  const selectCls = 'mt-1 h-9 w-full rounded-md border border-input bg-white px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
   return (
     <>
     <span onClick={() => setOpen(true)}>{trigger}</span>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{plan ? '원서·에세이 서비스 수정' : '원서·에세이 서비스 등록'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{plan ? '원서·에세이 담당자 수정' : '원서·에세이 담당자 추가'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label className="text-xs">담당 컨설턴트 <span className="text-muted-foreground font-normal">(월 급여 대상)</span></Label>
+            <Label className="text-xs">담당 컨설턴트</Label>
             <Input className="mt-1" value={consultant} onChange={e => setConsultant(e.target.value)} placeholder="예: John Kim" />
           </div>
-          {/* 패키지 선택 → 총액 자동 */}
           <div>
-            <Label className="text-xs">패키지 <span className="text-muted-foreground font-normal">(선택 시 총액 자동)</span></Label>
-            <select className={selectCls} value={pkg} onChange={e => setPkg(e.target.value)}>
-              {ESSAY_PACKAGES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-            </select>
+            <Label className="text-xs">시작월 (신청월)</Label>
+            <Input className="mt-1" type="month" value={startMonth} onChange={e => setStartMonth(e.target.value)} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {pkg === 'college_plus' && (
-              <div>
-                <Label className="text-xs">지원 개수 <span className="text-muted-foreground font-normal">(11개+)</span></Label>
-                <Input className="mt-1" type="number" min={11} value={apps} onChange={e => setApps(e.target.value)} placeholder="예: 12" />
-              </div>
-            )}
-            {pkg === 'custom' && (
-              <div>
-                <Label className="text-xs">총 급여 (원)</Label>
-                <Input className="mt-1" type="number" min={0} value={customTotal} onChange={e => setCustomTotal(e.target.value)} placeholder="예: 10000000" />
-              </div>
-            )}
-            <div>
-              <Label className="text-xs">시작월 (신청월)</Label>
-              <Input className="mt-1" type="month" value={startMonth} onChange={e => setStartMonth(e.target.value)} />
-            </div>
-          </div>
-          {/* 계산 미리보기 */}
           <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800 space-y-0.5">
-            <div>서비스 총액: <b>{formatCurrency(totalNum, 'KRW')}</b>{packageLabel ? <span className="text-indigo-500"> · {packageLabel}</span> : null}</div>
-            <div>기간: <b>{startMonth}</b> ~ <b>{essayEndMonth(startMonth)}</b> (그해 12월 종료) · <b>{count}개월</b></div>
-            <div>월 지급액: <b>{formatCurrency(monthly, 'KRW')}</b>{count > 1 && <> · 12월 <b>{formatCurrency(lastMonthly, 'KRW')}</b> (잔액 보정)</>}</div>
-            <div className="text-indigo-500">인보이스 발행 시 시작월~12월 매월 자동 추가됩니다(미팅 조건과 무관).</div>
+            <div>기간: <b>{startMonth}</b> ~ <b>{essayEndMonth(startMonth)}</b> (그해 12월 종료)</div>
+            <div className="text-indigo-500">인보이스 발행 시 담당자의 <b>월 단가</b>로 시작월~12월 매월 자동 계산됩니다. 단가는 인보이스관리(관리자·회계)에서 설정합니다.</div>
           </div>
           <div>
             <Label className="text-xs">비고</Label>
@@ -1446,7 +1403,7 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>취소</Button>
-          <Button onClick={save} disabled={!startMonth || totalNum <= 0 || create.isPending || update.isPending}>
+          <Button onClick={save} disabled={!consultant.trim() || !startMonth || create.isPending || update.isPending}>
             {(create.isPending || update.isPending) && <Loader2 className="size-4 mr-1 animate-spin" />}저장
           </Button>
         </DialogFooter>
