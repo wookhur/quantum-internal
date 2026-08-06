@@ -1729,22 +1729,29 @@ function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: strin
   const { data: invoices = [] } = useFreelancerInvoices(month, kind)
   const { data: profiles = [] } = useProfiles()
   const byConsultant = useConsultantBillable(month)
+  const { data: essayPlans = [] } = useAllEssayPlans()
   const linesByPerson = useIncentiveLinesByPerson()
   const send = useSendMessage()
   const [sending, setSending] = useState<string | null>(null)
 
   const rows = useMemo(() => {
     const source = new Map<string, number>()
+    const bump = (name: string, n: number) => { if (name && n > 0) source.set(name, (source.get(name) || 0) + n) }
     if (isIncentive) {
       linesByPerson.forEach((lines, name) => {
         const c = lines.filter(l => l.month === month).length
-        if (c) source.set(name, c)
+        if (c) bump(name, c)
       })
     } else {
       byConsultant.forEach((entry) => {
-        const c = entry.students.filter(s => s.billable).length
-        if (c > 0) source.set(entry.name, c)
+        bump(entry.name, entry.students.filter(s => s.billable).length)
       })
+      // 원서·에세이: 담당 컨설턴트별 이 달 청구 가능 건수 포함(관리비와 별개)
+      for (const p of essayPlans) {
+        if (!p.consultantName) continue
+        if (!essayLineForMonth(p, month)) continue
+        bump(canonicalConsultantName(p.consultantName), 1)
+      }
     }
     const out: { name: string; count: number; status: 'none' | 'submitted' | 'approved' }[] = []
     source.forEach((count, name) => {
@@ -1754,7 +1761,7 @@ function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: strin
       out.push({ name, count, status })
     })
     return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [isIncentive, byConsultant, linesByPerson, invoices, month])
+  }, [isIncentive, byConsultant, essayPlans, linesByPerson, invoices, month])
 
   const request = async (name: string) => {
     if (!canEdit) return
