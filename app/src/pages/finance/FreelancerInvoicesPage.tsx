@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect, Fragment } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   FileText, Plus, Trash2, Download, CheckCircle2, XCircle,
-  Eye, Loader2,
+  Eye, Loader2, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -1014,6 +1014,85 @@ export function useIncentiveLinesByPerson() {
   }, [entries, serviceLines, students, clawbacks])
 }
 
+// ─── 급여 지급 대상자(모든 소스) + 상세 라인 ──────────────────────────────
+export interface PayeeItem { label: string; amount: number }
+/** 이 달 급여를 받아야 하는 사람(이름) → 상세 라인 목록.
+ *  관리비(2회 미팅) · 원서·에세이 · 에세이 에디터 · 멘토(학습코칭·전공별) / 인센티브. */
+function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]> {
+  const isIncentive = kind === 'sales_incentive'
+  const byConsultant = useConsultantBillable(month)
+  const { data: essayPlans = [] } = useAllEssayPlans()
+  const { data: editorMeetings = [] } = useAllEditorMeetings()
+  const { data: students = [] } = useServiceStudents()
+  const { data: mentors = [] } = useMentors()
+  const { data: assignments = [] } = useAllMentorAssignments()
+  const { data: sessions = [] } = useAllMentorSessions()
+  const linesByPerson = useIncentiveLinesByPerson()
+  return useMemo(() => {
+    const out = new Map<string, PayeeItem[]>()
+    const add = (rawName: string | undefined, item: PayeeItem) => {
+      const nm = canonicalConsultantName(rawName || '')
+      if (!nm || /^[0-9a-f-]{36}$/i.test(nm)) return
+      const arr = out.get(nm) || []
+      arr.push(item); out.set(nm, arr)
+    }
+    if (isIncentive) {
+      linesByPerson.forEach((lines, name) => {
+        for (const l of lines) if (l.month === month) add(name, { label: l.label, amount: l.amount })
+      })
+      return out
+    }
+    const studentsById = new Map(students.map(s => [s.id, s]))
+    // 관리비 (단가는 발행 시 입력 → amount 0)
+    byConsultant.forEach(entry => {
+      for (const s of entry.students) if (s.billable) add(entry.name, { label: `${s.label} · 관리비`, amount: 0 })
+    })
+    // 원서·에세이 (총액÷개월수)
+    for (const p of essayPlans) {
+      const line = essayLineForMonth(p, month)
+      if (!p.consultantName || !line) continue
+      const s = studentsById.get(p.studentId)
+      const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ') || (s ? studentLabel(s.name, s.koreanName) : '학생')
+      add(p.consultantName, { label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, amount: line.amount })
+    }
+    // 에세이 에디터 (원서·에세이 플랜 학생 제외, 2회 짝 마감월 · 단가 발행 시 입력)
+    const planStudentIds = new Set(essayPlans.map(p => p.studentId))
+    const byEditorStudent = new Map<string, { editor: string; studentId: string; dates: string[] }>()
+    for (const em of editorMeetings) {
+      if (!em.meetingDate || !em.editor || planStudentIds.has(em.studentId)) continue
+      const k = `${consultantNameKey(em.editor)}|${em.studentId}`
+      const e = byEditorStudent.get(k) || { editor: em.editor, studentId: em.studentId, dates: [] }
+      e.dates.push(em.meetingDate); byEditorStudent.set(k, e)
+    }
+    byEditorStudent.forEach(({ editor, studentId, dates }) => {
+      const pairs = pairsClosingInMonth(dates, month)
+      if (!pairs.length) return
+      const s = studentsById.get(studentId)
+      const who = s ? studentLabel(s.name, s.koreanName) : '학생'
+      pairs.forEach(() => add(editor, { label: `${who} · 에세이에디터`, amount: 0 }))
+    })
+    // 멘토 (학습코칭 월정액 · 전공별 회당)
+    const mentorById = new Map(mentors.map(mt => [mt.id, mt]))
+    const asgById = new Map(assignments.map(a => [a.id, a]))
+    for (const a of assignments) {
+      const mt = mentorById.get(a.mentorId || ''); if (!mt || mt.type !== 'coaching') continue
+      if (((a.startDate || '').slice(0, 7)) > month) continue
+      const s = studentsById.get(a.studentId)
+      const who = s ? studentLabel(s.name, s.koreanName) : '학생'
+      add(mt.koreanName || mt.englishName, { label: `${who} · 학습코칭 (월정액)`, amount: COACHING_MONTHLY })
+    }
+    for (const sess of sessions) {
+      const asg = asgById.get(sess.coachingId)
+      const mt = mentorById.get((sess.mentorId || asg?.mentorId) || ''); if (!mt || mt.type !== 'major') continue
+      if ((sess.sessionDate || '').slice(0, 7) !== month) continue
+      const s = studentsById.get((sess.studentId || asg?.studentId) || '')
+      const who = s ? studentLabel(s.name, s.koreanName) : '학생'
+      add(mt.koreanName || mt.englishName, { label: `${who} · 전공별멘토 (${sess.sessionDate})`, amount: majorTierAmount(mt.tier) })
+    }
+    return out
+  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, linesByPerson, month])
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────
 
 export function FreelancerInvoicesPage(
@@ -1067,12 +1146,14 @@ export function FreelancerInvoicesPage(
     return list
   }, [invoices, statusFilter, search])
 
-  // 제출자 이름 드롭다운 옵션 (현재 조회 범위의 인보이스 제출자)
+  // 이름 드롭다운 옵션 = 이 달 급여 지급 대상자(모든 소스) + 이미 제출한 사람
+  const dropdownPayees = useBillablePayees(selectedMonth === 'all' ? getCurrentMonth() : selectedMonth, kind)
   const nameOptions = useMemo(() => {
     const set = new Set<string>()
+    dropdownPayees.forEach((_items, name) => set.add(name))
     for (const inv of invoices) { const n = invoiceDisplayName(inv); if (n) set.add(n) }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [invoices])
+  }, [invoices, dropdownPayees])
 
   const monthOptions = getMonthOptions()
   const grandTotal = filtered.reduce((s, inv) => s + inv.totalAmount, 0)
@@ -1348,10 +1429,10 @@ export function FreelancerInvoicesPage(
         {isAccounting && (
           <Select value={search || 'all'} onValueChange={v => setSearch(!v || v === 'all' ? '' : v)}>
             <SelectTrigger className="w-48 h-9">
-              <span className="truncate">{search || (t('fInvoice.all') + ' 제출자')}</span>
+              <span className="truncate">{search || '전체 지급 대상자'}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{t('fInvoice.all')} 제출자</SelectItem>
+              <SelectItem value="all">전체 지급 대상자</SelectItem>
               {nameOptions.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -1728,40 +1809,21 @@ function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: strin
   const isIncentive = kind === 'sales_incentive'
   const { data: invoices = [] } = useFreelancerInvoices(month, kind)
   const { data: profiles = [] } = useProfiles()
-  const byConsultant = useConsultantBillable(month)
-  const { data: essayPlans = [] } = useAllEssayPlans()
-  const linesByPerson = useIncentiveLinesByPerson()
+  const payees = useBillablePayees(month, kind)
   const send = useSendMessage()
   const [sending, setSending] = useState<string | null>(null)
+  const [openName, setOpenName] = useState<string | null>(null)
 
   const rows = useMemo(() => {
-    const source = new Map<string, number>()
-    const bump = (name: string, n: number) => { if (name && n > 0) source.set(name, (source.get(name) || 0) + n) }
-    if (isIncentive) {
-      linesByPerson.forEach((lines, name) => {
-        const c = lines.filter(l => l.month === month).length
-        if (c) bump(name, c)
-      })
-    } else {
-      byConsultant.forEach((entry) => {
-        bump(entry.name, entry.students.filter(s => s.billable).length)
-      })
-      // 원서·에세이: 담당 컨설턴트별 이 달 청구 가능 건수 포함(관리비와 별개)
-      for (const p of essayPlans) {
-        if (!p.consultantName) continue
-        if (!essayLineForMonth(p, month)) continue
-        bump(canonicalConsultantName(p.consultantName), 1)
-      }
-    }
-    const out: { name: string; count: number; status: 'none' | 'submitted' | 'approved' }[] = []
-    source.forEach((count, name) => {
+    const out: { name: string; count: number; total: number; items: PayeeItem[]; status: 'none' | 'submitted' | 'approved' }[] = []
+    payees.forEach((items, name) => {
       const theirs = invoices.filter(inv => canonicalConsultantName(inv.freelancerName) === name)
       const status = theirs.some(i => i.status === 'approved') ? 'approved'
         : theirs.some(i => i.status === 'submitted') ? 'submitted' : 'none'
-      out.push({ name, count, status })
+      out.push({ name, count: items.length, total: items.reduce((s, i) => s + i.amount, 0), items, status })
     })
     return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [isIncentive, byConsultant, essayPlans, linesByPerson, invoices, month])
+  }, [payees, invoices])
 
   const request = async (name: string) => {
     if (!canEdit) return
@@ -1785,39 +1847,65 @@ function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: strin
     <Card>
       <CardContent className="p-0">
         <div className="p-4 text-sm text-muted-foreground">
-          {month} {isIncentive ? '인센티브 발생자별' : '청구 대상 컨설턴트별'} 인보이스 제출 현황입니다. '승인완료'가 아닌 대상에게 요청 메시지를 보낼 수 있습니다.
+          {month} {isIncentive ? '인센티브 발생자별' : '급여 지급 대상자별'} 현황입니다. 이름을 클릭하면 <b>상세 내역</b>이 펼쳐집니다. '승인완료'가 아닌 대상에게 요청 메시지를 보낼 수 있습니다.
         </div>
         <Table>
           <TableHeader>
             <TableRow className="text-xs">
-              <TableHead>{isIncentive ? '발생자' : '컨설턴트'}</TableHead>
-              <TableHead className="text-center w-28">{isIncentive ? '발생 건' : '청구 가능'}</TableHead>
-              <TableHead className="w-40">상태</TableHead>
-              <TableHead className="w-28"></TableHead>
+              <TableHead>{isIncentive ? '발생자' : '지급 대상자'}</TableHead>
+              <TableHead className="text-center w-20">건수</TableHead>
+              <TableHead className="text-right w-32">금액</TableHead>
+              <TableHead className="w-36">상태</TableHead>
+              <TableHead className="w-24"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-sm text-muted-foreground">대상이 없습니다.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">대상이 없습니다.</TableCell></TableRow>
             )}
-            {rows.map(r => (
-              <TableRow key={r.name}>
-                <TableCell className="font-medium">{r.name}</TableCell>
-                <TableCell className="text-center">{r.count}{isIncentive ? '건' : '명'}</TableCell>
-                <TableCell>
-                  {r.status === 'approved' ? <Badge className="bg-green-100 text-green-700">승인완료</Badge>
-                    : r.status === 'submitted' ? <Badge className="bg-blue-100 text-blue-700">제출됨(미승인)</Badge>
-                    : <Badge className="bg-red-100 text-red-700">미제출</Badge>}
-                </TableCell>
-                <TableCell>
-                  {canEdit && r.status !== 'approved' && (
-                    <Button size="sm" variant="outline" disabled={sending === r.name} onClick={() => request(r.name)}>
-                      {sending === r.name ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}요청
-                    </Button>
+            {rows.map(r => {
+              const open = openName === r.name
+              return (
+                <Fragment key={r.name}>
+                  <TableRow className="cursor-pointer hover:bg-muted/40" onClick={() => setOpenName(open ? null : r.name)}>
+                    <TableCell className="font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        {open ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
+                        {r.name}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">{r.count}건</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">{r.total > 0 ? formatKRW(r.total) : '—'}</TableCell>
+                    <TableCell>
+                      {r.status === 'approved' ? <Badge className="bg-green-100 text-green-700">승인완료</Badge>
+                        : r.status === 'submitted' ? <Badge className="bg-blue-100 text-blue-700">제출됨(미승인)</Badge>
+                        : <Badge className="bg-red-100 text-red-700">미제출</Badge>}
+                    </TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      {canEdit && r.status !== 'approved' && (
+                        <Button size="sm" variant="outline" disabled={sending === r.name} onClick={() => request(r.name)}>
+                          {sending === r.name ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}요청
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  {open && (
+                    <TableRow className="bg-muted/20 hover:bg-muted/20">
+                      <TableCell colSpan={5} className="py-2">
+                        <div className="space-y-1 pl-6 pr-2">
+                          {r.items.map((it, i) => (
+                            <div key={i} className="flex items-center justify-between gap-3 text-xs">
+                              <span className="text-muted-foreground">{it.label}</span>
+                              <span className="tabular-nums shrink-0">{it.amount > 0 ? formatKRW(it.amount) : <span className="text-muted-foreground">발행 시 입력</span>}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   )}
-                </TableCell>
-              </TableRow>
-            ))}
+                </Fragment>
+              )
+            })}
           </TableBody>
         </Table>
       </CardContent>
