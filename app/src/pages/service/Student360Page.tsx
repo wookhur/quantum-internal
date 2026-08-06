@@ -1369,6 +1369,14 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
   const isManager = user?.role === 'admin' || user?.role === 'c_level' || canAccessAccount(user)
   const create = useCreateEssayPlan()
   const update = useUpdateEssayPlan()
+  const consultantPool = useConsultantPool()
+  // 담당자 드롭다운 = 컨설턴트 풀 + 에세이 에디터 (오타·띄어쓰기 방지 → 인보이스 매칭 정확)
+  const consultantOptions = useMemo(() => {
+    const byKey = new Map<string, string>()
+    for (const c of consultantPool) { const k = consultantNameKey(c.name); if (k && !byKey.has(k)) byKey.set(k, c.name) }
+    for (const e of ESSAY_EDITORS) { const k = consultantNameKey(e); if (k && !byKey.has(k)) byKey.set(k, e) }
+    return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [consultantPool])
   const [open, setOpen] = useState(false)
   const [consultant, setConsultant] = useState(plan?.consultantName || defaultConsultant || '')
   const [startMonth, setStartMonth] = useState(plan?.startMonth || `${SERVICE_YEAR}-06`)
@@ -1403,8 +1411,16 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
         <DialogHeader><DialogTitle>{plan ? '원서·에세이 서비스 수정' : '원서·에세이 서비스 추가'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
-            <Label className="text-xs">담당 컨설턴트</Label>
-            <Input className="mt-1" value={consultant} onChange={e => setConsultant(e.target.value)} placeholder="예: John Kim" />
+            <Label className="text-xs">담당 컨설턴트 <span className="text-muted-foreground font-normal">(컨설턴트·에세이 에디터)</span></Label>
+            <select
+              className="mt-1 h-9 w-full rounded-md border border-input bg-white px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              value={consultant}
+              onChange={e => setConsultant(e.target.value)}
+            >
+              <option value="">담당자 선택</option>
+              {consultant && !consultantOptions.includes(consultant) && <option value={consultant}>{consultant}</option>}
+              {consultantOptions.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
