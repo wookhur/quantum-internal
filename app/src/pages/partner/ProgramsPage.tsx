@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -544,6 +544,47 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
   )
 }
 
+// ── Program title (inline 편집) ─────────────────────────────────
+function ProgramTitle({ program, canEdit }: { program: PartnerProgram; canEdit: boolean }) {
+  const { language: lang } = useLanguage()
+  const updateProgram = useUpdateProgram()
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(program.name)
+  useEffect(() => { setName(program.name); setEditing(false) }, [program.id, program.name])
+  const save = () => {
+    setEditing(false)
+    const v = name.trim()
+    if (v && v !== program.name) updateProgram.mutate({ id: program.id, name: v })
+    else setName(program.name)
+  }
+  if (editing && canEdit) {
+    return (
+      <Input
+        value={name}
+        autoFocus
+        onChange={(e) => setName(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          if (e.key === 'Escape') { setName(program.name); setEditing(false) }
+        }}
+        className="h-8 text-lg font-bold"
+        placeholder={lang === 'en' ? 'Program name' : '프로그램 이름'}
+      />
+    )
+  }
+  return (
+    <h2
+      className={`text-lg font-bold inline-flex items-center gap-1.5 ${canEdit ? 'group cursor-text' : ''}`}
+      onClick={() => canEdit && setEditing(true)}
+      title={canEdit ? (lang === 'en' ? 'Click to rename' : '클릭하여 이름 수정') : undefined}
+    >
+      <span className="truncate">{program.name}</span>
+      {canEdit && <Pencil className="size-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />}
+    </h2>
+  )
+}
+
 // ── Program detail ──────────────────────────────────────────────
 function ProgramDetail({ program, canEdit, tutoring }: { program: PartnerProgram; canEdit: boolean; tutoring?: boolean }) {
   const { language: lang } = useLanguage()
@@ -926,8 +967,8 @@ export function ProgramsPage({ variant = PARTNER_VARIANT }: { variant?: Programs
             {selected ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-bold">{selected.name}</h2>
+                  <div className="min-w-0 flex-1">
+                    <ProgramTitle program={selected} canEdit={canEdit} />
                     {!variant.tutoring && <p className="text-xs text-muted-foreground">{selected.partnerName || (lang === 'en' ? 'No partner assigned' : '파트너사 미지정')}</p>}
                   </div>
                   {canEdit && (
