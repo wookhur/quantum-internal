@@ -1027,12 +1027,25 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
   const { data: mentors = [] } = useMentors()
   const { data: assignments = [] } = useAllMentorAssignments()
   const { data: sessions = [] } = useAllMentorSessions()
+  const { data: profiles = [] } = useProfiles()
   const linesByPerson = useIncentiveLinesByPerson()
   return useMemo(() => {
+    // 프리랜서 개인 지급 목록에서 내부 임직원/임원 역할 제외 (인센티브 탭은 제외 안 함)
+    const EXCLUDED_ROLES = new Set(['admin', 'c_level', 'account', 'sales_manager', 'service_manager', 'marketing_manager'])
+    const excludedKeys = new Set<string>()
+    if (!isIncentive) {
+      for (const p of profiles) {
+        if (p.role && EXCLUDED_ROLES.has(p.role)) {
+          const k = consultantNameKey(canonicalConsultantName(p.name))
+          if (k) excludedKeys.add(k)
+        }
+      }
+    }
     const out = new Map<string, PayeeItem[]>()
     const add = (rawName: string | undefined, item: PayeeItem) => {
       const nm = canonicalConsultantName(rawName || '')
       if (!nm || /^[0-9a-f-]{36}$/i.test(nm)) return
+      if (excludedKeys.has(consultantNameKey(nm))) return
       const arr = out.get(nm) || []
       arr.push(item); out.set(nm, arr)
     }
@@ -1090,7 +1103,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       add(mt.koreanName || mt.englishName, { label: `${who} · 전공별멘토 (${sess.sessionDate})`, amount: majorTierAmount(mt.tier) })
     }
     return out
-  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, linesByPerson, month])
+  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
