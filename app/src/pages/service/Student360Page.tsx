@@ -345,11 +345,19 @@ export function Student360Page() {
   const { data: allContractsForLink = [] } = useContracts()
   const linkedContract = useMemo(() => {
     if (!selected) return undefined
-    const nm = (selected.name || '').trim()
-    const kn = (selected.koreanName || '').trim()
+    const norm = (v?: string) => (v || '').replace(/\s+/g, '').toLowerCase()
+    const nm = norm(selected.name)
+    const kn = norm(selected.koreanName)
+    // 정확 일치(공백/대소문자 무시) + 합쳐진 형태("김은서 Amy Kim") 대응
+    const forms = new Set([nm, kn, nm + kn, kn + nm].filter(Boolean))
     const cands = allContractsForLink.filter(c => {
-      const sn = (c.studentName || '').trim()
-      return !!sn && (sn === nm || (!!kn && sn === kn))
+      const sn = norm(c.studentName)
+      if (!sn) return false
+      if (forms.has(sn)) return true
+      // 계약 학생명이 학생의 (한글/영문) 전체 이름을 포함하면 매칭
+      if (kn && kn.length >= 2 && sn.includes(kn)) return true
+      if (nm && nm.length >= 3 && sn.includes(nm)) return true
+      return false
     })
     if (cands.length === 0) return undefined
     return [...cands].sort((a, b) => {
