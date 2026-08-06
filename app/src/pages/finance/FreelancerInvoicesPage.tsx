@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   FileText, Plus, Trash2, Download, CheckCircle2, XCircle,
-  Eye, Loader2, Search,
+  Eye, Loader2,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -1063,15 +1063,16 @@ export function FreelancerInvoicesPage(
   const filtered = useMemo(() => {
     let list = invoices
     if (statusFilter !== 'all') list = list.filter(inv => inv.status === statusFilter)
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      list = list.filter(inv =>
-        inv.freelancerName?.toLowerCase().includes(q) || inv.clientName?.toLowerCase().includes(q) ||
-        inv.freelancerEmail?.toLowerCase().includes(q),
-      )
-    }
+    if (search.trim()) list = list.filter(inv => invoiceDisplayName(inv) === search)   // 드롭다운 선택 이름과 정확 일치
     return list
   }, [invoices, statusFilter, search])
+
+  // 제출자 이름 드롭다운 옵션 (현재 조회 범위의 인보이스 제출자)
+  const nameOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const inv of invoices) { const n = invoiceDisplayName(inv); if (n) set.add(n) }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [invoices])
 
   const monthOptions = getMonthOptions()
   const grandTotal = filtered.reduce((s, inv) => s + inv.totalAmount, 0)
@@ -1345,10 +1346,15 @@ export function FreelancerInvoicesPage(
         </Select>
 
         {isAccounting && (
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('fInvoice.searchPlaceholder')} className="h-9 pl-9" />
-          </div>
+          <Select value={search || 'all'} onValueChange={v => setSearch(!v || v === 'all' ? '' : v)}>
+            <SelectTrigger className="w-48 h-9">
+              <span className="truncate">{search || (t('fInvoice.all') + ' 제출자')}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('fInvoice.all')} 제출자</SelectItem>
+              {nameOptions.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+            </SelectContent>
+          </Select>
         )}
 
         <div className="ml-auto text-sm font-medium">
