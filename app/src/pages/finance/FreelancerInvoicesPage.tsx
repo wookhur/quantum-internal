@@ -1018,22 +1018,26 @@ export function useIncentiveLinesByPerson() {
 // ─── 원서·에세이 컨설턴트별 월 단가 관리 (관리자·회계 전용) ───
 function EssayRatesManager() {
   const { data: profiles = [] } = useProfiles()
-  const { data: essayPlans = [] } = useAllEssayPlans()
   const { data: rates } = useEssayRates()
   const upsert = useUpsertEssayRate()
   const [open, setOpen] = useState(false)
   const consultants = useMemo(() => {
+    // 프리랜서로 지정된 사람만 (workerType/employmentType/role 중 하나라도 freelancer)
+    const isFreelancer = (p: typeof profiles[number]) =>
+      p.workerType === 'freelancer' ||
+      p.role === 'freelancer' ||
+      p.employmentType === 'freelancer' ||
+      (p.employmentTypes || []).includes('freelancer')
     const seen = new Map<string, string>()
-    const add = (raw?: string) => {
-      const nm = canonicalConsultantName(raw || '')
-      if (!nm || /^[0-9a-f-]{36}$/i.test(nm)) return
+    for (const p of profiles) {
+      if (!isFreelancer(p)) continue
+      const nm = canonicalConsultantName(p.name)
+      if (!nm || /^[0-9a-f-]{36}$/i.test(nm)) continue
       const key = consultantNameKey(nm)
       if (key && !seen.has(key)) seen.set(key, nm)
     }
-    for (const p of profiles) add(p.name)
-    for (const pl of essayPlans) add(pl.consultantName)   // 원서·에세이 담당자로 지정된 이름도 포함
     return Array.from(seen.entries()).map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [profiles, essayPlans])
+  }, [profiles])
 
   return (
     <Card>

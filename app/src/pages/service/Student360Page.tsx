@@ -1179,20 +1179,17 @@ function ApplicationSlots({ studentId, count, canEdit }: { studentId: string; co
   const { data: apps = [] } = useStudentApplications(studentId)
   const upsert = useUpsertStudentApplication()
   const emptyCount = Math.max(0, count - apps.length)
+  const totalSlots = apps.length + emptyCount
   const addSlot = () => upsert.mutate({ studentId, university: '', sortOrder: Math.max(apps.length, count) })
-  if (count === 0 && apps.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-sky-200 bg-sky-50/30 p-3 text-xs text-muted-foreground">
-        계약관리에서 <b>원서지원수</b>를 입력하면 원서 칸이 여기에 자동으로 생성됩니다.
-      </div>
-    )
-  }
   return (
     <div className="rounded-lg border border-sky-100 bg-sky-50/30 p-3 space-y-2">
       <div className="text-sm font-semibold text-sky-800">원서 목록 <span className="font-normal text-xs text-muted-foreground">· 계약 원서지원수 {count}개</span></div>
       <div className="space-y-1.5">
         {apps.map((a, i) => <AppRow key={a.id} studentId={studentId} app={a} index={i} canEdit={canEdit} />)}
         {Array.from({ length: emptyCount }).map((_, i) => <AppRow key={`empty-${i}`} studentId={studentId} index={apps.length + i} canEdit={canEdit} />)}
+        {totalSlots === 0 && (
+          <p className="text-xs text-muted-foreground">계약관리에서 <b>원서지원수</b>를 입력하면 칸이 자동 생성됩니다. 아래 버튼으로 직접 추가할 수도 있습니다.</p>
+        )}
       </div>
       {canEdit && (
         <button onClick={addSlot} className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-sky-200 py-1.5 text-xs text-sky-700 hover:bg-sky-50">
