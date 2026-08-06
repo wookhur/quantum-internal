@@ -14,6 +14,7 @@ import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
   UserCircle, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText, Star,
+  Upload, Download,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
@@ -204,6 +205,78 @@ function IncentivePersonSelect({
         </div>
       </PopoverContent>
     </Popover>
+  )
+}
+
+// 계약 정보: 계약유형 · 원서지원수 · 계약서 PDF — Student360에 자동 연동되는 원본
+function ContractInfoCard({ contract, canEdit }: { contract: Contract; canEdit: boolean }) {
+  const update = useUpdateContract()
+  const [contractType, setContractType] = useState(contract.contractType || '')
+  const [appCount, setAppCount] = useState(contract.applicationCount ? String(contract.applicationCount) : '')
+  const pdfInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  useEffect(() => {
+    setContractType(contract.contractType || '')
+    setAppCount(contract.applicationCount ? String(contract.applicationCount) : '')
+  }, [contract.id, contract.contractType, contract.applicationCount])
+
+  const saveType = () => { if (canEdit && contractType !== (contract.contractType || '')) update.mutate({ id: contract.id, contractType }) }
+  const saveCount = () => {
+    const n = appCount ? Number(appCount) : undefined
+    if (canEdit && n !== contract.applicationCount) update.mutate({ id: contract.id, applicationCount: n })
+  }
+  const handlePickPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.type && file.type !== 'application/pdf') { window.alert('PDF 파일만 업로드할 수 있습니다.'); return }
+    setUploading(true)
+    try {
+      const path = `contract/${contract.id}/${Date.now()}.pdf`
+      const { error: upErr } = await supabase.storage.from('contract-pdfs').upload(path, file, { upsert: true, contentType: 'application/pdf' })
+      if (upErr) throw upErr
+      const { data: { publicUrl } } = supabase.storage.from('contract-pdfs').getPublicUrl(path)
+      update.mutate({ id: contract.id, contractPdfUrl: publicUrl })
+    } catch (err) {
+      window.alert('계약서 업로드 실패: ' + (err instanceof Error ? err.message : String(err)))
+    } finally { setUploading(false) }
+  }
+  const pdfUrl = contract.contractPdfUrl
+
+  return (
+    <Card>
+      <CardHeader className="py-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <FileText className="size-4 text-primary" /> 계약 정보
+          <span className="text-xs font-normal text-muted-foreground">· Student360에 자동 연동</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="space-y-1">
+          <Label className="text-xs">계약유형</Label>
+          <Input value={contractType} onChange={e => setContractType(e.target.value)} onBlur={saveType} disabled={!canEdit} placeholder="예: A (Platinum)" className="h-9" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">원서지원수 <span className="text-muted-foreground font-normal">(원서 칸 자동 생성 수)</span></Label>
+          <Input type="number" min={0} value={appCount} onChange={e => setAppCount(e.target.value)} onBlur={saveCount} disabled={!canEdit} placeholder="예: 10" className="h-9" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">실물 계약서 (PDF)</Label>
+          <div className="flex items-center gap-2">
+            <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={handlePickPdf} />
+            {canEdit && (
+              <Button variant="outline" size="sm" className="h-9 gap-1" disabled={uploading} onClick={() => pdfInputRef.current?.click()}>
+                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}{pdfUrl ? '교체' : '업로드'}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className={`h-9 gap-1 ${pdfUrl ? 'text-primary' : 'text-muted-foreground/40'}`} disabled={!pdfUrl}
+              onClick={() => { if (pdfUrl) window.open(pdfUrl, '_blank', 'noopener') }}>
+              <Download className="size-4" /> 다운로드
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -1151,6 +1224,9 @@ export function ContractDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 계약 정보: 계약유형 · 원서지원수 · 계약서 PDF (Student360에 자동 연동) */}
+      <ContractInfoCard contract={contract} canEdit={canEdit} />
 
       {/* Base Installment Timeline */}
       <div>

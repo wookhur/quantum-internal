@@ -199,6 +199,8 @@ export interface Contract {
   partnerFeeRate?: number  // e.g. 0.20 = 20%
   applicationCount?: number
   additionalServices?: string
+  contractType?: string       // 계약유형 (예: A (Platinum)) — 계약관리에서 입력
+  contractPdfUrl?: string      // 실물 계약서 PDF
   status: ContractStatus
   notes?: string
   /** 계약 취소(중도해지) 시 환불한 금액·일자 */

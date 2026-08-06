@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type ReactNode, type ChangeEvent } from 'react'
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +17,7 @@ import {
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
   Lock, Unlock, MessageSquare, Send, Flag,
-  PenTool, BookText, FolderArchive, Upload, Download,
+  PenTool, BookText, FolderArchive, Download,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -62,6 +62,12 @@ import {
   useEssayPlans, useCreateEssayPlan, useUpdateEssayPlan, useDeleteEssayPlan,
   essayEndMonth, essayMonthCount, type EssayPlan,
 } from '@/hooks/useEssayPlans'
+import { useContracts } from '@/hooks/useContracts'
+import {
+  useStudentApplications, useUpsertStudentApplication, useDeleteStudentApplication,
+  APPLICATION_STATUSES, APPLICATION_TYPES, type StudentApplication,
+} from '@/hooks/useStudentApplications'
+import type { Contract } from '@/types'
 import {
   useAcademicSupport, useCreateAcademicSupport, useUpdateAcademicSupport, useDeleteAcademicSupport,
   type AcademicSupportItem,
@@ -333,6 +339,25 @@ export function Student360Page() {
   }, [students, search, filterName, consultantName, showArchive, gradeFilter, essayEditorFilter, pausedOnly])
 
   const selected = students.find(s => s.id === selectedId) || null
+
+  // 계약관리 연동: 학생 이름으로 매칭(취소 아님 우선, 계약일 최신) → 계약유형·원서지원수·계약서 자동 표시
+  const { data: allContractsForLink = [] } = useContracts()
+  const linkedContract = useMemo(() => {
+    if (!selected) return undefined
+    const nm = (selected.name || '').trim()
+    const kn = (selected.koreanName || '').trim()
+    const cands = allContractsForLink.filter(c => {
+      const sn = (c.studentName || '').trim()
+      return !!sn && (sn === nm || (!!kn && sn === kn))
+    })
+    if (cands.length === 0) return undefined
+    return [...cands].sort((a, b) => {
+      const ac = a.status === 'cancelled' ? 1 : 0
+      const bc = b.status === 'cancelled' ? 1 : 0
+      if (ac !== bc) return ac - bc
+      return (b.contractDate || '').localeCompare(a.contractDate || '')
+    })[0]
+  }, [selected, allContractsForLink])
   const statusLabel = (status?: string) => {
     const o = STUDENT_STATUS_OPTIONS.find(x => x.value === normalizeStatus(status))
     return o ? t(o.labelKey) : (status || '')
@@ -510,9 +535,9 @@ export function Student360Page() {
           </div>
           ) : (
           <div className="space-y-4">
-            <ProfileSection student={selected} onDeleted={() => setSelectedId(null)} createdBy={user?.id} canEdit={canEdit} />
-            <ContractSection student={selected} canEdit={canEdit} />
-            <EssayServiceSection studentId={selected.id} defaultConsultant={consultantName(selected.assignedConsultant)} createdBy={user?.id} canEdit={canEdit} locked={!!selected.essayLocked} />
+            <ProfileSection student={selected} linkedContract={linkedContract} onDeleted={() => setSelectedId(null)} createdBy={user?.id} canEdit={canEdit} />
+            <ContractSection student={selected} linkedContract={linkedContract} canEdit={canEdit} />
+            <EssayServiceSection studentId={selected.id} applicationCount={linkedContract?.applicationCount ?? selected.applicationCount} defaultConsultant={consultantName(selected.assignedConsultant)} createdBy={user?.id} canEdit={canEdit} locked={!!selected.essayLocked} />
             <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <CoachingSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
@@ -586,8 +611,9 @@ function MeetingProgressBar({ completed, target }: { completed: number; target: 
 }
 
 // ────────────────────────── Profile ──────────────────────────
-function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
+function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit }: {
   student: ServiceStudent
+  linkedContract?: Contract
   onDeleted: () => void
   createdBy?: string
   canEdit: boolean
@@ -663,6 +689,8 @@ function ProfileSection({ student, onDeleted, createdBy, canEdit }: {
         <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
         <ConsultantField student={student} canEdit={canEdit} />
         <Field label={t('student360.essayEditor')} value={student.essayEditor} />
+        <Field label={t('student360.contractType')} value={linkedContract?.contractType ?? student.contractType} />
+        <Field label={t('contracts.applicationCount')} value={(linkedContract?.applicationCount ?? student.applicationCount) != null ? `${linkedContract?.applicationCount ?? student.applicationCount}개` : undefined} />
         <Field label={t('student360.majorTrack')} value={[student.majorTrack ? MAJOR_TRACK_LABEL[student.majorTrack] : '', student.majorDetail].filter(Boolean).join(' · ') || undefined} />
         <Field label={t('student360.majors')} value={student.majors} />
         <Field label={t('student360.status')} value={statusLabelFor(t, student.status)} />
@@ -818,48 +846,25 @@ const CONTRACT_SERVICES: { id: string; label: string; unit?: string; totalPrefix
   { id: 'admissions_review', label: '전입학사정관 리뷰 서비스', unit: '회' },
 ]
 
-function ContractSection({ student, canEdit: canEditProp }: { student: ServiceStudent; canEdit: boolean }) {
+function ContractSection({ student, linkedContract, canEdit: canEditProp }: { student: ServiceStudent; linkedContract?: Contract; canEdit: boolean }) {
   const t = useT()
   const update = useUpdateServiceStudent()
   const [expanded, setExpanded] = useState(false)
   const locked = !!student.contractLocked
   const canEdit = canEditProp && !locked   // 잠금 시 편집 불가
 
-  // 실물 계약서 PDF 업로드/다운로드 (잠금과 무관 — 권한만 있으면 첨부 가능)
-  const pdfUrl = student.contractPdfUrl
-  const pdfInputRef = useRef<HTMLInputElement>(null)
-  const [uploadingPdf, setUploadingPdf] = useState(false)
-  const handlePickPdf = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''   // 같은 파일 다시 선택 가능하도록 초기화
-    if (!file) return
-    if (file.type && file.type !== 'application/pdf') { window.alert('PDF 파일만 업로드할 수 있습니다.'); return }
-    setUploadingPdf(true)
-    try {
-      const path = `${student.id}/${Date.now()}.pdf`
-      const { error: upErr } = await supabase.storage.from('contract-pdfs')
-        .upload(path, file, { upsert: true, contentType: 'application/pdf' })
-      if (upErr) throw upErr
-      const { data: { publicUrl } } = supabase.storage.from('contract-pdfs').getPublicUrl(path)
-      update.mutate({ id: student.id, contractPdfUrl: publicUrl })
-    } catch (err) {
-      window.alert('계약서 업로드 실패: ' + (err instanceof Error ? err.message : String(err)))
-    } finally {
-      setUploadingPdf(false)
-    }
-  }
+  // 실물 계약서 PDF: 계약관리에서 업로드한 파일을 다운로드(읽기전용). 미연동 학생은 기존 값 표시.
+  const pdfUrl = linkedContract?.contractPdfUrl ?? student.contractPdfUrl
+  const dispContractType = linkedContract?.contractType ?? student.contractType
+  const dispAppCount = linkedContract?.applicationCount ?? student.applicationCount
 
   // 편집 중 원격 갱신이 입력값을 덮어쓰지 않도록 학생이 바뀔 때만 초기화
   const [local, setLocal] = useState<ContractDetails>(() => student.contractDetails || {})
-  const [appCount, setAppCount] = useState(student.applicationCount ? String(student.applicationCount) : '')
   const [addSvc, setAddSvc] = useState(student.additionalServices || '')
-  const [contractType, setContractType] = useState(student.contractType || '')
   useEffect(() => {
     setLocal(student.contractDetails || {})
-    setAppCount(student.applicationCount ? String(student.applicationCount) : '')
     setAddSvc(student.additionalServices || '')
-    setContractType(student.contractType || '')
-  }, [student.id, student.contractDetails, student.applicationCount, student.additionalServices, student.contractType])
+  }, [student.id, student.contractDetails, student.additionalServices])
 
   const persistDetails = (next: ContractDetails) => {
     setLocal(next)
@@ -882,14 +887,7 @@ function ContractSection({ student, canEdit: canEditProp }: { student: ServiceSt
   const saveQty = () => { if (canEdit) update.mutate({ id: student.id, contractDetails: local }) }
   const saveAppServices = () => {
     if (!canEdit) return
-    update.mutate({
-      id: student.id,
-      applicationCount: appCount ? Number(appCount) : undefined,
-      additionalServices: addSvc || undefined,
-    })
-  }
-  const saveContractType = () => {
-    if (canEdit && contractType !== (student.contractType || '')) update.mutate({ id: student.id, contractType })
+    update.mutate({ id: student.id, additionalServices: addSvc || undefined })
   }
 
   const rowCls = 'flex items-center justify-between gap-2 border-t px-3 py-2'
@@ -903,21 +901,13 @@ function ContractSection({ student, canEdit: canEditProp }: { student: ServiceSt
           <CardTitle className="text-base flex items-center gap-2">
             <FileText className="size-4 text-primary" />
             {t('student360.contractSection')}
-            {student.contractType && <Badge variant="outline">{t('student360.contractType')} {student.contractType}</Badge>}
+            {dispContractType && <Badge variant="outline">{t('student360.contractType')} {dispContractType}</Badge>}
             {locked && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1"><Lock className="size-3" />{t('student360.sectionLocked')}</Badge>}
           </CardTitle>
           <div className="flex items-center gap-1">
-            {/* 실물 계약서 PDF: 업로드 / 다운로드 */}
-            <input ref={pdfInputRef} type="file" accept="application/pdf" className="hidden" onChange={handlePickPdf} />
-            {canEditProp && (
-              <Button size="sm" variant="ghost" className="size-7 text-muted-foreground" disabled={uploadingPdf}
-                title={pdfUrl ? '실물 계약서 PDF 교체 업로드' : '실물 계약서 PDF 업로드'}
-                onClick={(e) => { e.stopPropagation(); pdfInputRef.current?.click() }}>
-                {uploadingPdf ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-              </Button>
-            )}
+            {/* 실물 계약서 PDF: 계약관리에서 업로드, 여기선 다운로드만 */}
             <Button size="sm" variant="ghost" className={`size-7 ${pdfUrl ? 'text-primary' : 'text-muted-foreground/40'}`}
-              title={pdfUrl ? '실물 계약서 PDF 다운로드' : '업로드된 계약서 PDF 없음'} disabled={!pdfUrl}
+              title={pdfUrl ? '실물 계약서 PDF 다운로드 (계약관리)' : '계약관리에서 계약서를 업로드하세요'} disabled={!pdfUrl}
               onClick={(e) => { e.stopPropagation(); if (pdfUrl) window.open(pdfUrl, '_blank', 'noopener') }}>
               <Download className="size-4" />
             </Button>
@@ -936,15 +926,15 @@ function ContractSection({ student, canEdit: canEditProp }: { student: ServiceSt
       </CardHeader>
       {expanded && (
         <CardContent className="space-y-4 pt-0">
-          {/* 계약 유형 + 원서지원수 + 추가서비스 */}
+          {/* 계약유형·원서지원수는 계약관리 연동(읽기전용) · 추가서비스는 학생 메모 */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">{t('student360.contractType')}</Label>
-              <Input value={contractType} onChange={(e) => setContractType(e.target.value)} onBlur={saveContractType} disabled={!canEdit} className="h-8" />
+              <Label className="text-xs">{t('student360.contractType')} <span className="text-muted-foreground font-normal">(계약관리 연동)</span></Label>
+              <div className="h-8 flex items-center px-2 text-sm rounded-md border bg-muted/40">{dispContractType || '—'}</div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">{t('contracts.applicationCount')}</Label>
-              <Input type="number" value={appCount} onChange={(e) => setAppCount(e.target.value)} onBlur={saveAppServices} disabled={!canEdit} className="h-8" />
+              <Label className="text-xs">{t('contracts.applicationCount')} <span className="text-muted-foreground font-normal">(계약관리 연동)</span></Label>
+              <div className="h-8 flex items-center px-2 text-sm rounded-md border bg-muted/40">{dispAppCount != null ? `${dispAppCount}개` : '—'}</div>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">{t('contracts.additionalServices')}</Label>
@@ -1379,8 +1369,76 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
   )
 }
 
+// ── 원서 목록: 계약 원서지원수만큼 칸 자동 생성 (대학명·상태·유형·마감일) ──
+const selectCls = 'h-8 rounded-md border border-input bg-transparent px-1.5 text-xs outline-none focus-visible:border-ring disabled:opacity-60'
+
+function ApplicationSlots({ studentId, count, canEdit }: { studentId: string; count: number; canEdit: boolean }) {
+  const { data: apps = [] } = useStudentApplications(studentId)
+  const emptyCount = Math.max(0, count - apps.length)
+  if (count === 0 && apps.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-sky-200 bg-sky-50/30 p-3 text-xs text-muted-foreground">
+        계약관리에서 <b>원서지원수</b>를 입력하면 원서 칸이 여기에 자동으로 생성됩니다.
+      </div>
+    )
+  }
+  return (
+    <div className="rounded-lg border border-sky-100 bg-sky-50/30 p-3 space-y-2">
+      <div className="text-sm font-semibold text-sky-800">원서 목록 <span className="font-normal text-xs text-muted-foreground">· 계약 원서지원수 {count}개</span></div>
+      <div className="space-y-1.5">
+        {apps.map((a, i) => <AppRow key={a.id} studentId={studentId} app={a} index={i} canEdit={canEdit} />)}
+        {Array.from({ length: emptyCount }).map((_, i) => <AppRow key={`empty-${i}`} studentId={studentId} index={apps.length + i} canEdit={canEdit} />)}
+      </div>
+    </div>
+  )
+}
+
+function AppRow({ studentId, app, index, canEdit }: { studentId: string; app?: StudentApplication; index: number; canEdit: boolean }) {
+  const upsert = useUpsertStudentApplication()
+  const del = useDeleteStudentApplication()
+  const [university, setUniversity] = useState(app?.university || '')
+  const [status, setStatus] = useState(app?.status || '')
+  const [appType, setAppType] = useState(app?.appType || '')
+  const [deadline, setDeadline] = useState(app?.deadline || '')
+  const savedId = useRef<string | undefined>(app?.id)
+  useEffect(() => {
+    if (app) { setUniversity(app.university || ''); setStatus(app.status || ''); setAppType(app.appType || ''); setDeadline(app.deadline || ''); savedId.current = app.id }
+  }, [app?.id, app?.university, app?.status, app?.appType, app?.deadline])
+
+  const persist = (patch: Partial<StudentApplication>) => {
+    if (!canEdit) return
+    const next = { university, status, appType, deadline, ...patch }
+    if (!savedId.current && !next.university && !next.status && !next.appType && !next.deadline) return
+    upsert.mutate(
+      { studentId, id: savedId.current, sortOrder: index, ...next },
+      { onSuccess: (newId) => { if (newId && !savedId.current) savedId.current = newId as string } },
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-md border bg-white/70 px-2 py-1.5">
+      <span className="w-5 shrink-0 text-center text-xs text-muted-foreground tabular-nums">{index + 1}</span>
+      <Input value={university} disabled={!canEdit} onChange={e => setUniversity(e.target.value)} onBlur={() => persist({ university })} placeholder="대학명" className="h-8 min-w-[140px] flex-1 text-sm" />
+      <select value={status} disabled={!canEdit} onChange={e => { setStatus(e.target.value); persist({ status: e.target.value }) }} className={selectCls}>
+        <option value="">상태</option>
+        {APPLICATION_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+      </select>
+      <select value={appType} disabled={!canEdit} onChange={e => { setAppType(e.target.value); persist({ appType: e.target.value }) }} className={selectCls}>
+        <option value="">유형</option>
+        {APPLICATION_TYPES.map(ty => <option key={ty} value={ty}>{ty}</option>)}
+      </select>
+      <Input type="date" value={deadline} disabled={!canEdit} onChange={e => setDeadline(e.target.value)} onBlur={() => persist({ deadline })} className="h-8 w-36 text-xs" title="마감일" />
+      {canEdit && savedId.current && (
+        <button onClick={() => { if (confirm('이 원서 칸을 삭제할까요?')) del.mutate({ id: savedId.current!, studentId }) }} className="text-muted-foreground hover:text-red-500">
+          <Trash2 className="size-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ────────────────────────── 원서·에세이 서비스 (컨설턴트 월 급여) ──────────────────────────
-function EssayServiceSection({ studentId, defaultConsultant, createdBy, canEdit: canEditProp, locked }: { studentId: string; defaultConsultant?: string; createdBy?: string; canEdit: boolean; locked?: boolean }) {
+function EssayServiceSection({ studentId, applicationCount, defaultConsultant, createdBy, canEdit: canEditProp, locked }: { studentId: string; applicationCount?: number; defaultConsultant?: string; createdBy?: string; canEdit: boolean; locked?: boolean }) {
   const t = useT()
   const { data: plans = [] } = useEssayPlans(studentId)
   const del = useDeleteEssayPlan()
@@ -1421,6 +1479,8 @@ function EssayServiceSection({ studentId, defaultConsultant, createdBy, canEdit:
       </CardHeader>
       {expanded && (
       <CardContent className="space-y-3">
+        {/* 원서 목록: 계약 원서지원수(N)만큼 칸 자동 생성 */}
+        <ApplicationSlots studentId={studentId} count={applicationCount || 0} canEdit={canEdit} />
         {plans.length === 0 && (
           <p className="text-sm text-muted-foreground">등록된 원서·에세이 서비스가 없습니다. 총액과 시작월을 등록하면 인보이스 발행 시 매월 자동 계산됩니다.</p>
         )}

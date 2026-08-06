@@ -81,6 +81,8 @@ function mapContract(row: Record<string, unknown>): Contract {
     serviceEndDate: (row.service_end_date as string) || undefined,
     applicationCount: (row.application_count as number) || undefined,
     additionalServices: (row.additional_services as string) || undefined,
+    contractType: (row.contract_type as string) || undefined,
+    contractPdfUrl: (row.contract_pdf_url as string) || undefined,
     totalAmount: (row.total_amount as number) || 0,
     currency: (row.currency as 'KRW' | 'USD') || 'KRW',
     paymentAccount: (row.payment_account as 'KR' | 'US') || 'KR',
@@ -273,6 +275,8 @@ export function useUpdateContract() {
       serviceEndDate?: string
       applicationCount?: number
       additionalServices?: string
+      contractType?: string
+      contractPdfUrl?: string | null
       address?: string
       phone?: string
       totalAmount?: number
@@ -295,6 +299,8 @@ export function useUpdateContract() {
       if (rest.serviceEndDate !== undefined) update.service_end_date = rest.serviceEndDate || null
       if (rest.applicationCount !== undefined) update.application_count = rest.applicationCount || null
       if (rest.additionalServices !== undefined) update.additional_services = rest.additionalServices || null
+      if (rest.contractType !== undefined) update.contract_type = rest.contractType || null
+      if (rest.contractPdfUrl !== undefined) update.contract_pdf_url = rest.contractPdfUrl
       if (rest.address !== undefined) update.address = rest.address
       if (rest.phone !== undefined) update.phone = rest.phone
       if (rest.totalAmount !== undefined) update.total_amount = rest.totalAmount
