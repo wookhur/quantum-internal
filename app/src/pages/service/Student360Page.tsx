@@ -17,7 +17,7 @@ import {
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
   Lock, Unlock, MessageSquare, Send, Flag,
-  PenTool, BookText, FolderArchive, Download,
+  PenTool, BookText, FolderArchive,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -78,7 +78,7 @@ import {
 } from '@/hooks/useIssueReports'
 import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
-  ServiceReportCategory, ContractDetails,
+  ServiceReportCategory,
 } from '@/types'
 import { formatCurrency } from '@/types'
 import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
@@ -536,7 +536,6 @@ export function Student360Page() {
           ) : (
           <div className="space-y-4">
             <ProfileSection student={selected} linkedContract={linkedContract} onDeleted={() => setSelectedId(null)} createdBy={user?.id} canEdit={canEdit} />
-            <ContractSection student={selected} linkedContract={linkedContract} canEdit={canEdit} />
             <EssayServiceSection studentId={selected.id} applicationCount={linkedContract?.applicationCount ?? selected.applicationCount} defaultConsultant={consultantName(selected.assignedConsultant)} createdBy={user?.id} canEdit={canEdit} locked={!!selected.essayLocked} />
             <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
@@ -822,211 +821,6 @@ function ConsultantField({ student, canEdit }: { student: ServiceStudent; canEdi
   )
 }
 
-// ────────────────────────── Contract (계약사항) ──────────────────────────
-// 별첨1 형식: 서비스 티어(하나 선택) + 세부 서비스 체크리스트(수량 기재)
-const CONTRACT_TIERS: { id: string; label: string }[] = [
-  { id: 'vip', label: 'VIP' },
-  { id: 'platinum', label: '플래티넘 (Platinum)' },
-  { id: 'transfer', label: '편입 (Transfer)' },
-  { id: 'boarding', label: '보딩스쿨 (Boarding School)' },
-  { id: 'premed', label: '의대 · 치대 (Pre-Med / Pre-Dental)' },
-]
-const CONTRACT_SERVICES: { id: string; label: string; unit?: string; totalPrefix?: boolean }[] = [
-  { id: 'us_univ', label: '미국 대학교 진학 컨설팅', unit: '개 학교' },
-  { id: 'uk_univ', label: '영국 대학교 진학 컨설팅 (UCAS 지원)', unit: '개 학교' },
-  { id: 'other_univ', label: '기타 국가 대학교 진학 컨설팅' },
-  { id: 'us_boarding', label: '미국 보딩스쿨 진학 컨설팅', unit: '개 학교' },
-  { id: 'uk_boarding', label: '영국 보딩스쿨 진학 컨설팅', unit: '개 학교' },
-  { id: 'internship', label: '인턴십 프로그램 매칭 서비스', unit: '개' },
-  { id: 'research', label: '리서치 서비스', unit: '개' },
-  { id: 'capstone', label: '전공 캡스톤 프로젝트', unit: '개' },
-  { id: 'interview', label: '면접 트레이닝', unit: '시간', totalPrefix: true },
-  { id: 'test_prep', label: 'TOEFL/IELTS/SAT 시험 전략 컨설팅' },
-  { id: 'scholarship', label: '장학금 지원 컨설팅' },
-  { id: 'admissions_review', label: '전입학사정관 리뷰 서비스', unit: '회' },
-]
-
-function ContractSection({ student, linkedContract, canEdit: canEditProp }: { student: ServiceStudent; linkedContract?: Contract; canEdit: boolean }) {
-  const t = useT()
-  const update = useUpdateServiceStudent()
-  const [expanded, setExpanded] = useState(false)
-  const locked = !!student.contractLocked
-  const canEdit = canEditProp && !locked   // 잠금 시 편집 불가
-
-  // 실물 계약서 PDF: 계약관리에서 업로드한 파일을 다운로드(읽기전용). 미연동 학생은 기존 값 표시.
-  const pdfUrl = linkedContract?.contractPdfUrl ?? student.contractPdfUrl
-  const dispContractType = linkedContract?.contractType ?? student.contractType
-  const dispAppCount = linkedContract?.applicationCount ?? student.applicationCount
-
-  // 편집 중 원격 갱신이 입력값을 덮어쓰지 않도록 학생이 바뀔 때만 초기화
-  const [local, setLocal] = useState<ContractDetails>(() => student.contractDetails || {})
-  const [addSvc, setAddSvc] = useState(student.additionalServices || '')
-  useEffect(() => {
-    setLocal(student.contractDetails || {})
-    setAddSvc(student.additionalServices || '')
-  }, [student.id, student.contractDetails, student.additionalServices])
-
-  const persistDetails = (next: ContractDetails) => {
-    setLocal(next)
-    if (canEdit) update.mutate({ id: student.id, contractDetails: next })
-  }
-  const setTier = (id: string) => persistDetails({ ...local, tier: local.tier === id ? null : id })
-  const toggleSvc = (id: string) => {
-    const s = local.services?.[id] || {}
-    persistDetails({ ...local, services: { ...(local.services || {}), [id]: { ...s, checked: !s.checked } } })
-  }
-  const setQty = (id: string, qty: string) => {
-    const s = local.services?.[id] || {}
-    const n = qty === '' ? null : Number(qty)
-    setLocal({ ...local, services: { ...(local.services || {}), [id]: { ...s, qty: n } } })
-  }
-  const setMemo = (id: string, memo: string) => {
-    const s = local.services?.[id] || {}
-    setLocal({ ...local, services: { ...(local.services || {}), [id]: { ...s, memo } } })
-  }
-  const saveQty = () => { if (canEdit) update.mutate({ id: student.id, contractDetails: local }) }
-  const saveAppServices = () => {
-    if (!canEdit) return
-    update.mutate({ id: student.id, additionalServices: addSvc || undefined })
-  }
-
-  const rowCls = 'flex items-center justify-between gap-2 border-t px-3 py-2'
-  const boxCls = 'size-4 shrink-0 accent-slate-700 cursor-pointer disabled:cursor-default'
-  const headerCls = 'bg-slate-700 text-white font-semibold px-3 py-2 text-sm'
-
-  return (
-    <Card>
-      <CardHeader className="py-3 cursor-pointer select-none" onClick={() => setExpanded((v) => !v)}>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileText className="size-4 text-primary" />
-            {t('student360.contractSection')}
-            {dispContractType && <Badge variant="outline">{t('student360.contractType')} {dispContractType}</Badge>}
-            {locked && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 gap-1"><Lock className="size-3" />{t('student360.sectionLocked')}</Badge>}
-          </CardTitle>
-          <div className="flex items-center gap-1">
-            {/* 실물 계약서 PDF: 계약관리에서 업로드, 여기선 다운로드만 */}
-            <Button size="sm" variant="ghost" className={`size-7 ${pdfUrl ? 'text-primary' : 'text-muted-foreground/40'}`}
-              title={pdfUrl ? '실물 계약서 PDF 다운로드 (계약관리)' : '계약관리에서 계약서를 업로드하세요'} disabled={!pdfUrl}
-              onClick={(e) => { e.stopPropagation(); if (pdfUrl) window.open(pdfUrl, '_blank', 'noopener') }}>
-              <Download className="size-4" />
-            </Button>
-            {canEditProp && (
-              <Button size="sm" variant="ghost" className={`size-7 ${locked ? 'text-amber-600' : 'text-muted-foreground'}`}
-                title={locked ? t('student360.unlockToEdit') : t('student360.lockToEdit')}
-                onClick={(e) => { e.stopPropagation(); update.mutate({ id: student.id, contractLocked: !locked }) }}>
-                {locked ? <Lock className="size-4" /> : <Unlock className="size-4" />}
-              </Button>
-            )}
-            <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v) }}>
-              {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      {expanded && (
-        <CardContent className="space-y-4 pt-0">
-          {/* 계약유형·원서지원수는 계약관리 연동(읽기전용) · 추가서비스는 학생 메모 */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">{t('student360.contractType')} <span className="text-muted-foreground font-normal">(계약관리 연동)</span></Label>
-              <div className="h-8 flex items-center px-2 text-sm rounded-md border bg-muted/40">{dispContractType || '—'}</div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{t('contracts.applicationCount')} <span className="text-muted-foreground font-normal">(계약관리 연동)</span></Label>
-              <div className="h-8 flex items-center px-2 text-sm rounded-md border bg-muted/40">{dispAppCount != null ? `${dispAppCount}개` : '—'}</div>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{t('contracts.additionalServices')}</Label>
-              <Input value={addSvc} onChange={(e) => setAddSvc(e.target.value)} onBlur={saveAppServices} disabled={!canEdit} className="h-8" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">{t('student360.annualMeetingTarget')}</Label>
-              <Input
-                type="number" min={1}
-                value={local.annualMeetingTarget ?? ''}
-                placeholder={String(DEFAULT_ANNUAL_MEETING_TARGET)}
-                onChange={(e) => setLocal((l) => ({ ...l, annualMeetingTarget: e.target.value ? Number(e.target.value) : undefined }))}
-                onBlur={() => { if (canEdit) update.mutate({ id: student.id, contractDetails: local }) }}
-                disabled={!canEdit}
-                className="h-8"
-              />
-            </div>
-          </div>
-
-          {/* 별첨1 체크리스트 */}
-          <div className="rounded-md border overflow-hidden">
-            <div className={headerCls}>서비스 티어 및 트랙 선택 <span className="font-normal opacity-80">(하나 선택)</span></div>
-            {CONTRACT_TIERS.map((tier) => (
-              <label key={tier.id} className={`${rowCls} cursor-pointer`}>
-                <span className="font-medium text-sm">{tier.label}</span>
-                <input type="checkbox" className={boxCls} checked={local.tier === tier.id} disabled={!canEdit} onChange={() => setTier(tier.id)} />
-              </label>
-            ))}
-
-            <div className={headerCls}>세부 서비스 <span className="font-normal opacity-80">(선택한 티어에 포함되는 항목에 체크하고 수량을 기재)</span></div>
-            {CONTRACT_SERVICES.map((svc) => {
-              const s = local.services?.[svc.id] || {}
-              return (
-                <div key={svc.id} className={rowCls}>
-                  <div className="flex items-center gap-1.5 flex-wrap text-sm shrink-0">
-                    <span>{svc.label}</span>
-                    {svc.unit && (
-                      <span className="inline-flex items-center gap-1 text-muted-foreground">
-                        ( {svc.totalPrefix ? '총' : ''}
-                        <input
-                          type="number"
-                          className="w-14 h-6 rounded border px-1 text-center text-sm bg-background disabled:opacity-70"
-                          value={s.qty ?? ''}
-                          disabled={!canEdit}
-                          onChange={(e) => setQty(svc.id, e.target.value)}
-                          onBlur={saveQty}
-                        />
-                        {svc.unit} )
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    className="flex-1 min-w-0 h-7 rounded border px-2 text-sm bg-background disabled:opacity-70"
-                    placeholder="특이사항 메모"
-                    value={s.memo || ''}
-                    disabled={!canEdit}
-                    onChange={(e) => setMemo(svc.id, e.target.value)}
-                    onBlur={saveQty}
-                  />
-                  <input type="checkbox" className={boxCls} checked={!!s.checked} disabled={!canEdit} onChange={() => toggleSvc(svc.id)} />
-                </div>
-              )
-            })}
-
-            {/* 기타 */}
-            <div className={rowCls}>
-              <div className="flex items-center gap-2 flex-1 text-sm">
-                <span className="whitespace-nowrap">기타 :</span>
-                <input
-                  type="text"
-                  className="flex-1 h-6 border-b bg-transparent text-sm px-1 disabled:opacity-70"
-                  value={local.otherText || ''}
-                  disabled={!canEdit}
-                  onChange={(e) => setLocal({ ...local, otherText: e.target.value })}
-                  onBlur={() => { if (canEdit) update.mutate({ id: student.id, contractDetails: local }) }}
-                />
-              </div>
-              <input
-                type="checkbox"
-                className={boxCls}
-                checked={!!local.otherChecked}
-                disabled={!canEdit}
-                onChange={() => persistDetails({ ...local, otherChecked: !local.otherChecked })}
-              />
-            </div>
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  )
-}
 
 // ────────────────────────── EC Services ──────────────────────────
 function ECServicesSection({ studentId, createdBy, canEdit }: { studentId: string; createdBy?: string; canEdit: boolean }) {
