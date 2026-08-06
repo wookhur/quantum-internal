@@ -93,9 +93,17 @@ export function useAllEssayPlans() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('essay_service_plans')
-        .select('*, service_students:student_id(name, korean_name)')
+        .select('*, service_students(name, korean_name)')
         .order('created_at', { ascending: false })
-      if (error) throw error
+      if (error) {
+        // 학생 조인(FK 임베드) 실패 시에도 플랜은 로드 → 인보이스 자동계산 유지(학생명만 생략)
+        const { data: d2, error: e2 } = await supabase
+          .from('essay_service_plans')
+          .select('*')
+          .order('created_at', { ascending: false })
+        if (e2) throw e2
+        return (d2 || []).map(mapRow)
+      }
       return (data || []).map(mapRow)
     },
   })

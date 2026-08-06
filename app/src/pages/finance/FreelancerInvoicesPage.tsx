@@ -1152,12 +1152,16 @@ export function FreelancerInvoicesPage(
         sourceDetail: pairDetail(pair),
       })))
     // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산(총액÷개월수)
+    const studentsByIdEssay = new Map(allStudentsForEditor.map(s => [s.id, s]))
     const essay: DItem[] = essayPlans
       .filter(p => consultantNameKey(p.consultantName || '') === myKey)
       .map(p => {
         const line = essayLineForMonth(p, issueMonth)
         if (!line) return null
-        const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ') || p.studentName || '학생'
+        const s = studentsByIdEssay.get(p.studentId)
+        const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ')
+          || (s ? studentLabel(s.name, s.koreanName) : '')
+          || '학생'
         return { id: `essay:${p.id}:${issueMonth}`, label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, amount: line.amount, received: false }
       })
       .filter((x): x is DItem => x !== null)
