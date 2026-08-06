@@ -86,7 +86,6 @@ import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 
 // Consultant pool + helpers (shared with KPI page)
 import { useConsultantPool, useConsultantName, consultantNameKey } from '@/lib/consultants'
-import { useEssayRates, essayRateForName } from '@/hooks/useEssayRates'
 import { kpiDotColor } from '@/lib/kpi'
 import { useStudentKpis, KPI_MAX } from '@/hooks/useConsultantKpis'
 import { useStudentStatusFlags } from '@/hooks/useServiceDashboard'
@@ -1254,7 +1253,6 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
   const canEdit = canEditProp && !locked   // 잠금 시 편집 불가
   // 금액은 관리자·회계 + 본인(담당 컨설턴트)에게만 노출
   const { user } = useAuth()
-  const { data: essayRates } = useEssayRates()
   const isManager = user?.role === 'admin' || user?.role === 'c_level' || canAccessAccount(user)
   const myKey = consultantNameKey(user?.name || '')
 
@@ -1320,18 +1318,18 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
               </div>
               {(() => {
                 const canSeeAmount = isManager || (!!p.consultantName && consultantNameKey(p.consultantName) === myKey)
-                const rate = essayRateForName(essayRates, p.consultantName)
+                const monthly = count > 0 ? Math.floor((p.totalAmount || 0) / count) : 0
                 return (
                   <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-sm">
                     {canSeeAmount ? (
                       <>
                         <div>
-                          <p className="text-xs text-muted-foreground">월 단가</p>
-                          <p className="font-medium text-indigo-700">{rate > 0 ? <>{formatCurrency(rate, 'KRW')}<span className="text-xs text-muted-foreground">/월</span></> : <span className="text-muted-foreground">미설정</span>}</p>
+                          <p className="text-xs text-muted-foreground">총 금액</p>
+                          <p className="font-medium">{p.totalAmount > 0 ? formatCurrency(p.totalAmount, 'KRW') : <span className="text-muted-foreground">미입력</span>}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground">예상 총액 (×{count})</p>
-                          <p className="font-medium">{rate > 0 ? formatCurrency(rate * count, 'KRW') : '—'}</p>
+                          <p className="text-xs text-muted-foreground">월 지급액 (÷{count})</p>
+                          <p className="font-medium text-indigo-700">{p.totalAmount > 0 ? <>{formatCurrency(monthly, 'KRW')}<span className="text-xs text-muted-foreground">/월</span></> : '—'}</p>
                         </div>
                       </>
                     ) : (
@@ -1347,7 +1345,7 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
                   </div>
                 )
               })()}
-              <p className="text-[11px] text-muted-foreground">인보이스 발행 시 {p.consultantName || '담당 컨설턴트'}의 해당 월 인보이스에 담당자 <b>월 단가</b>로 자동 추가됩니다(시작월~12월).</p>
+              <p className="text-[11px] text-muted-foreground">인보이스 발행 시 {p.consultantName || '담당 컨설턴트'}의 해당 월 인보이스에 <b>총액÷개월수</b>로 시작월~12월 매월 자동 추가됩니다.</p>
             </div>
           )
         })}
@@ -1367,19 +1365,34 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
   canEdit: boolean
   trigger: ReactNode
 }) {
+  const { user } = useAuth()
+  const isManager = user?.role === 'admin' || user?.role === 'c_level' || canAccessAccount(user)
   const create = useCreateEssayPlan()
   const update = useUpdateEssayPlan()
   const [open, setOpen] = useState(false)
   const [consultant, setConsultant] = useState(plan?.consultantName || defaultConsultant || '')
   const [startMonth, setStartMonth] = useState(plan?.startMonth || `${SERVICE_YEAR}-06`)
+  const [count, setCount] = useState(() => (plan?.packageLabel || '').match(/\d+/)?.[0] || '')
+  const [total, setTotal] = useState(plan?.totalAmount ? String(plan.totalAmount) : '')
   const [notes, setNotes] = useState(plan?.notes || '')
+
+  const totalNum = Number(total) || 0
+  const months = essayMonthCount(startMonth)
+  const monthly = months > 0 ? Math.floor(totalNum / months) : 0
+  const lastMonthly = months > 0 ? totalNum - monthly * (months - 1) : 0
 
   const save = () => {
     if (!canEdit || !consultant.trim() || !startMonth) return
-    // 금액은 저장하지 않음 — 인보이스가 담당자별 월 단가로 자동 계산
-    const base = { consultantName: consultant.trim(), totalAmount: 0, startMonth, notes: notes.trim() || undefined }
+    // 금액은 관리자·회계만 설정 — 비관리자 편집 시 기존 금액 보존
+    const base = {
+      consultantName: consultant.trim(),
+      startMonth,
+      packageLabel: count ? `원서 ${count}개` : undefined,
+      notes: notes.trim() || undefined,
+      ...(isManager ? { totalAmount: totalNum } : {}),
+    }
     if (plan) update.mutate({ id: plan.id, studentId, ...base }, { onSuccess: () => setOpen(false) })
-    else create.mutate({ studentId, ...base, currency: 'KRW', createdBy }, { onSuccess: () => setOpen(false) })
+    else create.mutate({ studentId, ...base, totalAmount: isManager ? totalNum : 0, currency: 'KRW', createdBy }, { onSuccess: () => setOpen(false) })
   }
 
   return (
@@ -1387,20 +1400,39 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
     <span onClick={() => setOpen(true)}>{trigger}</span>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>{plan ? '원서·에세이 담당자 수정' : '원서·에세이 담당자 추가'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{plan ? '원서·에세이 서비스 수정' : '원서·에세이 서비스 추가'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div>
             <Label className="text-xs">담당 컨설턴트</Label>
             <Input className="mt-1" value={consultant} onChange={e => setConsultant(e.target.value)} placeholder="예: John Kim" />
           </div>
-          <div>
-            <Label className="text-xs">시작월 (신청월)</Label>
-            <Input className="mt-1" type="month" value={startMonth} onChange={e => setStartMonth(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">시작월 (신청월)</Label>
+              <Input className="mt-1" type="month" value={startMonth} onChange={e => setStartMonth(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">총 원서 갯수</Label>
+              <Input className="mt-1" type="number" min={0} value={count} onChange={e => setCount(e.target.value)} placeholder="예: 10" />
+            </div>
           </div>
-          <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800 space-y-0.5">
-            <div>기간: <b>{startMonth}</b> ~ <b>{essayEndMonth(startMonth)}</b> (그해 12월 종료)</div>
-            <div className="text-indigo-500">인보이스 발행 시 담당자의 <b>월 단가</b>로 시작월~12월 매월 자동 계산됩니다. 단가는 인보이스관리(관리자·회계)에서 설정합니다.</div>
-          </div>
+          {isManager ? (
+            <>
+              <div>
+                <Label className="text-xs">총 금액 (원) <span className="text-muted-foreground font-normal">· 관리자·회계 전용</span></Label>
+                <Input className="mt-1" type="number" min={0} value={total} onChange={e => setTotal(e.target.value)} placeholder="예: 10000000" />
+              </div>
+              <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800 space-y-0.5">
+                <div>기간: <b>{startMonth}</b> ~ <b>{essayEndMonth(startMonth)}</b> (그해 12월 종료) · <b>{months}개월</b></div>
+                <div>월 지급액(단가): <b>{formatCurrency(monthly, 'KRW')}</b>{months > 1 && <> · 12월 <b>{formatCurrency(lastMonthly, 'KRW')}</b> (잔액 보정)</>}</div>
+                <div className="text-indigo-500">인보이스 발행 시 시작월~12월 매월 자동 추가됩니다.</div>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-md border border-muted bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              금액은 관리자·회계만 입력·조회할 수 있습니다. 담당자·시작월·갯수만 저장됩니다.
+            </div>
+          )}
           <div>
             <Label className="text-xs">비고</Label>
             <Textarea className="mt-1" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />

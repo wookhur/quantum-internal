@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   FileText, Plus, Trash2, Download, CheckCircle2, XCircle,
-  Eye, Loader2, Search, ChevronDown, ChevronRight,
+  Eye, Loader2, Search,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -25,8 +25,7 @@ import { useConsultantName, canonicalConsultantName, consultantNameKey } from '@
 import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
-import { useAllEssayPlans, essayEndMonth } from '@/hooks/useEssayPlans'
-import { useEssayRates, useUpsertEssayRate, essayRateForName } from '@/hooks/useEssayRates'
+import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
 import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
@@ -1015,64 +1014,6 @@ export function useIncentiveLinesByPerson() {
   }, [entries, serviceLines, students, clawbacks])
 }
 
-// ─── 원서·에세이 컨설턴트별 월 단가 관리 (관리자·회계 전용) ───
-function EssayRatesManager() {
-  const { data: profiles = [] } = useProfiles()
-  const { data: rates } = useEssayRates()
-  const upsert = useUpsertEssayRate()
-  const [open, setOpen] = useState(false)
-  const consultants = useMemo(() => {
-    // 프리랜서로 지정된 사람만 (workerType/employmentType/role 중 하나라도 freelancer)
-    const isFreelancer = (p: typeof profiles[number]) =>
-      p.workerType === 'freelancer' ||
-      p.role === 'freelancer' ||
-      p.employmentType === 'freelancer' ||
-      (p.employmentTypes || []).includes('freelancer')
-    const seen = new Map<string, string>()
-    for (const p of profiles) {
-      if (!isFreelancer(p)) continue
-      const nm = canonicalConsultantName(p.name)
-      if (!nm || /^[0-9a-f-]{36}$/i.test(nm)) continue
-      const key = consultantNameKey(nm)
-      if (key && !seen.has(key)) seen.set(key, nm)
-    }
-    return Array.from(seen.entries()).map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [profiles])
-
-  return (
-    <Card>
-      <CardContent className="p-0">
-        <button type="button" onClick={() => setOpen(v => !v)} className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-muted/40">
-          {open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-          <FileText className="size-4 text-indigo-500" />
-          <span className="text-sm font-semibold">원서·에세이 컨설턴트 월 단가</span>
-          <span className="text-[11px] text-muted-foreground">담당자만 추가하면 이 단가로 인보이스 자동 계산 (시작월~12월 매월) · 관리자·회계 전용</span>
-        </button>
-        {open && (
-          <div className="grid grid-cols-1 gap-2.5 border-t p-4 sm:grid-cols-2 lg:grid-cols-3">
-            {consultants.length === 0 && <p className="text-xs text-muted-foreground">등록된 컨설턴트가 없습니다.</p>}
-            {consultants.map(c => (
-              <div key={c.key} className="flex items-center gap-2">
-                <span className="w-20 shrink-0 truncate text-sm" title={c.name}>{c.name}</span>
-                <Input
-                  type="number" min={0} className="h-8 flex-1 text-right tabular-nums"
-                  placeholder="월 단가"
-                  defaultValue={rates?.get(c.key)?.monthlyAmount || ''}
-                  onBlur={e => {
-                    const v = Number(e.target.value) || 0
-                    if (v !== (rates?.get(c.key)?.monthlyAmount || 0)) upsert.mutate({ name: c.name, monthlyAmount: v })
-                  }}
-                />
-                <span className="shrink-0 text-xs text-muted-foreground">원/월</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────
 
 export function FreelancerInvoicesPage(
@@ -1156,7 +1097,6 @@ export function FreelancerInvoicesPage(
   const { data: allMentors = [] } = useMentors()
   const { data: allMentorAssignments = [] } = useAllMentorAssignments()
   const { data: allMentorSessions = [] } = useAllMentorSessions()
-  const { data: essayRates } = useEssayRates()   // 원서·에세이 컨설턴트별 월 단가
   // 관리자/회계는 다른 컨설턴트의 자동반영 화면을 그대로 미리볼 수 있음 (진단·검증용)
   const { data: previewProfiles = [] } = useProfiles()
   const isManager = isAccounting || user?.role === 'admin'
@@ -1211,19 +1151,14 @@ export function FreelancerInvoicesPage(
         received: false,
         sourceDetail: pairDetail(pair),
       })))
-    // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산(컨설턴트별 월 단가)
+    // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산(총액÷개월수)
     const essay: DItem[] = essayPlans
       .filter(p => consultantNameKey(p.consultantName || '') === myKey)
       .map(p => {
-        const start = p.startMonth
-        if (!start || issueMonth < start || issueMonth > essayEndMonth(start)) return null
-        const startM = Number(start.slice(5, 7)) || 0
-        const curM = Number(issueMonth.slice(5, 7)) || 0
-        const index = curM - startM + 1
-        const count = 12 - startM + 1
-        const amount = essayRateForName(essayRates, p.consultantName)   // 컨설턴트 월 단가
+        const line = essayLineForMonth(p, issueMonth)
+        if (!line) return null
         const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ') || p.studentName || '학생'
-        return { id: `essay:${p.id}:${issueMonth}`, label: `${who} · 원서에세이 (${index}/${count}월차)`, amount, received: false }
+        return { id: `essay:${p.id}:${issueMonth}`, label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, amount: line.amount, received: false }
       })
       .filter((x): x is DItem => x !== null)
 
@@ -1287,7 +1222,7 @@ export function FreelancerInvoicesPage(
     }
 
     return [...mgmt, ...essay, ...editorLines, ...mentorLines]
-  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions, essayRates])
+  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions])
 
   // 발행 대상 = 아직 수령완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
@@ -1378,7 +1313,6 @@ export function FreelancerInvoicesPage(
   const listView = (
     <div className="space-y-6">
       {listActions}
-      {isManager && <EssayRatesManager />}
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
