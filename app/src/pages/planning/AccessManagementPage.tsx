@@ -13,8 +13,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   Loader2, Shield, Search, UserCog, Save,
   CheckCircle2, Users, ShieldCheck, Eye, EyeOff, Briefcase, UserX,
-  ChevronDown, ChevronRight, ChevronUp, Mail, UserPlus, Copy, Check,
+  ChevronDown, ChevronRight, ChevronUp, Mail, UserPlus, Copy, Check, KeyRound,
 } from 'lucide-react'
+import { useResetInstructorPassword } from '@/hooks/usePartnerInstructors'
 import { supabase } from '@/lib/supabase'
 import { NAV_SECTIONS } from '@/components/layout/AppSidebar'
 import { useHiddenBoards, useSetBoardHidden } from '@/hooks/useHiddenBoards'
@@ -855,6 +856,23 @@ export function AccessManagementPage() {
   const isAdmin = isFullAccessRole(currentUser)
   const isLoading = profilesLoading || accessLoading
 
+  // 직원 비밀번호 재설정(기본값 000000) — 관리자용, 배포된 엣지함수 재사용
+  const resetPw = useResetInstructorPassword()
+  const [resettingId, setResettingId] = useState<string | null>(null)
+  const handleResetPassword = async (profile: User) => {
+    if (!profile.email) { alert('이 계정에 이메일이 없어 재설정할 수 없습니다.'); return }
+    if (!confirm(`'${profile.name || profile.email}'의 비밀번호를 초기화할까요?\n초기 비밀번호는 000000 이며, 본인이 로그인 후 변경하도록 안내하세요.`)) return
+    setResettingId(profile.id)
+    try {
+      const res = await resetPw.mutateAsync(profile.email)
+      alert(`비밀번호가 초기화되었습니다.\n\n이메일: ${profile.email}\n임시 비밀번호: ${res.password}\n\n본인에게 전달하고, 로그인 후 변경하도록 안내하세요.`)
+    } catch (e) {
+      alert(`재설정 실패: ${(e as Error)?.message || ''}`)
+    } finally {
+      setResettingId(null)
+    }
+  }
+
   const filteredProfiles = useMemo(() => {
     let list = profiles
     if (employmentFilter !== 'all') {
@@ -1160,15 +1178,30 @@ export function AccessManagementPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => setEditUser(profile)}
-                        >
-                          <UserCog className="size-3.5 mr-1" />
-                          {t('common.edit')}
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setEditUser(profile)}
+                          >
+                            <UserCog className="size-3.5 mr-1" />
+                            {t('common.edit')}
+                          </Button>
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs text-muted-foreground hover:text-amber-600"
+                              title="비밀번호 초기화 (000000)"
+                              disabled={resettingId === profile.id}
+                              onClick={() => handleResetPassword(profile)}
+                            >
+                              {resettingId === profile.id ? <Loader2 className="size-3.5 animate-spin" /> : <KeyRound className="size-3.5" />}
+                              <span className="ml-1 hidden sm:inline">비번</span>
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
