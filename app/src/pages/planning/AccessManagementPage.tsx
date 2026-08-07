@@ -430,6 +430,7 @@ function UserEditDialog({
             {!useCustomAccess && (
               <div className="text-xs text-muted-foreground bg-blue-50 text-blue-700 rounded p-2">
                 {t('access.defaultAccessNote').replace('{role}', ROLE_CONFIG[role]?.label || '')}
+                <span className="block mt-1 text-blue-600">아래 토글·게시판을 바로 조정하면 자동으로 <b>맞춤 설정</b>으로 전환되어 저장됩니다.</span>
               </div>
             )}
 
@@ -461,8 +462,7 @@ function UserEditDialog({
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <button
                           className="p-0.5 rounded hover:bg-gray-100 transition-colors"
-                          onClick={() => useCustomAccess && toggleExpand(mod.key)}
-                          disabled={!useCustomAccess}
+                          onClick={() => { setUseCustomAccess(true); toggleExpand(mod.key) }}
                         >
                           {isExpanded
                             ? <ChevronDown className="size-3.5 text-gray-500" />
@@ -489,8 +489,7 @@ function UserEditDialog({
                         )}
                         <Switch
                           checked={isModEnabled}
-                          onCheckedChange={() => toggleModule(mod.key)}
-                          disabled={!useCustomAccess}
+                          onCheckedChange={() => { setUseCustomAccess(true); toggleModule(mod.key) }}
                         />
                       </div>
                     </div>
