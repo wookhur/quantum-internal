@@ -309,22 +309,29 @@ export function useAllMentorSessions() {
   return useQuery({
     queryKey: ['all_mentor_sessions'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('mentor_sessions')
-        .select('id, session_date, comment, coaching_id, student_coaching(student_id, mentor_id)')
-      if (error) throw error
-      return (data || []).map(r => {
-        const row = r as Record<string, unknown>
-        const sc = row.student_coaching as Record<string, unknown> | null
+      const map = (r: Record<string, unknown>): MentorSessionRow => {
+        const sc = r.student_coaching as Record<string, unknown> | null
         return {
-          id: row.id as string,
-          coachingId: row.coaching_id as string,
-          sessionDate: row.session_date as string,
-          comment: (row.comment as string) || undefined,
+          id: r.id as string,
+          coachingId: r.coaching_id as string,
+          sessionDate: r.session_date as string,
+          comment: (r.comment as string) || undefined,
           studentId: (sc?.student_id as string) || undefined,
           mentorId: (sc?.mentor_id as string) || undefined,
         }
-      }) as MentorSessionRow[]
+      }
+      const { data, error } = await supabase
+        .from('mentor_sessions')
+        .select('id, session_date, comment, coaching_id, student_coaching(student_id, mentor_id)')
+      if (error) {
+        // 학생/멘토 조인(FK 임베드) 실패 시에도 세션은 로드 — mentorId는 배정에서 보강됨
+        const { data: d2, error: e2 } = await supabase
+          .from('mentor_sessions')
+          .select('id, session_date, comment, coaching_id')
+        if (e2) throw e2
+        return (d2 || []).map(r => map(r as Record<string, unknown>))
+      }
+      return (data || []).map(r => map(r as Record<string, unknown>))
     },
   })
 }
