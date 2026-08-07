@@ -48,25 +48,27 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    // 3) 대상 계정(auth user) 찾기 — profiles(id=auth uid) 우선, 없으면 auth 목록 스캔
+    // 3) 대상 계정(auth user) 찾기 — auth 이메일로 직접 매칭(권위 있는 소스). profiles.id가
+    //    auth uid와 어긋난 경우에도 정확히 실제 로그인 계정을 찾도록 함.
     let userId: string | undefined
-    const { data: prof } = await adminClient
-      .from('profiles').select('id').ilike('email', target).maybeSingle()
-    userId = (prof as { id?: string } | null)?.id
+    for (let page = 1; page <= 30 && !userId; page++) {
+      const { data: list } = await adminClient.auth.admin.listUsers({ page, perPage: 200 })
+      const users = list?.users || []
+      userId = users.find((u) => (u.email || '').toLowerCase() === target)?.id
+      if (users.length < 200) break
+    }
     if (!userId) {
-      // fallback: 페이지네이션 스캔 (대상이 profiles에 없을 때)
-      for (let page = 1; page <= 20 && !userId; page++) {
-        const { data: list } = await adminClient.auth.admin.listUsers({ page, perPage: 200 })
-        const users = list?.users || []
-        userId = users.find((u) => (u.email || '').toLowerCase() === target)?.id
-        if (users.length < 200) break
-      }
+      // fallback: profiles(id=auth uid) 기준
+      const { data: prof } = await adminClient
+        .from('profiles').select('id').ilike('email', target).maybeSingle()
+      userId = (prof as { id?: string } | null)?.id
     }
     if (!userId) return json({ error: '해당 이메일로 가입된 계정을 찾을 수 없습니다.' }, 404)
 
-    // 4) 비밀번호 초기화
+    // 4) 비밀번호 초기화 + 이메일 인증 확정(미인증이면 로그인 막히므로 함께 처리)
     const { error: updErr } = await adminClient.auth.admin.updateUserById(userId, {
       password: DEFAULT_PASSWORD,
+      email_confirm: true,
     })
     if (updErr) return json({ error: updErr.message }, 400)
 
