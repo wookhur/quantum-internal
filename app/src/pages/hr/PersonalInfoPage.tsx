@@ -354,7 +354,14 @@ export function PersonalInfoPage() {
                     <TableRow key={profile.id}>
                       <TableCell>
                         <div>
-                          <div className="text-sm font-medium">{profile.name}</div>
+                          <div className="text-sm font-medium flex items-center gap-1.5">
+                            {profile.name}
+                            {profile.resigned && (
+                              <Badge variant="outline" className="text-[10px] h-4 bg-red-50 text-red-600 border-red-200">
+                                퇴사{profile.contractEndDate ? ` ~${profile.contractEndDate}` : ''}
+                              </Badge>
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground">{profile.email}</div>
                         </div>
                       </TableCell>
