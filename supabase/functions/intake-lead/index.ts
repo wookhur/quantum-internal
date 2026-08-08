@@ -83,8 +83,9 @@ Deno.serve(async (req) => {
         current_school: currentSchool || null,
         grade: grade || null,
         region: region || null,
+        interest_area: interestArea || null,
         source_channel: SOURCE_CHANNEL,
-        memo: [interestArea ? `관심분야: ${interestArea}` : '', message].filter(Boolean).join('\n') || null,
+        memo: message || null,
         pipeline_stage: 'new_lead',
         assigned_to: null,
       }).select('id').single()
