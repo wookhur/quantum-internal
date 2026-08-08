@@ -17,6 +17,7 @@ import {
   meetingsForLeads,
   computeColdCallOutcome,
   leadMatchesSeminar,
+  leadMatchesSeminarLoose,
   seminarSessionsForLead,
   dedupeLeadsByPerson,
   normalizePhone,
@@ -333,6 +334,18 @@ export function SalesPerformancePage() {
       return matched
     }
     return allLeads.filter(l => l.sourceChannel === row.eventName)
+  }, [detailDialog, allLeads])
+
+  // 참석자 모달 폴백: 등록(신청서) 데이터가 없는 세미나는 유입경로(source_channel)로 연결된 리드를 표시
+  const attendeeSourceLeads = useMemo((): Lead[] => {
+    if (detailDialog?.kind !== 'attendees') return []
+    const s = detailDialog.row.seminar
+    const name = detailDialog.row.eventName
+    const list = allLeads.filter(l =>
+      (!!l.sourceChannel && l.sourceChannel === name) ||
+      (s ? leadMatchesSeminarLoose(s, l) : false),
+    )
+    return dedupeLeadsByPerson(list)
   }, [detailDialog, allLeads])
 
   // Leads marked 참석예정(planned) in cold call for the clicked row's seminar/session
@@ -774,8 +787,10 @@ export function SalesPerformancePage() {
                   '{n}',
                   String(
                     manualFigure ?? (
-                      (detailDialog?.kind === 'registrants' || detailDialog?.kind === 'attendees')
+                      detailDialog?.kind === 'registrants'
                         ? dialogRegistrations.length
+                        : detailDialog?.kind === 'attendees'
+                        ? (dialogRegistrations.length || attendeeSourceLeads.length)
                         : detailDialog?.kind === 'meetings'
                           ? dialogMeetings.length
                           : detailDialog?.kind === 'planned'
@@ -800,9 +815,46 @@ export function SalesPerformancePage() {
                 <Loader2 className="size-5 animate-spin text-muted-foreground" />
               </div>
             ) : dialogRegistrations.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-10">
-                {t('salesPerf.noMatchingLeads')}
-              </p>
+              attendeeSourceLeads.length > 0 ? (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-amber-600">등록(신청서) 데이터가 없어 <b>유입경로</b> 기준으로 연결된 리드를 표시합니다. ({attendeeSourceLeads.length}건)</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('leads.col.parent')}</TableHead>
+                        <TableHead>{t('leads.col.student')}</TableHead>
+                        <TableHead>{t('leads.col.school')}</TableHead>
+                        <TableHead>{t('leads.col.grade')}</TableHead>
+                        <TableHead>{t('leads.col.stage')}</TableHead>
+                        <TableHead className="w-[40px]" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {attendeeSourceLeads.map((lead) => {
+                        const stage = getStageConfig(lead.pipelineStage)
+                        return (
+                          <TableRow key={lead.id}>
+                            <TableCell className="text-sm font-medium">{lead.parentName}</TableCell>
+                            <TableCell className="text-sm">{lead.studentName || '-'}</TableCell>
+                            <TableCell className="text-sm">{lead.currentSchool || '-'}</TableCell>
+                            <TableCell className="text-sm">{lead.grade || '-'}</TableCell>
+                            <TableCell><span className={`status-pill status-pill--${stage.color.replace('stage-', '')}`}>{stage.label}</span></TableCell>
+                            <TableCell>
+                              <Link to={`/sales/leads/${lead.id}`}>
+                                <Button variant="ghost" size="icon" className="size-6"><ChevronRight className="size-3.5" /></Button>
+                              </Link>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-10">
+                  {t('salesPerf.noMatchingLeads')}
+                </p>
+              )
             ) : (
               <Table>
                 <TableHeader>
