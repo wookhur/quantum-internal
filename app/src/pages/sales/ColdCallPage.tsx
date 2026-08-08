@@ -192,12 +192,19 @@ function getSchoolTierScore(school: string): number {
 }
 
 /** Stages eligible for cold calling (콜백요청(on_hold)·부재중 포함 — 콜드콜에서 계속 관리) */
+// 콜드콜 기본 목록: 진행·상담·계약 등 모든 활성/성사 단계 포함.
+// (거절·이탈·보류(연락불가)는 이탈/연락불가로 따로 관리 → 기본 목록에서 제외)
 const COLD_CALL_STAGES: PipelineStage[] = [
   'new_lead',
   'contact_attempted',
   'no_response',
   'on_hold',
-  'consultation_scheduled',   // 상담예약으로 넘어간 리드도 콜드콜 목록에 표시
+  'consultation_scheduled',
+  'first_consultation',
+  'second_consultation',
+  'third_consultation',
+  'contract_review',
+  'contracted',
 ]
 
 /**
