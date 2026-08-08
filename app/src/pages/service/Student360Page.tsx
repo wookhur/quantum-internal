@@ -208,18 +208,16 @@ const REPORT_META: Record<ServiceReportStatus, { labelKey: string; className: st
 }
 
 // Meeting-diary columns (from the original Meeting Diary sheet)
+// 미팅다이어리 6개 섹션 (자동생성·편집·표시 공통 구조)
+//  1 Meeting Summary · 2 QnA · 3 Concerns · 4 Assignments · 5 Follow-up Commitments · 6 Next Meeting Agenda
 const DIARY_FIELDS = [
-  { key: 'agendaItems', labelKey: 'student360.agendaItems' },
-  { key: 'meetingSummary', labelKey: 'student360.meetingSummary' },
-  { key: 'extracurricularNotes', labelKey: 'student360.extracurricularNotes' },
-  { key: 'identityNarrativeNotes', labelKey: 'student360.identityNarrativeNotes' },
-  { key: 'questionsConcerns', labelKey: 'student360.questionsConcerns' },
-  { key: 'nextMeetingAgenda', labelKey: 'student360.nextMeetingAgenda' },
-  { key: 'followUpCommitments', labelKey: 'student360.followUpCommitments' },
-  { key: 'assignments', labelKey: 'student360.assignments' },
-  { key: 'criticalDates', labelKey: 'student360.criticalDates' },
-  { key: 'criticalIssue', labelKey: 'student360.criticalIssue' },
-] as const satisfies ReadonlyArray<{ key: keyof ServiceDiaryEntry; labelKey: string }>
+  { key: 'meetingSummary', label: 'Meeting Summary' },
+  { key: 'questionsConcerns', label: 'QnA' },
+  { key: 'criticalIssue', label: 'Concerns' },
+  { key: 'assignments', label: 'Assignments' },
+  { key: 'followUpCommitments', label: 'Follow-up Commitments' },
+  { key: 'nextMeetingAgenda', label: 'Next Meeting Agenda' },
+] as const satisfies ReadonlyArray<{ key: keyof ServiceDiaryEntry; label: string }>
 
 export function Student360Page() {
   const t = useT()
@@ -3103,37 +3101,38 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
               </div>
             )}
             <div className="mt-2 space-y-2">
-              {DIARY_FIELDS.map(f => {
-                // Shown as checklists below instead of plain text
-                if (f.key === 'followUpCommitments' || f.key === 'assignments') return null
-                const val = d[f.key]
-                if (!val) return null
-                return (
-                  <div key={f.key}>
-                    <p className="text-xs font-medium text-muted-foreground">{t(f.labelKey)}</p>
-                    <p className="text-sm whitespace-pre-wrap">{val}</p>
-                  </div>
-                )
-              })}
-              <FollowupChecklist
-                studentId={studentId}
-                diaryId={d.id}
-                category="followup"
-                labelKey="student360.followUpCommitments"
-                fallbackText={d.followUpCommitments}
-                createdBy={createdBy}
-                canEdit={canEdit}
-              />
+              {/* 6개 섹션 순서대로: Meeting Summary · QnA · Concerns · Assignments · Follow-up Commitments · Next Meeting Agenda */}
+              {d.meetingSummary && (
+                <div><p className="text-xs font-medium text-muted-foreground">Meeting Summary</p><p className="text-sm whitespace-pre-wrap">{d.meetingSummary}</p></div>
+              )}
+              {d.questionsConcerns && (
+                <div><p className="text-xs font-medium text-muted-foreground">QnA</p><p className="text-sm whitespace-pre-wrap">{d.questionsConcerns}</p></div>
+              )}
+              {d.criticalIssue && (
+                <div><p className="text-xs font-medium text-muted-foreground">Concerns</p><p className="text-sm whitespace-pre-wrap">{d.criticalIssue}</p></div>
+              )}
               <FollowupChecklist
                 studentId={studentId}
                 diaryId={d.id}
                 category="assignment"
-                labelKey="student360.assignments"
+                label="Assignments"
                 fallbackText={d.assignments}
                 createdBy={createdBy}
                 showToggle={false}
                 canEdit={canEdit}
               />
+              <FollowupChecklist
+                studentId={studentId}
+                diaryId={d.id}
+                category="followup"
+                label="Follow-up Commitments"
+                fallbackText={d.followUpCommitments}
+                createdBy={createdBy}
+                canEdit={canEdit}
+              />
+              {d.nextMeetingAgenda && (
+                <div><p className="text-xs font-medium text-muted-foreground">Next Meeting Agenda</p><p className="text-sm whitespace-pre-wrap">{d.nextMeetingAgenda}</p></div>
+              )}
             </div>
             </>)}
           </div>
@@ -3224,7 +3223,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
           </div>
           {DIARY_FIELDS.map(f => (
             <div key={f.key}>
-              <Label className="text-xs">{t(f.labelKey)}</Label>
+              <Label className="text-xs">{f.label}</Label>
               <Textarea
                 value={form[f.key]}
                 onChange={e => setField(f.key, e.target.value)}
@@ -3590,17 +3589,19 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName, canEdit }:
 }
 
 // ────────────────────────── Follow-up Checklist ──────────────────────────
-function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, category = 'followup', labelKey = 'student360.followUpCommitments', showToggle = true, canEdit }: {
+function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, category = 'followup', labelKey = 'student360.followUpCommitments', label, showToggle = true, canEdit }: {
   studentId: string
   diaryId: string
   fallbackText?: string
   createdBy?: string
   category?: string
   labelKey?: string
+  label?: string
   showToggle?: boolean
   canEdit: boolean
 }) {
   const t = useT()
+  const heading = label ?? t(labelKey)
   const { data: all = [] } = useServiceFollowups(studentId)
   const items = useMemo(
     () => all.filter(f => f.diaryId === diaryId && (f.category || 'followup') === category),
@@ -3628,7 +3629,7 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
     return (
       <div>
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">{t(labelKey)}</p>
+          <p className="text-xs font-medium text-muted-foreground">{heading}</p>
           {canEdit && (
             <Button size="sm" variant="ghost" onClick={() => setAdding(true)}>
               <Plus className="size-3.5" />
@@ -3655,7 +3656,7 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
     <div>
       <div className="flex items-center justify-between mb-1">
         <p className="text-xs font-medium text-muted-foreground">
-          {t(labelKey)}
+          {heading}
           {items.length > 0 && (
             <span className="ml-1 text-muted-foreground/70">
               {showToggle ? `(${doneCount}/${items.length})` : `(${items.length})`}
