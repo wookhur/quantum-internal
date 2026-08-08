@@ -197,6 +197,7 @@ const COLD_CALL_STAGES: PipelineStage[] = [
   'contact_attempted',
   'no_response',
   'on_hold',
+  'consultation_scheduled',   // 상담예약으로 넘어간 리드도 콜드콜 목록에 표시
 ]
 
 /**
