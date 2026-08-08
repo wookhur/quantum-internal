@@ -23,6 +23,8 @@ function toUser(data: Record<string, unknown>, fallbackEmail: string): User {
     department: (data.department as User['department']) || undefined,
     position: data.position as string | undefined,
     contractStartDate: (data.contract_start_date as string) || undefined,
+    contractEndDate: (data.contract_end_date as string) || undefined,
+    resigned: (data.resigned as boolean) || false,
     hireDate: (data.hire_date as string) || undefined,
     isExternal: (data.is_external as boolean) || false,
     isPartner: (data.is_partner as boolean) || false,
