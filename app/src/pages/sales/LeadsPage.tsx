@@ -547,7 +547,12 @@ function LeadsTableView() {
                 {paginatedLeads.map((lead) => (
                   <tr key={lead.id} className="group">
                     <td>
-                      <StagePill stage={lead.pipelineStage} />
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <StagePill stage={lead.pipelineStage} />
+                        {(lead.sourceChannel || '').includes('홈페이지') && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500 text-white font-medium">홈페이지</span>
+                        )}
+                      </div>
                     </td>
                     <td className="text-xs text-muted-foreground font-mono whitespace-nowrap">
                       {formatDate(lead.leadDate)}

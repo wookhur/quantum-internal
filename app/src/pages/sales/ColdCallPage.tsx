@@ -951,6 +951,9 @@ export function ColdCallView() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
+                      {(lead.sourceChannel || '').includes('홈페이지') && (
+                        <span className="block text-[10px] px-1.5 py-0.5 rounded-full bg-red-500 text-white font-medium mb-1">홈페이지</span>
+                      )}
                       {(() => {
                         const b = coldStageBadge(lead.pipelineStage, oneOnOneLeadIds.has(lead.id), t)
                         return (
