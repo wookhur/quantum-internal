@@ -43,6 +43,7 @@ import {
   Kanban,
   NotebookPen,
   Tag,
+  FolderArchive,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -70,6 +71,7 @@ export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; i
       { labelKey: 'nav.myTodo', to: '/my-todos', icon: CheckSquare },
       { labelKey: 'nav.messages', to: '/messages', icon: MessageSquare },
       { labelKey: 'nav.coupangOrders', to: '/common/coupang-orders', icon: ShoppingCart },
+      { labelKey: 'nav.archive', to: '/common/archive', icon: FolderArchive },
     ],
   },
   {

@@ -146,6 +146,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/messages', labelKey: 'nav.messages', module: 'dashboard' },
   { path: '/person', labelKey: 'nav.personProfile', module: 'dashboard', hidden: true },
   { path: '/common/coupang-orders', labelKey: 'nav.coupangOrders', module: 'dashboard' },
+  { path: '/common/archive', labelKey: 'nav.archive', module: 'dashboard' },
   // ── Sales ──
   { path: '/sales/leads', labelKey: 'nav.leadManagement', module: 'sales' },
   { path: '/sales/cold-call', labelKey: 'nav.coldCall', module: 'sales' },
@@ -250,6 +251,8 @@ export function canAccessAccount(
 
 /** 재무 권한자만 열람 가능한 라우트(재정대시보드). admin이라도 account 없으면 차단. */
 export const ACCOUNT_ONLY_ROUTES: string[] = ['/finance/dashboard']
+// 내부직원(내부 스태프) 전용 — 외부/프리랜서/외부표시 계정은 기본 제외 (명시 부여 시 허용)
+export const INTERNAL_ONLY_ROUTES: string[] = ['/common/archive']
 
 /** 파트너 게시판 3종 — 서비스팀(department='service') 소속에게 열람 허용 */
 export const PARTNER_BOARD_ROUTES: string[] = ['/partner/students', '/partner/companies', '/partner/contracts']
@@ -360,11 +363,11 @@ export function getEffectiveRoutes(
 ): string[] {
   // 전체 접근(admin·account): 모든 라우트. (단, 아래 재정대시보드 필터는 이들에게도 적용됨)
   const isAdmin = isFullAccessRole(user)
+  const custom = featureAccessRecords.find(r => r.userId === user.id)
   let routes: string[]
   if (isAdmin) {
     routes = NAV_ROUTE_DEFS.map(r => r.path)
   } else {
-    const custom = featureAccessRecords.find(r => r.userId === user.id)
     if (custom) {
       // enabledRoutes(있으면)는 게시판별로 명시 저장된 권위 있는 목록이다.
       // 모듈 확장과 병합하면 '없음'으로 끈 게시판이 모듈 확장으로 되살아나므로(뷰어로 복원되는 버그)
@@ -380,8 +383,10 @@ export function getEffectiveRoutes(
       routes = expandModulesToRoutes(defaultModules)
     }
   }
-  // Non-admin users are always blocked from admin-only routes
-  let result = isAdmin ? routes : routes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
+  // 관리자전용 라우트는 역할 기본값에서는 비-admin에게 제외하되,
+  // 접근권한 관리에서 '명시적으로' 부여한 경우(custom.enabledRoutes에 존재)는 관리자의 의도대로 허용.
+  const hasExplicitRoutes = !!custom && custom.enabledRoutes.length > 0
+  let result = (isAdmin || hasExplicitRoutes) ? routes : routes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
   // 서비스입금관리는 재무 권한자(대표·부대표·재무이사)만 열람
   if (!canManageServiceFinance(user)) {
     result = result.filter(r => !SERVICE_FINANCE_ROUTES.includes(r))
@@ -389,6 +394,11 @@ export function getEffectiveRoutes(
   // 재정대시보드는 account(재무) 권한자만 — admin이라도 account 없으면 제외
   if (!canAccessAccount(user)) {
     result = result.filter(r => !ACCOUNT_ONLY_ROUTES.includes(r))
+  }
+  // 내부직원 전용(Archive 등): 외부/프리랜서/외부표시 계정은 기본 제외(명시 부여 시 허용)
+  const isExternalUser = user.role === 'external' || user.role === 'freelancer' || user.isExternal === true
+  if (isExternalUser && !hasExplicitRoutes) {
+    result = result.filter(r => !INTERNAL_ONLY_ROUTES.includes(r))
   }
   // 서비스팀(department='service') 소속은 파트너 게시판 3종을 열람
   if (user.department === 'service') {

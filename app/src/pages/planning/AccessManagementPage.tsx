@@ -231,10 +231,8 @@ function UserEditDialog({
       })
 
       if (useCustomAccess) {
-        // Strip admin-only routes for non-admin users
-        const safeRoutes = role === 'admin'
-          ? enabledRoutes
-          : enabledRoutes.filter(r => !ADMIN_ONLY_ROUTES.includes(r))
+        // 관리자전용 라우트도 여기서 명시적으로 켜면 그대로 저장(수동 권한 부여 허용)
+        const safeRoutes = enabledRoutes
         // 편집 라우트는 열람 가능 라우트의 부분집합으로 제한
         const safeEdit = editRoutes.filter(r => safeRoutes.includes(r))
         await updateFeatureAccess.mutateAsync({
@@ -499,11 +497,9 @@ function UserEditDialog({
                       <div className="border-t bg-gray-50/30 px-3 py-1.5 space-y-0.5">
                         {modRoutes.map(route => {
                           const isAdminOnly = ADMIN_ONLY_ROUTES.includes(route.path)
-                          const isTargetAdmin = role === 'admin'
-                          const routeLocked = isAdminOnly && !isTargetAdmin
-                          const level: 'none' | 'view' | 'edit' = routeLocked
-                            ? 'none'
-                            : enabledRoutes.includes(route.path)
+                          // 모든 게시판을 수동으로 설정 가능(관리자전용도 명시 부여 허용)
+                          const level: 'none' | 'view' | 'edit' =
+                            enabledRoutes.includes(route.path)
                               ? (editRoutes.includes(route.path) ? 'edit' : 'view')
                               : 'none'
                           const levelOpts: { v: 'none' | 'view' | 'edit'; label: string; on: string }[] = [
@@ -515,7 +511,7 @@ function UserEditDialog({
                           return (
                             <div
                               key={route.path}
-                              className={`flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-100/60 ${routeLocked ? 'opacity-50' : ''}`}
+                              className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-gray-100/60"
                             >
                               <div className="flex items-center gap-2 min-w-0">
                                 <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
@@ -537,11 +533,10 @@ function UserEditDialog({
                                   <button
                                     key={o.v}
                                     type="button"
-                                    disabled={routeLocked}
                                     onClick={() => setRouteLevel(route.path, mod.key, o.v)}
                                     className={`px-2 py-0.5 text-[11px] border-r last:border-r-0 transition-colors ${
                                       level === o.v ? o.on : 'bg-white text-gray-500 hover:bg-gray-100'
-                                    } ${routeLocked ? 'cursor-not-allowed' : ''}`}
+                                    }`}
                                   >
                                     {o.label}
                                   </button>

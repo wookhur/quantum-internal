@@ -60,6 +60,7 @@ import { ProgramsPage } from '@/pages/partner/ProgramsPage'
 import { SalesPriceGuidePage } from '@/pages/partner/SalesPriceGuidePage'
 import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
 import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
+import { ArchivePage } from '@/pages/common/ArchivePage'
 import { SeminarsPage } from '@/pages/marketing/SeminarsPage'
 import { SeminarRegisterPage } from '@/pages/public/SeminarRegisterPage'
 
@@ -162,6 +163,7 @@ export default function App() {
                 <Route path="/planning/kpi-targets" element={<Navigate to="/hr/kpi-targets" replace />} />
 
                 <Route path="/common/coupang-orders" element={<CoupangOrdersPage />} />
+                <Route path="/common/archive" element={<ArchivePage />} />
                 <Route path="/game" element={<GamePage />} />
               </Route>
             </Route>
