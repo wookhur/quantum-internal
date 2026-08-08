@@ -55,7 +55,7 @@ export function ArchivePage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-foreground">
-            <FolderArchive className="h-6 w-6 text-primary" /> Archive
+            <FolderArchive className="h-6 w-6 text-primary" /> 자료실 <span className="text-base font-normal text-muted-foreground">Archive</span>
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">각종 자료(문서·이미지·PDF 등)를 업로드·검색·다운로드하는 내부 자료 보관함입니다.</p>
         </div>

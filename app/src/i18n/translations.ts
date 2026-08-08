@@ -72,7 +72,7 @@ const koTranslations = {
   'nav.messages': '메시지',
   'nav.personProfile': '통합 프로필',
   'nav.coupangOrders': '주문 요청',
-  'nav.archive': 'Archive',
+  'nav.archive': '자료실',
   'nav.sales': '세일즈',
   'nav.coldCall': '콜드콜',
   'nav.leadManagement': '리드 관리',
