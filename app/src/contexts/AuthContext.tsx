@@ -127,6 +127,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const profile = await fetchInFlight.current
         if (isMounted) {
           if (profile) {
+            // 퇴사 처리 + 계약종료일 '다음날부터' 접속 차단 (앱단)
+            const end = profile.contractEndDate
+            const n = new Date()
+            const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+            if (profile.resigned && end && today > end) {
+              await supabase.auth.signOut()
+              if (isMounted) {
+                setUser(null); setSession(null); setLoading(false)
+                fetchInFlight.current = null
+                window.alert('퇴사 처리되어 시스템에 접속할 수 없습니다. 문의사항은 관리자에게 연락하세요.')
+              }
+              return
+            }
             profileResolved.current = true
             setUser(profile)
           } else {

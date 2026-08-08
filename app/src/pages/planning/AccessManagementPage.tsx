@@ -867,6 +867,27 @@ export function AccessManagementPage() {
     }
   }
 
+  // 퇴사/복직 처리 — 계약종료일 다음날부터 접속 차단
+  const resignMut = useUpdateProfile()
+  function handleToggleResigned(profile: User) {
+    if (profile.resigned) {
+      if (!confirm(`'${profile.name}'을(를) 복직 처리할까요? (접속 차단 해제)`)) return
+      resignMut.mutate({ id: profile.id, resigned: false, resignedAt: null })
+      return
+    }
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const hasEnd = !!profile.contractEndDate
+    const msg = hasEnd
+      ? `'${profile.name}'을(를) 퇴사 처리할까요?\n계약종료일(${profile.contractEndDate}) 다음날부터 접속이 차단됩니다.`
+      : `'${profile.name}'을(를) 퇴사 처리할까요?\n계약종료일이 없어 오늘(${today})로 설정되고, 내일부터 접속이 차단됩니다.`
+    if (!confirm(msg)) return
+    resignMut.mutate({
+      id: profile.id, resigned: true, resignedAt: new Date().toISOString(),
+      ...(hasEnd ? {} : { contractEndDate: today }),
+    })
+  }
+
   const filteredProfiles = useMemo(() => {
     let list = profiles
     if (employmentFilter !== 'all') {
@@ -1115,6 +1136,11 @@ export function AccessManagementPage() {
                           <div>
                             <div className="text-sm font-medium flex items-center gap-1.5">
                               {profile.name}
+                              {profile.resigned && (
+                                <Badge variant="outline" className="text-[10px] h-4 bg-red-50 text-red-600 border-red-200">
+                                  퇴사{profile.contractEndDate ? ` ~${profile.contractEndDate}` : ''}
+                                </Badge>
+                              )}
                               {isSelf && (
                                 <Badge variant="outline" className="text-[10px] h-4 bg-blue-50 text-blue-600 border-blue-200">
                                   {t('access.me')}
@@ -1193,6 +1219,18 @@ export function AccessManagementPage() {
                             >
                               {resettingId === profile.id ? <Loader2 className="size-3.5 animate-spin" /> : <KeyRound className="size-3.5" />}
                               <span className="ml-1 hidden sm:inline">비번</span>
+                            </Button>
+                          )}
+                          {isAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={`h-7 px-2 text-xs ${profile.resigned ? 'text-emerald-600 hover:text-emerald-700' : 'text-muted-foreground hover:text-red-600'}`}
+                              title={profile.resigned ? '복직 처리 (접속 차단 해제)' : '퇴사 처리 (계약종료일 다음날부터 접속 차단)'}
+                              onClick={() => handleToggleResigned(profile)}
+                            >
+                              <UserX className="size-3.5" />
+                              <span className="ml-1 hidden sm:inline">{profile.resigned ? '복직' : '퇴사'}</span>
                             </Button>
                           )}
                         </div>

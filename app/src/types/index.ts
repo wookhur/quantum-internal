@@ -24,6 +24,7 @@ export interface User {
   canApproveLeave?: boolean   // '연차·휴가 승인' 권한
   canEditAttendance?: boolean // '근태관리 수정' 권한 (지정된 사용자만)
   isAccount?: boolean         // 재무(account) 화면 접근 권한 — admin과 독립적으로 부여
+  resigned?: boolean          // 퇴사 처리 여부 — 계약종료일 다음날부터 접속 차단
   avatarUrl?: string
   createdAt: string
 }
