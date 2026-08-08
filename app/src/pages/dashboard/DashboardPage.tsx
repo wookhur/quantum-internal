@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,12 +9,13 @@ import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   Loader2, Megaphone, Plus, Pencil, Trash2, Pin, Building2, Globe, Smartphone, Landmark,
-  Phone, Mail, Users, ExternalLink, MonitorSmartphone, MessageCircle,
+  Phone, Mail, Users, ExternalLink, MonitorSmartphone, MessageCircle, Paperclip, X,
 } from 'lucide-react'
 import { todayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import {
-  useNotices, useCreateNotice, useUpdateNotice, useDeleteNotice, type Notice,
+  useNotices, useCreateNotice, useUpdateNotice, useDeleteNotice, uploadNoticeFile,
+  type Notice, type NoticeAttachment,
 } from '@/hooks/useNotices'
 import { useCompanyInfo, useUpdateCompanyInfo, type CompanyInfo } from '@/hooks/useCompanyInfo'
 import { useProfiles } from '@/hooks/useProfiles'
@@ -58,8 +59,10 @@ export function DashboardPage() {
   // 공지 폼
   const [showNoticeForm, setShowNoticeForm] = useState(false)
   const [editingNotice, setEditingNotice] = useState<Notice | null>(null)
-  const [noticeForm, setNoticeForm] = useState({ title: '', content: '', pinned: false })
+  const [noticeForm, setNoticeForm] = useState<{ title: string; content: string; pinned: boolean; attachments: NoticeAttachment[] }>({ title: '', content: '', pinned: false, attachments: [] })
   const [expandedNotice, setExpandedNotice] = useState<string | null>(null)
+  const [uploadingNotice, setUploadingNotice] = useState(false)
+  const noticeFileRef = useRef<HTMLInputElement>(null)
 
   // 회사 정보 편집
   const [companyOpen, setCompanyOpen] = useState(false)
@@ -67,21 +70,37 @@ export function DashboardPage() {
 
   function openCreateNotice() {
     setEditingNotice(null)
-    setNoticeForm({ title: '', content: '', pinned: false })
+    setNoticeForm({ title: '', content: '', pinned: false, attachments: [] })
     setShowNoticeForm(true)
   }
   function openEditNotice(n: Notice) {
     setEditingNotice(n)
-    setNoticeForm({ title: n.title, content: n.content || '', pinned: n.pinned })
+    setNoticeForm({ title: n.title, content: n.content || '', pinned: n.pinned, attachments: n.attachments || [] })
     setShowNoticeForm(true)
+  }
+  async function handleNoticeFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!files.length) return
+    setUploadingNotice(true)
+    try {
+      const uploaded: NoticeAttachment[] = []
+      for (const f of files) uploaded.push(await uploadNoticeFile(f))
+      setNoticeForm(f => ({ ...f, attachments: [...f.attachments, ...uploaded] }))
+    } catch (err) {
+      alert('파일 업로드 실패: ' + ((err as Error)?.message || ''))
+    } finally {
+      setUploadingNotice(false)
+    }
   }
   function submitNotice() {
     const title = noticeForm.title.trim()
     if (!title) return
     const content = noticeForm.content.trim()
     const pinned = noticeForm.pinned
-    if (editingNotice) updateNotice.mutate({ id: editingNotice.id, title, content, pinned }, { onSuccess: () => setShowNoticeForm(false) })
-    else createNotice.mutate({ title, content, pinned, createdBy: user?.id || '' }, { onSuccess: () => setShowNoticeForm(false) })
+    const attachments = noticeForm.attachments
+    if (editingNotice) updateNotice.mutate({ id: editingNotice.id, title, content, pinned, attachments }, { onSuccess: () => setShowNoticeForm(false) })
+    else createNotice.mutate({ title, content, pinned, attachments, createdBy: user?.id || '' }, { onSuccess: () => setShowNoticeForm(false) })
   }
   function handleDeleteNotice(id: string) {
     if (confirm('이 공지를 삭제할까요?')) deleteNotice.mutate(id)
@@ -171,9 +190,23 @@ export function DashboardPage() {
                       </button>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[11px] text-muted-foreground">{notice.authorName || t('dashboard.admin')} · {notice.createdAt.slice(0, 10)}</span>
+                        {notice.attachments.length > 0 && (
+                          <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground"><Paperclip className="size-3" />{notice.attachments.length}</span>
+                        )}
                       </div>
-                      {expandedNotice === notice.id && notice.content && (
-                        <div className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap border-t pt-2">{notice.content}</div>
+                      {expandedNotice === notice.id && (notice.content || notice.attachments.length > 0) && (
+                        <div className="mt-2 border-t pt-2 space-y-2">
+                          {notice.content && <div className="text-sm text-muted-foreground whitespace-pre-wrap">{notice.content}</div>}
+                          {notice.attachments.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {notice.attachments.map((a, i) => (
+                                <a key={i} href={a.url} target="_blank" rel="noreferrer" download className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted">
+                                  <Paperclip className="size-3 text-muted-foreground" /><span className="max-w-[160px] truncate">{a.name}</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                     {isAdmin && (
@@ -215,16 +248,33 @@ export function DashboardPage() {
 
       {/* 공지 작성/수정 */}
       <Dialog open={showNoticeForm} onOpenChange={setShowNoticeForm}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{editingNotice ? '공지 수정' : '공지 작성'}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
             <div className="space-y-1">
               <Label className="text-xs">제목</Label>
               <Input value={noticeForm.title} onChange={(e) => setNoticeForm((f) => ({ ...f, title: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">내용</Label>
-              <Textarea rows={5} value={noticeForm.content} onChange={(e) => setNoticeForm((f) => ({ ...f, content: e.target.value }))} />
+              <Label className="text-xs">내용 <span className="text-muted-foreground font-normal">(길게 작성 가능)</span></Label>
+              <Textarea rows={12} value={noticeForm.content} onChange={(e) => setNoticeForm((f) => ({ ...f, content: e.target.value }))} placeholder="긴 내용을 자유롭게 작성하세요..." />
+            </div>
+            {/* 파일 첨부 (PDF · txt · docx · 이미지) */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">첨부파일 <span className="text-muted-foreground font-normal">(PDF · txt · docx · 이미지)</span></Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {noticeForm.attachments.map((a, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-1 text-xs">
+                    <Paperclip className="size-3 text-muted-foreground" />
+                    <span className="max-w-[160px] truncate">{a.name}</span>
+                    <button onClick={() => setNoticeForm(f => ({ ...f, attachments: f.attachments.filter((_, k) => k !== i) }))} className="text-muted-foreground hover:text-red-500"><X className="size-3" /></button>
+                  </span>
+                ))}
+                <input ref={noticeFileRef} type="file" multiple accept=".pdf,.txt,.doc,.docx,image/*" className="hidden" onChange={handleNoticeFiles} />
+                <Button variant="outline" size="sm" className="h-8 gap-1" disabled={uploadingNotice} onClick={() => noticeFileRef.current?.click()}>
+                  {uploadingNotice ? <Loader2 className="size-3.5 animate-spin" /> : <Paperclip className="size-3.5" />} 파일 추가
+                </Button>
+              </div>
             </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <Switch checked={noticeForm.pinned} onCheckedChange={(v) => setNoticeForm((f) => ({ ...f, pinned: v }))} /> 상단 고정
