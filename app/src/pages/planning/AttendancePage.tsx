@@ -45,7 +45,7 @@ import {
 import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
-import { useAttendances, useAttendancesRange, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances, useSetLateExempt } from '@/hooks/useAttendances'
+import { useAttendances, useAttendancesRange, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances, useSetLateExempt, useUpdateAttendanceNote } from '@/hooks/useAttendances'
 import { useKioskExcludedIds, useUpdateKioskExcludedIds } from '@/hooks/useKioskSettings'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
@@ -323,6 +323,13 @@ export function AttendancePage() {
   // 근태 기록 편집(추가·수정·삭제·업로드)은 관리자 또는 '근태관리 수정' 특수 권한 보유자만 가능.
   // HR 모듈 접근 권한이 있어도 이 권한이 없으면 조회만 가능.
   const canEdit = user?.role === 'admin' || !!user?.canEditAttendance
+  // 근무노트(사유)는 근태수정 권한이 없어도 내부 직원이 '본인 행'에 직접 기록할 수 있다.
+  // (출퇴근 시간은 canEdit 권한자만 수정 가능 — 권한 이원화)
+  const isInternalStaff = !!user && user.role !== 'external' && user.role !== 'freelancer' && !user.isExternal
+  const canEditNoteRow = useCallback(
+    (att: { profileId: string }) => canEdit || (isInternalStaff && att.profileId === user?.id),
+    [canEdit, isInternalStaff, user?.id],
+  )
   const { data: profiles = [] } = useProfiles()
   const [currentMonth, setCurrentMonth] = useState<string>(getCurrentMonth())
   const { data: attendances = [], isLoading } = useAttendances(currentMonth)
@@ -337,6 +344,7 @@ export function AttendancePage() {
   const deleteMut = useDeleteAttendance()
   const setLateExemptMut = useSetLateExempt()
   const bulkUpsertMut = useBulkUpsertAttendances()
+  const updateNoteMut = useUpdateAttendanceNote()
   const { data: kioskExcludedIds = [] } = useKioskExcludedIds()
   const updateKioskExcluded = useUpdateKioskExcludedIds()
 
@@ -344,6 +352,11 @@ export function AttendancePage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState<AttendanceForm>({ profileId: '', date: '', clockIn: '', clockOut: '', note: '', lateExempt: false })
+  // 근무노트 전용(시간 수정 권한 없는 직원의 본인 행 사유 기록)
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [noteEditId, setNoteEditId] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState('')
+  const [noteContext, setNoteContext] = useState<{ name: string; date: string; clockIn: string | null; clockOut: string | null } | null>(null)
   const [kioskSettingsOpen, setKioskSettingsOpen] = useState(false)
   const [kioskExcludedDraft, setKioskExcludedDraft] = useState<Set<string>>(new Set())
   const [dayDetail, setDayDetail] = useState<{ date: string; mode: 'work' | 'late' } | null>(null)
@@ -447,6 +460,32 @@ export function AttendancePage() {
     if (!canEdit) return
     if (!confirm(t('attendance.confirmDelete'))) return
     deleteMut.mutate(id)
+  }
+
+  // 근무노트만 수정하는 다이얼로그(시간 수정 권한 없는 직원의 본인 행)
+  const openNoteEdit = (id: string) => {
+    const att = attendances.find(a => a.id === id)
+    if (!att || !canEditNoteRow(att)) return
+    setNoteEditId(id)
+    setNoteDraft(att.note || '')
+    setNoteContext({ name: profileName(att.profileId), date: att.date, clockIn: att.clockIn, clockOut: att.clockOut })
+    setNoteDialogOpen(true)
+  }
+
+  const handleSaveNote = () => {
+    if (!noteEditId) return
+    updateNoteMut.mutate(
+      { id: noteEditId, note: noteDraft.trim() || null },
+      { onSuccess: () => setNoteDialogOpen(false) },
+    )
+  }
+
+  // 행 편집 진입점: 권한자는 전체 수정, 그 외 내부 직원은 본인 행 노트만
+  const openEditRow = (id: string) => {
+    const att = attendances.find(a => a.id === id)
+    if (!att) return
+    if (canEdit) { openEdit(id); return }
+    if (canEditNoteRow(att)) openNoteEdit(id)
   }
 
   // ─── Readable report (default download) ───
@@ -1051,6 +1090,14 @@ export function AttendancePage() {
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
+                        ) : canEditNoteRow(att) ? (
+                          <Button
+                            variant="ghost" size="icon" className="h-7 w-7"
+                            title="근무노트 기록"
+                            onClick={() => openNoteEdit(att.id)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
                         ) : (
                           <span className="text-xs text-muted-foreground">-</span>
                         )}
@@ -1090,7 +1137,7 @@ export function AttendancePage() {
                     <div
                       key={r.id}
                       className="flex items-center justify-between py-2 px-1 cursor-pointer hover:bg-muted/40 rounded"
-                      onClick={() => { setDayDetail(null); openEdit(r.id) }}
+                      onClick={() => { setDayDetail(null); openEditRow(r.id) }}
                     >
                       <span className="text-sm font-medium flex items-center gap-1.5">
                         {profileName(r.profileId)}
@@ -1153,7 +1200,7 @@ export function AttendancePage() {
                         <div
                           key={r.id}
                           className="flex items-center justify-between py-1.5 px-3 cursor-pointer hover:bg-muted/40"
-                          onClick={() => { setLateMonthOpen(false); openEdit(r.id) }}
+                          onClick={() => { setLateMonthOpen(false); openEditRow(r.id) }}
                         >
                           <span className="text-sm font-mono text-muted-foreground">{r.date.slice(5)}</span>
                           <span className="text-sm font-mono text-red-600 font-bold">{formatTime(r.clockIn)}</span>
@@ -1223,6 +1270,46 @@ export function AttendancePage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={handleSave} disabled={!form.profileId || !form.date}>
+              {t('common.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 근무노트 전용 Dialog — 시간 수정 권한 없는 직원이 본인 행 사유 기록 */}
+      <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>근무노트 기록</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {noteContext && (
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="flex justify-between"><span className="text-muted-foreground">{t('attendance.employee')}</span><span className="font-medium">{noteContext.name}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">{t('attendance.date')}</span><span className="font-mono">{noteContext.date}</span></div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{t('attendance.clockIn')} / {t('attendance.clockOut')}</span>
+                  <span className="font-mono">{noteContext.clockIn || '-'} ~ {noteContext.clockOut || '-'}</span>
+                </div>
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              출퇴근 시간 수정은 근태관리 담당자만 가능합니다. 지각·특이근무 사유를 아래에 남겨주세요.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t('attendance.note')}</Label>
+              <Input
+                value={noteDraft}
+                onChange={e => setNoteDraft(e.target.value)}
+                placeholder={t('attendance.notePlaceholder')}
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveNote() }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNoteDialogOpen(false)}>{t('common.cancel')}</Button>
+            <Button onClick={handleSaveNote} disabled={updateNoteMut.isPending}>
               {t('common.save')}
             </Button>
           </DialogFooter>

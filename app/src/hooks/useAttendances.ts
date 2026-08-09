@@ -148,6 +148,26 @@ export function useBulkUpsertAttendances() {
   })
 }
 
+/**
+ * 근무노트(note)만 수정. 출퇴근 시간·스케줄·지각면제 등 다른 값은 절대 건드리지 않는다.
+ * 근태수정 권한이 없는 일반 직원이 본인 행에 사유를 기록할 때 사용.
+ */
+export function useUpdateAttendanceNote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: { id: string; note: string | null }) => {
+      // 본인 행 여부(또는 근태수정 권한)를 서버에서 검증하고 note 컬럼만 수정한다.
+      // 키오스크가 공용 계정으로 기록하는 구조라 테이블 RLS와 무관하게 동작하도록 RPC 사용.
+      const { error } = await supabase.rpc('update_own_attendance_note', {
+        p_id: params.id,
+        p_note: params.note,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['attendances'] }),
+  })
+}
+
 /** Toggle the manual 지각 면제(late-exempt) flag on one record (keeps clock times). */
 export function useSetLateExempt() {
   const qc = useQueryClient()
