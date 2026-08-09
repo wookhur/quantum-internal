@@ -63,6 +63,7 @@ import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
 import { ArchivePage } from '@/pages/common/ArchivePage'
 import { SeminarsPage } from '@/pages/marketing/SeminarsPage'
 import { SeminarRegisterPage } from '@/pages/public/SeminarRegisterPage'
+import { ConsultRegisterPage } from '@/pages/public/ConsultRegisterPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -82,6 +83,7 @@ export default function App() {
             <Route path="/portal/:token" element={<StudentPortalPage />} />
             <Route path="/employee-form/:token" element={<EmployeeFormPage />} />
             <Route path="/seminar/:id" element={<SeminarRegisterPage />} />
+            <Route path="/consult" element={<ConsultRegisterPage />} />
 
             <Route element={<ProtectedRoute />}>
               {/* Full-screen kiosk (no sidebar) */}
