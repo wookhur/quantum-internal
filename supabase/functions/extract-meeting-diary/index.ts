@@ -43,20 +43,42 @@ Deno.serve(async (req) => {
 
     const { url, text } = await req.json()
 
-    // 입력 구성: text 우선, 없으면 url(PDF)을 document 블록으로 전달
+    // 입력 구성: text 우선, 없으면 url(Google Docs / Drive PDF / 직접 PDF)을 처리
     let userContent: unknown[]
     if (text && typeof text === 'string' && text.trim()) {
       userContent = [{ type: 'text', text: `다음 미팅 리포트에서 6개 섹션을 정리해주세요:\n\n${text.slice(0, 20000)}` }]
     } else if (url && typeof url === 'string') {
-      const res = await fetch(url)
-      if (!res.ok) return json({ ok: false, error: `리포트 파일을 불러오지 못했습니다 (${res.status})` }, 400)
-      const bytes = new Uint8Array(await res.arrayBuffer())
-      const isPdf = url.toLowerCase().split('?')[0].endsWith('.pdf') || bytes[0] === 0x25 /* % */
-      if (!isPdf) return json({ ok: false, error: 'PDF 링크만 자동 분석할 수 있습니다. 텍스트를 직접 붙여넣어 주세요.' }, 400)
-      userContent = [
-        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: encodeBase64(bytes) } },
-        { type: 'text', text: '위 미팅 리포트 PDF에서 6개 섹션을 정리해주세요.' },
-      ]
+      const gdoc = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/)
+      const gdrive = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:[^]*&)?id=)([a-zA-Z0-9_-]+)/)
+
+      if (gdoc) {
+        // Google Docs → 평문(txt)으로 export 하여 텍스트 분석
+        const exportUrl = `https://docs.google.com/document/d/${gdoc[1]}/export?format=txt`
+        const res = await fetch(exportUrl, { redirect: 'follow' })
+        const ct = res.headers.get('content-type') || ''
+        const body = await res.text()
+        // 비공개 문서면 로그인 HTML 페이지가 돌아온다
+        if (!res.ok || ct.includes('text/html') || /^\s*(<!doctype html|<html)/i.test(body.slice(0, 200))) {
+          return json({ ok: false, error: '비공개 Google 문서는 자동으로 열 수 없습니다. 문서를 "링크가 있는 모든 사용자(뷰어)"로 공유하거나, 아래 칸에 본문을 직접 붙여넣어 주세요.' }, 400)
+        }
+        if (!body.trim()) return json({ ok: false, error: '문서 내용이 비어 있습니다. 본문을 직접 붙여넣어 주세요.' }, 400)
+        userContent = [{ type: 'text', text: `다음 미팅 리포트에서 6개 섹션을 정리해주세요:\n\n${body.slice(0, 20000)}` }]
+      } else {
+        // Drive 파일(PDF) 또는 직접 PDF 링크
+        const fetchUrl = gdrive ? `https://drive.google.com/uc?export=download&id=${gdrive[1]}` : url
+        const res = await fetch(fetchUrl, { redirect: 'follow' })
+        if (!res.ok) return json({ ok: false, error: `리포트 파일을 불러오지 못했습니다 (${res.status})` }, 400)
+        const bytes = new Uint8Array(await res.arrayBuffer())
+        // PDF 매직바이트(%PDF)로 확인 — 비공개 파일이면 HTML(로그인/확인 페이지)이 옴
+        const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46
+        if (!isPdf) {
+          return json({ ok: false, error: 'Google Docs 링크 또는 공개된 PDF 링크만 자동 분석할 수 있습니다. 비공개 파일이면 문서를 "링크가 있는 모든 사용자"로 공유하거나 본문을 직접 붙여넣어 주세요.' }, 400)
+        }
+        userContent = [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: encodeBase64(bytes) } },
+          { type: 'text', text: '위 미팅 리포트 PDF에서 6개 섹션을 정리해주세요.' },
+        ]
+      }
     } else {
       return json({ ok: false, error: 'url 또는 text 중 하나가 필요합니다.' }, 400)
     }
