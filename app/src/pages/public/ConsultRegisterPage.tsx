@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,6 +47,23 @@ export function ConsultRegisterPage() {
     overCountry: '',
   })
   const set = (patch: Partial<typeof form>) => setForm(f => ({ ...f, ...patch }))
+
+  // iframe 삽입 시 부모 페이지에 실제 높이를 알려 스크롤 겹침 없이 자동 맞춤
+  useEffect(() => {
+    const post = () => {
+      try {
+        window.parent?.postMessage(
+          { type: 'qa-consult-height', height: document.body.scrollHeight },
+          '*',
+        )
+      } catch { /* ignore */ }
+    }
+    post()
+    const ro = new ResizeObserver(post)
+    ro.observe(document.body)
+    window.addEventListener('load', post)
+    return () => { ro.disconnect(); window.removeEventListener('load', post) }
+  }, [])
 
   const isDom = form.residence === 'domestic'
   const domDigits = form.domPhone.replace(/\D/g, '')
