@@ -323,12 +323,15 @@ export function AttendancePage() {
   // 근태 기록 편집(추가·수정·삭제·업로드)은 관리자 또는 '근태관리 수정' 특수 권한 보유자만 가능.
   // HR 모듈 접근 권한이 있어도 이 권한이 없으면 조회만 가능.
   const canEdit = user?.role === 'admin' || !!user?.canEditAttendance
-  // 근무노트(사유)는 근태수정 권한이 없어도 내부 직원이 '본인 행'에 직접 기록할 수 있다.
+  // 근무노트(사유)는 근태수정 권한이 없어도 '본인 행'에 직접 기록할 수 있다.
+  // 기준: 직원관리에서 '외부'로 지정(isExternal)되지 않은, 근태관리에 나오는 모든 직원.
+  //   · 근태관리에 나온다 = 본인의 attendance 행이 존재한다(고용형태 정규직/인턴)
+  //   · 따라서 '본인 행 && 외부 아님' 이면 허용 (권한등급 role 과는 무관)
   // (출퇴근 시간은 canEdit 권한자만 수정 가능 — 권한 이원화)
-  const isInternalStaff = !!user && user.role !== 'external' && user.role !== 'freelancer' && !user.isExternal
+  const notExternal = !!user && !user.isExternal
   const canEditNoteRow = useCallback(
-    (att: { profileId: string }) => canEdit || (isInternalStaff && att.profileId === user?.id),
-    [canEdit, isInternalStaff, user?.id],
+    (att: { profileId: string }) => canEdit || (notExternal && att.profileId === user?.id),
+    [canEdit, notExternal, user?.id],
   )
   const { data: profiles = [] } = useProfiles()
   const [currentMonth, setCurrentMonth] = useState<string>(getCurrentMonth())
