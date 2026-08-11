@@ -960,16 +960,20 @@ function ClawbackSection() {
   const { data: clawbacks = [] } = useAllClawbacks()
   const setStatus = useSetClawbackStatus()
   const del = useDeleteClawback()
-  // 당월(현재 달) 건 + 아직 환급 안 된(미완료) 건만 표시.
-  // 지난달 이전에 '환급완료'된 건은 현황에서 숨긴다. (미완료 건은 안전상 월과 무관하게 계속 표시)
+  // 월별 조회: 차감월 드롭다운으로 선택한 달의 건만 표시(기본=당월).
   const now = new Date()
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const visible = clawbacks.filter(c => c.status === 'pending' || c.deductMonth === currentMonth)
-  if (visible.length === 0) return null
-  const rows = [...visible].sort((a, b) =>
-    (a.status === b.status ? 0 : a.status === 'pending' ? -1 : 1) ||
-    (b.deductMonth || '').localeCompare(a.deductMonth || ''))
-  const pending = visible.filter(c => c.status === 'pending')
+  const [month, setMonth] = useState(currentMonth)
+  if (clawbacks.length === 0) return null
+  // 선택 가능한 월: 데이터에 있는 차감월 + 당월, 최신순
+  const months = Array.from(
+    new Set([currentMonth, ...clawbacks.map(c => c.deductMonth).filter(Boolean)]),
+  ).sort((a, b) => b.localeCompare(a))
+  const monthLabel = (m: string) => `${m.slice(0, 4)}년 ${Number(m.slice(5, 7))}월`
+  const monthRows = clawbacks.filter(c => c.deductMonth === month)
+  const rows = [...monthRows].sort((a, b) =>
+    (a.status === b.status ? 0 : a.status === 'pending' ? -1 : 1))
+  const pending = monthRows.filter(c => c.status === 'pending')
   const pendingTotal = pending.reduce((s, c) => s + c.amount, 0)
   return (
     <Card>
@@ -977,8 +981,18 @@ function ClawbackSection() {
         <div className="flex items-center gap-2 px-4 py-3 border-b flex-wrap">
           <RefreshCw className="size-4 text-rose-500" />
           <span className="font-semibold text-sm">인센티브 환급 현황</span>
+          <select
+            value={month}
+            onChange={e => setMonth(e.target.value)}
+            className="h-7 rounded-md border bg-background px-2 text-xs"
+            title="차감월 선택"
+          >
+            {months.map(m => (
+              <option key={m} value={m}>{monthLabel(m)}</option>
+            ))}
+          </select>
           <Badge variant="outline" className="text-rose-700 border-rose-200 bg-rose-50">환급신청 {pending.length}건 · {formatCurrency(pendingTotal)}</Badge>
-          <span className="text-[11px] text-muted-foreground ml-auto">환불로 회수할 세일즈 인센티브. 급여 지급 후 "환급완료"로 표시. 당월·미완료 건만 표시(지난달 완료 건은 숨김). 인보이스·지급원장에는 (−)로 자동 반영됩니다.</span>
+          <span className="text-[11px] text-muted-foreground ml-auto">환불로 회수할 세일즈 인센티브. 급여 지급 후 "환급완료"로 표시. 위 드롭다운으로 차감월별 조회. 인보이스·지급원장에는 (−)로 자동 반영됩니다.</span>
         </div>
         <Table>
           <TableHeader>
@@ -992,6 +1006,13 @@ function ClawbackSection() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                  {monthLabel(month)} 환급 내역이 없습니다.
+                </TableCell>
+              </TableRow>
+            )}
             {rows.map(c => (
               <TableRow key={c.id} className={c.status === 'deducted' ? 'bg-muted/30' : ''}>
                 <TableCell className="text-sm font-medium">{c.contributorName}</TableCell>
