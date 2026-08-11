@@ -960,11 +960,16 @@ function ClawbackSection() {
   const { data: clawbacks = [] } = useAllClawbacks()
   const setStatus = useSetClawbackStatus()
   const del = useDeleteClawback()
-  if (clawbacks.length === 0) return null
-  const rows = [...clawbacks].sort((a, b) =>
+  // 당월(현재 달) 건 + 아직 환급 안 된(미완료) 건만 표시.
+  // 지난달 이전에 '환급완료'된 건은 현황에서 숨긴다. (미완료 건은 안전상 월과 무관하게 계속 표시)
+  const now = new Date()
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const visible = clawbacks.filter(c => c.status === 'pending' || c.deductMonth === currentMonth)
+  if (visible.length === 0) return null
+  const rows = [...visible].sort((a, b) =>
     (a.status === b.status ? 0 : a.status === 'pending' ? -1 : 1) ||
     (b.deductMonth || '').localeCompare(a.deductMonth || ''))
-  const pending = clawbacks.filter(c => c.status === 'pending')
+  const pending = visible.filter(c => c.status === 'pending')
   const pendingTotal = pending.reduce((s, c) => s + c.amount, 0)
   return (
     <Card>
@@ -973,7 +978,7 @@ function ClawbackSection() {
           <RefreshCw className="size-4 text-rose-500" />
           <span className="font-semibold text-sm">인센티브 환급 현황</span>
           <Badge variant="outline" className="text-rose-700 border-rose-200 bg-rose-50">환급신청 {pending.length}건 · {formatCurrency(pendingTotal)}</Badge>
-          <span className="text-[11px] text-muted-foreground ml-auto">환불로 회수할 세일즈 인센티브. 급여 지급 후 "환급완료"로 표시. 인보이스·지급원장에는 (−)로 자동 반영됩니다.</span>
+          <span className="text-[11px] text-muted-foreground ml-auto">환불로 회수할 세일즈 인센티브. 급여 지급 후 "환급완료"로 표시. 당월·미완료 건만 표시(지난달 완료 건은 숨김). 인보이스·지급원장에는 (−)로 자동 반영됩니다.</span>
         </div>
         <Table>
           <TableHeader>
