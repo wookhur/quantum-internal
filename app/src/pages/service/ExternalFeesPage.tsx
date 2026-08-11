@@ -31,6 +31,9 @@ import { useT } from '@/i18n/LanguageContext'
 import { todayKST } from '@/lib/date'
 import { formatCurrency, type RefundStatus } from '@/types'
 
+/** 교육비 처리 월 옵션 (Student360과 동일) */
+const SERVICE_MONTH_OPTIONS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월', '여름특강', '겨울특강'] as const
+
 /** Resolve a contributor name → team from 인사관리 department. */
 type TeamResolver = (name: string | undefined) => ContributorTeam | undefined
 
@@ -99,6 +102,11 @@ export function ExternalFeesPage() {
     const base = { id: f.id, studentId: f.studentId }
     const payload = slot === 0 ? { ...base, contributor1Team: val } : { ...base, contributor2Team: val }
     ;(f.source === 'ec' ? updateEC : updateAC).mutate(payload)
+  }
+
+  // set '몇월 교육비' inline from the list
+  const setServiceMonth = (f: ServiceProgramFee, month: string) => {
+    ;(f.source === 'ec' ? updateEC : updateAC).mutate({ id: f.id, studentId: f.studentId, serviceMonth: month || undefined })
   }
 
   // effective {salesRate, serviceRate} for an item's partner (specific → else default)
@@ -229,7 +237,16 @@ export function ExternalFeesPage() {
                           <div>
                             <div className="font-medium text-sm flex items-center gap-1.5">
                               {f.label}
-                              {f.serviceMonth && <Badge variant="outline" className="text-[10px] h-4 bg-purple-50 text-purple-700 border-purple-200">{f.serviceMonth}</Badge>}
+                              <select
+                                value={f.serviceMonth || ''}
+                                onClick={e => e.stopPropagation()}
+                                onChange={e => { e.stopPropagation(); setServiceMonth(f, e.target.value) }}
+                                title="몇월 교육비"
+                                className={`h-5 rounded border px-1 text-[10px] ${f.serviceMonth ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-muted/40 text-muted-foreground border-border'}`}
+                              >
+                                <option value="">월 미지정</option>
+                                {SERVICE_MONTH_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+                              </select>
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {f.source === 'ec' ? 'EC' : 'Academic'}
