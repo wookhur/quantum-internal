@@ -59,15 +59,19 @@ export function PartnerStudentsPage() {
   }
   // 파트너사(외부 강사) 로그인: 학생의 다른 수업/프로그램 정보는 감추고 이름·학교만 노출
   const isPartnerViewer = !isAdmin && (!!myInstructor || !!user?.isPartner)
+  // 내부 직원(외부/프리랜서 제외)은 파트너 여부와 무관하게 전체 학생·코멘트를 열람할 수 있다.
+  // (예: KYN 파트너이면서 우리 컨설턴트인 남연서 — 작성은 파트너 신원으로 하되, 다른 코멘트 열람은 전체)
+  const isInternalStaff = !!user && user.role !== 'external' && user.role !== 'freelancer' && !user.isExternal
+  const canViewAll = isAdmin || isInternalStaff
   // 소속학원명 — 같은 학원 강사끼리 코멘트를 공유하는 기준
   const myAcademy = myInstructor?.academy || user?.partnerAcademy
-  // 관리자는 전체, 파트너 강사는 '같은 학원(academy) + 본인 작성' 코멘트를 조회
+  // 전체 열람 권한자는 전체, 외부 파트너 강사는 '같은 학원(academy) + 본인 작성' 코멘트를 조회
   const { data: academyMeetings = [] } = usePartnerStudentMeetingsForAcademy(
-    isAdmin ? undefined : myAcademy,
-    isAdmin ? undefined : partnerId,
+    canViewAll ? undefined : myAcademy,
+    canViewAll ? undefined : partnerId,
   )
-  const { data: allMeetings = [] } = useAllPartnerStudentMeetings(isAdmin)
-  const meetings = isAdmin ? allMeetings : academyMeetings
+  const { data: allMeetings = [] } = useAllPartnerStudentMeetings(canViewAll)
+  const meetings = canViewAll ? allMeetings : academyMeetings
 
   const [partnerFilter, setPartnerFilter] = useState('all')
   const partnerOptions = useMemo(() => {
@@ -120,7 +124,7 @@ export function PartnerStudentsPage() {
         const assigned = myStudentIds.has(s.id)
         const hasMeeting = meetingStudentNames.has(s.name)
         if (!entry && !assigned && !hasMeeting) return false
-        if (!isAdmin) {
+        if (!canViewAll) {
           if (myInstructor) {
             // 소속학원 라벨 매칭 · 담당학생 지정 · 우리 학원 코멘트가 있는 학생
             const byAcademy = !!myAcademyKey && !!entry && Array.from(entry.display).some(d => nrm(d) === myAcademyKey || nrm(d).includes(myAcademyKey))
