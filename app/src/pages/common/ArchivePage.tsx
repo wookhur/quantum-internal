@@ -184,7 +184,7 @@ export function ArchivePage() {
       )}
 
       {(creating || editing) && (
-        <ArchiveDialog item={editing} defaultTeam={team} isAdmin={isAdmin} createdBy={user?.id} onClose={() => { setCreating(false); setEditing(null) }} />
+        <ArchiveDialog item={editing} defaultTeam={team === 'all' ? 'marketing' : team} isAdmin={isAdmin} createdBy={user?.id} onClose={() => { setCreating(false); setEditing(null) }} />
       )}
     </div>
   )
