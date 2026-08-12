@@ -14,12 +14,14 @@ import {
 } from '@/hooks/useArchive'
 import type { User } from '@/types'
 
-const TEAMS: { key: ArchiveTeam; label: string; icon: typeof Megaphone; box: string; boxOn: string }[] = [
-  { key: 'marketing', label: '마케팅팀', icon: Megaphone, box: 'border-amber-200 bg-amber-50/60 hover:bg-amber-50 text-amber-800', boxOn: 'border-amber-400 ring-2 ring-amber-300 bg-amber-100 text-amber-900' },
-  { key: 'service', label: '서비스팀', icon: HeartHandshake, box: 'border-emerald-200 bg-emerald-50/60 hover:bg-emerald-50 text-emerald-800', boxOn: 'border-emerald-400 ring-2 ring-emerald-300 bg-emerald-100 text-emerald-900' },
-  { key: 'planning', label: '경영기획팀', icon: Briefcase, box: 'border-indigo-200 bg-indigo-50/60 hover:bg-indigo-50 text-indigo-800', boxOn: 'border-indigo-400 ring-2 ring-indigo-300 bg-indigo-100 text-indigo-900' },
-  { key: 'sales', label: '세일즈팀', icon: Target, box: 'border-rose-200 bg-rose-50/60 hover:bg-rose-50 text-rose-800', boxOn: 'border-rose-400 ring-2 ring-rose-300 bg-rose-100 text-rose-900' },
+const TEAMS: { key: ArchiveTeam; label: string; icon: typeof Megaphone; box: string; boxOn: string; tag: string }[] = [
+  { key: 'marketing', label: '마케팅팀', icon: Megaphone, box: 'border-amber-200 bg-amber-50/60 hover:bg-amber-50 text-amber-800', boxOn: 'border-amber-400 ring-2 ring-amber-300 bg-amber-100 text-amber-900', tag: 'bg-amber-100 text-amber-700 border-amber-200' },
+  { key: 'service', label: '서비스팀', icon: HeartHandshake, box: 'border-emerald-200 bg-emerald-50/60 hover:bg-emerald-50 text-emerald-800', boxOn: 'border-emerald-400 ring-2 ring-emerald-300 bg-emerald-100 text-emerald-900', tag: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  { key: 'planning', label: '경영기획팀', icon: Briefcase, box: 'border-indigo-200 bg-indigo-50/60 hover:bg-indigo-50 text-indigo-800', boxOn: 'border-indigo-400 ring-2 ring-indigo-300 bg-indigo-100 text-indigo-900', tag: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
+  { key: 'sales', label: '세일즈팀', icon: Target, box: 'border-rose-200 bg-rose-50/60 hover:bg-rose-50 text-rose-800', boxOn: 'border-rose-400 ring-2 ring-rose-300 bg-rose-100 text-rose-900', tag: 'bg-rose-100 text-rose-700 border-rose-200' },
 ]
+
+const teamMeta = (key: ArchiveTeam | null) => TEAMS.find(t => t.key === (key || 'planning')) || TEAMS[2]
 
 /** 내부 직원 여부(외부/프리랜서 제외) */
 function isInternalUser(u: User | null | undefined): boolean {
@@ -48,7 +50,7 @@ export function ArchivePage() {
   const { data: items = [], isLoading } = useArchiveItems()
   const del = useDeleteArchiveItem()
 
-  const [team, setTeam] = useState<ArchiveTeam>('marketing')
+  const [team, setTeam] = useState<ArchiveTeam | 'all'>('all')
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [editing, setEditing] = useState<ArchiveItem | null>(null)
@@ -69,7 +71,7 @@ export function ArchivePage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return viewable.filter(it => {
-      if ((it.team || 'planning') !== team) return false
+      if (team !== 'all' && (it.team || 'planning') !== team) return false
       if (!q) return true
       return it.title.toLowerCase().includes(q) ||
         it.content.toLowerCase().includes(q) ||
@@ -99,7 +101,7 @@ export function ArchivePage() {
           return (
             <button
               key={tm.key}
-              onClick={() => { setTeam(tm.key); setExpanded(null) }}
+              onClick={() => { setTeam(prev => prev === tm.key ? 'all' : tm.key); setExpanded(null) }}
               className={`rounded-xl border p-4 text-left transition ${on ? tm.boxOn : tm.box}`}
             >
               <Icon className="size-6" />
@@ -122,13 +124,16 @@ export function ArchivePage() {
         <div className="flex justify-center py-16"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
       ) : filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed py-16 text-center text-sm text-muted-foreground">
-          {search ? '검색 결과가 없습니다.' : `${TEAMS.find(t => t.key === team)?.label}에 등록된 자료가 없습니다.`}
+          {search ? '검색 결과가 없습니다.'
+            : team === 'all' ? '등록된 자료가 없습니다.'
+            : `${TEAMS.find(t => t.key === team)?.label}에 등록된 자료가 없습니다.`}
         </div>
       ) : (
         <div className="space-y-2">
           {filtered.map(it => {
             const open = expanded === it.id
             const restricted = it.allowedUserIds.length > 0
+            const tmeta = teamMeta(it.team)
             return (
               <Card key={it.id}>
                 <CardContent className="p-3">
@@ -144,6 +149,7 @@ export function ArchivePage() {
                         </span>
                       </button>
                       <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span className={`rounded border px-1.5 py-0 font-medium ${tmeta.tag}`}>{tmeta.label}</span>
                         <span>{it.authorName || '관리자'} · {it.createdAt.slice(0, 10)}</span>
                         {it.attachments.length > 0 && <span className="inline-flex items-center gap-0.5"><Paperclip className="size-3" />{it.attachments.length}</span>}
                         {restricted && <span className="text-amber-600">· 지정 인원만</span>}
