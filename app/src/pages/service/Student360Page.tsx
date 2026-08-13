@@ -307,21 +307,12 @@ export function Student360Page() {
 
   // Archived = 서비스 완료(finished) / 서비스 취소(canceled). Archived students keep
   // all their data but are hidden from the active list; the 아카이브 tab shows them.
-  const archiveCount = useMemo(() => students.filter(s => isArchivedStatus(s.status)).length, [students])
-  const activeCount = students.length - archiveCount
-
-  // 학년 필터 옵션: 실제 학생들의 학년을 G12→G6→기타 순으로
-  const gradeOptions = useMemo(() => {
-    const present = new Set(students.filter(s => !isArchivedStatus(s.status)).map(s => gradeBucket(s.grade)))
-    return ['G12', 'G11', 'G10', 'G9', 'G8', 'G7', 'G6', '기타'].filter(g => present.has(g))
-  }, [students])
-
-  const pausedCount = useMemo(() => students.filter(s => s.paused && !isArchivedStatus(s.status)).length, [students])
-  const filtered = useMemo(() => {
+  // 공통 필터(담당자·에세이에디터·학년·검색·멘토·일시중지) — 활성/아카이브 토글만 제외.
+  // 탭 카운트와 목록이 항상 같은 기준을 쓰도록 여기서 한 번만 거른다.
+  const baseFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return students.filter(s => {
-      if (mentorStudentIds && !mentorStudentIds.has(s.id)) return false   // 멘토: 배정 학생만
-      if (showArchive ? !isArchivedStatus(s.status) : isArchivedStatus(s.status)) return false
+      if (mentorStudentIds && !mentorStudentIds.has(s.id)) return false
       if (pausedOnly && !s.paused) return false
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
       if (essayEditorFilter !== 'all' && (s.essayEditor || '') !== essayEditorFilter) return false
@@ -333,8 +324,24 @@ export function Student360Page() {
         (s.school || '').toLowerCase().includes(q) ||
         (s.parentName || '').toLowerCase().includes(q)
       )
-    }).sort(compareStudentsKo)
-  }, [students, search, filterName, consultantName, showArchive, gradeFilter, essayEditorFilter, pausedOnly])
+    })
+  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, pausedOnly, mentorStudentIds])
+  const archiveCount = useMemo(() => baseFiltered.filter(s => isArchivedStatus(s.status)).length, [baseFiltered])
+  const activeCount = baseFiltered.length - archiveCount
+
+  // 학년 필터 옵션: 실제 학생들의 학년을 G12→G6→기타 순으로
+  const gradeOptions = useMemo(() => {
+    const present = new Set(students.filter(s => !isArchivedStatus(s.status)).map(s => gradeBucket(s.grade)))
+    return ['G12', 'G11', 'G10', 'G9', 'G8', 'G7', 'G6', '기타'].filter(g => present.has(g))
+  }, [students])
+
+  const pausedCount = useMemo(() => students.filter(s => s.paused && !isArchivedStatus(s.status)).length, [students])
+  const filtered = useMemo(() =>
+    baseFiltered
+      .filter(s => showArchive ? isArchivedStatus(s.status) : !isArchivedStatus(s.status))
+      .sort(compareStudentsKo),
+    [baseFiltered, showArchive],
+  )
 
   const selected = students.find(s => s.id === selectedId) || null
 
