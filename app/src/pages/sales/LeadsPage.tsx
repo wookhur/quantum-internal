@@ -23,12 +23,19 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Search,
   Plus,
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
   Pencil,
+  Trash2,
   X,
   Loader2,
   Users,
@@ -37,7 +44,7 @@ import {
   BarChart3,
   RefreshCw,
 } from 'lucide-react'
-import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads } from '@/hooks/useLeads'
+import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads, useDeleteLead } from '@/hooks/useLeads'
 import { LeadSeminarBadges } from '@/components/LeadSeminarBadges'
 import { leadLevelConfig } from '@/lib/leadLevels'
 import type { Lead, PipelineStage } from '@/types'
@@ -148,6 +155,17 @@ export function LeadsPage() {
 function LeadsTableView() {
   const t = useT()
   const canEdit = useCanEdit(useLocation().pathname)
+
+  // -- 리드 삭제 (중복 정리용). 계약 연결 시 훅에서 차단됨.
+  const deleteLead = useDeleteLead()
+  const handleDeleteLead = (lead: Lead) => {
+    const name = lead.studentName || lead.parentName || '이 리드'
+    if (!confirm(`'${name}' 리드를 삭제할까요?\n연결된 세미나 출석·등록 등은 함께 삭제되며, 이 작업은 되돌릴 수 없습니다.`)) return
+    deleteLead.mutate(lead.id, {
+      onError: (e: unknown) => alert(e instanceof Error ? e.message : '삭제에 실패했습니다.'),
+    })
+  }
+
   // -- Filter state
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<string>('all')
@@ -629,9 +647,20 @@ function LeadsTableView() {
                               <Pencil className="size-3.5" />
                             </Button>
                           </Link>
-                          <Button variant="ghost" size="icon-xs">
-                            <MoreHorizontal className="size-3.5" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-xs" />}>
+                              <MoreHorizontal className="size-3.5" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleDeleteLead(lead)}
+                              >
+                                <Trash2 className="size-3.5 mr-2" />
+                                삭제
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       )}
                     </td>

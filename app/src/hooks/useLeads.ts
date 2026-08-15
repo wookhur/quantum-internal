@@ -324,6 +324,15 @@ export function useDeleteLead() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // 안전장치: 계약이 연결된 리드는 삭제 차단 (계약의 인센티브 최초담당자 귀속 보호)
+      const { count, error: cErr } = await supabase
+        .from('contracts')
+        .select('id', { count: 'exact', head: true })
+        .eq('lead_id', id)
+      if (cErr) throw cErr
+      if ((count ?? 0) > 0) {
+        throw new Error('이 리드는 계약과 연결되어 있어 삭제할 수 없습니다. 계약을 먼저 정리하거나, 중복이면 병합을 사용하세요.')
+      }
       const { error } = await supabase.from('leads').delete().eq('id', id)
       if (error) throw error
     },
