@@ -344,6 +344,28 @@ export function useDeleteLead() {
 }
 
 /**
+ * Merge a duplicate lead into a survivor lead (server-side RPC, single transaction).
+ * Reassigns all child rows, preserves lost source/name into memo, deletes the duplicate.
+ */
+export function useMergeLeads() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ survivorId, duplicateId }: { survivorId: string; duplicateId: string }) => {
+      const { error } = await supabase.rpc('merge_leads', {
+        p_survivor_id: survivorId,
+        p_duplicate_id: duplicateId,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['lead-stats'] })
+    },
+  })
+}
+
+/**
  * Fetch activities for a lead, ordered by created_at DESC.
  * Joins profiles for created_by user info.
  */

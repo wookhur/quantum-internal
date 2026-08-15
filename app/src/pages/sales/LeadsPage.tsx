@@ -36,6 +36,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  GitMerge,
   X,
   Loader2,
   Users,
@@ -46,6 +47,7 @@ import {
 } from 'lucide-react'
 import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads, useDeleteLead } from '@/hooks/useLeads'
 import { LeadSeminarBadges } from '@/components/LeadSeminarBadges'
+import { MergeLeadDialog } from '@/components/MergeLeadDialog'
 import { leadLevelConfig } from '@/lib/leadLevels'
 import type { Lead, PipelineStage } from '@/types'
 import {
@@ -155,6 +157,9 @@ export function LeadsPage() {
 function LeadsTableView() {
   const t = useT()
   const canEdit = useCanEdit(useLocation().pathname)
+
+  // -- 중복 병합 다이얼로그 대상 리드
+  const [mergeSource, setMergeSource] = useState<Lead | null>(null)
 
   // -- 리드 삭제 (중복 정리용). 계약 연결 시 훅에서 차단됨.
   const deleteLead = useDeleteLead()
@@ -652,6 +657,10 @@ function LeadsTableView() {
                               <MoreHorizontal className="size-3.5" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setMergeSource(lead)}>
+                                <GitMerge className="size-3.5 mr-2" />
+                                병합
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
                                 onClick={() => handleDeleteLead(lead)}
@@ -873,6 +882,8 @@ function LeadsTableView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MergeLeadDialog sourceLead={mergeSource} onClose={() => setMergeSource(null)} />
     </div>
   )
 }
