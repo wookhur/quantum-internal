@@ -21,6 +21,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import {
@@ -1169,6 +1170,8 @@ export function TaskBoardPage() {
   const { data: profiles = [] } = useProfiles()
   const statusCfg = useStatusConfig()
 
+  const [searchParams, setSearchParams] = useSearchParams()
+
   const [viewMode, setViewMode] = useState<ViewMode>('board')
   const [filters, setFilters] = useState<TaskFilters>({ status: 'all', priority: 'all', parentOnly: true })
   const [searchQuery, setSearchQuery] = useState('')
@@ -1192,12 +1195,20 @@ export function TaskBoardPage() {
   const createTask = useCreateTask()
   const addAttachment = useAddTaskAttachment()
 
-  // Check URL for ?open= param
-  const urlParams = new URLSearchParams(window.location.search)
-  const openFromUrl = urlParams.get('open')
-  if (openFromUrl && !selectedTaskId) {
+  // 알림의 "자세히 보기" 등에서 넘어온 업무를 연다.
+  // - ?open= (이 페이지가 만드는 링크) 와 ?task= (알림 훅이 만드는 링크) 를 모두 받는다.
+  //   DB에 이미 쌓인 알림들이 ?task= 를 쓰고 있어 둘 다 지원해야 한다.
+  // - 한 번 열고 나면 파라미터를 지운다. 남겨두면 닫아도 다시 열려 닫을 수 없다.
+  // - 이미 /tasks 에 머무는 상태에서 다른 알림을 눌러도 열리도록 searchParams 를 구독한다.
+  const openFromUrl = searchParams.get('open') || searchParams.get('task')
+  useEffect(() => {
+    if (!openFromUrl) return
     setSelectedTaskId(openFromUrl)
-  }
+    const next = new URLSearchParams(searchParams)
+    next.delete('open')
+    next.delete('task')
+    setSearchParams(next, { replace: true })
+  }, [openFromUrl, searchParams, setSearchParams])
 
   // Board view: group by status
   const boardColumns = useMemo(() => {

@@ -331,7 +331,7 @@ export function useCreateTask() {
           type: 'task_assigned',
           title: '새 업무 배정',
           message: `${requesterName}님이 "${task.title}" 업무를 배정했습니다.`,
-          link: `/tasks?task=${task.id}`,
+          link: `/tasks?open=${task.id}`,
           metadata: { taskId: task.id, actor: requesterName, task: task.title, kind: 'assign' },
         }).catch(() => {})
       }
@@ -398,7 +398,7 @@ export function useUpdateTask() {
           type: 'task_assigned',
           title: '업무 배정',
           message: `${requesterName}님이 "${task.title}" 업무를 배정했습니다.`,
-          link: `/tasks?task=${task.id}`,
+          link: `/tasks?open=${task.id}`,
           metadata: { taskId: task.id, actor: requesterName, task: task.title, kind: 'assign' },
         }).catch(() => {})
       }
@@ -418,7 +418,7 @@ export function useUpdateTask() {
             type: 'task_status_changed',
             title: '업무 상태 변경',
             message: `${assigneeName}님이 "${task.title}" 업무를 ${label}(으)로 변경했습니다.`,
-            link: `/tasks?task=${task.id}`,
+            link: `/tasks?open=${task.id}`,
             metadata: { taskId: task.id, status: updates.status, actor: assigneeName, task: task.title },
           }).catch(() => {})
         }
@@ -482,7 +482,7 @@ export function useAddTaskComment() {
               type: 'task_comment',
               title: '업무 댓글',
               message: `${authorName}님이 "${taskRow.title}" 업무에 댓글을 남겼습니다.`,
-              link: `/tasks?task=${params.taskId}`,
+              link: `/tasks?open=${params.taskId}`,
               metadata: { taskId: params.taskId, actor: authorName, task: taskRow.title },
             }).catch(() => {})
           }
