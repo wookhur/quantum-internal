@@ -594,6 +594,8 @@ export interface ServiceDiaryEntry {
   identityNarrativeNotes?: string
   questionsConcerns?: string
   nextMeetingAgenda?: string
+  /** 다음 미팅 예정일 (YYYY-MM-DD). 관리지수 ⑤ 산정 기준. */
+  nextMeetingDate?: string
   followUpCommitments?: string
   assignments?: string
   criticalDates?: string

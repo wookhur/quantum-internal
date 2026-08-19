@@ -3067,6 +3067,15 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
               <div className="flex items-center gap-2 text-sm font-medium">
                 <span>{d.entryDate || '—'}</span>
                 {d.authorId && <span className="text-muted-foreground font-normal">{d.authorId}</span>}
+                {d.nextMeetingDate ? (
+                  <Badge variant="outline" className="text-[10px] font-normal shrink-0 bg-blue-50 text-blue-700 border-blue-200">
+                    {t('student360.nextMeetingDate')} {d.nextMeetingDate}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] font-normal shrink-0 text-amber-700 border-amber-200 bg-amber-50">
+                    {t('student360.nextMeetingDateMissing')}
+                  </Badge>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -3173,6 +3182,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
     identityNarrativeNotes: entry?.identityNarrativeNotes || '',
     questionsConcerns: entry?.questionsConcerns || '',
     nextMeetingAgenda: entry?.nextMeetingAgenda || '',
+    nextMeetingDate: entry?.nextMeetingDate || '',
     followUpCommitments: entry?.followUpCommitments || '',
     assignments: entry?.assignments || '',
     criticalDates: entry?.criticalDates || '',
@@ -3194,6 +3204,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
       identityNarrativeNotes: form.identityNarrativeNotes || undefined,
       questionsConcerns: form.questionsConcerns || undefined,
       nextMeetingAgenda: form.nextMeetingAgenda || undefined,
+      nextMeetingDate: form.nextMeetingDate || undefined,
       followUpCommitments: form.followUpCommitments || undefined,
       assignments: form.assignments || undefined,
       criticalDates: form.criticalDates || undefined,
@@ -3214,9 +3225,15 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
           <DialogTitle>{entry ? t('student360.editDiary') : t('student360.newDiary')}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
-          <div>
-            <Label className="text-xs">{t('student360.entryDate')}</Label>
-            <Input type="date" value={form.entryDate} onChange={e => setField('entryDate', e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">{t('student360.entryDate')}</Label>
+              <Input type="date" value={form.entryDate} onChange={e => setField('entryDate', e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">{t('student360.nextMeetingDate')}</Label>
+              <Input type="date" value={form.nextMeetingDate} onChange={e => setField('nextMeetingDate', e.target.value)} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -3496,6 +3513,7 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName, canEdit }:
           identityNarrativeNotes: d.identityNarrativeNotes || undefined,
           questionsConcerns: d.questionsConcerns || undefined,
           nextMeetingAgenda: d.nextMeetingAgenda || undefined,
+          nextMeetingDate: d.nextMeetingDate || undefined,
           followUpCommitments: d.followUpCommitments || undefined,
           assignments: d.assignments || undefined,
           criticalDates: d.criticalDates || undefined,

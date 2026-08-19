@@ -95,6 +95,7 @@ function mapDiary(row: Record<string, unknown>): ServiceDiaryEntry {
     identityNarrativeNotes: (row.identity_narrative_notes as string) || undefined,
     questionsConcerns: (row.questions_concerns as string) || undefined,
     nextMeetingAgenda: (row.next_meeting_agenda as string) || undefined,
+    nextMeetingDate: (row.next_meeting_date as string) || undefined,
     followUpCommitments: (row.follow_up_commitments as string) || undefined,
     assignments: (row.assignments as string) || undefined,
     criticalDates: (row.critical_dates as string) || undefined,
@@ -530,6 +531,7 @@ export function useCreateServiceDiary() {
       identityNarrativeNotes?: string
       questionsConcerns?: string
       nextMeetingAgenda?: string
+      nextMeetingDate?: string
       followUpCommitments?: string
       assignments?: string
       criticalDates?: string
@@ -548,6 +550,7 @@ export function useCreateServiceDiary() {
         identity_narrative_notes: d.identityNarrativeNotes,
         questions_concerns: d.questionsConcerns,
         next_meeting_agenda: d.nextMeetingAgenda,
+        next_meeting_date: d.nextMeetingDate || null,
         follow_up_commitments: d.followUpCommitments,
         assignments: d.assignments,
         critical_dates: d.criticalDates,
@@ -577,6 +580,7 @@ export function useUpdateServiceDiary() {
       identityNarrativeNotes?: string
       questionsConcerns?: string
       nextMeetingAgenda?: string
+      nextMeetingDate?: string
       followUpCommitments?: string
       assignments?: string
       criticalDates?: string
@@ -593,6 +597,7 @@ export function useUpdateServiceDiary() {
       if (rest.identityNarrativeNotes !== undefined) update.identity_narrative_notes = rest.identityNarrativeNotes
       if (rest.questionsConcerns !== undefined) update.questions_concerns = rest.questionsConcerns
       if (rest.nextMeetingAgenda !== undefined) update.next_meeting_agenda = rest.nextMeetingAgenda
+      if (rest.nextMeetingDate !== undefined) update.next_meeting_date = rest.nextMeetingDate || null
       if (rest.followUpCommitments !== undefined) update.follow_up_commitments = rest.followUpCommitments
       if (rest.assignments !== undefined) update.assignments = rest.assignments
       if (rest.criticalDates !== undefined) update.critical_dates = rest.criticalDates

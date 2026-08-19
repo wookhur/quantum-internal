@@ -8,7 +8,7 @@ export interface StudentKpi {
   prepScore: number         // 0-1 — % of student's meetings with prep_url
   summaryScore: number      // 0-2 — % of student's meetings with report_url
   reportsScore: number      // 0-2 — required-report coverage for this student
-  followupScore: number     // 0-2 — % of student's follow-ups marked done
+  followupScore: number     // 0-2 — % of last-30d meeting diaries that have a next-meeting date
   score: number             // 0-11 total
 }
 
@@ -49,15 +49,16 @@ async function fetchAllKpi(): Promise<KpiData> {
       .select('id, consultant_id, student_id, meeting_date, prep_url, report_url')
       .gte('meeting_date', sinceIso),
     supabase.from('service_reports').select('student_id, category'),
+    // ⑤ 다음 미팅 일정: 최근 30일 미팅 다이어리에 next_meeting_date 가 적혔는지
     supabase
-      .from('service_followups')
-      .select('id, student_id, diary_id, done, created_at')
-      .gte('created_at', `${sinceIso}T00:00:00Z`),
+      .from('service_diary')
+      .select('student_id, entry_date, next_meeting_date')
+      .gte('entry_date', sinceIso),
   ])
   if (stRes.error) throw stRes.error
   if (mtRes.error) throw mtRes.error
   const reports = repRes.error ? [] : (repRes.data || [])
-  const followups = fupRes.error ? [] : (fupRes.data || [])
+  const diaries = fupRes.error ? [] : (fupRes.data || [])
 
   type StudentRow = { id: string; assigned_consultant: string | null }
   type MeetingRow = {
@@ -85,11 +86,13 @@ async function fetchAllKpi(): Promise<KpiData> {
     reportsByStudent[row.student_id].add(row.category)
   })
 
-  const followupsByStudent: Record<string, { done: boolean }[]> = {}
-  followups.forEach(f => {
-    const row = f as { student_id: string; done: boolean }
-    if (!followupsByStudent[row.student_id]) followupsByStudent[row.student_id] = []
-    followupsByStudent[row.student_id].push({ done: row.done })
+  // 학생별 최근 30일 다이어리 — 다음 미팅 일정이 적혔는지만 본다.
+  const diariesByStudent: Record<string, { hasNext: boolean }[]> = {}
+  diaries.forEach(d => {
+    const row = d as { student_id: string; next_meeting_date: string | null }
+    if (!row.student_id) return
+    if (!diariesByStudent[row.student_id]) diariesByStudent[row.student_id] = []
+    diariesByStudent[row.student_id].push({ hasNext: !!row.next_meeting_date })
   })
 
   // ─── Compute per-student KPI ───
@@ -107,8 +110,10 @@ async function fetchAllKpi(): Promise<KpiData> {
     const present = REQUIRED_REPORT_CATEGORIES.reduce((n, c) => n + (cats.has(c) ? 1 : 0), 0)
     const reportsScore = (present / REQUIRED_REPORT_CATEGORIES.length) * 2
 
-    const fps = followupsByStudent[s.id] || []
-    const followupScore = fps.length ? (fps.filter(f => f.done).length / fps.length) * 2 : 0
+    // ⑤ 다음 미팅 일정 (0-2): 최근 30일 다이어리 중 다음 일정이 기록된 비율.
+    //    체크박스 클릭과 무관하게 "일정을 잡아 기록했는가"만 본다.
+    const dys = diariesByStudent[s.id] || []
+    const followupScore = dys.length ? (dys.filter(d => d.hasNext).length / dys.length) * 2 : 0
 
     const score = Math.max(0, Math.min(KPI_MAX,
       meetingsScore + prepScore + summaryScore + reportsScore + followupScore,
