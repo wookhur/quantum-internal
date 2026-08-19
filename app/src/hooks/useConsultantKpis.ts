@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 export interface StudentKpi {
   meetings30d: number       // meetings for this student in last 30 days
   meetingsScore: number     // 0-4 — 2pts × min(meetings, 2)
-  prepScore: number         // 0-1 — % of student's meetings with prep_url
+  prepScore: number         // 0-1 — % of student's meetings with prep_url (참고용, 점수 미반영)
   summaryScore: number      // 0-2 — % of student's meetings with report_url
   reportsScore: number      // 0-2 — required-report coverage for this student
   followupScore: number     // 0-2 — % of last-30d meeting diaries that have a next-meeting date
@@ -24,7 +24,7 @@ export interface ConsultantKpi {
   score: number
 }
 
-export const KPI_MAX = 11
+export const KPI_MAX = 10
 
 const REQUIRED_REPORT_CATEGORIES = [
   'strength_result', 'strength_report', 'grade_report', 'grade_analysis',
@@ -115,8 +115,9 @@ async function fetchAllKpi(): Promise<KpiData> {
     const dys = diariesByStudent[s.id] || []
     const followupScore = dys.length ? (dys.filter(d => d.hasNext).length / dys.length) * 2 : 0
 
+    // prepScore(사전자료)는 2026-08 부터 점수에서 제외 — 값은 참고용으로 계속 계산한다.
     const score = Math.max(0, Math.min(KPI_MAX,
-      meetingsScore + prepScore + summaryScore + reportsScore + followupScore,
+      meetingsScore + summaryScore + reportsScore + followupScore,
     ))
 
     byStudent[s.id] = { meetings30d, meetingsScore, prepScore, summaryScore, reportsScore, followupScore, score }

@@ -86,7 +86,7 @@ import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 
 // Consultant pool + helpers (shared with KPI page)
 import { useConsultantPool, useConsultantName, consultantNameKey } from '@/lib/consultants'
-import { kpiDotColor } from '@/lib/kpi'
+import { kpiDotColor, KPI_TIERS } from '@/lib/kpi'
 import { useStudentKpis, KPI_MAX } from '@/hooks/useConsultantKpis'
 import { useStudentStatusFlags } from '@/hooks/useServiceDashboard'
 
@@ -174,10 +174,10 @@ const ESSAY_EDITORS = ['Danny Kim', 'Soomee Park', '한상범+양은영'] as con
 
 // KPI dot color legend, expressed as % of KPI_MAX so it always matches kpiDotColor().
 const KPI_LEGEND = [
-  { color: 'bg-emerald-500', label: `≥${Math.round((9 / KPI_MAX) * 100)}%` },
-  { color: 'bg-yellow-400', label: `≥${Math.round((7 / KPI_MAX) * 100)}%` },
-  { color: 'bg-red-500', label: `≥${Math.round((5 / KPI_MAX) * 100)}%` },
-  { color: 'bg-black', label: `<${Math.round((5 / KPI_MAX) * 100)}%` },
+  { color: 'bg-emerald-500', label: `≥${Math.round((KPI_TIERS.green / KPI_MAX) * 100)}%` },
+  { color: 'bg-yellow-400', label: `≥${Math.round((KPI_TIERS.yellow / KPI_MAX) * 100)}%` },
+  { color: 'bg-red-500', label: `≥${Math.round((KPI_TIERS.red / KPI_MAX) * 100)}%` },
+  { color: 'bg-black', label: `<${Math.round((KPI_TIERS.red / KPI_MAX) * 100)}%` },
 ]
 
 /** Tooltip text for the hourglass: lists which meetings are missing a summary report. */
@@ -3172,6 +3172,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
   const [open, setOpen] = useState(false)
   const create = useCreateServiceDiary()
   const update = useUpdateServiceDiary()
+  const bulkCreateFollowups = useBulkCreateFollowups()
   const buildForm = () => ({
     entryDate: entry?.entryDate || new Date().toISOString().slice(0, 10),
     prepUrl: entry?.prepUrl || '',
@@ -3213,7 +3214,24 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
     if (entry) {
       update.mutate({ id: entry.id, studentId, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
     } else {
-      create.mutate({ studentId, ...payload, authorId: authorName, createdBy }, { onSuccess: () => setOpen(false), onError: reportSaveError })
+      create.mutate({ studentId, ...payload, authorId: authorName, createdBy }, {
+        onSuccess: (created) => {
+          // 미팅에서 만드는 경로와 동작을 맞춘다 — 직접 만든 다이어리도
+          // 적어둔 텍스트가 체크 항목으로 만들어져야 추적이 가능하다.
+          if (created?.id) {
+            const followupItems = splitFollowupText(form.followUpCommitments || '')
+            if (followupItems.length) {
+              bulkCreateFollowups.mutate({ studentId, diaryId: created.id, category: 'followup', items: followupItems, createdBy })
+            }
+            const assignmentItems = splitFollowupText(form.assignments || '')
+            if (assignmentItems.length) {
+              bulkCreateFollowups.mutate({ studentId, diaryId: created.id, category: 'assignment', items: assignmentItems, createdBy })
+            }
+          }
+          setOpen(false)
+        },
+        onError: reportSaveError,
+      })
     }
   }
 
@@ -3636,6 +3654,7 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
   const create = useCreateFollowup()
   const update = useUpdateFollowup()
   const del = useDeleteFollowup()
+  const bulkCreate = useBulkCreateFollowups()
   const [adding, setAdding] = useState(false)
   const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -3695,9 +3714,27 @@ function FollowupChecklist({ studentId, diaryId, fallbackText, createdBy, catego
         )}
       </div>
 
-      {/* If no structured items yet but there is raw text, show it (one-time fallback) */}
+      {/* 아직 체크 항목이 없고 텍스트만 있는 경우 — 텍스트를 보여주고,
+          한 번의 클릭으로 체크 가능한 항목으로 바꿀 수 있게 한다.
+          (예전 다이어리나 텍스트만 수정한 다이어리가 여기에 해당) */}
       {items.length === 0 && fallbackText && (
-        <p className="text-sm whitespace-pre-wrap text-muted-foreground italic">{fallbackText}</p>
+        <div className="space-y-1.5">
+          <p className="text-sm whitespace-pre-wrap text-muted-foreground italic">{fallbackText}</p>
+          {canEdit && splitFollowupText(fallbackText).length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              disabled={bulkCreate.isPending}
+              onClick={() => bulkCreate.mutate(
+                { studentId, diaryId, category, items: splitFollowupText(fallbackText), createdBy },
+                { onError: reportSaveError },
+              )}
+            >
+              {t('student360.convertToChecklist')}
+            </Button>
+          )}
+        </div>
       )}
 
       <ul className="space-y-1.5">
