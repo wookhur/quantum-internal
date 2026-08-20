@@ -308,9 +308,15 @@ export function SeminarRegisterPage() {
                 ) : (
                   <>
                     <div className="flex gap-2">
-                      <div className="w-20">
+                      <div className="w-24">
                         <Label>국가번호 *</Label>
-                        <Input value={form.overCC} onChange={e => set({ overCC: e.target.value })} placeholder="+1" />
+                        <Input
+                          value={form.overCC}
+                          onChange={e => set({ overCC: e.target.value })}
+                          placeholder="예: +1"
+                          aria-invalid={!form.overCC.trim()}
+                          className={!form.overCC.trim() ? 'border-red-400 focus-visible:ring-red-400' : undefined}
+                        />
                       </div>
                       <div className="w-24">
                         <Label>지역번호</Label>
@@ -321,6 +327,13 @@ export function SeminarRegisterPage() {
                         <Input value={form.overNum} onChange={e => set({ overNum: e.target.value })} placeholder="3453383" />
                       </div>
                     </div>
+                    {(!form.overCC.trim() || !form.overNum.trim()) && (
+                      <p className="text-xs text-red-500">
+                        {!form.overCC.trim()
+                          ? '국가번호를 직접 입력해주세요. (미국·캐나다 +1, 영국 +44, 한국 +82)'
+                          : '전화번호를 입력해주세요.'}
+                      </p>
+                    )}
                     <div>
                       <Label>거주 국가</Label>
                       <Input value={form.overCountry} onChange={e => set({ overCountry: e.target.value })} placeholder="미국 / 캐나다 등" />
@@ -359,7 +372,7 @@ export function SeminarRegisterPage() {
 
               <Button type="submit" className="w-full" disabled={submitMut.isPending || !canSubmit}>
                 {submitMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
-                {hasSessions && !pickedSession ? '희망 회차를 선택해주세요' : !phoneOk ? '연락처를 확인해주세요' : '신청하기'}
+                {hasSessions && !pickedSession ? '희망 회차를 선택해주세요' : !phoneOk ? (isDom ? '휴대폰 번호를 확인해주세요' : (!form.overCC.trim() ? '국가번호를 입력해주세요' : '전화번호를 확인해주세요')) : '신청하기'}
               </Button>
             </form>
           </CardContent>
