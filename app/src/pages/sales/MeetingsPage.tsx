@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Link, useLocation } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -409,10 +410,22 @@ export function MeetingsPage() {
     })
   }
 
-  const { data: meetings = [], isLoading, error } = useMeetings({
+  const { data: allMeetings = [], isLoading, error } = useMeetings({
     dateFrom: dateFrom || undefined,
     dateTo: dateTo || undefined,
   })
+
+  // 리드 상세의 '미팅' 카드에서 넘어온 경우 해당 학부모의 미팅만 보여준다.
+  const [meetingParams, setMeetingParams] = useSearchParams()
+  const nameFilter = (meetingParams.get('name') || '').trim()
+  const meetings = useMemo(() => {
+    if (!nameFilter) return allMeetings
+    const needle = nameFilter.toLowerCase()
+    return allMeetings.filter(m =>
+      (m.parentName || '').toLowerCase().includes(needle) ||
+      (m.studentName || '').toLowerCase().includes(needle),
+    )
+  }, [allMeetings, nameFilter])
 
   const updateNoteDelivered = useUpdateNoteDelivered()
 
@@ -437,6 +450,26 @@ export function MeetingsPage() {
 
   return (
     <div className="space-y-4 max-w-full overflow-x-hidden">
+      {/* 리드 상세에서 넘어온 경우 — 누구의 미팅을 보고 있는지 알리고 해제 수단을 준다 */}
+      {nameFilter && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm">
+          <span className="text-violet-900">
+            <b>{nameFilter}</b> 님의 미팅만 보는 중입니다 · {meetings.length}건
+          </span>
+          <button
+            type="button"
+            className="text-xs font-semibold text-violet-700 underline underline-offset-4"
+            onClick={() => {
+              const next = new URLSearchParams(meetingParams)
+              next.delete('name')
+              setMeetingParams(next, { replace: true })
+            }}
+          >
+            전체 미팅 보기
+          </button>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">

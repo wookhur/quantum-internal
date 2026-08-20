@@ -387,39 +387,59 @@ export function LeadDetailPage() {
             </CardContent>
           </Card>
         </Link>
-        <Card className={consultationCount > 0 ? 'border-green-200 bg-green-50/30' : ''}>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="rounded-full bg-green-50 p-2">
-              <Video className="size-4 text-green-500" />
-            </div>
-            <div>
-              <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.consultations')}</p>
-              <p className="text-lg font-bold text-gray-900">{consultationCount}{t('leadDetail.times')}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className={meetingCount > 0 ? 'border-violet-200 bg-violet-50/30' : ''}>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="rounded-full bg-violet-50 p-2">
-              <Users className="size-4 text-violet-500" />
-            </div>
-            <div>
-              <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.meetings')}</p>
-              <p className="text-lg font-bold text-gray-900">{meetingCount}{t('leadDetail.times')}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className={contractCount > 0 ? 'border-emerald-200 bg-emerald-50/30' : ''}>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="rounded-full bg-emerald-50 p-2">
-              <FileText className="size-4 text-emerald-500" />
-            </div>
-            <div>
-              <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.contracts')}</p>
-              <p className="text-lg font-bold text-gray-900">{contractCount}{t('common.count')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <button type="button" onClick={() => setBookingOpen(true)} title={t('leadDetail.goBooking')}
+                className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-green-400 rounded-xl">
+          <Card className={`h-full transition hover:border-green-300 hover:shadow-sm ${consultationCount > 0 ? 'border-green-200 bg-green-50/30' : ''}`}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="rounded-full bg-green-50 p-2">
+                <Video className="size-4 text-green-500" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.consultations')}</p>
+                <p className="text-lg font-bold text-gray-900">{consultationCount}{t('leadDetail.times')}</p>
+              </div>
+              <CalendarPlus className="size-4 text-green-400 ml-auto shrink-0" />
+            </CardContent>
+          </Card>
+        </button>
+        <Link to={`/sales/meetings?name=${encodeURIComponent(lead.parentName || '')}`}
+              title={t('leadDetail.goMeetings')}
+              className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded-xl">
+          <Card className={`h-full transition hover:border-violet-300 hover:shadow-sm ${meetingCount > 0 ? 'border-violet-200 bg-violet-50/30' : ''}`}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="rounded-full bg-violet-50 p-2">
+                <Users className="size-4 text-violet-500" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.meetings')}</p>
+                <p className="text-lg font-bold text-gray-900">{meetingCount}{t('leadDetail.times')}</p>
+              </div>
+              <ChevronRight className="size-4 text-violet-400 ml-auto shrink-0" />
+            </CardContent>
+          </Card>
+        </Link>
+        {(() => {
+          // 계약이 있을 때만 이동 가능(없으면 갈 곳이 없어 링크로 만들지 않는다)
+          const firstContractId = contractCount > 0 ? (linkedContracts[0].id as string) : null
+          const inner = (
+            <Card className={`h-full transition ${contractCount > 0 ? 'border-emerald-200 bg-emerald-50/30 hover:border-emerald-300 hover:shadow-sm' : ''}`}>
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="rounded-full bg-emerald-50 p-2">
+                  <FileText className="size-4 text-emerald-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.contracts')}</p>
+                  <p className="text-lg font-bold text-gray-900">{contractCount}{t('common.count')}</p>
+                </div>
+                {firstContractId && <ChevronRight className="size-4 text-emerald-400 ml-auto shrink-0" />}
+              </CardContent>
+            </Card>
+          )
+          return firstContractId
+            ? <Link to={`/consulting/clients/${firstContractId}`} title={t('leadDetail.goContract')}
+                    className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-xl">{inner}</Link>
+            : inner
+        })()}
       </div>
 
       {/* Linked Contracts Detail */}
