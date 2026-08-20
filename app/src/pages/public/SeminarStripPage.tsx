@@ -1,8 +1,8 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSeminars } from '@/hooks/useSeminars'
 
 /**
- * 홈페이지에 끼워 넣는 세미나·웨비나 타임라인 (공개, 로그인 불필요)
+ * 홈페이지에 끼워 넣는 세미나·웨비나 세로 타임라인 (공개, 로그인 불필요)
  *
  * 왜 여기에 두는가
  *   세미나 기록은 사내 시스템에만 있는데, 홈페이지에는 세미나 이야기가 한 줄도
@@ -10,10 +10,15 @@ import { useSeminars } from '@/hooks/useSeminars'
  *   같은 데이터를 홈페이지가 iframe 으로 그대로 가져다 쓰면, 세미나를 새로 열
  *   때마다 홈페이지가 자동으로 최신 상태가 된다(따로 올릴 필요 없음).
  *
- * 부모(홈페이지)에 높이를 알려 스크롤이 겹치지 않게 한다.
+ * 표현
+ *   왼쪽에 세로선을 긋고 그 위에 점을 얹은 타임라인. 목록이 천천히 아래로
+ *   흐르며, 마우스를 올리면 멈춘다. 제목은 홈페이지 쪽 섹션이 담당하므로
+ *   여기서는 타임라인만 그린다.
  */
 export function SeminarStripPage() {
   const { data: seminars = [], isLoading } = useSeminars()
+  // 현재 시각은 최초 1회만 잡는다('모집 중' 판정용). 렌더마다 값이 달라지지 않게.
+  const [now] = useState(() => Date.now())
 
   useEffect(() => {
     const post = () => {
@@ -32,7 +37,7 @@ export function SeminarStripPage() {
   }, [seminars.length, isLoading])
 
   const items = useMemo(() => {
-    const withDate = seminars
+    return seminars
       .map(s => {
         // 세미나 날짜 = date 값, 없으면 세션 중 가장 이른 일시
         const sessionDates = (s.sessions || [])
@@ -44,75 +49,74 @@ export function SeminarStripPage() {
       })
       .filter(s => s.when && !isNaN(s.when.getTime()))
       .sort((a, b) => b.when!.getTime() - a.when!.getTime())
-    return withDate.slice(0, 14)
-  }, [seminars])
+      .slice(0, 12)
+      // '모집 중' 판정은 목록을 만들 때 한 번만 한다(렌더 중 현재시각 조회 금지)
+      .map(s => ({ ...s, upcoming: s.when!.getTime() > now }))
+  }, [seminars, now])
 
-  const thisYear = new Date().getFullYear()
-  const countThisYear = items.filter(s => s.when!.getFullYear() === thisYear).length
+  if (isLoading) return <div style={{ height: 200 }} />
+  if (items.length === 0) return <div style={{ height: 0 }} />
 
-  if (isLoading) {
-    return <div style={{ height: 200 }} />
-  }
-  if (items.length === 0) {
-    return <div style={{ height: 0 }} />
-  }
-
-  // 흐르는 효과를 위해 목록을 두 번 이어 붙인다(끊김 없이 순환)
+  // 끊김 없이 순환하도록 목록을 두 번 이어 붙인다
   const loop = [...items, ...items]
 
   return (
-    <div className="qa-strip">
+    <div className="qa-tl">
       <style>{`
-        .qa-strip{font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",-apple-system,sans-serif;
-          background:transparent;padding:4px 0 10px;overflow:hidden}
-        .qa-strip *{box-sizing:border-box}
-        .qa-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
-          padding:0 4px 16px;justify-content:center}
-        .qa-head b{font-size:26px;color:#0c3656;letter-spacing:-.02em}
-        .qa-head span{font-size:13.5px;color:#6b7480}
-        .qa-rail{position:relative;overflow:hidden;
-          -webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
-          mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
-        .qa-track{display:flex;gap:14px;width:max-content;animation:qa-slide 46s linear infinite}
-        .qa-rail:hover .qa-track{animation-play-state:paused}
-        @keyframes qa-slide{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-        @media (prefers-reduced-motion: reduce){.qa-track{animation:none}}
-        .qa-card{flex:0 0 auto;width:268px;background:#fff;border:1px solid #e6ebf1;border-radius:14px;
-          padding:16px 18px;box-shadow:0 2px 10px rgba(12,54,86,.05)}
-        .qa-date{font-size:11px;font-weight:700;letter-spacing:.08em;color:#a51c30}
-        .qa-title{margin-top:7px;font-size:14.5px;font-weight:700;color:#0c3656;line-height:1.45;
-          word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-        .qa-meta{margin-top:9px;display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:#7b8695}
-        .qa-badge{display:inline-block;margin-top:10px;font-size:10.5px;font-weight:700;
-          padding:3px 9px;border-radius:999px;background:#eef3f8;color:#0c3656}
-        .qa-badge.live{background:#a51c30;color:#fff}
+        .qa-tl{font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",-apple-system,sans-serif;
+          background:transparent;padding:0;overflow:hidden}
+        .qa-tl *{box-sizing:border-box}
+        .qa-view{position:relative;height:430px;overflow:hidden;
+          -webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent);
+          mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent)}
+        /* 왼쪽 세로선 — 목록과 무관하게 항상 이어져 보이도록 뷰 전체에 그린다 */
+        .qa-view::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:1px;
+          background:linear-gradient(180deg,rgba(12,54,86,.06),rgba(12,54,86,.22) 18%,rgba(12,54,86,.22) 82%,rgba(12,54,86,.06))}
+        .qa-track{position:absolute;left:0;right:0;top:0;
+          animation:qa-down 44s linear infinite}
+        .qa-view:hover .qa-track{animation-play-state:paused}
+        /* 아래로 흐른다: 위에서 새 항목이 내려오는 방향 */
+        @keyframes qa-down{from{transform:translateY(-50%)}to{transform:translateY(0)}}
+        @media (prefers-reduced-motion: reduce){.qa-track{animation:none;transform:translateY(-50%)}}
+
+        .qa-row{position:relative;padding:0 6px 26px 44px}
+        /* 선 위에 얹는 점 */
+        .qa-dot{position:absolute;left:9px;top:6px;width:13px;height:13px;border-radius:50%;
+          background:#fff;border:2px solid #c3ced9}
+        .qa-row.is-live .qa-dot{border-color:#a51c30;background:#a51c30;
+          box-shadow:0 0 0 4px rgba(165,28,48,.14)}
+        .qa-date{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:#a51c30;line-height:1}
+        .qa-title{margin-top:7px;font-size:15px;font-weight:700;color:#0c3656;line-height:1.5;
+          word-break:keep-all}
+        .qa-meta{margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#7b8695}
+        .qa-live{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:700;
+          padding:2px 8px;border-radius:999px;background:#a51c30;color:#fff;vertical-align:2px}
       `}</style>
 
-      <div className="qa-head">
-        <b>세미나 · 웨비나</b>
-        <span>
-          최근 {items.length}회
-          {countThisYear > 0 && ` · ${thisYear}년에만 ${countThisYear}회`} 진행했습니다
-        </span>
-      </div>
-
-      <div className="qa-rail">
+      <div className="qa-view">
         <div className="qa-track">
           {loop.map((s, i) => {
             const d = s.when!
-            const upcoming = d.getTime() > Date.now()
+            const upcoming = s.upcoming
             return (
-              <article className="qa-card" key={`${s.id}-${i}`} aria-hidden={i >= items.length}>
+              <div
+                className={`qa-row${upcoming ? ' is-live' : ''}`}
+                key={`${s.id}-${i}`}
+                aria-hidden={i >= items.length}
+              >
+                <span className="qa-dot" />
                 <p className="qa-date">
                   {d.getFullYear()}.{String(d.getMonth() + 1).padStart(2, '0')}.{String(d.getDate()).padStart(2, '0')}
+                  {upcoming && <span className="qa-live">모집 중</span>}
                 </p>
                 <p className="qa-title">{s.title}</p>
-                <div className="qa-meta">
-                  {s.location && <span>{s.location}</span>}
-                  {s.sessions?.length > 1 && <span>{s.sessions.length}개 세션</span>}
-                </div>
-                {upcoming && <span className="qa-badge live">모집 중</span>}
-              </article>
+                {(s.location || (s.sessions?.length ?? 0) > 1) && (
+                  <div className="qa-meta">
+                    {s.location && <span>{s.location}</span>}
+                    {(s.sessions?.length ?? 0) > 1 && <span>{s.sessions.length}개 세션</span>}
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
