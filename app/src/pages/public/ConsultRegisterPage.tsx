@@ -28,6 +28,8 @@ function formatDomesticPhone(v: string): string {
 export function ConsultRegisterPage() {
   const submitMut = useSubmitConsultation()
   const [submitted, setSubmitted] = useState(false)
+  // 공개 수집 폼이라 개인정보 수집·이용 동의가 필요하다(홈페이지 폼에 있던 항목).
+  const [privacyAgreed, setPrivacyAgreed] = useState(false)
 
   const [form, setForm] = useState({
     parentName: '',
@@ -72,7 +74,7 @@ export function ConsultRegisterPage() {
     : !!form.overCC.trim() && !!form.overNum.trim()
   const canSubmit =
     !!form.parentName.trim() && !!form.studentName.trim() && !!form.email.trim() &&
-    !!form.grade && phoneOk
+    !!form.grade && phoneOk && privacyAgreed
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -102,6 +104,10 @@ export function ConsultRegisterPage() {
     if (typeof window !== 'undefined' && window.fbq) {
       window.fbq('track', 'Lead', { content_name: '홈페이지 상담신청' })
     }
+    // iframe 으로 삽입된 경우 부모 페이지(홈페이지)가 전환 이벤트를 기록하도록 알린다.
+    try {
+      window.parent?.postMessage({ type: 'qa-consult-submitted' }, '*')
+    } catch { /* ignore */ }
     setSubmitted(true)
   }
 
@@ -257,6 +263,21 @@ export function ConsultRegisterPage() {
                 <Label>상담 희망 내용 / 메모</Label>
                 <Textarea value={form.memo} onChange={e => set({ memo: e.target.value })} placeholder="궁금한 점이나 전달사항을 자유롭게 남겨주세요." rows={3} />
               </div>
+
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 shrink-0 accent-[#0c3656]"
+                  checked={privacyAgreed}
+                  onChange={e => setPrivacyAgreed(e.target.checked)}
+                />
+                <span>
+                  개인정보 수집 및 이용에 동의합니다. <span className="text-red-500">*</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-gray-500">
+                    수집 항목: 학생·학부모 이름, 연락처, 이메일, 학교·학년, 거주 지역 · 목적: 입시 상담 안내 · 보유 기간: 상담 종료 후 3년
+                  </span>
+                </span>
+              </label>
 
               <Button type="submit" className="w-full" disabled={submitMut.isPending || !canSubmit}>
                 {submitMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
