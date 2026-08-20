@@ -505,6 +505,7 @@ const koTranslations = {
   // ── Lead Detail ──
   'leadDetail.customerJourney': '고객 여정 요약',
   'leadDetail.coldCalls': '콜드콜',
+  'leadDetail.goColdCall': '콜드콜 화면에서 이 리드 열기',
   'leadDetail.consultations': '상담',
   'leadDetail.meetings': '미팅',
   'leadDetail.contracts': '계약',
@@ -3159,6 +3160,7 @@ const enTranslations: Record<string, string> = {
   'leads.viewColdCall': 'Cold Call',
   'leadDetail.customerJourney': 'Customer Journey Summary',
   'leadDetail.coldCalls': 'Cold Calls',
+  'leadDetail.goColdCall': 'Open this lead in Cold Call',
   'leadDetail.consultations': 'Consultations',
   'leadDetail.meetings': 'Meetings',
   'leadDetail.contracts': 'Contracts',

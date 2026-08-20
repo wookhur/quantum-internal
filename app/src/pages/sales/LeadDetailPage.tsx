@@ -7,7 +7,7 @@ import {
   ArrowLeft, Loader2, Phone, Mail, MapPin, School, GraduationCap,
   Calendar, MessageSquare, Edit, Clock, CheckCircle2, Video, CalendarPlus,
   AlertTriangle, XCircle, RefreshCw, Pencil, Trash2, Save, X,
-  FileText, Users, PhoneCall, Briefcase, User,
+  FileText, Users, PhoneCall, Briefcase, User, ChevronRight,
 } from 'lucide-react'
 import { useLead, useLeadActivities, useCreateActivity, useUpdateActivity, useDeleteActivity } from '@/hooks/useLeads'
 import { useT } from '@/i18n/LanguageContext'
@@ -372,17 +372,21 @@ export function LeadDetailPage() {
 
       {/* Customer Journey Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className={callCount > 0 ? 'border-orange-200 bg-orange-50/30' : ''}>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="rounded-full bg-orange-50 p-2">
-              <PhoneCall className="size-4 text-orange-500" />
-            </div>
-            <div>
-              <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.coldCalls')}</p>
-              <p className="text-lg font-bold text-gray-900">{callCount}{t('leadDetail.times')}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Link to={`/sales/cold-call?lead=${lead.id}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 rounded-xl"
+              title={t('leadDetail.goColdCall')}>
+          <Card className={`h-full transition hover:border-orange-300 hover:shadow-sm ${callCount > 0 ? 'border-orange-200 bg-orange-50/30' : ''}`}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="rounded-full bg-orange-50 p-2">
+                <PhoneCall className="size-4 text-orange-500" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500 font-medium">{t('leadDetail.coldCalls')}</p>
+                <p className="text-lg font-bold text-gray-900">{callCount}{t('leadDetail.times')}</p>
+              </div>
+              <ChevronRight className="size-4 text-orange-400 ml-auto shrink-0" />
+            </CardContent>
+          </Card>
+        </Link>
         <Card className={consultationCount > 0 ? 'border-green-200 bg-green-50/30' : ''}>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="rounded-full bg-green-50 p-2">

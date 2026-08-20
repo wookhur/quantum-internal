@@ -68,7 +68,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
 import { getStageConfig, GRADES } from '@/types'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 // ============ Priority scoring ============
 
@@ -506,9 +506,23 @@ export function ColdCallView() {
   const [stageFilter, setStageFilter] = useState<'coldcall' | PipelineStage>('coldcall')
   const [phoneFilter, setPhoneFilter] = useState<'all' | 'domestic' | 'overseas'>('all')
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // Fetch leads in cold-callable stages
   const { data: allLeads = [], isLoading } = useLeads()
+
+  // 리드 상세에서 '콜드콜' 카드를 눌러 들어온 경우(/sales/cold-call?lead=<id>)
+  // 해당 리드를 바로 연다. 필터를 되돌리지 않아도 아래 selectedLead 가
+  // 전체 목록에서 찾아주므로 목록에 없어도 상세는 열린다.
+  const leadParam = searchParams.get('lead')
+  useEffect(() => {
+    if (!leadParam) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 주소 파라미터로 들어온 선택을 반영하는 곳이라 effect 가 맞다
+    setSelectedLeadId(leadParam)
+    const next = new URLSearchParams(searchParams)
+    next.delete('lead')
+    setSearchParams(next, { replace: true })
+  }, [leadParam, searchParams, setSearchParams])
   // Seminars with registrant phone sets — so leads that registered for a
   // seminar are matched even if their lead source is another channel
   const { data: seminars = [] } = useSeminarsWithRegistrations()
@@ -685,7 +699,15 @@ export function ColdCallView() {
     return scored
   }, [allLeads, gradeGroup, selectedGrade, selectedSchool, selectedEvent, selectedSeminar, search, sortBy, levelFilter, sessionFilter, stageFilter, phoneFilter])
 
-  const selectedLead = coldCallLeads.find((l) => l.id === selectedLeadId)
+  // 필터 때문에 목록에 없더라도 상세는 열리도록 전체 리드에서 한 번 더 찾는다.
+  // 목록을 거치지 않은 리드에는 우선순위 점수가 없으므로 같은 기준으로 계산해 붙인다.
+  const selectedLead = useMemo(() => {
+    if (!selectedLeadId) return undefined
+    const inList = coldCallLeads.find((l) => l.id === selectedLeadId)
+    if (inList) return inList
+    const anyLead = allLeads.find((l) => l.id === selectedLeadId)
+    return anyLead ? { ...anyLead, _priority: getLeadPriority(anyLead) } : undefined
+  }, [selectedLeadId, coldCallLeads, allLeads])
 
   // Stats
   const totalColdCallable = allLeads.filter((l) => COLD_CALL_STAGES.includes(l.pipelineStage)).length
