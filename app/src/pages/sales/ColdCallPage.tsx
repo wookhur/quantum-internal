@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { hasHomepageReinquiry } from '@/lib/homepageInquiry'
+import { hasHomepageReinquiry, latestInquiryDate } from '@/lib/homepageInquiry'
 import { useT } from '@/i18n/LanguageContext'
 import { resolveInstant, geocodePlace, formatLocalTime, isOverseasPhone } from '@/lib/leadLocation'
 import { useQuery } from '@tanstack/react-query'
@@ -688,9 +688,11 @@ export function ColdCallView() {
         ((leadLevelConfig(b.leadLevel)?.rank || 0) - (leadLevelConfig(a.leadLevel)?.rank || 0))
         || (t(b.leadDate) - t(a.leadDate)) || byId(a, b))
     } else if (sortBy === 'date') {
-      // 최신순: 유입일 내림차순 → 등록 시각 내림차순 → id (완전 결정적)
+      // 최신순: 최근 문의일 내림차순 → 등록 시각 내림차순 → id (완전 결정적)
+      // 홈페이지로 다시 문의한 기존 고객은 그 날짜 기준으로 위로 올라온다(우선 연락 대상).
       scored.sort((a, b) =>
-        (t(b.leadDate) - t(a.leadDate)) || (t(b.createdAt) - t(a.createdAt)) || byId(a, b))
+        (t(latestInquiryDate(b.leadDate, b.memo)) - t(latestInquiryDate(a.leadDate, a.memo)))
+        || (t(b.createdAt) - t(a.createdAt)) || byId(a, b))
     } else if (sortBy === 'grade') {
       scored.sort((a, b) =>
         ((GRADE_PRIORITY[b.grade] || 0) - (GRADE_PRIORITY[a.grade] || 0))

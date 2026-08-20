@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { hasHomepageReinquiry } from '@/lib/homepageInquiry'
+import { hasHomepageReinquiry, latestInquiryDate, parseHomepageInquiries } from '@/lib/homepageInquiry'
 import { useT } from '@/i18n/LanguageContext'
 import { Link, useLocation } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -235,13 +235,22 @@ function LeadsTableView() {
     !!search,
   ].filter(Boolean).length
 
+  // 기존 고객이 홈페이지로 다시 문의하면 기존 리드에 병합되므로 유입일은 그대로다.
+  // 그러면 목록 아래에 묻혀 "또 신청했다"는 사실을 놓치게 된다.
+  // 유입일과 재문의일 중 최신값으로 다시 정렬해 신규 리드와 같이 위로 올린다.
+  const sortedLeads = useMemo(() => {
+    return [...allLeads].sort((a, b) =>
+      latestInquiryDate(b.leadDate, b.memo).localeCompare(latestInquiryDate(a.leadDate, a.memo)),
+    )
+  }, [allLeads])
+
   // -- Client-side pagination
-  const totalCount = allLeads.length
+  const totalCount = sortedLeads.length
   const totalPages = Math.max(1, Math.ceil(totalCount / ROWS_PER_PAGE))
   const safePage = Math.min(page, totalPages)
   const startIdx = (safePage - 1) * ROWS_PER_PAGE
   const endIdx = startIdx + ROWS_PER_PAGE
-  const paginatedLeads = allLeads.slice(startIdx, endIdx)
+  const paginatedLeads = sortedLeads.slice(startIdx, endIdx)
 
   // -- Active leads count (not contracted/lost/rejected)
   const activeLeadCount = useMemo(() => {
@@ -583,6 +592,11 @@ function LeadsTableView() {
                     </td>
                     <td className="text-xs text-muted-foreground font-mono whitespace-nowrap">
                       {formatDate(lead.leadDate)}
+                      {hasHomepageReinquiry(lead.sourceChannel, lead.memo) && (
+                        <span className="block text-[10px] text-blue-600" title="홈페이지로 다시 문의한 날">
+                          ↻ {parseHomepageInquiries(lead.memo)[0].date.slice(5)}
+                        </span>
+                      )}
                     </td>
                     <td className="font-medium">
                       <Link

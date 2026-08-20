@@ -57,3 +57,17 @@ export function hasHomepageReinquiry(
 ): boolean {
   return !isHomepageOrigin(sourceChannel) && parseHomepageInquiries(memo).length > 0
 }
+
+/**
+ * 목록에서 쓸 "최근 문의일".
+ * 유입일과 홈페이지 재문의일 중 더 최근 값. 기존 고객이 다시 문의하면
+ * 이 값이 올라가므로, 이 기준으로 정렬하면 신규 리드와 함께 위로 떠오른다.
+ */
+export function latestInquiryDate(
+  leadDate?: string | null,
+  memo?: string | null,
+): string {
+  const base = (leadDate || '').slice(0, 10)
+  const re = parseHomepageInquiries(memo)[0]?.date || ''
+  return re > base ? re : base
+}
