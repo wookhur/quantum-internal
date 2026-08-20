@@ -66,31 +66,31 @@ export function SeminarStripPage() {
         .qa-tl{font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",-apple-system,sans-serif;
           background:transparent;padding:0;overflow:hidden}
         .qa-tl *{box-sizing:border-box}
-        .qa-view{position:relative;height:430px;overflow:hidden;
+        .qa-view{position:relative;height:470px;overflow:hidden;
           -webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent);
           mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent)}
         /* 왼쪽 세로선 — 목록과 무관하게 항상 이어져 보이도록 뷰 전체에 그린다 */
-        .qa-view::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:1px;
+        .qa-view::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:1.5px;
           background:linear-gradient(180deg,rgba(12,54,86,.06),rgba(12,54,86,.22) 18%,rgba(12,54,86,.22) 82%,rgba(12,54,86,.06))}
         .qa-track{position:absolute;left:0;right:0;top:0;
           animation:qa-down 44s linear infinite}
         .qa-view:hover .qa-track{animation-play-state:paused}
-        /* 아래로 흐른다: 위에서 새 항목이 내려오는 방향 */
-        @keyframes qa-down{from{transform:translateY(-50%)}to{transform:translateY(0)}}
-        @media (prefers-reduced-motion: reduce){.qa-track{animation:none;transform:translateY(-50%)}}
+        /* 위로 흐른다: 아래에서 다음 항목이 올라오는 방향 */
+        @keyframes qa-down{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+        @media (prefers-reduced-motion: reduce){.qa-track{animation:none;transform:translateY(0)}}
 
-        .qa-row{position:relative;padding:0 6px 26px 44px}
+        .qa-row{position:relative;padding:0 6px 34px 52px}
         /* 선 위에 얹는 점 */
-        .qa-dot{position:absolute;left:9px;top:6px;width:13px;height:13px;border-radius:50%;
+        .qa-dot{position:absolute;left:8px;top:7px;width:15px;height:15px;border-radius:50%;
           background:#fff;border:2px solid #c3ced9}
         .qa-row.is-live .qa-dot{border-color:#a51c30;background:#a51c30;
           box-shadow:0 0 0 4px rgba(165,28,48,.14)}
-        .qa-date{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:#a51c30;line-height:1}
-        .qa-title{margin-top:7px;font-size:15px;font-weight:700;color:#0c3656;line-height:1.5;
+        .qa-date{font-size:13.5px;font-weight:700;letter-spacing:.05em;color:#a51c30;line-height:1}
+        .qa-title{margin-top:9px;font-size:19px;font-weight:700;color:#0c3656;line-height:1.45;
           word-break:keep-all}
-        .qa-meta{margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#7b8695}
-        .qa-live{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:700;
-          padding:2px 8px;border-radius:999px;background:#a51c30;color:#fff;vertical-align:2px}
+        .qa-meta{margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;font-size:14px;color:#7b8695}
+        .qa-live{display:inline-block;margin-left:9px;font-size:12px;font-weight:700;
+          padding:3px 10px;border-radius:999px;background:#a51c30;color:#fff;vertical-align:1px}
       `}</style>
 
       <div className="qa-view">
