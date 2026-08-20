@@ -1,4 +1,5 @@
 import { useParams, Link, useLocation } from 'react-router-dom'
+import { parseHomepageInquiries, hasHomepageReinquiry, isHomepageOrigin } from '@/lib/homepageInquiry'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -7,7 +8,7 @@ import {
   ArrowLeft, Loader2, Phone, Mail, MapPin, School, GraduationCap,
   Calendar, MessageSquare, Edit, Clock, CheckCircle2, Video, CalendarPlus,
   AlertTriangle, XCircle, RefreshCw, Pencil, Trash2, Save, X,
-  FileText, Users, PhoneCall, Briefcase, User, ChevronRight,
+  FileText, Users, PhoneCall, Briefcase, User, ChevronRight, Globe,
 } from 'lucide-react'
 import { useLead, useLeadActivities, useCreateActivity, useUpdateActivity, useDeleteActivity } from '@/hooks/useLeads'
 import { useT } from '@/i18n/LanguageContext'
@@ -238,6 +239,21 @@ export function LeadDetailPage() {
     }
   }
 
+  // 홈페이지 상담신청 — 메모에 남은 '[홈페이지 재문의 YYYY-MM-DD]' 표시를 타임라인에 드러낸다.
+  // 병합될 때 유입 채널은 최초 값을 지키므로, 재문의 사실은 이 표시로만 남아 있었다.
+  for (const inq of parseHomepageInquiries(lead.memo)) {
+    timeline.push({
+      id: `hp-${inq.date}`,
+      date: inq.date,
+      category: 'activity',
+      icon: <Globe className="size-4 text-blue-500" />,
+      badge: t('leadDetail.homepageInquiry'),
+      badgeColor: 'bg-blue-100 text-blue-700',
+      title: t('leadDetail.homepageInquiry'),
+      description: inq.content || undefined,
+    })
+  }
+
   // Add meetings
   for (const m of linkedMeetings) {
     const profiles = m.profiles as { id: string; name: string } | null
@@ -367,6 +383,15 @@ export function LeadDetailPage() {
 
         {/* 현지시각/시차 (전화·거주지 기반) + 세미나 참석 이력 (최신순) */}
         <LeadLocalTime lead={lead} />
+        {isHomepageOrigin(lead.sourceChannel) && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500 text-white font-medium">홈페이지</span>
+        )}
+        {hasHomepageReinquiry(lead.sourceChannel, lead.memo) && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500 text-white font-medium"
+                title="다른 경로로 유입됐지만 홈페이지로 추가 문의한 리드">
+            홈페이지 재문의 {parseHomepageInquiries(lead.memo).length > 1 ? `${parseHomepageInquiries(lead.memo).length}회` : ''}
+          </span>
+        )}
         <LeadSeminarBadges lead={lead} label="🎓 참석 이력" />
       </div>
 

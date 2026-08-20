@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { hasHomepageReinquiry } from '@/lib/homepageInquiry'
 import { useT } from '@/i18n/LanguageContext'
 import { Link, useLocation } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -574,6 +575,9 @@ function LeadsTableView() {
                         <StagePill stage={lead.pipelineStage} />
                         {(lead.sourceChannel || '').includes('홈페이지') && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500 text-white font-medium">홈페이지</span>
+                        )}
+                        {hasHomepageReinquiry(lead.sourceChannel, lead.memo) && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500 text-white font-medium" title="다른 경로로 유입됐지만 홈페이지로 추가 문의한 리드">홈페이지 재문의</span>
                         )}
                       </div>
                     </td>
