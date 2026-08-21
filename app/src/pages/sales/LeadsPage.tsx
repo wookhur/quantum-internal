@@ -73,12 +73,22 @@ function leadCountryName(lead: LeadLocFields): string {
   return (resolved?.country || lead.residenceCountry || '').trim()
 }
 
-/** 거주국가 분류: 국내(빈값·한국) / 미국 / 기타국가. */
+// region 필드(REGIONS)가 국가/지역을 직접 담음 → 1차 신호로 사용.
+const KR_REGIONS = ['서울', '부산', '제주', '대구', '인천']
+const FOREIGN_REGIONS = ['캐나다', '영국', '홍콩', '싱가폴', '싱가포르', '중국', '두바이', '일본', '멕시코', '발리']
+
+/** 거주국가 분류: 국내 / 미국 / 기타국가.
+ *  1) region 필드(미국·서울·캐나다 등)를 우선 사용. 2) region이 비었거나 '기타'면 도시·전화·학교로 보조 판정. */
 function countryBucket(lead: LeadLocFields): 'domestic' | 'us' | 'other' {
+  const r = (lead.region || '').trim()
+  if (r === '미국') return 'us'
+  if (KR_REGIONS.includes(r)) return 'domestic'
+  if (FOREIGN_REGIONS.includes(r)) return 'other'
+  // region 미기입/'기타' → 도시·전화·학교 기반 보조 판정
   const c = leadCountryName(lead).toLowerCase()
-  if (!c || ['대한민국', '한국', 'korea', 'kr', 'south korea', 'republic of korea'].includes(c)) return 'domestic'
   if (['미국', 'us', 'usa', 'united states', 'united states of america', 'america'].includes(c)) return 'us'
-  return 'other'
+  if (c && !['대한민국', '한국', 'korea', 'kr', 'south korea', 'republic of korea'].includes(c)) return 'other'
+  return 'domestic'
 }
 
 const INITIAL_FORM = {
