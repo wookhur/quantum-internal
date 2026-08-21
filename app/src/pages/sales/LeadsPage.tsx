@@ -50,6 +50,7 @@ import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads, useDele
 import { LeadSeminarBadges } from '@/components/LeadSeminarBadges'
 import { MergeLeadDialog } from '@/components/MergeLeadDialog'
 import { leadLevelConfig } from '@/lib/leadLevels'
+import { resolveInstant } from '@/lib/leadLocation'
 import type { Lead, PipelineStage } from '@/types'
 import {
   PIPELINE_STAGES,
@@ -64,9 +65,17 @@ import {
 
 const ROWS_PER_PAGE = 25
 
-/** 거주국가 분류: 국내(빈값·한국) / 미국 / 기타국가. residenceCountry는 국가명(예: '미국','대한민국') 또는 빈값. */
-function countryBucket(rc?: string): 'domestic' | 'us' | 'other' {
-  const c = (rc || '').trim().toLowerCase()
+type LeadLocFields = Pick<Lead, 'residenceCity' | 'currentSchool' | 'region' | 'phone' | 'residenceCountry'>
+
+/** 리드의 실제 거주국가(한글명). 도시>전화>학교>지역 순으로 판정(LeadLocalTime과 동일 로직), 없으면 residenceCountry. */
+function leadCountryName(lead: LeadLocFields): string {
+  const resolved = resolveInstant({ city: lead.residenceCity, school: lead.currentSchool, region: lead.region, phone: lead.phone })
+  return (resolved?.country || lead.residenceCountry || '').trim()
+}
+
+/** 거주국가 분류: 국내(빈값·한국) / 미국 / 기타국가. */
+function countryBucket(lead: LeadLocFields): 'domestic' | 'us' | 'other' {
+  const c = leadCountryName(lead).toLowerCase()
   if (!c || ['대한민국', '한국', 'korea', 'kr', 'south korea', 'republic of korea'].includes(c)) return 'domestic'
   if (['미국', 'us', 'usa', 'united states', 'united states of america', 'america'].includes(c)) return 'us'
   return 'other'
@@ -251,7 +260,7 @@ function LeadsTableView() {
   const sortedLeads = useMemo(() => {
     const filtered = residenceFilter === 'all'
       ? allLeads
-      : allLeads.filter((l) => countryBucket(l.residenceCountry) === residenceFilter)
+      : allLeads.filter((l) => countryBucket(l) === residenceFilter)
     return [...filtered].sort((a, b) =>
       latestInquiryDate(b.leadDate, b.memo).localeCompare(latestInquiryDate(a.leadDate, a.memo)),
     )
@@ -511,6 +520,9 @@ function LeadsTableView() {
           {/* Active filter count + Reset */}
           {activeFilterCount > 0 && (
             <>
+              <Badge className="text-xs gap-1">
+                결과 {totalCount.toLocaleString()}명
+              </Badge>
               <Badge variant="secondary" className="text-xs gap-1">
                 {t('leads.filtersActive', { n: activeFilterCount })}
               </Badge>
