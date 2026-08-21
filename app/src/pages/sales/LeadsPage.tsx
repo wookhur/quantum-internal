@@ -64,6 +64,14 @@ import {
 
 const ROWS_PER_PAGE = 25
 
+/** 거주국가 분류: 국내(빈값·한국) / 미국 / 기타국가. residenceCountry는 국가명(예: '미국','대한민국') 또는 빈값. */
+function countryBucket(rc?: string): 'domestic' | 'us' | 'other' {
+  const c = (rc || '').trim().toLowerCase()
+  if (!c || ['대한민국', '한국', 'korea', 'kr', 'south korea', 'republic of korea'].includes(c)) return 'domestic'
+  if (['미국', 'us', 'usa', 'united states', 'united states of america', 'america'].includes(c)) return 'us'
+  return 'other'
+}
+
 const INITIAL_FORM = {
   parentName: '',
   studentName: '',
@@ -177,6 +185,7 @@ function LeadsTableView() {
   const [stageFilter, setStageFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [assignedFilter, setAssignedFilter] = useState<string>('all')
+  const [residenceFilter, setResidenceFilter] = useState<string>('all')
   const [regionFilter, setRegionFilter] = useState<string>('all')
   const [gradeFilter, setGradeFilter] = useState<string>('all')
 
@@ -230,6 +239,7 @@ function LeadsTableView() {
     stageFilter !== 'all',
     sourceFilter !== 'all',
     assignedFilter !== 'all',
+    residenceFilter !== 'all',
     regionFilter !== 'all',
     gradeFilter !== 'all',
     !!search,
@@ -239,10 +249,13 @@ function LeadsTableView() {
   // 그러면 목록 아래에 묻혀 "또 신청했다"는 사실을 놓치게 된다.
   // 유입일과 재문의일 중 최신값으로 다시 정렬해 신규 리드와 같이 위로 올린다.
   const sortedLeads = useMemo(() => {
-    return [...allLeads].sort((a, b) =>
+    const filtered = residenceFilter === 'all'
+      ? allLeads
+      : allLeads.filter((l) => countryBucket(l.residenceCountry) === residenceFilter)
+    return [...filtered].sort((a, b) =>
       latestInquiryDate(b.leadDate, b.memo).localeCompare(latestInquiryDate(a.leadDate, a.memo)),
     )
-  }, [allLeads])
+  }, [allLeads, residenceFilter])
 
   // -- Client-side pagination
   const totalCount = sortedLeads.length
@@ -389,7 +402,7 @@ function LeadsTableView() {
             }}
           >
             <SelectTrigger className="w-[140px]" size="sm">
-              <SelectValue placeholder={t('leads.pipeline')} />
+              <span className="truncate">{stageFilter === 'all' ? t('leads.allStages') : (PIPELINE_STAGES.find((s) => s.key === stageFilter)?.label ?? stageFilter)}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('leads.allStages')}</SelectItem>
@@ -410,7 +423,7 @@ function LeadsTableView() {
             }}
           >
             <SelectTrigger className="w-[140px]" size="sm">
-              <SelectValue placeholder={t('leads.sourceChannel')} />
+              <span className="truncate">{sourceFilter === 'all' ? t('leads.allChannels') : sourceFilter}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('leads.allChannels')}</SelectItem>
@@ -431,7 +444,7 @@ function LeadsTableView() {
             }}
           >
             <SelectTrigger className="w-[130px]" size="sm">
-              <SelectValue placeholder={t('leads.col.assignee')} />
+              <span className="truncate">{assignedFilter === 'all' ? t('leads.allAssignees') : (assignedUsers.find((u) => u.id === assignedFilter)?.name ?? assignedFilter)}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('leads.allAssignees')}</SelectItem>
@@ -443,13 +456,33 @@ function LeadsTableView() {
             </SelectContent>
           </Select>
 
+          {/* Residence country filter (국내/미국/기타국가) */}
+          <Select
+            value={residenceFilter}
+            onValueChange={(v) => { v && setResidenceFilter(v); resetPage() }}
+          >
+            <SelectTrigger className="w-[130px]" size="sm">
+              <span className="truncate">
+                {residenceFilter === 'all' ? '전체 거주국가'
+                  : residenceFilter === 'domestic' ? '국내'
+                  : residenceFilter === 'us' ? '미국' : '기타국가'}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 거주국가</SelectItem>
+              <SelectItem value="domestic">국내</SelectItem>
+              <SelectItem value="us">미국</SelectItem>
+              <SelectItem value="other">기타국가</SelectItem>
+            </SelectContent>
+          </Select>
+
           {/* Region filter */}
           <Select
             value={regionFilter}
             onValueChange={(v) => { v && setRegionFilter(v); resetPage() }}
           >
             <SelectTrigger className="w-[120px]" size="sm">
-              <SelectValue placeholder="지역" />
+              <span className="truncate">{regionFilter === 'all' ? '전체 지역' : regionFilter}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">전체 지역</SelectItem>
@@ -465,7 +498,7 @@ function LeadsTableView() {
             onValueChange={(v) => { v && setGradeFilter(v); resetPage() }}
           >
             <SelectTrigger className="w-[110px]" size="sm">
-              <SelectValue placeholder="학년" />
+              <span className="truncate">{gradeFilter === 'all' ? '전체 학년' : gradeFilter}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">전체 학년</SelectItem>
