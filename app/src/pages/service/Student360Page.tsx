@@ -56,6 +56,7 @@ import {
 } from '@/hooks/usePortalTokens'
 import {
   useECActivities, useCreateECActivity, useUpdateECActivity, useDeleteECActivity,
+  useAllECPrograms,
   type ECActivity,
 } from '@/hooks/useECActivities'
 import {
@@ -228,6 +229,7 @@ export function Student360Page() {
   const [consultantFilter, setConsultantFilter] = useState('')
   const [essayEditorFilter, setEssayEditorFilter] = useState('all')
   const [gradeFilter, setGradeFilter] = useState('all')
+  const [ecProgramFilter, setEcProgramFilter] = useState('all')
   const [showArchive, setShowArchive] = useState(false)
   const [pausedOnly, setPausedOnly] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('student'))
@@ -303,6 +305,22 @@ export function Student360Page() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
   }, [students])
 
+  // EC 프로그램 필터: 전체 학생의 신청 프로그램 → studentId별 집합 + 옵션 목록
+  const { data: ecPrograms = [] } = useAllECPrograms()
+  const ecProgramsByStudent = useMemo(() => {
+    const m = new Map<string, Set<string>>()
+    for (const r of ecPrograms) {
+      if (!m.has(r.studentId)) m.set(r.studentId, new Set())
+      m.get(r.studentId)!.add(r.program)
+    }
+    return m
+  }, [ecPrograms])
+  const ecProgramOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of ecPrograms) set.add(r.program)
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [ecPrograms])
+
   const filterName = consultantFilter ? consultantName(consultantFilter) : ''
 
   // Archived = 서비스 완료(finished) / 서비스 취소(canceled). Archived students keep
@@ -317,6 +335,7 @@ export function Student360Page() {
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
       if (essayEditorFilter !== 'all' && (s.essayEditor || '') !== essayEditorFilter) return false
       if (gradeFilter !== 'all' && gradeBucket(s.grade) !== gradeFilter) return false
+      if (ecProgramFilter !== 'all' && !(ecProgramsByStudent.get(s.id)?.has(ecProgramFilter))) return false
       if (!q) return true
       return (
         s.name.toLowerCase().includes(q) ||
@@ -325,7 +344,7 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     })
-  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, pausedOnly, mentorStudentIds])
+  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, ecProgramFilter, ecProgramsByStudent, pausedOnly, mentorStudentIds])
   const archiveCount = useMemo(() => baseFiltered.filter(s => isArchivedStatus(s.status)).length, [baseFiltered])
   const activeCount = baseFiltered.length - archiveCount
 
@@ -403,12 +422,12 @@ export function Student360Page() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex gap-2 mb-3">
+        <div className="grid grid-cols-2 gap-2 mb-3">
           <Select
             value={consultantFilter || '__all__'}
             onValueChange={v => setConsultantFilter(v === '__all__' ? '' : (v ?? ''))}
           >
-            <SelectTrigger className="flex-1">
+            <SelectTrigger className="w-full">
               <span className="truncate">
                 {consultantFilter ? consultantName(consultantFilter) : t('student360.allConsultants')}
               </span>
@@ -421,7 +440,7 @@ export function Student360Page() {
             </SelectContent>
           </Select>
           <Select value={essayEditorFilter} onValueChange={v => setEssayEditorFilter(v ?? 'all')}>
-            <SelectTrigger className="flex-1">
+            <SelectTrigger className="w-full">
               <span className="truncate">{essayEditorFilter === 'all' ? '전체 에세이에디터' : essayEditorFilter}</span>
             </SelectTrigger>
             <SelectContent>
@@ -430,12 +449,21 @@ export function Student360Page() {
             </SelectContent>
           </Select>
           <Select value={gradeFilter} onValueChange={v => setGradeFilter(v ?? 'all')}>
-            <SelectTrigger className="w-28 shrink-0">
+            <SelectTrigger className="w-full">
               <span className="truncate">{gradeFilter === 'all' ? t('student360.allGrades') : gradeFilter}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t('student360.allGrades')}</SelectItem>
               {gradeOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={ecProgramFilter} onValueChange={v => setEcProgramFilter(v ?? 'all')}>
+            <SelectTrigger className="w-full">
+              <span className="truncate">{ecProgramFilter === 'all' ? '전체 EC 프로그램' : ecProgramFilter}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 EC 프로그램</SelectItem>
+              {ecProgramOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

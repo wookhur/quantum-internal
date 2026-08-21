@@ -79,6 +79,23 @@ export function useECActivities(studentId?: string) {
   })
 }
 
+/** 전체 학생의 EC 프로그램 신청 목록 (Student360 필터용). student_id + program 만 가볍게 조회. */
+export function useAllECPrograms() {
+  return useQuery({
+    queryKey: ['ec_programs_all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('service_ec_activities')
+        .select('student_id, program')
+        .not('program', 'is', null)
+      if (error) throw error
+      return (data || [])
+        .map(r => ({ studentId: r.student_id as string, program: ((r.program as string) || '').trim() }))
+        .filter(r => r.program !== '')
+    },
+  })
+}
+
 export function useCreateECActivity() {
   const qc = useQueryClient()
   return useMutation({
