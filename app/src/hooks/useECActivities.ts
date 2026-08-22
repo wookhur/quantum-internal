@@ -79,19 +79,20 @@ export function useECActivities(studentId?: string) {
   })
 }
 
-/** 전체 학생의 EC 프로그램 신청 목록 (Student360 필터용). student_id + program 만 가볍게 조회. */
-export function useAllECPrograms() {
+/** 전체 학생의 EC 파트너사 신청 목록 (Student360 필터용). student_id + partner 만 가볍게 조회.
+ *  partner는 EC 추가 폼의 'Partner' 드롭다운과 동일한 회사명으로 정규화(canonicalPartnerName). */
+export function useAllECPartners() {
   return useQuery({
-    queryKey: ['ec_programs_all'],
+    queryKey: ['ec_partners_all'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('service_ec_activities')
-        .select('student_id, program')
-        .not('program', 'is', null)
+        .select('student_id, partner')
+        .not('partner', 'is', null)
       if (error) throw error
       return (data || [])
-        .map(r => ({ studentId: r.student_id as string, program: ((r.program as string) || '').trim() }))
-        .filter(r => r.program !== '')
+        .map(r => ({ studentId: r.student_id as string, partner: (canonicalPartnerName(r.partner as string) || '').trim() }))
+        .filter(r => r.partner !== '')
     },
   })
 }

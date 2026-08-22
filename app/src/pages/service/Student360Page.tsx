@@ -56,7 +56,7 @@ import {
 } from '@/hooks/usePortalTokens'
 import {
   useECActivities, useCreateECActivity, useUpdateECActivity, useDeleteECActivity,
-  useAllECPrograms,
+  useAllECPartners,
   type ECActivity,
 } from '@/hooks/useECActivities'
 import {
@@ -229,7 +229,7 @@ export function Student360Page() {
   const [consultantFilter, setConsultantFilter] = useState('')
   const [essayEditorFilter, setEssayEditorFilter] = useState('all')
   const [gradeFilter, setGradeFilter] = useState('all')
-  const [ecProgramFilter, setEcProgramFilter] = useState('all')
+  const [ecPartnerFilter, setEcPartnerFilter] = useState('all')
   const [showArchive, setShowArchive] = useState(false)
   const [pausedOnly, setPausedOnly] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('student'))
@@ -305,21 +305,21 @@ export function Student360Page() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
   }, [students])
 
-  // EC 프로그램 필터: 전체 학생의 신청 프로그램 → studentId별 집합 + 옵션 목록
-  const { data: ecPrograms = [] } = useAllECPrograms()
-  const ecProgramsByStudent = useMemo(() => {
+  // EC 파트너 필터: 전체 학생의 신청 파트너사 → studentId별 집합 + 옵션 목록 (EC 추가의 Partner 목록과 동일)
+  const { data: ecPartners = [] } = useAllECPartners()
+  const ecPartnersByStudent = useMemo(() => {
     const m = new Map<string, Set<string>>()
-    for (const r of ecPrograms) {
+    for (const r of ecPartners) {
       if (!m.has(r.studentId)) m.set(r.studentId, new Set())
-      m.get(r.studentId)!.add(r.program)
+      m.get(r.studentId)!.add(r.partner)
     }
     return m
-  }, [ecPrograms])
-  const ecProgramOptions = useMemo(() => {
+  }, [ecPartners])
+  const ecPartnerOptions = useMemo(() => {
     const set = new Set<string>()
-    for (const r of ecPrograms) set.add(r.program)
+    for (const r of ecPartners) set.add(r.partner)
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [ecPrograms])
+  }, [ecPartners])
 
   const filterName = consultantFilter ? consultantName(consultantFilter) : ''
 
@@ -335,7 +335,7 @@ export function Student360Page() {
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
       if (essayEditorFilter !== 'all' && (s.essayEditor || '') !== essayEditorFilter) return false
       if (gradeFilter !== 'all' && gradeBucket(s.grade) !== gradeFilter) return false
-      if (ecProgramFilter !== 'all' && !(ecProgramsByStudent.get(s.id)?.has(ecProgramFilter))) return false
+      if (ecPartnerFilter !== 'all' && !(ecPartnersByStudent.get(s.id)?.has(ecPartnerFilter))) return false
       if (!q) return true
       return (
         s.name.toLowerCase().includes(q) ||
@@ -344,7 +344,7 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     })
-  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, ecProgramFilter, ecProgramsByStudent, pausedOnly, mentorStudentIds])
+  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, ecPartnerFilter, ecPartnersByStudent, pausedOnly, mentorStudentIds])
   const archiveCount = useMemo(() => baseFiltered.filter(s => isArchivedStatus(s.status)).length, [baseFiltered])
   const activeCount = baseFiltered.length - archiveCount
 
@@ -457,13 +457,13 @@ export function Student360Page() {
               {gradeOptions.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={ecProgramFilter} onValueChange={v => setEcProgramFilter(v ?? 'all')}>
+          <Select value={ecPartnerFilter} onValueChange={v => setEcPartnerFilter(v ?? 'all')}>
             <SelectTrigger className="w-full">
-              <span className="truncate">{ecProgramFilter === 'all' ? '전체 EC 프로그램' : ecProgramFilter}</span>
+              <span className="truncate">{ecPartnerFilter === 'all' ? '전체 EC 파트너' : ecPartnerFilter}</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">전체 EC 프로그램</SelectItem>
-              {ecProgramOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              <SelectItem value="all">전체 EC 파트너</SelectItem>
+              {ecPartnerOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
