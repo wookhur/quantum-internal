@@ -48,7 +48,6 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads, useDeleteLead } from '@/hooks/useLeads'
-import { LeadSeminarBadges } from '@/components/LeadSeminarBadges'
 import { MergeLeadDialog } from '@/components/MergeLeadDialog'
 import { leadLevelConfig } from '@/lib/leadLevels'
 import { resolveInstant } from '@/lib/leadLocation'
@@ -682,9 +681,6 @@ function LeadsTableView() {
                             </Badge>
                           ) : null
                         })()}
-                      </span>
-                      <span className="block mt-0.5">
-                        <LeadSeminarBadges lead={lead} compact max={2} />
                       </span>
                     </td>
                     <td className="hidden md:table-cell text-sm text-muted-foreground">
