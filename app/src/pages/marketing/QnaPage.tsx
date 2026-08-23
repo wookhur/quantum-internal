@@ -208,11 +208,17 @@ export function QnaPage() {
             <Card key={q.id} className="transition hover:border-primary/40">
               <CardContent className="p-4 sm:p-5">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <Badge className={STATUS_META[q.status].className}>{STATUS_META[q.status].label}</Badge>
+                  {/* 잠근 질문은 목록에 제목만 나가고 내용·답변은 가려진다.
+                      '공개'와 '잠금'을 나란히 붙이면 서로 반대말이라 어느 쪽인지
+                      읽히지 않는다. 잠근 글은 잠금 배지 하나로만 표시한다. */}
+                  {!(q.status === 'published' && q.isLocked) && (
+                    <Badge className={STATUS_META[q.status].className}>{STATUS_META[q.status].label}</Badge>
+                  )}
                   <Badge variant="outline">{q.category}</Badge>
                   {q.isLocked && (
-                    <Badge variant="outline" className="gap-1 border-rose-200 text-rose-700">
-                      <Lock className="h-3 w-3" /> 잠금
+                    <Badge className="gap-1 bg-rose-100 text-rose-800 hover:bg-rose-100">
+                      <Lock className="h-3 w-3" />
+                      {q.status === 'published' ? '잠금 · 비공개' : '잠금'}
                     </Badge>
                   )}
                   {q.residence === 'overseas' && (
