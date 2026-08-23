@@ -976,8 +976,7 @@ export function ColdCallView() {
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      {(lead.sourceChannel || '').includes('홈페이지') && (
-                        {(() => {
+                      {(lead.sourceChannel || '').includes('홈페이지') && (() => {
                           const b = homepageOriginBadge(lead.sourceChannel)
                           const cls = `block text-[10px] px-1.5 py-0.5 rounded-full font-medium mb-1 ${b?.className ?? 'bg-red-500 text-white'}`
                           return b?.label === 'Q&A' ? (
@@ -989,7 +988,6 @@ export function ColdCallView() {
                             <span className={cls}>{b?.label ?? '홈페이지'}</span>
                           )
                         })()}
-                      )}
                       {(() => {
                         const rb = reinquiryBadge(lead.sourceChannel, lead.memo)
                         if (!rb) return null
