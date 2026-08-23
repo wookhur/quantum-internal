@@ -1766,7 +1766,7 @@ export function FreelancerInvoicesPage(
         <h1 className="text-xl font-bold">{invoiceTitle}{isAccounting ? ' (재무)' : ''}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           {isAccounting
-            ? '제출된 인보이스를 확인·승인하고 엑셀로 다운로드합니다.'
+            ? '제출된 인보이스를 확인·승인하고 엑셀로 다운로드합니다. 본인 청구는 아래 「내 청구 대상」에서 발행합니다.'
             : (business
                 ? '엑셀 양식을 내려받아 작성한 뒤 업로드하여 인보이스를 제출합니다.'
                 : isIncentive ? '이 달 발생한 세일즈 인센티브로 정산 인보이스를 발행하세요.'
@@ -1774,6 +1774,26 @@ export function FreelancerInvoicesPage(
                 : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
         </p>
       </div>
+
+      {/* 재무 권한자가 컨설턴트를 겸하는 경우 — 재무 화면에서도 본인 청구를 바로 할 수 있게 한다.
+          권한이 붙는 순간 화면이 재무용으로 갈라져, 컨설턴트로서 청구할 자리가 사라졌었다.
+          청구할 것이 있을 때만 펼쳐 보여 재무 업무에 방해되지 않게 한다. */}
+      {isAccounting && !business && (
+        <details className="rounded-lg border bg-card" open={displayItems.length > 0}>
+          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold">
+            내 청구 대상 · {issueMonth}
+            {displayItems.length > 0 && (
+              <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                {displayItems.length}{isIncentive ? '건' : '명'}
+              </span>
+            )}
+            <span className="ml-2 font-normal text-muted-foreground">
+              — 컨설턴트로서 직접 인보이스를 발행합니다
+            </span>
+          </summary>
+          <div className="border-t p-4">{creationPanel}</div>
+        </details>
+      )}
 
       {isAccounting ? (
         isAuto ? (
