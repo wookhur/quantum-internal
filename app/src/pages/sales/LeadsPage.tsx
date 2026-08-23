@@ -703,7 +703,7 @@ function LeadsTableView() {
                           if (!rb) return null
                           const cls = `text-[10px] px-1.5 py-0.5 rounded-full font-medium ${rb.className}`
                           const tip = `다른 경로로 유입됐지만 홈페이지로 다시 문의한 리드 (${rb.date})`
-                          return rb.label === '홈페이지 Q&A' ? (
+                          return rb.kind === 'qna' ? (
                             <Link to={`/marketing/qna?lead=${lead.id}`} onClick={e => e.stopPropagation()}
                                   className={`${cls} hover:brightness-110`} title={`${tip} — 눌러서 질문 보기`}>
                               {rb.label}

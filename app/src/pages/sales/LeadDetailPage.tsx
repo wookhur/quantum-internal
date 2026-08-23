@@ -250,7 +250,7 @@ export function LeadDetailPage() {
       date: inq.date,
       category: 'activity',
       icon: <Globe className={`size-4 ${isQna ? 'text-violet-500' : 'text-blue-500'}`} />,
-      badge: isQna ? '홈페이지 Q&A' : t('leadDetail.homepageInquiry'),
+      badge: isQna ? '홈페이지 Q&A' : t('leadDetail.homepageInquiry'),  // 타임라인은 시점 기록이라 '재문의' 대신 창구 이름을 쓴다
       badgeColor: isQna ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700',
       title: isQna ? '홈페이지 질문' : t('leadDetail.homepageInquiry'),
       description: inq.content || undefined,
