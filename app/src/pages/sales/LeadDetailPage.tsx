@@ -1,5 +1,5 @@
 import { useParams, Link, useLocation } from 'react-router-dom'
-import { parseHomepageInquiries, hasHomepageReinquiry, isHomepageOrigin } from '@/lib/homepageInquiry'
+import { parseHomepageInquiries, hasHomepageReinquiry, homepageOriginBadge } from '@/lib/homepageInquiry'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -383,9 +383,15 @@ export function LeadDetailPage() {
 
         {/* 현지시각/시차 (전화·거주지 기반) + 세미나 참석 이력 (최신순) */}
         <LeadLocalTime lead={lead} />
-        {isHomepageOrigin(lead.sourceChannel) && (
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500 text-white font-medium">홈페이지</span>
-        )}
+        {(() => {
+          const b = homepageOriginBadge(lead.sourceChannel)
+          return b ? (
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${b.className}`}
+                  title={lead.sourceChannel || undefined}>
+              {b.label}
+            </span>
+          ) : null
+        })()}
         {hasHomepageReinquiry(lead.sourceChannel, lead.memo) && (
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500 text-white font-medium"
                 title="다른 경로로 유입됐지만 홈페이지로 추가 문의한 리드">

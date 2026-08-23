@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { hasHomepageReinquiry, latestInquiryDate, parseHomepageInquiries } from '@/lib/homepageInquiry'
+import { homepageOriginBadge, hasHomepageReinquiry, latestInquiryDate, parseHomepageInquiries } from '@/lib/homepageInquiry'
 import { useT } from '@/i18n/LanguageContext'
 import { Link, useLocation } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -638,9 +638,15 @@ function LeadsTableView() {
                     <td>
                       <div className="flex items-center gap-1 flex-wrap">
                         <StagePill stage={lead.pipelineStage} />
-                        {(lead.sourceChannel || '').includes('홈페이지') && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500 text-white font-medium">홈페이지</span>
-                        )}
+                        {(() => {
+                          const b = homepageOriginBadge(lead.sourceChannel)
+                          return b ? (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${b.className}`}
+                                  title={lead.sourceChannel || undefined}>
+                              {b.label}
+                            </span>
+                          ) : null
+                        })()}
                         {hasHomepageReinquiry(lead.sourceChannel, lead.memo) && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500 text-white font-medium" title="다른 경로로 유입됐지만 홈페이지로 추가 문의한 리드">홈페이지 재문의</span>
                         )}

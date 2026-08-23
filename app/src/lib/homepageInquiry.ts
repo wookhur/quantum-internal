@@ -48,6 +48,34 @@ export function isHomepageOrigin(sourceChannel?: string | null): boolean {
 }
 
 /**
+ * 홈페이지에서 들어왔다면 어느 창구인지.
+ * 상담신청은 바로 통화로 이어지고, Q&A 는 먼저 답변을 써야 하는 리드라
+ * 응대 순서가 다르다. 목록에서 한눈에 갈라 보이도록 나눈다.
+ *
+ *   intake-lead → '홈페이지 상담신청'
+ *   intake-qna  → '홈페이지 질문'
+ */
+export type HomepageOriginKind = 'consult' | 'qna' | 'other'
+
+export function homepageOriginKind(sourceChannel?: string | null): HomepageOriginKind | null {
+  const c = sourceChannel || ''
+  if (!c.includes('홈페이지')) return null
+  if (c.includes('질문')) return 'qna'
+  if (c.includes('상담')) return 'consult'
+  return 'other'
+}
+
+/** 배지에 쓸 문구와 색 */
+export function homepageOriginBadge(sourceChannel?: string | null): { label: string; className: string } | null {
+  switch (homepageOriginKind(sourceChannel)) {
+    case 'consult': return { label: '상담신청', className: 'bg-red-500 text-white' }
+    case 'qna':     return { label: 'Q&A',     className: 'bg-violet-500 text-white' }
+    case 'other':   return { label: '홈페이지', className: 'bg-red-500 text-white' }
+    default:        return null
+  }
+}
+
+/**
  * 다른 경로로 들어왔지만 홈페이지로 추가 문의한 리드.
  * 최초 유입이 홈페이지면 이미 빨간 배지가 붙으므로 중복 표시하지 않는다.
  */
