@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -41,7 +41,11 @@ export function QnaPage() {
   const remove = useDeleteQna()
   const resetPin = useResetQnaPin()
 
-  const [tab, setTab] = useState<QnaStatus | 'all'>('pending')
+  // 리드 목록에서 '이 리드의 질문 보기' 로 들어오면 그 리드의 질문만 추린다
+  const [params, setParams] = useSearchParams()
+  const leadFilter = params.get('lead')
+
+  const [tab, setTab] = useState<QnaStatus | 'all'>(leadFilter ? 'all' : 'pending')
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<QnaQuestion | null>(null)
   const [newPin, setNewPin] = useState('')
@@ -57,9 +61,10 @@ export function QnaPage() {
   const shown = useMemo(() => {
     const kw = search.trim().toLowerCase()
     return questions
+      .filter(q => !leadFilter || q.leadId === leadFilter)
       .filter(q => tab === 'all' || q.status === tab)
       .filter(q => !kw || [q.title, q.body, q.askerName, q.answer ?? ''].some(v => v.toLowerCase().includes(kw)))
-  }, [questions, tab, search])
+  }, [questions, tab, search, leadFilter])
 
   function open(q: QnaQuestion) {
     setEditing(q)
@@ -152,6 +157,15 @@ export function QnaPage() {
           </Card>
         )
       })()}
+
+      {leadFilter && (
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-2.5 text-sm">
+          <span>이 리드가 남긴 질문만 보고 있습니다.</span>
+          <Button variant="outline" size="sm" onClick={() => { params.delete('lead'); setParams(params) }}>
+            전체 질문 보기
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         {([

@@ -385,12 +385,16 @@ export function LeadDetailPage() {
         <LeadLocalTime lead={lead} />
         {(() => {
           const b = homepageOriginBadge(lead.sourceChannel)
-          return b ? (
-            <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${b.className}`}
-                  title={lead.sourceChannel || undefined}>
+          if (!b) return null
+          const cls = `text-[11px] px-2 py-0.5 rounded-full font-medium ${b.className}`
+          return b.label === 'Q&A' ? (
+            <Link to={`/marketing/qna?lead=${lead.id}`} className={`${cls} hover:brightness-110`}
+                  title="이 리드가 남긴 질문 보기">
               {b.label}
-            </span>
-          ) : null
+            </Link>
+          ) : (
+            <span className={cls} title={lead.sourceChannel || undefined}>{b.label}</span>
+          )
         })()}
         {hasHomepageReinquiry(lead.sourceChannel, lead.memo) && (
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500 text-white font-medium"

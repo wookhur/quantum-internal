@@ -684,21 +684,33 @@ function LeadsTableView() {
                         <StagePill stage={lead.pipelineStage} />
                         {(() => {
                           const b = homepageOriginBadge(lead.sourceChannel)
-                          return b ? (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${b.className}`}
-                                  title={lead.sourceChannel || undefined}>
+                          if (!b) return null
+                          const isQna = b.label === 'Q&A'
+                          const cls = `text-[10px] px-1.5 py-0.5 rounded-full font-medium ${b.className}`
+                          // Q&A 로 들어온 리드는 배지를 눌러 그 질문으로 바로 갈 수 있게 한다.
+                          // 무엇을 물었는지 보고 전화해야 대화가 이어진다.
+                          return isQna ? (
+                            <Link to={`/marketing/qna?lead=${lead.id}`} onClick={e => e.stopPropagation()}
+                                  className={`${cls} hover:brightness-110`} title="이 리드가 남긴 질문 보기">
                               {b.label}
-                            </span>
-                          ) : null
+                            </Link>
+                          ) : (
+                            <span className={cls} title={lead.sourceChannel || undefined}>{b.label}</span>
+                          )
                         })()}
                         {(() => {
                           const rb = reinquiryBadge(lead.sourceChannel, lead.memo)
-                          return rb ? (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${rb.className}`}
-                                  title={`다른 경로로 유입됐지만 홈페이지로 다시 문의한 리드 (${rb.date})`}>
+                          if (!rb) return null
+                          const cls = `text-[10px] px-1.5 py-0.5 rounded-full font-medium ${rb.className}`
+                          const tip = `다른 경로로 유입됐지만 홈페이지로 다시 문의한 리드 (${rb.date})`
+                          return rb.label === '홈페이지 Q&A' ? (
+                            <Link to={`/marketing/qna?lead=${lead.id}`} onClick={e => e.stopPropagation()}
+                                  className={`${cls} hover:brightness-110`} title={`${tip} — 눌러서 질문 보기`}>
                               {rb.label}
-                            </span>
-                          ) : null
+                            </Link>
+                          ) : (
+                            <span className={cls} title={tip}>{rb.label}</span>
+                          )
                         })()}
                       </div>
                     </td>

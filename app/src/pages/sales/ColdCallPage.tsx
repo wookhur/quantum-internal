@@ -977,18 +977,33 @@ export function ColdCallView() {
                     </div>
                     <div className="text-right shrink-0">
                       {(lead.sourceChannel || '').includes('홈페이지') && (
-                        <span className={`block text-[10px] px-1.5 py-0.5 rounded-full font-medium mb-1 ${homepageOriginBadge(lead.sourceChannel)?.className ?? 'bg-red-500 text-white'}`}>
-                          {homepageOriginBadge(lead.sourceChannel)?.label ?? '홈페이지'}
-                        </span>
+                        {(() => {
+                          const b = homepageOriginBadge(lead.sourceChannel)
+                          const cls = `block text-[10px] px-1.5 py-0.5 rounded-full font-medium mb-1 ${b?.className ?? 'bg-red-500 text-white'}`
+                          return b?.label === 'Q&A' ? (
+                            <Link to={`/marketing/qna?lead=${lead.id}`} onClick={e => e.stopPropagation()}
+                                  className={`${cls} hover:brightness-110`} title="이 리드가 남긴 질문 보기">
+                              {b.label}
+                            </Link>
+                          ) : (
+                            <span className={cls}>{b?.label ?? '홈페이지'}</span>
+                          )
+                        })()}
                       )}
                       {(() => {
                         const rb = reinquiryBadge(lead.sourceChannel, lead.memo)
-                        return rb ? (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${rb.className}`}
-                                title={`다른 경로로 유입됐지만 홈페이지로 다시 문의한 리드 (${rb.date})`}>
+                        if (!rb) return null
+                        const cls = `text-[10px] px-1.5 py-0.5 rounded-full font-medium ${rb.className}`
+                        const tip = `다른 경로로 유입됐지만 홈페이지로 다시 문의한 리드 (${rb.date})`
+                        // 전화를 걸기 직전 화면이다. 무엇을 물었는지 보고 걸어야 대화가 이어진다.
+                        return rb.label === '홈페이지 Q&A' ? (
+                          <Link to={`/marketing/qna?lead=${lead.id}`} onClick={e => e.stopPropagation()}
+                                className={`${cls} hover:brightness-110`} title={`${tip} — 눌러서 질문 보기`}>
                             {rb.label}
-                          </span>
-                        ) : null
+                          </Link>
+                        ) : (
+                          <span className={cls} title={tip}>{rb.label}</span>
+                        )
                       })()}
                       {(() => {
                         const b = coldStageBadge(lead.pipelineStage, oneOnOneLeadIds.has(lead.id), t)
