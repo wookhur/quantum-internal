@@ -1196,6 +1196,7 @@ export function FreelancerInvoicesPage(
   const { data: previewProfiles = [] } = useProfiles()
   const isManager = isAccounting || user?.role === 'admin'
   const [previewName, setPreviewName] = useState<string>('')
+  const [myPanelOpen, setMyPanelOpen] = useState(true)
   const effectiveName = isManager && previewName ? previewName : (user?.name || '')
   const previewNameOptions = useMemo(() => {
     const names = new Set<string>()
@@ -1779,20 +1780,29 @@ export function FreelancerInvoicesPage(
           권한이 붙는 순간 화면이 재무용으로 갈라져, 컨설턴트로서 청구할 자리가 사라졌었다.
           청구할 것이 있을 때만 펼쳐 보여 재무 업무에 방해되지 않게 한다. */}
       {isAccounting && !business && (
-        <details className="rounded-lg border bg-card" open={displayItems.length > 0}>
-          <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold">
-            내 청구 대상 · {issueMonth}
-            {displayItems.length > 0 && (
-              <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-                {displayItems.length}{isIncentive ? '건' : '명'}
-              </span>
-            )}
-            <span className="ml-2 font-normal text-muted-foreground">
-              — 컨설턴트로서 직접 인보이스를 발행합니다
+        <div className="rounded-lg border bg-card">
+          {/* details 의 open 속성을 값으로 묶으면 다른 필터를 만질 때마다 React 가
+              열림 상태를 되돌려 버린다. 사용자가 접고 펴는 것을 그대로 두려면
+              상태로 직접 잡아야 한다. */}
+          <button
+            type="button"
+            onClick={() => setMyPanelOpen(v => !v)}
+            className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold hover:bg-muted/40"
+          >
+            <span className="text-muted-foreground">{myPanelOpen ? '▼' : '▶'}</span>
+            <span>내 청구 대상 · {issueMonth}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+              displayItems.length > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {displayItems.length}{isIncentive ? '건' : '명'}
             </span>
-          </summary>
-          <div className="border-t p-4">{creationPanel}</div>
-        </details>
+            {/* 어느 이름으로 찾고 있는지 보여 준다 — 0명일 때 원인이 이름 매칭인지 바로 알 수 있다 */}
+            <span className="font-normal text-muted-foreground">
+              — {myName || '(이름 미설정)'} 기준
+            </span>
+          </button>
+          {myPanelOpen && <div className="border-t p-4">{creationPanel}</div>}
+        </div>
       )}
 
       {isAccounting ? (
