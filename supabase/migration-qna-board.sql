@@ -43,6 +43,11 @@ create table if not exists public.qna_questions (
   user_agent    text
 );
 
+-- 컬럼을 손대기 전에 뷰부터 내린다.
+-- 먼저 만든 뷰가 옛 컬럼(is_private)을 붙잡고 있으면 컬럼을 지울 수 없다.
+-- 뷰는 이 파일 아래쪽에서 새 구조로 다시 만든다.
+drop view if exists public.qna_public;
+
 -- 잠금 + 상담 폼과 같은 수집 항목 (이미 만든 뒤에도 안전하게 추가된다)
 alter table public.qna_questions add column if not exists is_locked     boolean not null default false;
 alter table public.qna_questions add column if not exists student_name  text;
