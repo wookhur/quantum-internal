@@ -165,6 +165,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/marketing/events', labelKey: 'nav.eventManagement', module: 'marketing', hidden: true },
   { path: '/marketing/videos', labelKey: 'nav.videoContent', module: 'marketing', hidden: true },
   { path: '/marketing/seminars', labelKey: 'nav.seminars', module: 'marketing' },
+  { path: '/marketing/qna', labelKey: 'nav.homepageQna', module: 'marketing' },
   // ── Service ──
   { path: '/service/dashboard', labelKey: 'nav.serviceDashboard', module: 'service' },
   { path: '/service/student-360', labelKey: 'nav.student360', module: 'service' },

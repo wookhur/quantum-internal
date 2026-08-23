@@ -62,6 +62,7 @@ import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
 import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
 import { ArchivePage } from '@/pages/common/ArchivePage'
 import { SeminarsPage } from '@/pages/marketing/SeminarsPage'
+import { QnaPage } from '@/pages/marketing/QnaPage'
 import { SeminarRegisterPage } from '@/pages/public/SeminarRegisterPage'
 import { ConsultRegisterPage } from '@/pages/public/ConsultRegisterPage'
 import { SeminarStripPage } from '@/pages/public/SeminarStripPage'
@@ -114,6 +115,7 @@ export default function App() {
                 <Route path="/marketing/events" element={<Navigate to="/calendar" replace />} />
                 <Route path="/marketing/videos" element={<VideoProjectsPage />} />
                 <Route path="/marketing/seminars" element={<SeminarsPage />} />
+                <Route path="/marketing/qna" element={<QnaPage />} />
 
                 <Route path="/consulting/clients" element={<ContractsPage />} />
                 <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />
