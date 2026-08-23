@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/PhoneInput'
+import { parsePhone, isPhoneComplete } from '@/lib/phone'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2, CheckCircle2 } from 'lucide-react'
 import { useSubmitConsultation } from '@/hooks/useConsultation'
@@ -16,14 +18,6 @@ const SOURCE_OPTIONS = [
   '인스타그램', '네이버 블로그/카페', '카카오톡 채널', '지인 소개',
   '구글/네이버 검색', '유튜브', '문자/DM', '기타',
 ]
-
-/** 국내 휴대폰: 숫자만 남기고 010-0000-0000 형식으로 하이픈 삽입 */
-function formatDomesticPhone(v: string): string {
-  const d = v.replace(/\D/g, '').slice(0, 11)
-  if (d.length > 7) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`
-  if (d.length > 3) return `${d.slice(0, 3)}-${d.slice(3)}`
-  return d
-}
 
 export function ConsultRegisterPage() {
   const submitMut = useSubmitConsultation()
@@ -41,11 +35,7 @@ export function ConsultRegisterPage() {
     interest: '',
     source: '',
     memo: '',
-    residence: 'domestic' as 'domestic' | 'overseas',
-    domPhone: '',
-    overCC: '',
-    overAC: '',
-    overNum: '',
+    phone: '',            // 국기 드롭다운 + 번호가 합쳐진 최종 문자열
     overCountry: '',
   })
   const set = (patch: Partial<typeof form>) => setForm(f => ({ ...f, ...patch }))
@@ -67,11 +57,9 @@ export function ConsultRegisterPage() {
     return () => { ro.disconnect(); window.removeEventListener('load', post) }
   }, [])
 
-  const isDom = form.residence === 'domestic'
-  const domDigits = form.domPhone.replace(/\D/g, '')
-  const phoneOk = isDom
-    ? domDigits.length === 11 && domDigits.startsWith('010')
-    : !!form.overCC.trim() && !!form.overNum.trim()
+  const phoneParts = parsePhone(form.phone)
+  const isDom = phoneParts.iso === 'KR'
+  const phoneOk = isPhoneComplete(phoneParts.iso, phoneParts.number)
   const canSubmit =
     !!form.parentName.trim() && !!form.studentName.trim() && !!form.email.trim() &&
     !!form.grade && phoneOk && privacyAgreed
@@ -80,9 +68,7 @@ export function ConsultRegisterPage() {
     e.preventDefault()
     if (!canSubmit) return
 
-    const combinedPhone = isDom
-      ? formatDomesticPhone(form.domPhone)
-      : [form.overCC.trim(), form.overAC.trim(), form.overNum.trim()].filter(Boolean).join(' ')
+    const combinedPhone = form.phone.trim()
 
     // 거주 국가/경로는 메모에 함께 남겨 유실 방지
     const extra: string[] = []
@@ -184,70 +170,25 @@ export function ConsultRegisterPage() {
               <div className="space-y-3">
                 <p className="text-sm font-medium text-gray-700 border-b pb-1">연락처</p>
                 <div>
-                  <Label>거주 구분 *</Label>
-                  <div className="flex gap-2 mt-1">
-                    {([['domestic', '🇰🇷 국내거주'], ['overseas', '🌏 해외거주']] as const).map(([v, label]) => (
-                      <label
-                        key={v}
-                        className={`flex-1 flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 cursor-pointer text-sm transition ${
-                          form.residence === v ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        <input type="radio" name="residence" className="size-4 accent-indigo-600" checked={form.residence === v} onChange={() => set({ residence: v })} />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
+                  <Label>연락처 *</Label>
+                  <PhoneInput
+                    value={form.phone}
+                    onChange={v => set({ phone: v })}
+                    required
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    국가를 고르고 번호를 입력해주세요. 한국은 숫자만 넣으면 010-0000-0000 형식으로 정리됩니다.
+                  </p>
                 </div>
 
-                {isDom ? (
+                {!isDom && (
                   <div>
-                    <Label>휴대폰 번호 *</Label>
-                    <Input
-                      value={form.domPhone}
-                      onChange={e => set({ domPhone: formatDomesticPhone(e.target.value) })}
-                      placeholder="010-0000-0000"
-                      inputMode="numeric"
-                      maxLength={13}
-                      required
-                    />
-                    <p className="text-xs text-gray-400 mt-1">숫자만 입력하면 010-0000-0000 형식으로 자동 정리됩니다.</p>
+                    <Label>거주 국가</Label>
+                    <Input value={form.overCountry} onChange={e => set({ overCountry: e.target.value })} placeholder="미국 / 캐나다 등" />
                   </div>
-                ) : (
-                  <>
-                    <div className="flex gap-2">
-                      <div className="w-24">
-                        <Label>국가번호 *</Label>
-                        <Input
-                          value={form.overCC}
-                          onChange={e => set({ overCC: e.target.value })}
-                          placeholder="예: +1"
-                          aria-invalid={!form.overCC.trim()}
-                          className={!form.overCC.trim() ? 'border-red-400 focus-visible:ring-red-400' : undefined}
-                        />
-                      </div>
-                      <div className="w-24">
-                        <Label>지역번호</Label>
-                        <Input value={form.overAC} onChange={e => set({ overAC: e.target.value })} placeholder="778" />
-                      </div>
-                      <div className="flex-1">
-                        <Label>전화번호 *</Label>
-                        <Input value={form.overNum} onChange={e => set({ overNum: e.target.value })} placeholder="3453383" />
-                      </div>
-                    </div>
-                    {(!form.overCC.trim() || !form.overNum.trim()) && (
-                      <p className="text-xs text-red-500">
-                        {!form.overCC.trim()
-                          ? '국가번호를 직접 입력해주세요. (미국·캐나다 +1, 영국 +44, 한국 +82)'
-                          : '전화번호를 입력해주세요.'}
-                      </p>
-                    )}
-                    <div>
-                      <Label>거주 국가</Label>
-                      <Input value={form.overCountry} onChange={e => set({ overCountry: e.target.value })} placeholder="미국 / 캐나다 등" />
-                    </div>
-                  </>
                 )}
+
                 <div>
                   <Label>거주 지역 (도시)</Label>
                   <Input value={form.regionGeo} onChange={e => set({ regionGeo: e.target.value })} placeholder="예: 서울 강남 / Vancouver" />
@@ -294,7 +235,7 @@ export function ConsultRegisterPage() {
 
               <Button type="submit" className="w-full" disabled={submitMut.isPending || !canSubmit}>
                 {submitMut.isPending && <Loader2 className="size-4 animate-spin mr-2" />}
-                {!phoneOk ? (isDom ? '휴대폰 번호를 확인해주세요' : (!form.overCC.trim() ? '국가번호를 입력해주세요' : '전화번호를 확인해주세요')) : '상담 신청하기'}
+                {!phoneOk ? '전화번호를 확인해주세요' : '상담 신청하기'}
               </Button>
               {submitMut.isError && (
                 <p className="text-sm text-red-500 text-center">

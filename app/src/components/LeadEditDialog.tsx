@@ -5,6 +5,7 @@ import { useUpdateLead } from '@/hooks/useLeads'
 import { useT } from '@/i18n/LanguageContext'
 import { PIPELINE_STAGES, SOURCE_CHANNELS, INTEREST_AREAS, REGIONS, GRADES } from '@/types'
 import type { Lead, PipelineStage } from '@/types'
+import { PhoneInput } from '@/components/PhoneInput'
 
 const PRIMARY = '#0073EA'
 
@@ -138,7 +139,10 @@ export default function LeadEditDialog({ open, onClose, lead }: LeadEditDialogPr
 
           {/* Row: Phone + Email */}
           <div className="grid grid-cols-2 gap-3">
-            <Field label={t('leadEdit.phone') + ' *'} value={form.phone} onChange={v => handleChange('phone', v)} />
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-gray-700">{t('leadEdit.phone') + ' *'}</label>
+              <PhoneInput value={form.phone} onChange={v => handleChange('phone', v)} />
+            </div>
             <Field label={t('leadEdit.email')} value={form.email} onChange={v => handleChange('email', v)} />
           </div>
 

@@ -6,6 +6,7 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PhoneInput } from '@/components/PhoneInput'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -821,10 +822,9 @@ function LeadsTableView() {
                 <Label className="text-xs font-medium">
                   {t('leads.phone')} <span className="text-destructive">*</span>
                 </Label>
-                <Input
+                <PhoneInput
                   value={form.phone}
-                  onChange={(e) => updateForm('phone', e.target.value)}
-                  placeholder="010-0000-0000"
+                  onChange={(v) => updateForm('phone', v)}
                 />
               </div>
               <div className="space-y-1.5">

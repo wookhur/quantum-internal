@@ -14,6 +14,7 @@ import {
 import { Loader2, Plus, Pencil, Trash2, Lock, Users, GraduationCap } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
+import { PhoneInput } from '@/components/PhoneInput'
 import {
   useMentors, useUpsertMentor, useDeleteMentor,
   MAJOR_TIERS, majorTierLabel, majorTierAmount, COACHING_MONTHLY,
@@ -267,7 +268,7 @@ function MentorDialog({ mentor, defaultType, canEdit, onClose }: { mentor: Mento
             </div>
             <div className="space-y-1">
               <Label className="text-xs">전화번호</Label>
-              <Input value={f.phone} onChange={e => set('phone', e.target.value)} placeholder="010-1234-5678" />
+              <PhoneInput value={f.phone} onChange={v => set('phone', v)} />
             </div>
           </div>
           <div className="space-y-1">

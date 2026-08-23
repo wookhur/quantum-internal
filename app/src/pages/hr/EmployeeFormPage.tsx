@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Loader2, CheckCircle2, XCircle, Globe } from 'lucide-react'
 import { useEmployeeInfoByToken, useUpsertEmployeeInfo, useMarkTokenUsed, type EmployeeInfo } from '@/hooks/useEmployeeInfo'
 import { useLanguage } from '@/i18n/LanguageContext'
+import { PhoneInput } from '@/components/PhoneInput'
 
 // ---------------------------------------------------------------------------
 // Component
@@ -145,11 +146,9 @@ export function EmployeeFormPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">{t('employeeForm.phone')}</Label>
-                <Input
-                  placeholder={t('employeeForm.phonePh')}
+                <PhoneInput
                   value={form.phone || ''}
-                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                  className="h-9"
+                  onChange={v => setForm(f => ({ ...f, phone: v }))}
                 />
               </div>
               <div className="space-y-1.5">
@@ -270,11 +269,9 @@ export function EmployeeFormPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">{t('employeeForm.ecPhone')}</Label>
-                <Input
-                  placeholder={t('employeeForm.ecPhonePh')}
+                <PhoneInput
                   value={form.emergencyContactPhone || ''}
-                  onChange={e => setForm(f => ({ ...f, emergencyContactPhone: e.target.value }))}
-                  className="h-9"
+                  onChange={v => setForm(f => ({ ...f, emergencyContactPhone: v }))}
                 />
               </div>
               <div className="space-y-1.5">
