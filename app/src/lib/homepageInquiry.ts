@@ -108,18 +108,18 @@ export function homepageOriginKind(sourceChannel?: string | null): HomepageOrigi
 /**
  * 배지에 쓸 문구와 색.
  *
- * 처음부터 홈페이지로 들어온 리드와, 다른 경로로 들어왔다가 나중에
- * 홈페이지로 다시 문의한 리드는 응대가 다르다. 한눈에 갈라 보이도록
- *   최초 유입 = 색을 채운 배지
- *   다시 문의 = 테두리만 있는 배지 (reinquiryBadge)
- * 로 모양을 다르게 쓴다. 색은 창구별로 같게 둬서(상담 빨강 · Q&A 보라)
- * 어느 창구인지도 색만 보고 알 수 있다.
+ * 처음부터 홈페이지로 들어왔든 나중에 다시 문의했든 배지는 같다 —
+ * 담당자에게 필요한 정보는 '홈페이지로 문의가 왔다' 와 '어느 창구냐' 이고,
+ * 최초냐 재문의냐는 리드일자 아래 ↻ 날짜로 이미 드러난다.
+ * 배지를 둘로 나눴더니 같은 뜻으로 읽혀 오히려 헷갈렸다.
+ *   홈페이지 상담  빨강
+ *   홈페이지 Q&A   보라
  */
 export function homepageOriginBadge(sourceChannel?: string | null): { label: string; className: string } | null {
   switch (homepageOriginKind(sourceChannel)) {
-    case 'consult': return { label: '상담신청', className: 'bg-red-500 text-white' }
-    case 'qna':     return { label: 'Q&A',     className: 'bg-violet-500 text-white' }
-    case 'other':   return { label: '홈페이지', className: 'bg-red-500 text-white' }
+    case 'consult': return { label: '홈페이지 상담', className: 'bg-red-500 text-white' }
+    case 'qna':     return { label: '홈페이지 Q&A', className: 'bg-violet-500 text-white' }
+    case 'other':   return { label: '홈페이지',     className: 'bg-red-500 text-white' }
     default:        return null
   }
 }
@@ -143,8 +143,8 @@ export function reinquiryBadge(
   if (!hasHomepageReinquiry(sourceChannel, memo)) return null
   const latest = parseHomepageInquiries(memo)[0]
   return latest.kind === 'qna'
-    ? { label: 'Q&A 재문의', className: 'border border-violet-400 text-violet-700 bg-violet-50', date: latest.date, kind: 'qna' }
-    : { label: '상담 재문의', className: 'border border-blue-400 text-blue-700 bg-blue-50', date: latest.date, kind: 'consult' }
+    ? { label: '홈페이지 Q&A', className: 'bg-violet-500 text-white', date: latest.date, kind: 'qna' }
+    : { label: '홈페이지 상담', className: 'bg-red-500 text-white', date: latest.date, kind: 'consult' }
 }
 
 /**
