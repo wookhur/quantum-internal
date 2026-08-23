@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Loader2, MessageSquare, Trash2, ExternalLink, Search, Lock, Eye, EyeOff, Globe } from 'lucide-react'
 import {
-  useQnaQuestions, useAnswerQna, useDeleteQna,
+  useQnaQuestions, useAnswerQna, useDeleteQna, useResetQnaPin,
   QNA_CATEGORIES, type QnaQuestion, type QnaStatus,
 } from '@/hooks/useQna'
 
@@ -38,10 +38,12 @@ export function QnaPage() {
   const { data: questions = [], isLoading } = useQnaQuestions()
   const answer = useAnswerQna()
   const remove = useDeleteQna()
+  const resetPin = useResetQnaPin()
 
   const [tab, setTab] = useState<QnaStatus | 'all'>('pending')
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<QnaQuestion | null>(null)
+  const [newPin, setNewPin] = useState('')
   const [draft, setDraft] = useState({ answer: '', title: '', body: '', category: '기타', isLocked: false })
 
   const counts = useMemo(() => ({
@@ -295,6 +297,39 @@ export function QnaPage() {
                   공개되는 글입니다. 실명·학교명처럼 질문자가 드러나는 부분은 다듬어 주세요.
                 </p>
               </div>
+
+              {editing.isLocked && (
+                <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                  <Label className="text-xs">잠금 비밀번호 재설정</Label>
+                  <p className="text-xs text-muted-foreground">
+                    비밀번호는 해시로만 저장돼 조회할 수 없습니다. 질문자가 잊었다고 연락해 오면
+                    여기서 새 번호를 정해 알려주세요.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      className="w-32"
+                      maxLength={4}
+                      inputMode="numeric"
+                      placeholder="숫자 4자리"
+                      value={newPin}
+                      onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!/^[0-9]{4}$/.test(newPin) || resetPin.isPending}
+                      onClick={async () => {
+                        await resetPin.mutateAsync({ id: editing.id, pin: newPin })
+                        setNewPin('')
+                        alert('비밀번호를 바꿨습니다. 질문자에게 새 번호를 알려주세요.')
+                      }}
+                    >
+                      재설정
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label>답변</Label>

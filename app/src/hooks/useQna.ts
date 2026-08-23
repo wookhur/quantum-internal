@@ -142,6 +142,22 @@ export function useAnswerQna() {
   })
 }
 
+/**
+ * 잠금 비밀번호 재설정.
+ * 비밀번호는 해시로만 저장돼 우리도 볼 수 없다. 질문자가 잊었다고 연락해 오면
+ * 새 번호를 정해 알려주는 방식으로 푼다.
+ */
+export function useResetQnaPin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: { id: string; pin: string }) => {
+      const { error } = await supabase.rpc('qna_set_lock_pin', { p_id: params.id, p_pin: params.pin })
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['qna-questions'] }),
+  })
+}
+
 export function useDeleteQna() {
   const qc = useQueryClient()
   return useMutation({

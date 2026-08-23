@@ -57,6 +57,7 @@ Deno.serve(async (req) => {
     const title = s(body.title)
     const question = s(body.question)
     const isLocked = body.isLocked === true || body.isLocked === 'true'
+    const lockPin = s(body.lockPin)
     const category = CATEGORIES.includes(s(body.category)) ? s(body.category) : '기타'
 
     if (!parentName) return json({ ok: false, error: '이름을 입력해 주세요.' }, 400)
@@ -65,6 +66,10 @@ Deno.serve(async (req) => {
     if (question.length < 10) return json({ ok: false, error: '질문을 조금 더 자세히 적어 주세요. (10자 이상)' }, 400)
     if (title.length > 120) return json({ ok: false, error: '제목이 너무 깁니다. (120자 이내)' }, 400)
     if (question.length > 3000) return json({ ok: false, error: '질문이 너무 깁니다. (3000자 이내)' }, 400)
+    // 잠근 질문은 나중에 본인이 열어봐야 하므로 비밀번호가 반드시 있어야 한다
+    if (isLocked && !/^[0-9]{4}$/.test(lockPin)) {
+      return json({ ok: false, error: '잠금 비밀번호를 숫자 4자리로 입력해 주세요.' }, 400)
+    }
 
     const admin = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -110,6 +115,15 @@ Deno.serve(async (req) => {
     if (insErr) return json({ ok: false, error: insErr.message }, 400)
 
     const questionId = (inserted as { id: string }).id
+
+    // 비밀번호는 원문을 저장하지 않는다 — DB 함수가 해시로 바꿔 넣는다
+    if (isLocked && lockPin) {
+      const { error: pinErr } = await admin.rpc('qna_set_lock_pin', { p_id: questionId, p_pin: lockPin })
+      if (pinErr) {
+        await admin.from('qna_questions').delete().eq('id', questionId)
+        return json({ ok: false, error: '잠금 비밀번호를 저장하지 못했습니다. 다시 시도해 주세요.' }, 400)
+      }
+    }
 
     // ── 리드 생성/병합 (intake-lead 와 같은 기준) ──
     const today = new Date().toISOString().slice(0, 10)
