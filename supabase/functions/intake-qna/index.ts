@@ -20,7 +20,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-const NOTIFY_NAME = '곽지수'                    // 없으면 role=sales_manager 전원
+// Q&A 답변은 김지현이 직접 단다. 상담 신청(intake-lead)은 그대로 세일즈로 간다.
+const NOTIFY_NAME = '김지현'                    // 없으면 role=sales_manager 전원
 const SOURCE_CHANNEL = '홈페이지 질문'
 const RATE_LIMIT = 3                            // 같은 연락처 · 1시간
 const CATEGORIES = ['원서·지원', '에세이', '활동·EC', '시험·성적', '유학 준비', '기타']
