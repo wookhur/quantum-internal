@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { homepageOriginBadge, hasHomepageReinquiry, latestInquiryDate, parseHomepageInquiries } from '@/lib/homepageInquiry'
+import { homepageOriginBadge, hasHomepageReinquiry, reinquiryBadge, homepageTouch, latestInquiryDate, parseHomepageInquiries } from '@/lib/homepageInquiry'
 import { useT } from '@/i18n/LanguageContext'
 import { Link, useLocation } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -204,6 +204,7 @@ function LeadsTableView() {
   const [stageFilter, setStageFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [assignedFilter, setAssignedFilter] = useState<string>('all')
+  const [homepageFilter, setHomepageFilter] = useState<'all' | 'any' | 'consult' | 'qna'>('all')
   const [residenceFilter, setResidenceFilter] = useState<string>('all')
   const [regionFilter, setRegionFilter] = useState<string>('all')
   const [gradeFilter, setGradeFilter] = useState<string>('all')
@@ -267,14 +268,37 @@ function LeadsTableView() {
   // 기존 고객이 홈페이지로 다시 문의하면 기존 리드에 병합되므로 유입일은 그대로다.
   // 그러면 목록 아래에 묻혀 "또 신청했다"는 사실을 놓치게 된다.
   // 유입일과 재문의일 중 최신값으로 다시 정렬해 신규 리드와 같이 위로 올린다.
+  // 홈페이지가 얼마나 일하고 있는지 보려면 '최초 유입이 홈페이지' 만으로는 부족하다.
+  // 다른 경로로 들어온 뒤 홈페이지로 다시 문의한 리드까지 함께 묶어 봐야 한다.
   const sortedLeads = useMemo(() => {
-    const filtered = residenceFilter === 'all'
+    let filtered = residenceFilter === 'all'
       ? allLeads
       : allLeads.filter((l) => countryBucket(l) === residenceFilter)
+    if (homepageFilter !== 'all') {
+      filtered = filtered.filter((l) => {
+        const t = homepageTouch(l.sourceChannel, l.memo)
+        if (!t.touched) return false
+        if (homepageFilter === 'any') return true
+        return t.kinds.includes(homepageFilter)
+      })
+    }
     return [...filtered].sort((a, b) =>
       latestInquiryDate(b.leadDate, b.memo).localeCompare(latestInquiryDate(a.leadDate, a.memo)),
     )
-  }, [allLeads, residenceFilter])
+  }, [allLeads, residenceFilter, homepageFilter])
+
+  // 홈페이지 유입 건수 — 필터 버튼에 함께 보여 운영 상태를 바로 알 수 있게
+  const homepageCounts = useMemo(() => {
+    let any = 0, consult = 0, qna = 0
+    for (const l of allLeads) {
+      const t = homepageTouch(l.sourceChannel, l.memo)
+      if (!t.touched) continue
+      any++
+      if (t.kinds.includes('consult')) consult++
+      if (t.kinds.includes('qna')) qna++
+    }
+    return { any, consult, qna }
+  }, [allLeads])
 
   // -- Client-side pagination
   const totalCount = sortedLeads.length
@@ -475,6 +499,27 @@ function LeadsTableView() {
             </SelectContent>
           </Select>
 
+          {/* 홈페이지 유입 필터 — 최초 유입이 홈페이지인 리드 + 나중에 홈페이지로 다시 문의한 리드 */}
+          <Select
+            value={homepageFilter}
+            onValueChange={(v) => { v && setHomepageFilter(v as typeof homepageFilter); resetPage() }}
+          >
+            <SelectTrigger className="w-[168px]" size="sm">
+              <span className="truncate">
+                {homepageFilter === 'all' ? '전체 (홈페이지 포함)'
+                  : homepageFilter === 'any' ? `홈페이지 전체 ${homepageCounts.any}`
+                  : homepageFilter === 'consult' ? `홈페이지 상담 ${homepageCounts.consult}`
+                  : `홈페이지 Q&A ${homepageCounts.qna}`}
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 (홈페이지 포함)</SelectItem>
+              <SelectItem value="any">홈페이지 전체 · {homepageCounts.any}건</SelectItem>
+              <SelectItem value="consult">홈페이지 상담신청 · {homepageCounts.consult}건</SelectItem>
+              <SelectItem value="qna">홈페이지 Q&amp;A · {homepageCounts.qna}건</SelectItem>
+            </SelectContent>
+          </Select>
+
           {/* Residence country filter (국내/미국/기타국가) */}
           <Select
             value={residenceFilter}
@@ -646,9 +691,15 @@ function LeadsTableView() {
                             </span>
                           ) : null
                         })()}
-                        {hasHomepageReinquiry(lead.sourceChannel, lead.memo) && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500 text-white font-medium" title="다른 경로로 유입됐지만 홈페이지로 추가 문의한 리드">홈페이지 재문의</span>
-                        )}
+                        {(() => {
+                          const rb = reinquiryBadge(lead.sourceChannel, lead.memo)
+                          return rb ? (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${rb.className}`}
+                                  title={`다른 경로로 유입됐지만 홈페이지로 다시 문의한 리드 (${rb.date})`}>
+                              {rb.label}
+                            </span>
+                          ) : null
+                        })()}
                       </div>
                     </td>
                     <td className="text-xs text-muted-foreground font-mono whitespace-nowrap">

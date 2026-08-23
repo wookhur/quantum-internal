@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { homepageOriginBadge, hasHomepageReinquiry, latestInquiryDate } from '@/lib/homepageInquiry'
+import { homepageOriginBadge, reinquiryBadge, latestInquiryDate } from '@/lib/homepageInquiry'
 import { useT } from '@/i18n/LanguageContext'
 import { resolveInstant, geocodePlace, formatLocalTime, isOverseasPhone } from '@/lib/leadLocation'
 import { useQuery } from '@tanstack/react-query'
@@ -981,9 +981,15 @@ export function ColdCallView() {
                           {homepageOriginBadge(lead.sourceChannel)?.label ?? '홈페이지'}
                         </span>
                       )}
-                      {hasHomepageReinquiry(lead.sourceChannel, lead.memo) && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500 text-white font-medium" title="다른 경로로 유입됐지만 홈페이지로 추가 문의한 리드">홈페이지 재문의</span>
-                      )}
+                      {(() => {
+                        const rb = reinquiryBadge(lead.sourceChannel, lead.memo)
+                        return rb ? (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${rb.className}`}
+                                title={`다른 경로로 유입됐지만 홈페이지로 다시 문의한 리드 (${rb.date})`}>
+                            {rb.label}
+                          </span>
+                        ) : null
+                      })()}
                       {(() => {
                         const b = coldStageBadge(lead.pipelineStage, oneOnOneLeadIds.has(lead.id), t)
                         return (

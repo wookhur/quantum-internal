@@ -14,32 +14,72 @@
  *  이 표시를 읽어 배지와 타임라인에 드러낸다. 과거 기록에도 그대로 적용된다.
  */
 
+export type HomepageInquiryKind = 'consult' | 'qna'
+
 export type HomepageInquiry = {
   /** YYYY-MM-DD */
   date: string
+  /** 어느 창구로 들어왔는지 */
+  kind: HomepageInquiryKind
   /** 표시 뒤에 이어지는 문의 내용 (없을 수 있음) */
   content: string
 }
 
-/** 메모에 남은 '[홈페이지 재문의 YYYY-MM-DD]' 표시를 모두 찾아 최신순으로 돌려준다. */
+/**
+ * 메모에 남은 홈페이지 문의 표시를 모두 찾아 최신순으로 돌려준다.
+ * 창구가 둘이라 표시 문구도 둘이다.
+ *   [홈페이지 재문의 2026-08-20]  ← 상담 신청 폼
+ *   [홈페이지 질문 2026-08-23]    ← Q&A 게시판
+ */
 export function parseHomepageInquiries(memo?: string | null): HomepageInquiry[] {
   if (!memo) return []
 
-  const marker = /\[홈페이지\s*재문의\s*(\d{4}-\d{2}-\d{2})\]/g
-  const hits: { date: string; start: number; end: number }[] = []
+  const marker = /\[홈페이지\s*(재문의|질문)\s*(\d{4}-\d{2}-\d{2})\]/g
+  const hits: { date: string; kind: HomepageInquiryKind; start: number; end: number }[] = []
   let m: RegExpExecArray | null
   while ((m = marker.exec(memo)) !== null) {
-    hits.push({ date: m[1], start: m.index, end: m.index + m[0].length })
+    hits.push({
+      date: m[2],
+      kind: m[1] === '질문' ? 'qna' : 'consult',
+      start: m.index,
+      end: m.index + m[0].length,
+    })
   }
   if (hits.length === 0) return []
 
   return hits
     .map((h, i) => ({
       date: h.date,
+      kind: h.kind,
       // 다음 표시 전까지가 이번 문의 내용
       content: memo.slice(h.end, i + 1 < hits.length ? hits[i + 1].start : undefined).trim(),
     }))
     .sort((a, b) => b.date.localeCompare(a.date))
+}
+
+/**
+ * 리드를 '홈페이지 유입' 으로 묶어 보기 위한 판정.
+ * 최초 유입이 홈페이지든, 나중에 홈페이지로 다시 문의했든 모두 포함한다.
+ * 유입채널만 보면 2026년 1월에 인스타로 들어온 학부모가 오늘 홈페이지로
+ * 문의해도 '인스타그램' 으로만 잡혀, 홈페이지가 얼마나 일하고 있는지 알 수 없다.
+ */
+export type HomepageTouch = { touched: boolean; kinds: HomepageInquiryKind[]; latest: string }
+
+export function homepageTouch(sourceChannel?: string | null, memo?: string | null): HomepageTouch {
+  const kinds = new Set<HomepageInquiryKind>()
+  const origin = homepageOriginKind(sourceChannel)
+  if (origin === 'consult') kinds.add('consult')
+  if (origin === 'qna') kinds.add('qna')
+  if (origin === 'other') kinds.add('consult')
+
+  const inquiries = parseHomepageInquiries(memo)
+  for (const i of inquiries) kinds.add(i.kind)
+
+  return {
+    touched: kinds.size > 0,
+    kinds: [...kinds],
+    latest: inquiries[0]?.date ?? '',
+  }
 }
 
 /** 최초 유입이 홈페이지인 리드 (기존 빨간 '홈페이지' 배지 조건) */
@@ -84,6 +124,18 @@ export function hasHomepageReinquiry(
   memo?: string | null,
 ): boolean {
   return !isHomepageOrigin(sourceChannel) && parseHomepageInquiries(memo).length > 0
+}
+
+/** 재문의 배지에 쓸 문구 — 어느 창구로 다시 왔는지까지 보인다 */
+export function reinquiryBadge(
+  sourceChannel?: string | null,
+  memo?: string | null,
+): { label: string; className: string; date: string } | null {
+  if (!hasHomepageReinquiry(sourceChannel, memo)) return null
+  const latest = parseHomepageInquiries(memo)[0]
+  return latest.kind === 'qna'
+    ? { label: '홈페이지 Q&A', className: 'bg-violet-500 text-white', date: latest.date }
+    : { label: '홈페이지 재문의', className: 'bg-blue-500 text-white', date: latest.date }
 }
 
 /**
