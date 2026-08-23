@@ -5,6 +5,9 @@
 //   · 담당자에게 종 알림
 //   · body.secret 로 무단 호출 방지 (LEAD_INTAKE_SECRET 재사용)
 //
+// 수집 항목은 사내 상담 신청 폼(/consult)과 같다. 해외 거주자가 많이 쓸 창구라
+// 거주 구분·국가·지역이 있어야 콜드콜에서 시차와 연락 가능한 시간을 알 수 있다.
+//
 // 회원가입 없이 누구나 쓰는 창구라 스팸 방지를 서버에서 한다.
 //   · 허니팟(사람 눈에 안 보이는 칸)이 채워져 있으면 봇
 //   · 같은 연락처로 1시간에 3건까지
@@ -40,16 +43,23 @@ Deno.serve(async (req) => {
     // 봇이 재시도하지 않도록 성공한 것처럼 응답한다.
     if (s(body.website) || s(body.hp)) return json({ ok: true, skipped: true })
 
-    const name = s(body.name)
+    const parentName = s(body.parentName) || s(body.name)
+    const studentName = s(body.studentName)
     const phone = s(body.phone)
     const email = s(body.email)
     const grade = s(body.grade)
+    const school = s(body.school)
+    const residence = s(body.residence) === 'overseas' ? 'overseas' : 'domestic'
+    const country = s(body.country)
+    const region = s(body.region)
+    const interestArea = s(body.interestArea)
+    const sourcePath = s(body.sourcePath)
     const title = s(body.title)
     const question = s(body.question)
-    const isPrivate = body.isPrivate === true || body.isPrivate === 'true'
+    const isLocked = body.isLocked === true || body.isLocked === 'true'
     const category = CATEGORIES.includes(s(body.category)) ? s(body.category) : '기타'
 
-    if (!name) return json({ ok: false, error: '이름을 입력해 주세요.' }, 400)
+    if (!parentName) return json({ ok: false, error: '이름을 입력해 주세요.' }, 400)
     if (!phone && !email) return json({ ok: false, error: '연락처나 이메일 중 하나는 남겨 주세요.' }, 400)
     if (!title) return json({ ok: false, error: '질문 제목을 입력해 주세요.' }, 400)
     if (question.length < 10) return json({ ok: false, error: '질문을 조금 더 자세히 적어 주세요. (10자 이상)' }, 400)
@@ -78,14 +88,21 @@ Deno.serve(async (req) => {
     const status = linkCount >= 2 ? 'hidden' : 'pending'
 
     const { data: inserted, error: insErr } = await admin.from('qna_questions').insert({
-      asker_name: name,
+      asker_name: parentName,
+      student_name: studentName || null,
       asker_phone: phone || null,
       asker_email: email || null,
       grade: grade || null,
+      school: school || null,
+      residence,
+      country: country || null,
+      region: region || null,
+      interest_area: interestArea || null,
+      source_path: sourcePath || null,
       category,
       title,
       body: question,
-      is_private: isPrivate,
+      is_locked: isLocked,
       status,
       source_ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
       user_agent: (req.headers.get('user-agent') || '').slice(0, 300) || null,
@@ -108,8 +125,13 @@ Deno.serve(async (req) => {
       leadId = (data || []).find((l: { phone?: string }) => (l.phone || '').replace(/\D/g, '').endsWith(last8))?.id ?? null
     }
 
+    // 콜드콜에 필요한 맥락은 메모로 남긴다 (leads 에 없는 항목들)
+    const extra: string[] = []
+    if (residence === 'overseas') extra.push(`해외거주${country ? ` · ${country}` : ''}`)
+    if (sourcePath) extra.push(`알게된 경로: ${sourcePath}`)
+    const memoLine = [`[홈페이지 질문 ${today}] ${title}`, ...extra].join('\n')
+
     const deduped = !!leadId
-    const memoLine = `[홈페이지 질문 ${today}] ${title}`
     if (leadId) {
       const { data: cur } = await admin.from('leads').select('memo').eq('id', leadId).single()
       const appended = [(cur?.memo || '').trim(), memoLine].filter(Boolean).join('\n')
@@ -117,10 +139,14 @@ Deno.serve(async (req) => {
     } else {
       const { data: newLead } = await admin.from('leads').insert({
         lead_date: today,
-        parent_name: name,
+        parent_name: parentName,
+        student_name: studentName || null,
         phone: phone || null,
         email: email || null,
+        current_school: school || null,
         grade: grade || null,
+        region: region || null,
+        interest_area: interestArea || null,
         source_channel: SOURCE_CHANNEL,
         memo: memoLine,
         pipeline_stage: 'new_lead',
@@ -140,13 +166,14 @@ Deno.serve(async (req) => {
         recipientIds = (byRole || []).map((p: { id: string }) => p.id)
       }
       if (recipientIds.length > 0) {
+        const where = residence === 'overseas' ? `해외${country ? `·${country}` : ''}` : '국내'
         await admin.from('user_notifications').insert(recipientIds.map(uid => ({
           user_id: uid,
           type: 'new_qna',
           title: '홈페이지 새 질문',
-          message: `${name} 님 — ${title.slice(0, 60)}`,
+          message: `${parentName} 님(${where}) — ${title.slice(0, 60)}`,
           link: '/marketing/qna',
-          metadata: { source: 'homepage', questionId, leadId, deduped, isPrivate },
+          metadata: { source: 'homepage', questionId, leadId, deduped, isLocked, residence },
           is_read: false,
         })))
       }

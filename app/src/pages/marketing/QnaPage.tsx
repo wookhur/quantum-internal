@@ -13,7 +13,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, MessageSquare, Trash2, ExternalLink, Search, Lock, Eye, EyeOff } from 'lucide-react'
+import { Loader2, MessageSquare, Trash2, ExternalLink, Search, Lock, Eye, EyeOff, Globe } from 'lucide-react'
 import {
   useQnaQuestions, useAnswerQna, useDeleteQna,
   QNA_CATEGORIES, type QnaQuestion, type QnaStatus,
@@ -42,7 +42,7 @@ export function QnaPage() {
   const [tab, setTab] = useState<QnaStatus | 'all'>('pending')
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<QnaQuestion | null>(null)
-  const [draft, setDraft] = useState({ answer: '', title: '', body: '', category: '기타', isPrivate: false })
+  const [draft, setDraft] = useState({ answer: '', title: '', body: '', category: '기타', isLocked: false })
 
   const counts = useMemo(() => ({
     pending: questions.filter(q => q.status === 'pending').length,
@@ -65,7 +65,7 @@ export function QnaPage() {
       title: q.title,
       body: q.body,
       category: q.category,
-      isPrivate: q.isPrivate,
+      isLocked: q.isLocked,
     })
   }
 
@@ -77,7 +77,7 @@ export function QnaPage() {
       title: draft.title,
       body: draft.body,
       category: draft.category,
-      isPrivate: draft.isPrivate,
+      isLocked: draft.isLocked,
       ...(publish ? { status: 'published' as QnaStatus } : {}),
     })
     setEditing(null)
@@ -90,7 +90,7 @@ export function QnaPage() {
           <h1 className="text-2xl font-bold">홈페이지 Q&amp;A</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             방문자가 홈페이지에서 남긴 질문입니다. 답변을 쓰고 <b>공개</b>로 바꾸면 홈페이지에 올라갑니다.
-            비공개 질문은 답변해도 홈페이지에 노출되지 않습니다.
+            <b>잠금</b>으로 표시된 질문은 목록에 제목만 보이고 내용·답변은 가려집니다.
           </p>
         </div>
         <a
@@ -146,9 +146,14 @@ export function QnaPage() {
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <Badge className={STATUS_META[q.status].className}>{STATUS_META[q.status].label}</Badge>
                   <Badge variant="outline">{q.category}</Badge>
-                  {q.isPrivate && (
+                  {q.isLocked && (
                     <Badge variant="outline" className="gap-1 border-rose-200 text-rose-700">
-                      <Lock className="h-3 w-3" /> 비공개
+                      <Lock className="h-3 w-3" /> 잠금
+                    </Badge>
+                  )}
+                  {q.residence === 'overseas' && (
+                    <Badge variant="outline" className="gap-1 border-sky-200 text-sky-700">
+                      <Globe className="h-3 w-3" /> 해외{q.country ? ` · ${q.country}` : ''}
                     </Badge>
                   )}
                   {q.grade && <span className="text-muted-foreground">{q.grade}</span>}
@@ -171,10 +176,14 @@ export function QnaPage() {
                 </button>
 
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>{q.askerName}</span>
+                  <span>{q.askerName}{q.studentName ? ` / ${q.studentName}` : ''}</span>
                   {q.askerPhone && <span>{q.askerPhone}</span>}
                   {q.askerEmail && <span>{q.askerEmail}</span>}
-                  {q.status === 'published' && <span>조회 {q.viewCount}</span>}
+                  {q.school && <span>{q.school}</span>}
+                  {q.region && <span>{q.region}</span>}
+                  {q.interestArea && <span>관심: {q.interestArea}</span>}
+                  {q.sourcePath && <span>경로: {q.sourcePath}</span>}
+                  {q.status === 'published' && !q.isLocked && <span>조회 {q.viewCount}</span>}
                 </div>
 
                 {q.answer && (
@@ -227,12 +236,24 @@ export function QnaPage() {
 
           {editing && (
             <div className="space-y-4">
-              <div className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
-                {editing.askerName}
-                {editing.grade && ` · ${editing.grade}`}
-                {editing.askerPhone && ` · ${editing.askerPhone}`}
-                {editing.askerEmail && ` · ${editing.askerEmail}`}
-                <span className="ml-1">· {fmt(editing.createdAt)}</span>
+              <div className="space-y-1 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+                <div>
+                  <b className="text-foreground">{editing.askerName}</b>
+                  {editing.studentName && ` / 학생 ${editing.studentName}`}
+                  {editing.grade && ` · ${editing.grade}`}
+                  {editing.school && ` · ${editing.school}`}
+                </div>
+                <div>
+                  {editing.residence === 'overseas' ? `해외거주${editing.country ? ` · ${editing.country}` : ''}` : '국내거주'}
+                  {editing.region && ` · ${editing.region}`}
+                  {editing.askerPhone && ` · ${editing.askerPhone}`}
+                  {editing.askerEmail && ` · ${editing.askerEmail}`}
+                </div>
+                <div>
+                  {editing.interestArea && `관심 ${editing.interestArea} · `}
+                  {editing.sourcePath && `경로 ${editing.sourcePath} · `}
+                  {fmt(editing.createdAt)}
+                </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -250,10 +271,10 @@ export function QnaPage() {
                     <input
                       type="checkbox"
                       className="size-4"
-                      checked={draft.isPrivate}
-                      onChange={e => setDraft(d => ({ ...d, isPrivate: e.target.checked }))}
+                      checked={draft.isLocked}
+                      onChange={e => setDraft(d => ({ ...d, isLocked: e.target.checked }))}
                     />
-                    비공개 — 홈페이지에 올리지 않음
+                    잠금 — 제목만 노출, 내용·답변 가림
                   </label>
                 </div>
               </div>
@@ -295,8 +316,7 @@ export function QnaPage() {
               </Button>
               <Button
                 onClick={() => save(true)}
-                disabled={answer.isPending || !draft.answer.trim() || draft.isPrivate}
-                title={draft.isPrivate ? '비공개 질문은 홈페이지에 올릴 수 없습니다' : undefined}
+                disabled={answer.isPending || !draft.answer.trim()}
               >
                 {answer.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                 답변 저장 + 공개

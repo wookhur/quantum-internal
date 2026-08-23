@@ -21,7 +21,14 @@ export interface QnaQuestion {
   category: string
   title: string
   body: string
-  isPrivate: boolean
+  studentName: string | null
+  school: string | null
+  residence: 'domestic' | 'overseas'
+  country: string | null
+  region: string | null
+  interestArea: string | null
+  sourcePath: string | null
+  isLocked: boolean
   status: QnaStatus
   answer: string | null
   answeredAt: string | null
@@ -46,7 +53,14 @@ function toQuestion(r: Row): QnaQuestion {
     category: (r.category as string) ?? '기타',
     title: (r.title as string) ?? '',
     body: (r.body as string) ?? '',
-    isPrivate: !!r.is_private,
+    studentName: (r.student_name as string) ?? null,
+    school: (r.school as string) ?? null,
+    residence: (r.residence as 'domestic' | 'overseas') ?? 'domestic',
+    country: (r.country as string) ?? null,
+    region: (r.region as string) ?? null,
+    interestArea: (r.interest_area as string) ?? null,
+    sourcePath: (r.source_path as string) ?? null,
+    isLocked: !!r.is_locked,
     status: (r.status as QnaStatus) ?? 'pending',
     answer: (r.answer as string) ?? null,
     answeredAt: (r.answered_at as string) ?? null,
@@ -95,7 +109,7 @@ export function useAnswerQna() {
       id: string
       answer?: string
       status?: QnaStatus
-      isPrivate?: boolean
+      isLocked?: boolean
       category?: string
       /** 공개 전 다듬기 — 원문의 실명·학교명이 그대로 노출되지 않도록 */
       title?: string
@@ -107,7 +121,7 @@ export function useAnswerQna() {
         updates.answered_by = user?.id ?? null
       }
       if (params.status !== undefined) updates.status = params.status
-      if (params.isPrivate !== undefined) updates.is_private = params.isPrivate
+      if (params.isLocked !== undefined) updates.is_locked = params.isLocked
       if (params.category !== undefined) updates.category = params.category
       if (params.title !== undefined) updates.title = params.title
       if (params.body !== undefined) updates.body = params.body
