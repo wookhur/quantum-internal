@@ -13,7 +13,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, MessageSquare, Trash2, ExternalLink, Search, Lock, Eye, EyeOff, Globe } from 'lucide-react'
+import { Loader2, MessageSquare, Trash2, ExternalLink, Search, Lock, Eye, EyeOff, Globe, ThumbsUp, ThumbsDown } from 'lucide-react'
 import {
   useQnaQuestions, useAnswerQna, useDeleteQna, useResetQnaPin, useQnaFeedback,
   QNA_CATEGORIES, type QnaQuestion, type QnaStatus,
@@ -108,27 +108,46 @@ export function QnaPage() {
 
       {(() => {
         const all = [...(feedback?.values() ?? [])]
-        const t = all.reduce((a, f) => a + f.total, 0)
-        const h = all.reduce((a, f) => a + f.helpful, 0)
-        const at = all.reduce((a, f) => a + f.askerTotal, 0)
-        const ah = all.reduce((a, f) => a + f.askerHelpful, 0)
-        if (!t) return null
+        const up = all.reduce((a, f) => a + f.helpful, 0)
+        const down = all.reduce((a, f) => a + (f.total - f.helpful), 0)
+        const rated = all.filter(f => f.total > 0).length          // 평가가 달린 글 수
+        const askerUp = all.reduce((a, f) => a + f.askerHelpful, 0)
+        const askerDown = all.reduce((a, f) => a + (f.askerTotal - f.askerHelpful), 0)
+        const published = questions.filter(q => q.status === 'published' && q.answer).length
+        if (up + down === 0) return null
         return (
           <Card>
-            <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-2 p-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">답변 평가 </span>
-                <b className="text-lg">{Math.round((h / t) * 100)}%</b>
-                <span className="text-muted-foreground"> 도움됨 · {t}건</span>
+            <CardContent className="flex flex-wrap items-center gap-x-7 gap-y-3 p-4">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-sm text-muted-foreground">공개 글</span>
+                <b className="text-lg tabular-nums">{published}</b>
+                <span className="text-sm text-muted-foreground">건 중 {rated}건에 평가</span>
               </div>
-              {at > 0 && (
-                <div className="text-muted-foreground">
-                  이 중 질문자 본인 <b className="text-foreground">{Math.round((ah / at) * 100)}%</b> · {at}건
+              <div className="flex items-center gap-4">
+                <span className="flex items-center gap-1.5 text-emerald-700">
+                  <ThumbsUp className="h-4 w-4" />
+                  <b className="text-lg tabular-nums">{up}</b>
+                  <span className="text-sm">도움됨</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <ThumbsDown className="h-4 w-4" />
+                  <b className="text-lg tabular-nums">{down}</b>
+                  <span className="text-sm">도움안됨</span>
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  ({Math.round((up / (up + down)) * 100)}%)
+                </span>
+              </div>
+              {(askerUp + askerDown) > 0 && (
+                <div className="flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-sm text-amber-800">
+                  <span className="font-semibold">질문자 본인</span>
+                  <span className="tabular-nums">{askerUp}</span>
+                  <ThumbsUp className="h-3.5 w-3.5" />
+                  <span className="tabular-nums">{askerDown}</span>
+                  <ThumbsDown className="h-3.5 w-3.5" />
                 </div>
               )}
-              <span className="text-xs text-muted-foreground">
-                홈페이지에는 아직 표시되지 않습니다
-              </span>
+              <span className="ml-auto text-xs text-muted-foreground">홈페이지에는 아직 표시되지 않습니다</span>
             </CardContent>
           </Card>
         )
@@ -202,7 +221,40 @@ export function QnaPage() {
                   onClick={() => canEdit && open(q)}
                   disabled={!canEdit}
                 >
-                  <div className="font-semibold leading-snug">{q.title}</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold leading-snug">{q.title}</span>
+                    {(() => {
+                      const f = feedback?.get(q.id)
+                      if (!f || !f.total) return null
+                      const down = f.total - f.helpful
+                      return (
+                        <span className="flex shrink-0 items-center gap-2 rounded-full border px-2 py-0.5 text-xs">
+                          <span className="flex items-center gap-1 text-emerald-700">
+                            <ThumbsUp className="h-3 w-3" /><span className="tabular-nums">{f.helpful}</span>
+                          </span>
+                          <span className="flex items-center gap-1 text-muted-foreground">
+                            <ThumbsDown className="h-3 w-3" /><span className="tabular-nums">{down}</span>
+                          </span>
+                        </span>
+                      )
+                    })()}
+                    {(() => {
+                      const f = feedback?.get(q.id)
+                      if (!f || !f.askerTotal) return null
+                      const ok = f.askerHelpful > 0
+                      return (
+                        <span
+                          className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            ok ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
+                          }`}
+                          title="질문자 본인이 비밀번호로 열고 남긴 평가"
+                        >
+                          {ok ? <ThumbsUp className="h-3 w-3" /> : <ThumbsDown className="h-3 w-3" />}
+                          질문자
+                        </span>
+                      )
+                    })()}
+                  </div>
                   <p className="mt-1.5 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{q.body}</p>
                 </button>
 
@@ -215,16 +267,6 @@ export function QnaPage() {
                   {q.interestArea && <span>관심: {q.interestArea}</span>}
                   {q.sourcePath && <span>경로: {q.sourcePath}</span>}
                   {q.status === 'published' && !q.isLocked && <span>조회 {q.viewCount}</span>}
-                  {(() => {
-                    const f = feedback?.get(q.id)
-                    if (!f || !f.total) return null
-                    return (
-                      <span title={f.askerTotal ? `질문자 본인 ${f.askerHelpful}/${f.askerTotal}` : undefined}>
-                        평가 {f.helpful}/{f.total} 도움됨
-                        {f.askerTotal > 0 && ' · 본인평가 있음'}
-                      </span>
-                    )
-                  })()}
                 </div>
 
                 {q.answer && (
