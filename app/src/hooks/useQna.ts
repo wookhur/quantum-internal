@@ -101,6 +101,49 @@ export function useQnaPendingCount() {
   })
 }
 
+/**
+ * 답변 평가 집계.
+ * 글을 읽은 누구나 누를 수 있게 열어 두었다 — 그래야 표본이 쌓인다.
+ * 다만 비밀번호로 열고 누른 질문자(asker)와 그냥 읽고 누른 사람(reader)은
+ * 재는 것이 다르므로 나눠서 본다.
+ *   asker  → 상담 품질 (내 질문에 대한 답이 좋았나)
+ *   전체   → 콘텐츠 품질 (이 글이 도움이 되었나)
+ */
+export interface QnaFeedback {
+  questionId: string
+  total: number
+  helpful: number
+  askerTotal: number
+  askerHelpful: number
+}
+
+export function useQnaFeedback() {
+  return useQuery({
+    queryKey: ['qna-feedback'],
+    queryFn: async (): Promise<Map<string, QnaFeedback>> => {
+      const { data, error } = await supabase
+        .from('qna_feedback_summary')
+        .select('question_id, total, helpful, asker_total, asker_helpful')
+      if (error) {
+        console.warn('qna_feedback_summary not available:', error.message)
+        return new Map()
+      }
+      const m = new Map<string, QnaFeedback>()
+      for (const r of (data || []) as Row[]) {
+        m.set(r.question_id as string, {
+          questionId: r.question_id as string,
+          total: Number(r.total) || 0,
+          helpful: Number(r.helpful) || 0,
+          askerTotal: Number(r.asker_total) || 0,
+          askerHelpful: Number(r.asker_helpful) || 0,
+        })
+      }
+      return m
+    },
+    staleTime: 60_000,
+  })
+}
+
 export function useAnswerQna() {
   const qc = useQueryClient()
   const { user } = useAuth()

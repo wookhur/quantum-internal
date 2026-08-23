@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Loader2, MessageSquare, Trash2, ExternalLink, Search, Lock, Eye, EyeOff, Globe } from 'lucide-react'
 import {
-  useQnaQuestions, useAnswerQna, useDeleteQna, useResetQnaPin,
+  useQnaQuestions, useAnswerQna, useDeleteQna, useResetQnaPin, useQnaFeedback,
   QNA_CATEGORIES, type QnaQuestion, type QnaStatus,
 } from '@/hooks/useQna'
 
@@ -36,6 +36,7 @@ function fmt(d: string | null) {
 export function QnaPage() {
   const canEdit = useCanEdit('/marketing/qna')
   const { data: questions = [], isLoading } = useQnaQuestions()
+  const { data: feedback } = useQnaFeedback()
   const answer = useAnswerQna()
   const remove = useDeleteQna()
   const resetPin = useResetQnaPin()
@@ -104,6 +105,34 @@ export function QnaPage() {
           홈페이지에서 보기 <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
         </a>
       </div>
+
+      {(() => {
+        const all = [...(feedback?.values() ?? [])]
+        const t = all.reduce((a, f) => a + f.total, 0)
+        const h = all.reduce((a, f) => a + f.helpful, 0)
+        const at = all.reduce((a, f) => a + f.askerTotal, 0)
+        const ah = all.reduce((a, f) => a + f.askerHelpful, 0)
+        if (!t) return null
+        return (
+          <Card>
+            <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-2 p-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">답변 평가 </span>
+                <b className="text-lg">{Math.round((h / t) * 100)}%</b>
+                <span className="text-muted-foreground"> 도움됨 · {t}건</span>
+              </div>
+              {at > 0 && (
+                <div className="text-muted-foreground">
+                  이 중 질문자 본인 <b className="text-foreground">{Math.round((ah / at) * 100)}%</b> · {at}건
+                </div>
+              )}
+              <span className="text-xs text-muted-foreground">
+                홈페이지에는 아직 표시되지 않습니다
+              </span>
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       <div className="flex flex-wrap items-center gap-2">
         {([
@@ -186,6 +215,16 @@ export function QnaPage() {
                   {q.interestArea && <span>관심: {q.interestArea}</span>}
                   {q.sourcePath && <span>경로: {q.sourcePath}</span>}
                   {q.status === 'published' && !q.isLocked && <span>조회 {q.viewCount}</span>}
+                  {(() => {
+                    const f = feedback?.get(q.id)
+                    if (!f || !f.total) return null
+                    return (
+                      <span title={f.askerTotal ? `질문자 본인 ${f.askerHelpful}/${f.askerTotal}` : undefined}>
+                        평가 {f.helpful}/{f.total} 도움됨
+                        {f.askerTotal > 0 && ' · 본인평가 있음'}
+                      </span>
+                    )
+                  })()}
                 </div>
 
                 {q.answer && (
