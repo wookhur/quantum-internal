@@ -239,17 +239,20 @@ export function LeadDetailPage() {
     }
   }
 
-  // 홈페이지 상담신청 — 메모에 남은 '[홈페이지 재문의 YYYY-MM-DD]' 표시를 타임라인에 드러낸다.
-  // 병합될 때 유입 채널은 최초 값을 지키므로, 재문의 사실은 이 표시로만 남아 있었다.
+  // 홈페이지 문의 — 메모에 남은 표시를 타임라인에 드러낸다.
+  // 병합될 때 유입 채널은 최초 값을 지키므로, 다시 문의한 사실은 이 표시로만 남아 있었다.
+  // 창구가 둘이라 구분해서 보여야 한다 — 상담신청은 바로 통화로 이어지고,
+  // Q&A 는 답변을 먼저 써야 다음 단계가 열린다.
   for (const inq of parseHomepageInquiries(lead.memo)) {
+    const isQna = inq.kind === 'qna'
     timeline.push({
-      id: `hp-${inq.date}`,
+      id: `hp-${inq.kind}-${inq.date}`,
       date: inq.date,
       category: 'activity',
-      icon: <Globe className="size-4 text-blue-500" />,
-      badge: t('leadDetail.homepageInquiry'),
-      badgeColor: 'bg-blue-100 text-blue-700',
-      title: t('leadDetail.homepageInquiry'),
+      icon: <Globe className={`size-4 ${isQna ? 'text-violet-500' : 'text-blue-500'}`} />,
+      badge: isQna ? '홈페이지 Q&A' : t('leadDetail.homepageInquiry'),
+      badgeColor: isQna ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700',
+      title: isQna ? '홈페이지 질문' : t('leadDetail.homepageInquiry'),
       description: inq.content || undefined,
     })
   }
