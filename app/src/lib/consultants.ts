@@ -14,6 +14,8 @@ const LEGACY_CONSULTANTS = [
   { id: 'yeonse', name: '남연서' },
   { id: 'danny', name: 'Danny' },
   { id: 'liz', name: '유리즈' },
+  // 현재 컨설턴트(프로필 생성 전 수동 추가). 나중에 실제 프로필이 생기면 이름 중복으로 자동 통합됨.
+  { id: 'aidan', name: 'Aidan Lee' },
 ] as const
 
 /** Kept for backward compatibility with non-React consumers. */
@@ -46,6 +48,10 @@ export function consultantNameKey(name?: string): string {
   return canonicalConsultantName(name).toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
+/** 드롭다운(컨설턴트 목록)에서 제외할 은퇴/퇴사 컨설턴트 — 이름 기준.
+ *  이름 해석(useConsultantName)에는 남겨 과거 배정 데이터는 계속 이름이 보이게 한다. */
+const RETIRED_CONSULTANT_KEYS = new Set(['유리즈', 'Liz', 'Liz Yu'].map(consultantNameKey))
+
 export function useConsultantPool(): { id: string; name: string }[] {
   const { data: profiles = [] } = useProfiles()
   return useMemo(() => {
@@ -59,7 +65,7 @@ export function useConsultantPool(): { id: string; name: string }[] {
     const seen = new Set<string>()
     const merged: { id: string; name: string }[] = []
     for (const c of [...live, ...legacy]) {
-      if (seen.has(c.name)) continue
+      if (seen.has(c.name) || RETIRED_CONSULTANT_KEYS.has(consultantNameKey(c.name))) continue
       seen.add(c.name)
       merged.push(c)
     }
