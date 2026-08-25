@@ -1510,9 +1510,12 @@ export function ContractDetailPage() {
                             </Button>
                           )}
                         </div>
-                        {baseInstallments.length > 0 && (
+                        {(() => {
+                          // 수금된 회차만 표시 (미입금 회차는 입금 시 나타남)
+                          const paidBaseInstallments = baseInstallments.filter((i) => i.paidAmount > 0)
+                          return paidBaseInstallments.length > 0 ? (
                           <div className="space-y-1.5">
-                            {baseInstallments.map((inst) => {
+                            {paidBaseInstallments.map((inst) => {
                               const isPaid = inst.paidAmount > 0
                               const amountExVat = Math.round(inst.paidAmount / 1.1)
                               // 회차별 요율: 오버라이드 있으면 그 값, 없으면 기본 %
@@ -1550,7 +1553,10 @@ export function ContractDetailPage() {
                               )
                             })}
                           </div>
-                        )}
+                          ) : (
+                            <div className="text-xs text-muted-foreground px-1 py-0.5">수금된 회차가 없습니다 (입금 시 표시)</div>
+                          )
+                        })()}
                       </div>
                     )
                   })}
