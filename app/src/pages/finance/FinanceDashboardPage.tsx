@@ -24,7 +24,6 @@ import { useAllClawbacks, useSetClawbackStatus, useDeleteClawback } from '@/hook
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { canAccessAccount } from '@/hooks/useProfiles'
-import { IncentiveRateScheduleCard } from '@/pages/finance/IncentiveRateScheduleCard'
 import { AlertTriangle } from 'lucide-react'
 
 
@@ -452,9 +451,6 @@ export function FinanceDashboardPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* 인센티브 요율 변경(적용 시작월) — 재무·관리자 */}
-      <IncentiveRateScheduleCard />
 
       {/* 인센티브 지급 원장 (월 선택 · 계약·서비스 인센티브) */}
       <IncentivePayoutLedger

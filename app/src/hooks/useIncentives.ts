@@ -70,7 +70,7 @@ export const INCENTIVE_TYPES = {
   total_revenue_1_5: { labelKey: 'incentive.totalRevenue1_5', defaultPct: 1.5 },
   external_fee: { labelKey: 'incentive.externalFee', defaultPct: 0 },
   service_team: { labelKey: 'incentive.serviceTeam', defaultPct: 1 },
-  service_director: { labelKey: 'incentive.serviceDirector', defaultPct: 1 },
+  service_director: { labelKey: 'incentive.serviceDirector', defaultPct: 2 },
 } as const
 
 export type IncentiveType = keyof typeof INCENTIVE_TYPES
@@ -206,28 +206,6 @@ export function useIncentivesByInstallment() {
 
       if (!installments || installments.length === 0) return []
 
-      // 2b. 요율 이력(effective-dated): (대상자,유형)별 '언제부터 몇 %'.
-      //     스케줄이 있는 (사람,유형)만 회차 월(수금월/미수는 예정일월)에 유효한 요율로 override.
-      //     스케줄 미존재 또는 회차 월이 최초 스케줄보다 이르면 → 계약별 % 그대로(폴백).
-      //     (테이블 미생성 시 error → 조용히 무시하여 기존 계산 유지)
-      const { data: schedRows } = await supabase
-        .from('incentive_rate_schedule')
-        .select('profile_id, incentive_type, rate, effective_from')
-      const rateSchedule = new Map<string, Array<{ from: string; rate: number }>>()
-      for (const s of schedRows || []) {
-        const k = `${s.profile_id as string}|${s.incentive_type as string}`
-        if (!rateSchedule.has(k)) rateSchedule.set(k, [])
-        rateSchedule.get(k)!.push({ from: String(s.effective_from), rate: Number(s.rate) })
-      }
-      for (const arr of rateSchedule.values()) arr.sort((a, b) => b.from.localeCompare(a.from)) // 최신 우선
-      const effectiveRate = (profileId: string | null, incentiveType: string, monthYm: string, fallback: number): number => {
-        if (!profileId || !monthYm) return fallback
-        const arr = rateSchedule.get(`${profileId}|${incentiveType}`)
-        if (!arr) return fallback
-        for (const e of arr) if (e.from <= monthYm) return e.rate
-        return fallback
-      }
-
       // 3. Build per-installment map: contractId -> installments[]
       const instMap = new Map<string, Array<{
         id: string
@@ -292,10 +270,7 @@ export function useIncentivesByInstallment() {
           // 입금 완료: paid_amount 기준, 미입금: 예정 금액(amount) 기준
           const baseAmount = isPaid ? pi.paidAmount : pi.amount
           const amountExVat = Math.round(baseAmount / 1.1)
-          // 회차 귀속월: 입금완료=수금월, 미수=예정일월. 그 월에 유효한 요율을 적용(없으면 계약별 % 유지).
-          const instMonth = ((isPaid ? pi.paidDate : pi.dueDate) || '').slice(0, 7)
-          const effPct = effectiveRate(inc.profileId, inc.incentiveType, instMonth, inc.percentage)
-          const incentiveAmount = Math.round(amountExVat * effPct / 100)
+          const incentiveAmount = Math.round(amountExVat * inc.percentage / 100)
           results.push({
             key: `${inc.id}-${pi.id}`,
             incentiveId: inc.id,
@@ -313,7 +288,7 @@ export function useIncentivesByInstallment() {
             profileId: inc.profileId,
             displayName: inc.displayName,
             incentiveType: inc.incentiveType,
-            percentage: effPct,
+            percentage: inc.percentage,
             incentiveAmount,
             isPaid,
             dueDate: pi.dueDate,
