@@ -31,9 +31,6 @@ import { useCreateClawbacks, useAllClawbacks, useSetClawbackStatus, useDeleteCla
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
 
-// 회차별 인센티브 요율 선택 옵션 (0 ~ 10%, 0.5 단위)
-const INCENTIVE_RATE_STEPS = Array.from({ length: 21 }, (_, i) => i * 0.5)
-
 function todayLocalISO() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -1522,14 +1519,16 @@ export function ContractDetailPage() {
                               const rowPct = inc.installmentOverrides?.[inst.id] ?? inc.percentage
                               const overridden = inc.installmentOverrides?.[inst.id] != null
                               const instInc = isPaid ? Math.round(amountExVat * rowPct / 100) : 0
+                              // 현재 요율과 일치하는 유형(강조용) — 없으면 미선택
+                              const curTypeKey = (Object.keys(INCENTIVE_TYPES) as IncentiveType[]).find((k) => INCENTIVE_TYPES[k].defaultPct === rowPct) || ''
                               const rateControl = (canEdit && !isCancelled) ? (
-                                <Select value={String(rowPct)} onValueChange={(v) => saveIncentiveRate(inc, inst.id, Number(v))}>
-                                  <SelectTrigger className={`h-6 w-[70px] text-xs ${overridden ? 'border-orange-300 text-orange-700 font-semibold' : ''}`}>
+                                <Select value={curTypeKey} onValueChange={(v) => { if (v) saveIncentiveRate(inc, inst.id, INCENTIVE_TYPES[v as IncentiveType].defaultPct) }}>
+                                  <SelectTrigger className={`h-6 w-[76px] text-xs ${overridden ? 'border-orange-300 text-orange-700 font-semibold' : ''}`}>
                                     <span>{rowPct}%</span>
                                   </SelectTrigger>
-                                  <SelectContent>
-                                    {INCENTIVE_RATE_STEPS.map((r) => (
-                                      <SelectItem key={r} value={String(r)}>{r}%{r === inc.percentage ? ' (기본)' : ''}</SelectItem>
+                                  <SelectContent className="min-w-[240px]">
+                                    {(Object.entries(INCENTIVE_TYPES) as [IncentiveType, typeof INCENTIVE_TYPES[IncentiveType]][]).map(([key, cfg]) => (
+                                      <SelectItem key={key} value={key}>{t(cfg.labelKey)} ({cfg.defaultPct}%)</SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
