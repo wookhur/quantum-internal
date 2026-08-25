@@ -20,7 +20,7 @@ import { useContract, useCancelContract, useUpdateContract, useDeleteContract } 
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
 import { useRevenueSharesByInstallments, useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare } from '@/hooks/useRevenueShares'
 import { useECActivities } from '@/hooks/useECActivities'
-import { useContractIncentives, useCreateIncentive, useDeleteIncentive, useIncentiveRecipients, useCreateIncentiveRecipient, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
+import { useContractIncentives, useCreateIncentive, useDeleteIncentive, useSetIncentiveOverrides, useIncentiveRecipients, useCreateIncentiveRecipient, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
@@ -30,6 +30,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCreateClawbacks, useAllClawbacks, useSetClawbackStatus, useDeleteClawback, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
+
+// 회차별 인센티브 요율 선택 옵션 (0 ~ 10%, 0.5 단위)
+const INCENTIVE_RATE_STEPS = Array.from({ length: 21 }, (_, i) => i * 0.5)
 
 function todayLocalISO() {
   const d = new Date()
@@ -792,6 +795,14 @@ export function ContractDetailPage() {
   }
   const createIncentive = useCreateIncentive()
   const deleteIncentive = useDeleteIncentive()
+  const setIncentiveOverrides = useSetIncentiveOverrides()
+  // 회차별 요율 저장: 기본 %와 같으면 맵에서 제거(깔끔), 다르면 지정.
+  const saveIncentiveRate = (inc: { id: string; percentage: number; installmentOverrides: Record<string, number> | null }, installmentId: string, newPct: number) => {
+    const next = { ...(inc.installmentOverrides || {}) }
+    if (newPct === inc.percentage) delete next[installmentId]
+    else next[installmentId] = newPct
+    setIncentiveOverrides.mutate({ incentiveId: inc.id, overrides: next })
+  }
   const { data: allProfiles = [] } = useProfiles()
   const { data: incentiveRecipients = [] } = useIncentiveRecipients()
   const createRecipient = useCreateIncentiveRecipient()
@@ -1488,7 +1499,12 @@ export function ContractDetailPage() {
                               {t(typeCfg.labelKey)}
                             </Badge>
                             <span className="text-sm font-medium">{inc.displayName}</span>
-                            <span className="text-xs text-muted-foreground">{inc.percentage}%</span>
+                            <span className="text-xs text-muted-foreground">
+                              기본 {inc.percentage}%
+                              {inc.installmentOverrides && Object.keys(inc.installmentOverrides).length > 0 && (
+                                <span className="ml-1 text-orange-600">· 회차별 조정</span>
+                              )}
+                            </span>
                           </div>
                           {canEdit && !isCancelled && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-500"
@@ -1502,12 +1518,31 @@ export function ContractDetailPage() {
                             {baseInstallments.map((inst) => {
                               const isPaid = inst.paidAmount > 0
                               const amountExVat = Math.round(inst.paidAmount / 1.1)
-                              const instInc = isPaid ? Math.round(amountExVat * inc.percentage / 100) : 0
+                              // 회차별 요율: 오버라이드 있으면 그 값, 없으면 기본 %
+                              const rowPct = inc.installmentOverrides?.[inst.id] ?? inc.percentage
+                              const overridden = inc.installmentOverrides?.[inst.id] != null
+                              const instInc = isPaid ? Math.round(amountExVat * rowPct / 100) : 0
+                              const rateControl = (canEdit && !isCancelled) ? (
+                                <Select value={String(rowPct)} onValueChange={(v) => saveIncentiveRate(inc, inst.id, Number(v))}>
+                                  <SelectTrigger className={`h-6 w-[70px] text-xs ${overridden ? 'border-orange-300 text-orange-700 font-semibold' : ''}`}>
+                                    <span>{rowPct}%</span>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {INCENTIVE_RATE_STEPS.map((r) => (
+                                      <SelectItem key={r} value={String(r)}>{r}%{r === inc.percentage ? ' (기본)' : ''}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <span className={`text-xs ${overridden ? 'text-orange-700 font-semibold' : 'text-muted-foreground'}`}>{rowPct}%</span>
+                              )
                               return (
                                 <div key={inst.id} className={`flex items-center justify-between px-3 py-1.5 rounded text-sm ${isPaid ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
                                   <div className="flex items-center gap-2">
                                     <span className={`font-medium ${isPaid ? 'text-green-800' : 'text-gray-400'}`}>{inst.label}</span>
-                                    {isPaid && <span className="text-xs text-green-600">({formatCurrency(amountExVat)} × {inc.percentage}%)</span>}
+                                    {isPaid && <span className="text-xs text-green-600">({formatCurrency(amountExVat)} ×</span>}
+                                    {rateControl}
+                                    {isPaid && <span className="text-xs text-green-600">)</span>}
                                   </div>
                                   <span className={`font-mono font-semibold ${isPaid ? 'text-green-700' : 'text-gray-400'}`}>
                                     {isPaid ? formatCurrency(instInc) : t('incentive.unpaid')}

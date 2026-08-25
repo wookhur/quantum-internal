@@ -17,6 +17,8 @@ export interface ContractIncentive {
   percentage: number
   /** When set, this incentive applies only to that specific installment (extra payments) */
   installmentId: string | null
+  /** 회차별 요율 오버라이드: { installmentId: percent }. 없는 회차는 기본 percentage 적용. */
+  installmentOverrides: Record<string, number> | null
   createdAt: string
 }
 
@@ -93,6 +95,7 @@ function mapIncentive(row: Record<string, unknown>): ContractIncentive {
     incentiveType: row.incentive_type as ContractIncentive['incentiveType'],
     percentage: Number(row.percentage) || 0,
     installmentId: (row.installment_id as string) || null,
+    installmentOverrides: (row.installment_overrides as Record<string, number>) || null,
     createdAt: row.created_at as string,
   }
 }
@@ -270,7 +273,9 @@ export function useIncentivesByInstallment() {
           // 입금 완료: paid_amount 기준, 미입금: 예정 금액(amount) 기준
           const baseAmount = isPaid ? pi.paidAmount : pi.amount
           const amountExVat = Math.round(baseAmount / 1.1)
-          const incentiveAmount = Math.round(amountExVat * inc.percentage / 100)
+          // 회차별 요율 오버라이드: 해당 회차에 지정된 %가 있으면 그 값, 없으면 기본 percentage
+          const effPct = inc.installmentOverrides?.[pi.id] ?? inc.percentage
+          const incentiveAmount = Math.round(amountExVat * effPct / 100)
           results.push({
             key: `${inc.id}-${pi.id}`,
             incentiveId: inc.id,
@@ -288,7 +293,7 @@ export function useIncentivesByInstallment() {
             profileId: inc.profileId,
             displayName: inc.displayName,
             incentiveType: inc.incentiveType,
-            percentage: inc.percentage,
+            percentage: effPct,
             incentiveAmount,
             isPaid,
             dueDate: pi.dueDate,
@@ -469,6 +474,24 @@ export function useDeleteIncentive() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['incentives'] })
       qc.invalidateQueries({ queryKey: ['contracts'] })
+    },
+  })
+}
+
+/** 인센티브 1건의 회차별 요율 오버라이드 전체를 저장(빈 맵이면 null로 초기화). */
+export function useSetIncentiveOverrides() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ incentiveId, overrides }: { incentiveId: string; overrides: Record<string, number> }) => {
+      const cleaned = Object.keys(overrides).length > 0 ? overrides : null
+      const { error } = await supabase
+        .from('contract_incentives')
+        .update({ installment_overrides: cleaned })
+        .eq('id', incentiveId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['incentives'] })
     },
   })
 }
