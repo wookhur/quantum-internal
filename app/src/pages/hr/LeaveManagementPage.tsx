@@ -18,6 +18,7 @@ import {
   LEAVE_TYPE_LABELS, PAID_LEAVE_ANNUAL, HALF_DAY_LABELS, type LeaveType, type HalfDayPeriod,
 } from '@/lib/leave'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useRewardLeaveGrants, useCreateRewardGrant, useDeleteRewardGrant, type RewardGrant } from '@/hooks/useRewardLeaveGrants'
 import type { User } from '@/types'
 
 const STATUS_CFG: Record<LeaveStatus, { label: string; className: string }> = {
@@ -26,7 +27,7 @@ const STATUS_CFG: Record<LeaveStatus, { label: string; className: string }> = {
   rejected: { label: '반려', className: 'bg-red-100 text-red-700' },
 }
 
-type Tab = 'mine' | 'calendar' | 'approve' | 'summary'
+type Tab = 'mine' | 'calendar' | 'approve' | 'summary' | 'reward'
 
 export function LeaveManagementPage() {
   const { user } = useAuth()
@@ -35,6 +36,7 @@ export function LeaveManagementPage() {
   const createReq = useCreateLeaveRequest()
   const updateStatus = useUpdateLeaveStatus()
   const deleteReq = useDeleteLeaveRequest()
+  const { data: rewardGrants = [] } = useRewardLeaveGrants()
 
   const isApprover = user?.role === 'admin' || !!user?.canApproveLeave
   const [tab, setTab] = useState<Tab>('mine')
@@ -57,10 +59,23 @@ export function LeaveManagementPage() {
       .reduce((s, r) => s + r.days, 0),
     [requests, user?.id],
   )
+  // 포상휴가: 부여합계(내게 지급된 것) - 사용합계
+  const myRewardGranted = useMemo(() =>
+    rewardGrants.filter(g => g.profileId === user?.id).reduce((s, g) => s + g.days, 0),
+    [rewardGrants, user?.id],
+  )
+  const myRewardUsed = useMemo(() =>
+    requests
+      .filter(r => r.requesterId === user?.id && r.leaveType === 'reward' && r.status !== 'rejected')
+      .reduce((s, r) => s + r.days, 0),
+    [requests, user?.id],
+  )
+  const rewardRemaining = myRewardGranted - myRewardUsed
+
   // 잔여는 음수 허용(초과 사용). 연차는 매월 1일씩 발생하므로 시간이 지나면 자동 회복된다.
   const remaining = annual.entitlement - myAnnualUsed
   const paidRemaining = PAID_LEAVE_ANNUAL - myPaidUsed
-  const totalRemaining = remaining + paidRemaining // 연차+유급 통합 잔여
+  const totalRemaining = remaining + paidRemaining + rewardRemaining // 연차+유급+포상 통합 잔여
 
   const mine = requests.filter(r => r.requesterId === user?.id)
   const pending = requests.filter(r => r.status === 'requested')
@@ -137,13 +152,35 @@ export function LeaveManagementPage() {
             <div className="text-[11px] text-muted-foreground mt-2">연 {PAID_LEAVE_ANNUAL}일 · 경조사는 별도(잔여 차감 없음)</div>
           </CardContent>
         </Card>
+        {myRewardGranted > 0 && (
+          <Card>
+            <CardContent className="py-4">
+              <div className="text-xs font-semibold text-muted-foreground mb-2">포상휴가 🎉</div>
+              <div className="flex items-center gap-6">
+                <div>
+                  <div className="text-[11px] text-muted-foreground">부여</div>
+                  <div className="text-2xl font-bold">{myRewardGranted}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-muted-foreground">사용</div>
+                  <div className="text-2xl font-bold text-blue-600">{myRewardUsed}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-muted-foreground">잔여</div>
+                  <div className={`text-2xl font-bold ${rewardRemaining < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{rewardRemaining}<span className="text-sm font-normal text-muted-foreground">일</span></div>
+                </div>
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-2">포상으로 지급된 휴가 · 신청 시 ‘포상휴가’ 유형 선택</div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* 통합 잔여 (연차 + 유급) — 초과 사용 시 음수, 연차 월 발생으로 자동 회복 */}
       <Card className={totalRemaining < 0 ? 'border-red-300 bg-red-50/40' : ''}>
         <CardContent className="py-3">
           <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">잔여 휴가 <span className="text-xs font-normal text-muted-foreground">(연차 + 유급)</span></div>
+            <div className="text-sm font-semibold">잔여 휴가 <span className="text-xs font-normal text-muted-foreground">(연차 + 유급{myRewardGranted > 0 ? ' + 포상' : ''})</span></div>
             <div className={`text-2xl font-bold ${totalRemaining < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
               {totalRemaining}<span className="text-sm font-normal text-muted-foreground">일</span>
             </div>
@@ -174,10 +211,17 @@ export function LeaveManagementPage() {
             직원 현황
           </Button>
         )}
+        {isApprover && (
+          <Button variant={tab === 'reward' ? 'default' : 'outline'} size="sm" onClick={() => setTab('reward')}>
+            🎉 포상휴가 지급
+          </Button>
+        )}
       </div>
 
       {tab === 'calendar' ? (
         <LeaveCalendar approved={approvedLeaves} />
+      ) : tab === 'reward' ? (
+        <RewardGrantPanel profiles={profiles} grants={rewardGrants} requests={requests} actorId={user?.id} />
       ) : tab === 'summary' ? (
         <EmployeeLeaveSummary profiles={profiles} requests={requests} />
       ) : list.length === 0 ? (
@@ -205,6 +249,7 @@ export function LeaveManagementPage() {
         <LeaveFormDialog
           onClose={() => setShowForm(false)}
           pending={createReq.isPending}
+          rewardAvailable={rewardRemaining > 0}
           onSubmit={async (payload) => {
             try {
               await createReq.mutateAsync({
@@ -285,12 +330,13 @@ function LeaveCard({ req, isApprover, isOwner, showRequester, onStatus, onDelete
   )
 }
 
-function LeaveFormDialog({ onClose, onSubmit, pending }: {
+function LeaveFormDialog({ onClose, onSubmit, pending, rewardAvailable }: {
   onClose: () => void
   onSubmit: (p: {
     leaveType: LeaveType; eventType?: string; startDate: string; endDate: string; days: number; halfDayPeriod?: HalfDayPeriod; paid: boolean; reason?: string
   }) => void
   pending: boolean
+  rewardAvailable?: boolean
 }) {
   const [leaveType, setLeaveType] = useState<LeaveType>('annual')
   const [eventType, setEventType] = useState<string>(FAMILY_EVENTS[0].key)
@@ -332,6 +378,7 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
               <SelectContent>
                 <SelectItem value="annual">연차</SelectItem>
                 <SelectItem value="paid_special">유급휴가 (연 {PAID_LEAVE_ANNUAL}일)</SelectItem>
+                {rewardAvailable && <SelectItem value="reward">포상휴가 🎉</SelectItem>}
                 <SelectItem value="sick">병가</SelectItem>
                 <SelectItem value="family_event">경조사</SelectItem>
                 <SelectItem value="other">기타</SelectItem>
@@ -454,6 +501,7 @@ function LeaveFormDialog({ onClose, onSubmit, pending }: {
 const TYPE_COLOR: Record<string, string> = {
   annual: 'bg-blue-100 text-blue-700',
   paid_special: 'bg-emerald-100 text-emerald-700',
+  reward: 'bg-pink-100 text-pink-700',
   sick: 'bg-orange-100 text-orange-700',
   family_event: 'bg-purple-100 text-purple-700',
   other: 'bg-gray-100 text-gray-700',
@@ -543,6 +591,112 @@ function LeaveCalendar({ approved }: { approved: LeaveRequest[] }) {
         {approved.length === 0 && <p className="text-[11px] text-muted-foreground mt-2 text-center">승인된 휴가가 없습니다.</p>}
       </CardContent>
     </Card>
+  )
+}
+
+/** 포상휴가 지급 패널 (승인자/연차 담당 전용) — 직원에게 일수 부여 + 지급 내역 관리. */
+function RewardGrantPanel({ profiles, grants, requests, actorId }: {
+  profiles: User[]
+  grants: RewardGrant[]
+  requests: LeaveRequest[]
+  actorId?: string
+}) {
+  const createReward = useCreateRewardGrant()
+  const deleteReward = useDeleteRewardGrant()
+  const [profileId, setProfileId] = useState('')
+  const [days, setDays] = useState('')
+  const [reason, setReason] = useState('')
+
+  const nameOf = (id?: string) => profiles.find(p => p.id === id)?.name || '(이름 미설정)'
+
+  // 지급 대상: 정규직(풀타임) 비파트너
+  const grantable = useMemo(() =>
+    profiles
+      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isPartner)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')),
+    [profiles],
+  )
+
+  const grantedByProfile = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const g of grants) m.set(g.profileId, (m.get(g.profileId) || 0) + g.days)
+    return m
+  }, [grants])
+  const usedByProfile = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of requests) if (r.leaveType === 'reward' && r.status !== 'rejected') m.set(r.requesterId, (m.get(r.requesterId) || 0) + r.days)
+    return m
+  }, [requests])
+
+  const canGrant = !!profileId && Number(days) > 0
+  const handleGrant = () => {
+    if (!canGrant) return
+    createReward.mutate(
+      { profileId, days: Number(days), reason: reason.trim() || undefined, grantedBy: actorId },
+      { onSuccess: () => { setDays(''); setReason('') }, onError: (e: unknown) => alert(e instanceof Error ? e.message : '지급에 실패했습니다.') },
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="py-4 space-y-3">
+          <div className="text-sm font-semibold">포상휴가 지급 🎉</div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_130px]">
+            <div>
+              <Label className="text-xs">직원</Label>
+              <Select value={profileId} onValueChange={v => setProfileId(v ?? '')}>
+                <SelectTrigger><span className="truncate">{profileId ? nameOf(profileId) : '직원 선택'}</span></SelectTrigger>
+                <SelectContent>
+                  {grantable.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">일수</Label>
+              <Input type="number" min="0.5" step="0.5" value={days} onChange={e => setDays(e.target.value)} placeholder="예: 1" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">사유 (선택)</Label>
+            <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="예: 우수사원 포상" />
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" onClick={handleGrant} disabled={!canGrant || createReward.isPending}>
+              {createReward.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}지급
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-2">
+        <div className="text-sm font-semibold px-1">지급 내역 ({grants.length})</div>
+        {grants.length === 0 ? (
+          <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">지급된 포상휴가가 없습니다.</CardContent></Card>
+        ) : grants.map(g => {
+          const granted = grantedByProfile.get(g.profileId) || 0
+          const used = usedByProfile.get(g.profileId) || 0
+          return (
+            <Card key={g.id}>
+              <CardContent className="py-3 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">
+                    {nameOf(g.profileId)} · <span className="text-pink-600 font-bold">+{g.days}일</span>
+                    <span className="ml-2 text-[11px] text-muted-foreground">잔여 {granted - used}일 (부여 {granted} · 사용 {used})</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {g.grantedAt}{g.reason ? ` · ${g.reason}` : ''}{g.grantedBy ? ` · 지급: ${nameOf(g.grantedBy)}` : ''}
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon-xs" onClick={() => { if (confirm('이 포상휴가 지급을 삭제할까요?')) deleteReward.mutate(g.id) }}>
+                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
