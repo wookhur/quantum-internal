@@ -223,7 +223,7 @@ export function LeaveManagementPage() {
       ) : tab === 'reward' ? (
         <RewardGrantPanel profiles={profiles} grants={rewardGrants} requests={requests} actorId={user?.id} />
       ) : tab === 'summary' ? (
-        <EmployeeLeaveSummary profiles={profiles} requests={requests} />
+        <EmployeeLeaveSummary profiles={profiles} requests={requests} grants={rewardGrants} />
       ) : list.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">
           <CalendarDays className="h-10 w-10 mx-auto mb-2 opacity-40" />
@@ -700,17 +700,20 @@ function RewardGrantPanel({ profiles, grants, requests, actorId }: {
   )
 }
 
-function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; requests: LeaveRequest[] }) {
+function EmployeeLeaveSummary({ profiles, requests, grants }: { profiles: User[]; requests: LeaveRequest[]; grants: RewardGrant[] }) {
   const rows = useMemo(() => {
     // sum non-rejected days per requester per type
     const usedAnnual = new Map<string, number>()
     const usedPaid = new Map<string, number>()
+    const usedReward = new Map<string, number>()
     requests.forEach(r => {
       if (r.status === 'rejected') return
-      const m = r.leaveType === 'annual' ? usedAnnual : r.leaveType === 'paid_special' ? usedPaid : null
+      const m = r.leaveType === 'annual' ? usedAnnual : r.leaveType === 'paid_special' ? usedPaid : r.leaveType === 'reward' ? usedReward : null
       if (!m) return
       m.set(r.requesterId, (m.get(r.requesterId) || 0) + r.days)
     })
+    const grantedReward = new Map<string, number>()
+    grants.forEach(g => grantedReward.set(g.profileId, (grantedReward.get(g.profileId) || 0) + g.days))
     return profiles
       // 정규직(풀타임)만 연차 발생 대상
       .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isPartner)
@@ -719,8 +722,11 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
         const ent = computeAnnualEntitlement(hire)
         const aUsed = usedAnnual.get(p.id) || 0
         const pUsed = usedPaid.get(p.id) || 0
+        const rGranted = grantedReward.get(p.id) || 0
+        const rUsed = usedReward.get(p.id) || 0
         const annualLeft = ent.entitlement - aUsed
         const paidLeft = PAID_LEAVE_ANNUAL - pUsed
+        const rewardLeft = rGranted - rUsed
         return {
           id: p.id,
           name: p.name,
@@ -730,12 +736,15 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
           annualLeft, // 음수 허용
           paidUsed: pUsed,
           paidLeft, // 음수 허용
-          totalLeft: annualLeft + paidLeft, // 연차+유급 통합 잔여
+          rewardGranted: rGranted,
+          rewardUsed: rUsed,
+          rewardLeft,
+          totalLeft: annualLeft + paidLeft + rewardLeft, // 연차+유급+포상 통합 잔여
           noHire: !p.contractStartDate,
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [profiles, requests])
+  }, [profiles, requests, grants])
 
   // 사용 숫자 클릭 시 해당 직원·종류의 실제 신청 내역을 보여준다.
   const [detail, setDetail] = useState<{ name: string; typeLabel: string; items: LeaveRequest[] } | null>(null)
@@ -760,6 +769,9 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
               <th className="text-right font-medium px-3 py-2">연차 잔여</th>
               <th className="text-right font-medium px-3 py-2">유급 사용</th>
               <th className="text-right font-medium px-3 py-2">유급 잔여</th>
+              <th className="text-right font-medium px-3 py-2 whitespace-nowrap">포상 부여</th>
+              <th className="text-right font-medium px-3 py-2 whitespace-nowrap">포상 사용</th>
+              <th className="text-right font-medium px-3 py-2 whitespace-nowrap">포상 잔여</th>
               <th className="text-right font-medium px-3 py-2 whitespace-nowrap">총 잔여</th>
             </tr>
           </thead>
@@ -783,11 +795,18 @@ function EmployeeLeaveSummary({ profiles, requests }: { profiles: User[]; reques
                   ) : r.paidUsed}
                 </td>
                 <td className={`px-3 py-2 text-right font-semibold ${r.paidLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.paidLeft}</td>
+                <td className="px-3 py-2 text-right text-pink-600 font-medium">{r.rewardGranted > 0 ? r.rewardGranted : '-'}</td>
+                <td className="px-3 py-2 text-right text-blue-600">
+                  {r.rewardUsed > 0 ? (
+                    <button className="hover:underline font-medium" onClick={() => openDetail(r.id, r.name, 'reward', '포상휴가')}>{r.rewardUsed}</button>
+                  ) : (r.rewardGranted > 0 ? r.rewardUsed : '-')}
+                </td>
+                <td className={`px-3 py-2 text-right font-semibold ${r.rewardGranted === 0 ? 'text-muted-foreground' : r.rewardLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.rewardGranted > 0 ? r.rewardLeft : '-'}</td>
                 <td className={`px-3 py-2 text-right font-bold ${r.totalLeft < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{r.totalLeft}</td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">표시할 직원이 없습니다.</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">표시할 직원이 없습니다.</td></tr>
             )}
           </tbody>
         </table>
