@@ -591,7 +591,7 @@ function UserEditDialog({
                       <div className="min-w-0">
                         <div className="text-sm font-medium">근태관리 수정 권한</div>
                         <div className="text-[11px] text-muted-foreground truncate">
-                          HR 권한과 별개로, 지정된 사용자만 근태 기록을 추가·수정·삭제·업로드할 수 있습니다
+                          이 토글을 켠 사람만 근태 기록을 추가·수정·삭제·업로드할 수 있습니다 (관리자 등급이어도 이 토글이 꺼져 있으면 조회만 가능)
                         </div>
                       </div>
                     </div>

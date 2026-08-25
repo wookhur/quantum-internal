@@ -320,9 +320,9 @@ interface AttendanceForm {
 export function AttendancePage() {
   const t = useT()
   const { user } = useAuth()
-  // 근태 기록 편집(추가·수정·삭제·업로드)은 관리자 또는 '근태관리 수정' 특수 권한 보유자만 가능.
-  // HR 모듈 접근 권한이 있어도 이 권한이 없으면 조회만 가능.
-  const canEdit = user?.role === 'admin' || !!user?.canEditAttendance
+  // 근태 기록 편집(추가·수정·삭제·업로드)은 '근태관리 수정 권한'(can_edit_attendance) 보유자만 가능.
+  // 관리자(admin) 등급이어도 이 토글이 꺼져 있으면 조회만 가능 — 권한을 명시적으로 부여받은 사람만.
+  const canEdit = !!user?.canEditAttendance
   // 근무노트(사유)는 근태수정 권한이 없어도 '본인 행'에 직접 기록할 수 있다.
   // 기준: 직원관리에서 '외부'로 지정(isExternal)되지 않은, 근태관리에 나오는 모든 직원.
   //   · 근태관리에 나온다 = 본인의 attendance 행이 존재한다(고용형태 정규직/인턴)
