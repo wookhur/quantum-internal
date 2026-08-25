@@ -1157,9 +1157,20 @@ export function AccessManagementPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-xs ${roleCfg.className}`}>
-                          {roleCfg.label}
-                        </Badge>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge variant="outline" className={`text-xs ${roleCfg.className}`}>
+                            {roleCfg.label}
+                          </Badge>
+                          {(profile.canEditAttendance || profile.role === 'admin') && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] h-4 bg-emerald-50 text-emerald-700 border-emerald-200"
+                              title="출퇴근 시간 수정 권한 보유 (관리자 또는 근태관리 수정 권한). 없으면 본인 행 사유 메모만 가능."
+                            >
+                              근태수정
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm">
                         {deptLabel || <span className="text-muted-foreground">-</span>}
