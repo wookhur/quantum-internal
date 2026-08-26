@@ -220,6 +220,49 @@ const DIARY_FIELDS = [
   { key: 'nextMeetingAgenda', label: 'Next Meeting Agenda' },
 ] as const satisfies ReadonlyArray<{ key: keyof ServiceDiaryEntry; label: string }>
 
+// 미팅다이어리 텍스트 필드들 (AI 추출 JSON 키와 동일)
+const DIARY_TEXT_KEYS = [
+  'agendaItems', 'meetingSummary', 'extracurricularNotes', 'identityNarrativeNotes',
+  'questionsConcerns', 'nextMeetingAgenda', 'followUpCommitments', 'assignments',
+  'criticalDates', 'criticalIssue',
+] as const
+
+// 한 필드에 AI 요약 JSON(예: ```json {...}```)이 통째로 들어간 경우를 감지해 파싱.
+function tryParseDiaryBlob(v: unknown): Record<string, string> | null {
+  if (typeof v !== 'string') return null
+  const s = v.trim()
+  // 다이어리 JSON 특징 키가 있어야 blob 으로 간주
+  if (!s.includes('"meetingSummary"') && !s.includes('"followUpCommitments"')) return null
+  const cleaned = s.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
+  const start = cleaned.indexOf('{')
+  const end = cleaned.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  try {
+    const obj = JSON.parse(cleaned.slice(start, end + 1))
+    if (obj && typeof obj === 'object') return obj as Record<string, string>
+  } catch { /* 유효 JSON 아님 → 무시 */ }
+  return null
+}
+
+// 어느 텍스트 필드에 JSON blob 이 들어갔으면 각 키를 알맞은 필드로 분해(표시용 정규화).
+// 비파괴적: 원본은 그대로 두고, 렌더링 시점에만 정리된 사본을 사용.
+function normalizeDiaryEntry<T>(entry: T): T {
+  const e = entry as unknown as Record<string, unknown>
+  for (const key of DIARY_TEXT_KEYS) {
+    const parsed = tryParseDiaryBlob(e[key])
+    if (!parsed) continue
+    const out: Record<string, unknown> = { ...e }
+    for (const k of DIARY_TEXT_KEYS) {
+      const pv = parsed[k]
+      if (typeof pv === 'string' && pv.trim() && (!out[k] || out[k] === e[key])) out[k] = pv
+    }
+    // blob 이 담겼던 필드에 파싱값이 따로 없으면 비워서 원시 JSON 잔존 방지
+    if (out[key] === e[key] && !(typeof parsed[key] === 'string' && (parsed[key] as string).trim())) out[key] = ''
+    return out as unknown as T
+  }
+  return entry
+}
+
 export function Student360Page() {
   const t = useT()
   const { user } = useAuth()
@@ -3087,7 +3130,8 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
         {entries.length > 0 && visibleEntries.length === 0 && (
           <p className="text-sm text-muted-foreground">{t('student360.diaryNoMatch')}</p>
         )}
-        {visibleEntries.map(d => {
+        {visibleEntries.map(rawD => {
+          const d = normalizeDiaryEntry(rawD)
           const isCollapsed = collapsed.has(d.id)
           return (
           <div key={d.id} className="rounded-lg border p-3">
@@ -3201,29 +3245,34 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
   const create = useCreateServiceDiary()
   const update = useUpdateServiceDiary()
   const bulkCreateFollowups = useBulkCreateFollowups()
-  const buildForm = () => ({
-    entryDate: entry?.entryDate || new Date().toISOString().slice(0, 10),
-    prepUrl: entry?.prepUrl || '',
-    summaryUrl: entry?.summaryUrl || '',
-    agendaItems: entry?.agendaItems || '',
-    meetingSummary: entry?.meetingSummary || '',
-    extracurricularNotes: entry?.extracurricularNotes || '',
-    identityNarrativeNotes: entry?.identityNarrativeNotes || '',
-    questionsConcerns: entry?.questionsConcerns || '',
-    nextMeetingAgenda: entry?.nextMeetingAgenda || '',
-    nextMeetingDate: entry?.nextMeetingDate || '',
-    followUpCommitments: entry?.followUpCommitments || '',
-    assignments: entry?.assignments || '',
-    criticalDates: entry?.criticalDates || '',
-    criticalIssue: entry?.criticalIssue || '',
-  })
+  const buildForm = () => {
+    // 편집 시작 시 원시 JSON blob 이 들어간 항목은 필드로 분해해서 보여줌
+    const e = entry ? normalizeDiaryEntry(entry) : entry
+    return {
+    entryDate: e?.entryDate || new Date().toISOString().slice(0, 10),
+    prepUrl: e?.prepUrl || '',
+    summaryUrl: e?.summaryUrl || '',
+    agendaItems: e?.agendaItems || '',
+    meetingSummary: e?.meetingSummary || '',
+    extracurricularNotes: e?.extracurricularNotes || '',
+    identityNarrativeNotes: e?.identityNarrativeNotes || '',
+    questionsConcerns: e?.questionsConcerns || '',
+    nextMeetingAgenda: e?.nextMeetingAgenda || '',
+    nextMeetingDate: e?.nextMeetingDate || '',
+    followUpCommitments: e?.followUpCommitments || '',
+    assignments: e?.assignments || '',
+    criticalDates: e?.criticalDates || '',
+    criticalIssue: e?.criticalIssue || '',
+    }
+  }
   const [form, setForm] = useState(buildForm)
   useEffect(() => { if (open) setForm(buildForm()) }, [open])
   const setField = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
 
   const submit = () => {
     if (!canEdit) return
-    const payload = {
+    // 어느 칸에 AI 요약 JSON 을 통째로 붙여넣었으면 저장 전에 각 필드로 분해
+    const payload = normalizeDiaryEntry({
       entryDate: form.entryDate || undefined,
       prepUrl: form.prepUrl || undefined,
       summaryUrl: form.summaryUrl || undefined,
@@ -3238,7 +3287,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
       assignments: form.assignments || undefined,
       criticalDates: form.criticalDates || undefined,
       criticalIssue: form.criticalIssue || undefined,
-    }
+    })
     if (entry) {
       update.mutate({ id: entry.id, studentId, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
     } else {
@@ -3247,11 +3296,11 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
           // 미팅에서 만드는 경로와 동작을 맞춘다 — 직접 만든 다이어리도
           // 적어둔 텍스트가 체크 항목으로 만들어져야 추적이 가능하다.
           if (created?.id) {
-            const followupItems = splitFollowupText(form.followUpCommitments || '')
+            const followupItems = splitFollowupText(payload.followUpCommitments || '')
             if (followupItems.length) {
               bulkCreateFollowups.mutate({ studentId, diaryId: created.id, category: 'followup', items: followupItems, createdBy })
             }
-            const assignmentItems = splitFollowupText(form.assignments || '')
+            const assignmentItems = splitFollowupText(payload.assignments || '')
             if (assignmentItems.length) {
               bulkCreateFollowups.mutate({ studentId, diaryId: created.id, category: 'assignment', items: assignmentItems, createdBy })
             }
@@ -3548,7 +3597,8 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName, canEdit }:
       }
       if (!data?.ok) throw new Error(data?.error || 'Extraction failed')
 
-      const d = data.diary as Record<string, string>
+      // 혹시 AI가 한 필드에 JSON 을 통째로 담아 보내도 필드로 분해
+      const d = normalizeDiaryEntry(data.diary as Record<string, string>)
       create.mutate(
         {
           studentId,
