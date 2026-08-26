@@ -74,12 +74,17 @@ export function PartnerStudentsPage() {
   const meetings = canViewAll ? allMeetings : academyMeetings
 
   const [partnerFilter, setPartnerFilter] = useState('all')
-  const partnerOptions = useMemo(() => {
-    const s = new Set<string>()
-    programFees.forEach(f => { if (f.label) s.add(f.label) })
-    return [...s].sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [programFees])
   const nrm = (v?: string) => (v || '').replace(/\s+/g, '').toLowerCase()
+  // 파트너사 라벨 드롭다운 — 공백/대소문자 차이로 인한 중복 제거(예: "김효진수학" vs "김효진 수학")
+  const partnerOptions = useMemo(() => {
+    const byKey = new Map<string, string>()
+    programFees.forEach(f => {
+      if (!f.label) return
+      const k = nrm(f.label)
+      if (k && !byKey.has(k)) byKey.set(k, f.label.trim())
+    })
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [programFees])
 
   // 학생별 프로그램(파트너사) 라벨 — 미팅 추가 시 프로그램 선택 & 필터 매칭용
   const labelsByStudentName = useMemo(() => {
@@ -117,12 +122,13 @@ export function PartnerStudentsPage() {
     const myAcademyKey = nrm(myInstructor?.academy)
     const myStudentIds = new Set(myInstructor?.studentIds || [])
     // 우리 학원(또는 본인)이 코멘트를 남긴 학생 — EC 라벨/담당지정이 없어도 목록에 보이도록.
-    const meetingStudentNames = new Set(meetings.map(m => m.studentName))
+    // 정규화(공백제거·소문자) 집합으로 비교 — 영문/한글/띄어쓰기 차이로 코멘트가 학생과 안 붙는 문제 방지.
+    const meetingNameKeys = new Set(meetings.map(m => nrm(m.studentName)))
     return allStudents
       .filter(s => {
         const entry = studentPartners.get(s.id)
         const assigned = myStudentIds.has(s.id)
-        const hasMeeting = meetingStudentNames.has(s.name)
+        const hasMeeting = [s.name, s.koreanName].some(n => !!n && meetingNameKeys.has(nrm(n)))
         if (!entry && !assigned && !hasMeeting) return false
         if (!canViewAll) {
           if (myInstructor) {
@@ -153,9 +159,14 @@ export function PartnerStudentsPage() {
   const selectedSchool = students.find(s => s.name === selected)?.school
   const selectedLabels = useMemo(() => [...(labelsByStudentName.get(selected) || [])].sort(), [labelsByStudentName, selected])
 
+  // 선택 학생의 이름 표기들(영문 name + 한글 koreanName)을 정규화한 집합 — 저장 당시 표기가 달라도 매칭
+  const selectedNameKeys = useMemo(() => {
+    const so = students.find(s => s.name === selected)
+    return new Set([so?.name, so?.koreanName].filter(Boolean).map(v => nrm(v as string)))
+  }, [students, selected]) // eslint-disable-line react-hooks/exhaustive-deps
   const studentMeetings = useMemo(
     () => meetings.filter(m => {
-      if (m.studentName !== selected) return false
+      if (!selectedNameKeys.has(nrm(m.studentName))) return false
       if (partnerFilter === 'all') return true
       const fb = nrm(partnerFilter)
       // 파트너 매칭: 1) 코멘트의 프로그램 라벨, 2) 작성자 소속학원(partner_academy), 3) 작성 계정 이름
@@ -165,7 +176,7 @@ export function PartnerStudentsPage() {
       const cands = [author?.partnerAcademy, author?.name].map(nrm).filter(Boolean)
       return cands.some(c => c.includes(fb) || fb.includes(c))
     }),
-    [meetings, selected, partnerFilter, profiles], // eslint-disable-line react-hooks/exhaustive-deps
+    [meetings, selectedNameKeys, partnerFilter, profiles], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const [editingId, setEditingId] = useState<string | null>(null)
