@@ -227,21 +227,40 @@ const DIARY_TEXT_KEYS = [
   'criticalDates', 'criticalIssue',
 ] as const
 
+// JSON 문자열 이스케이프 복원
+function unescapeJsonStr(s: string): string {
+  return s
+    .replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"').replace(/\\\//g, '/').replace(/\\\\/g, '\\')
+}
+
 // 한 필드에 AI 요약 JSON(예: ```json {...}```)이 통째로 들어간 경우를 감지해 파싱.
+// 완전한 JSON 이면 JSON.parse, 잘린/불완전 JSON 이면 정규식으로 각 키를 최대한 추출.
 function tryParseDiaryBlob(v: unknown): Record<string, string> | null {
   if (typeof v !== 'string') return null
   const s = v.trim()
   // 다이어리 JSON 특징 키가 있어야 blob 으로 간주
   if (!s.includes('"meetingSummary"') && !s.includes('"followUpCommitments"')) return null
   const cleaned = s.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
+
+  // 1) 완전한 JSON 시도
   const start = cleaned.indexOf('{')
   const end = cleaned.lastIndexOf('}')
-  if (start < 0 || end <= start) return null
-  try {
-    const obj = JSON.parse(cleaned.slice(start, end + 1))
-    if (obj && typeof obj === 'object') return obj as Record<string, string>
-  } catch { /* 유효 JSON 아님 → 무시 */ }
-  return null
+  if (start >= 0 && end > start) {
+    try {
+      const obj = JSON.parse(cleaned.slice(start, end + 1))
+      if (obj && typeof obj === 'object') return obj as Record<string, string>
+    } catch { /* 아래 정규식 폴백 */ }
+  }
+
+  // 2) 잘린/불완전 JSON 폴백 — 각 키를 개별 정규식으로 추출
+  const out: Record<string, string> = {}
+  let found = 0
+  for (const key of DIARY_TEXT_KEYS) {
+    const m = cleaned.match(new RegExp('"' + key + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"'))
+    if (m) { out[key] = unescapeJsonStr(m[1]); found++ }
+  }
+  return found > 0 ? out : null
 }
 
 // 어느 텍스트 필드에 JSON blob 이 들어갔으면 각 키를 알맞은 필드로 분해(표시용 정규화).
