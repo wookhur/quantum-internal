@@ -21,7 +21,7 @@ import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } fro
 import { useRevenueSharesByInstallments, useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare } from '@/hooks/useRevenueShares'
 import { useECActivities } from '@/hooks/useECActivities'
 import { useContractIncentives, useCreateIncentive, useDeleteIncentive, useSetIncentiveOverrides, useIncentiveRecipients, useCreateIncentiveRecipient, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
-import { useProfiles } from '@/hooks/useProfiles'
+import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
 import { formatCurrency, formatPhone } from '@/types'
@@ -766,9 +766,10 @@ export function ContractDetailPage() {
   const { data: revenueShares = [] } = useRevenueSharesByInstallments(extraInstIds)
   const { data: contractIncentives = [] } = useContractIncentives(id)
   // 인센티브 설정 열람·수정 범위:
-  //  · 재무담당자(account)/관리자(admin) = 전체 인센티브 열람 + 수정 가능
+  //  · 재무 접근권한(account 등급 또는 is_account 부여) = 전체 인센티브 열람 + 수정 가능
   //  · 그 외 직원 = 본인이 수령자인 인센티브만 열람(수정 불가) — 남의 인센티브 노출 방지
-  const financeAccess = user?.role === 'account' || user?.role === 'admin'
+  //  · 관리자(admin)여도 account 권리가 없으면 제외
+  const financeAccess = canAccessAccount(user)
   const visibleIncentives = useMemo(
     () => (financeAccess ? contractIncentives : contractIncentives.filter((inc) => inc.profileId && inc.profileId === user?.id)),
     [financeAccess, contractIncentives, user?.id],
