@@ -22,6 +22,7 @@ import { useRevenueSharesByInstallments, useCreateRevenueShares, useUpdateRevenu
 import { useECActivities } from '@/hooks/useECActivities'
 import { useContractIncentives, useCreateIncentive, useDeleteIncentive, useSetIncentiveOverrides, useIncentiveRecipients, useCreateIncentiveRecipient, INCENTIVE_TYPES, type IncentiveType } from '@/hooks/useIncentives'
 import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
+import { useIncentiveStatus } from '@/hooks/useIncentiveStatus'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { autoIssueReceipt } from '@/hooks/useInvoicesReceipts'
 import { formatCurrency, formatPhone } from '@/types'
@@ -770,6 +771,13 @@ export function ContractDetailPage() {
   //  · 그 외 직원 = 본인이 수령자인 인센티브만 열람(수정 불가) — 남의 인센티브 노출 방지
   //  · 관리자(admin)여도 account 권리가 없으면 제외
   const financeAccess = canAccessAccount(user)
+  // 재무대시보드 지급 상태 연동 — 회차별 인센티브가 몇 월에 지급완료됐는지 표시
+  const incentiveStatus = useIncentiveStatus()
+  const fmtPaidMonth = (ym?: string) => {
+    if (!ym) return ''
+    const [y, mm] = ym.split('-')
+    return mm ? `${y}년 ${Number(mm)}월` : ym
+  }
   const visibleIncentives = useMemo(
     () => (financeAccess ? contractIncentives : contractIncentives.filter((inc) => inc.profileId && inc.profileId === user?.id)),
     [financeAccess, contractIncentives, user?.id],
@@ -1547,6 +1555,9 @@ export function ContractDetailPage() {
                               ) : (
                                 <span className={`text-xs ${overridden ? 'text-orange-700 font-semibold' : 'text-muted-foreground'}`}>{rowPct}%</span>
                               )
+                              // 재무대시보드 지급 상태 연동(라인키 c:인센티브id-회차id) — 지급완료 시 지급월 표시
+                              const payStatus = incentiveStatus.get(`c:${inc.id}-${inst.id}`)
+                              const paidMonthLabel = payStatus?.received && payStatus.receivedMonth ? fmtPaidMonth(payStatus.receivedMonth) : ''
                               return (
                                 <div key={inst.id} className={`flex items-center justify-between px-3 py-1.5 rounded text-sm ${isPaid ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
                                   <div className="flex items-center gap-2">
@@ -1554,6 +1565,9 @@ export function ContractDetailPage() {
                                     {isPaid && <span className="text-xs text-green-600">({formatCurrency(amountExVat)} ×</span>}
                                     {rateControl}
                                     {isPaid && <span className="text-xs text-green-600">)</span>}
+                                    {paidMonthLabel && (
+                                      <span className="text-[10px] rounded bg-emerald-100 text-emerald-700 px-1.5 py-0.5 whitespace-nowrap">{paidMonthLabel} 지급완료</span>
+                                    )}
                                   </div>
                                   <span className={`font-mono font-semibold ${isPaid ? 'text-green-700' : 'text-gray-400'}`}>
                                     {isPaid ? formatCurrency(instInc) : t('incentive.unpaid')}
