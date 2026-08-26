@@ -190,15 +190,16 @@ export function PartnerStudentsPage() {
   const save = () => {
     if (!canEdit) return
     if (!selected || (!form.content.trim() && !form.meetingDate)) return
+    const onError = (e: unknown) => alert(`코멘트 저장에 실패했습니다. 다시 시도해주세요.\n${(e as { message?: string })?.message || ''}`)
     if (editingId) {
       update.mutate(
         { id: editingId, partnerId, meetingDate: form.meetingDate || undefined, program: form.program || undefined, content: form.content || undefined },
-        { onSuccess: reset },
+        { onSuccess: reset, onError },
       )
     } else {
       create.mutate(
         { partnerId, partnerAcademy: myAcademy, authorName: myInstructor?.name || user?.name, studentName: selected, schoolName: selectedSchool, meetingDate: form.meetingDate || undefined, program: form.program || undefined, content: form.content || undefined, createdBy: partnerId },
-        { onSuccess: () => { notifyAssignedConsultant(); reset() } },
+        { onSuccess: () => { notifyAssignedConsultant(); reset() }, onError },
       )
     }
   }
@@ -229,6 +230,29 @@ export function PartnerStudentsPage() {
     allStudents.forEach(s => { [s.name, s.koreanName].forEach(n => { if (n) keys.add(nrm(n)) }) })
     return meetings.filter(m => !keys.has(nrm(m.studentName)))
   }, [canViewAll, allStudents, meetings]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 미분류 코멘트 → 학생 연결 선택(학생 id). 저장값 이름과 부분일치하는 학생을 추측해 기본 선택.
+  const [linkChoice, setLinkChoice] = useState<Record<string, string>>({})
+  const guessStudentId = (rawName?: string): string => {
+    const on = nrm(rawName)
+    if (!on) return ''
+    for (const s of allStudents) {
+      for (const cand of [s.name, s.koreanName]) {
+        const cn = nrm(cand)
+        if (cn && (cn === on || cn.includes(on) || on.includes(cn))) return s.id
+      }
+    }
+    return ''
+  }
+  const studentLabelById = (id: string) => {
+    const s = allStudents.find(x => x.id === id)
+    return s ? `${s.name}${s.koreanName ? ` · ${s.koreanName}` : ''}` : '학생 선택'
+  }
+  const linkOrphan = (meetingId: string, studentId: string) => {
+    const s = allStudents.find(x => x.id === studentId)
+    if (!s) return
+    update.mutate({ id: meetingId, studentName: s.name, schoolName: s.school })
+  }
 
   return (
     <div className="p-6 space-y-4">
@@ -269,6 +293,21 @@ export function PartnerStudentsPage() {
                   {m.program && <span>· {m.program}</span>}
                 </div>
                 {m.content && <div className="whitespace-pre-wrap text-sm mt-1">{m.content}</div>}
+                {canEdit && (() => {
+                  const choice = linkChoice[m.id] ?? guessStudentId(m.studentName)
+                  return (
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-amber-100">
+                      <span className="text-xs text-muted-foreground shrink-0">학생 연결</span>
+                      <Select value={choice} onValueChange={v => setLinkChoice(prev => ({ ...prev, [m.id]: v || '' }))}>
+                        <SelectTrigger className="h-8 w-64 text-xs"><span>{choice ? studentLabelById(choice) : '학생 선택'}</span></SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          {allStudents.map(s => <SelectItem key={s.id} value={s.id}>{s.name}{s.koreanName ? ` · ${s.koreanName}` : ''}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Button size="sm" className="h-8" disabled={!choice || update.isPending} onClick={() => linkOrphan(m.id, choice)}>연결</Button>
+                    </div>
+                  )
+                })()}
               </div>
             ))}
           </div>

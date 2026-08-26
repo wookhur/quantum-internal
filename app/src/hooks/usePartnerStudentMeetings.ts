@@ -122,11 +122,14 @@ export function useCreatePartnerStudentMeeting() {
 export function useUpdatePartnerStudentMeeting() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (a: { id: string; partnerId?: string; meetingDate?: string; program?: string; content?: string }) => {
+    mutationFn: async (a: { id: string; partnerId?: string; meetingDate?: string; program?: string; content?: string; studentName?: string; schoolName?: string }) => {
       const row: Record<string, unknown> = {}
       if (a.meetingDate !== undefined) row.meeting_date = a.meetingDate || null
       if (a.program !== undefined) row.program = a.program || null
       if (a.content !== undefined) row.content = a.content || null
+      // 학생 재지정(미분류 코멘트를 올바른 학생에 연결)
+      if (a.studentName !== undefined) row.student_name = a.studentName
+      if (a.schoolName !== undefined) row.school_name = a.schoolName || null
       const { error } = await supabase.from('partner_student_meetings').update(row).eq('id', a.id)
       if (error) throw error
     },
