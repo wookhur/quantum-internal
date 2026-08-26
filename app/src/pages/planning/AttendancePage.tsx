@@ -493,6 +493,7 @@ export function AttendancePage() {
 
   // ─── Readable report (default download) ───
   const handleExportReadable = () => {
+    if (!canEdit) return
     const targetAttendances = selectedProfile === 'all'
       ? attendances
       : attendances.filter(a => a.profileId === selectedProfile)
@@ -563,6 +564,7 @@ export function AttendancePage() {
 
   // ─── Export in Shiftee upload format (for re-import into Shiftee) ───
   const handleExport = () => {
+    if (!canEdit) return
     const wsData: (string | number | null)[][] = []
 
     wsData.push([
@@ -792,14 +794,19 @@ export function AttendancePage() {
             {t('attendance.add')}
           </Button>
         )}
-        <Button variant="outline" size="sm" className="h-8" onClick={handleExportReadable}>
-          <Download className="h-3.5 w-3.5 mr-1" />
-          {t('attendance.export')}
-        </Button>
-        <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" onClick={handleExport}>
-          <Download className="h-3.5 w-3.5 mr-1" />
-          {t('attendance.exportShiftee')}
-        </Button>
+        {/* 엑셀 다운로드는 전 직원 근태를 받아가므로 근태관리 담당자(canEditAttendance)만 가능 */}
+        {canEdit && (
+          <>
+            <Button variant="outline" size="sm" className="h-8" onClick={handleExportReadable}>
+              <Download className="h-3.5 w-3.5 mr-1" />
+              {t('attendance.export')}
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 text-muted-foreground" onClick={handleExport}>
+              <Download className="h-3.5 w-3.5 mr-1" />
+              {t('attendance.exportShiftee')}
+            </Button>
+          </>
+        )}
         {canEdit && (
           <>
             <Button variant="outline" size="sm" className="h-8" onClick={handleFilePick}>
