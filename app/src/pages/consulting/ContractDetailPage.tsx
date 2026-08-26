@@ -765,6 +765,14 @@ export function ContractDetailPage() {
   const extraInstIds = (contract?.installments || []).filter(i => i.category === 'extra').map(i => i.id)
   const { data: revenueShares = [] } = useRevenueSharesByInstallments(extraInstIds)
   const { data: contractIncentives = [] } = useContractIncentives(id)
+  // 인센티브 설정 열람·수정 범위:
+  //  · 재무담당자(account)/관리자(admin) = 전체 인센티브 열람 + 수정 가능
+  //  · 그 외 직원 = 본인이 수령자인 인센티브만 열람(수정 불가) — 남의 인센티브 노출 방지
+  const financeAccess = user?.role === 'account' || user?.role === 'admin'
+  const visibleIncentives = useMemo(
+    () => (financeAccess ? contractIncentives : contractIncentives.filter((inc) => inc.profileId && inc.profileId === user?.id)),
+    [financeAccess, contractIncentives, user?.id],
+  )
   // 이 계약의 세일즈 인센티브 담당자(중복 제거) — 환불완료 시 차감 입력 대상
   const incentiveContributorNames = useMemo(
     () => [...new Set(contractIncentives.map((ci) => ci.displayName).filter((n): n is string => !!n))],
@@ -1390,13 +1398,13 @@ export function ContractDetailPage() {
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <DollarSign className="size-5 text-orange-500" />
             {t('incentive.assign')}
-            {contractIncentives.length > 0 && (
+            {visibleIncentives.length > 0 && (
               <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50">
-                {contractIncentives.length}
+                {visibleIncentives.length}
               </Badge>
             )}
           </h2>
-          {canEdit && incentiveContributorNames.length > 0 && (
+          {financeAccess && canEdit && incentiveContributorNames.length > 0 && (
             <Button size="sm" variant="outline" className={`gap-1.5 ${clawOpen ? 'text-muted-foreground' : 'text-rose-700 border-rose-200 hover:bg-rose-50'}`}
               onClick={() => { if (!clawOpen) { setClawMonth(nextMonthKey(todayLocalISO())); setClawAmts({}); setClawReason('') } setClawOpen((v) => !v) }}>
               <DollarSign className="size-3.5" /> {clawOpen ? '닫기' : '환급금 신청'}
@@ -1441,8 +1449,8 @@ export function ContractDetailPage() {
           </Card>
         )}
 
-        {/* 환급 현황 — 신청된 건: 환급신청/환급완료 드롭다운(계약 환불 프로세스와 동일) */}
-        {contractClawbacks.length > 0 && (
+        {/* 환급 현황 — 신청된 건: 환급신청/환급완료 드롭다운(계약 환불 프로세스와 동일). 재무 권한자만 열람 */}
+        {financeAccess && contractClawbacks.length > 0 && (
           <Card className="mb-3">
             <CardContent className="py-3 space-y-2">
               <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">인센티브 환급 현황</div>
@@ -1482,7 +1490,7 @@ export function ContractDetailPage() {
           <CardContent className="py-4 space-y-4">
             {/* ── Base contract incentives ── */}
             {(() => {
-              const baseIncentives = contractIncentives.filter(inc => !inc.installmentId)
+              const baseIncentives = visibleIncentives.filter(inc => !inc.installmentId)
               return baseIncentives.length > 0 ? (
                 <div className="space-y-3">
                   <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('incentive.baseContract')}</div>
@@ -1503,9 +1511,9 @@ export function ContractDetailPage() {
                               )}
                             </span>
                           </div>
-                          {canEdit && !isCancelled && (
+                          {financeAccess && !isCancelled && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                              onClick={() => { if (!canEdit) return; if (confirm(t('incentive.deleteConfirm'))) deleteIncentive.mutate(inc.id) }}>
+                              onClick={() => { if (!financeAccess) return; if (confirm(t('incentive.deleteConfirm'))) deleteIncentive.mutate(inc.id) }}>
                               <Trash2 className="size-3.5" />
                             </Button>
                           )}
@@ -1524,7 +1532,7 @@ export function ContractDetailPage() {
                               const instInc = isPaid ? Math.round(amountExVat * rowPct / 100) : 0
                               // 현재 요율과 일치하는 유형(강조용) — 없으면 미선택
                               const curTypeKey = (Object.keys(INCENTIVE_TYPES) as IncentiveType[]).find((k) => INCENTIVE_TYPES[k].defaultPct === rowPct) || ''
-                              const rateControl = (canEdit && !isCancelled) ? (
+                              const rateControl = (financeAccess && !isCancelled) ? (
                                 <Select value={curTypeKey} onValueChange={(v) => { if (v) saveIncentiveRate(inc, inst.id, INCENTIVE_TYPES[v as IncentiveType].defaultPct) }}>
                                   <SelectTrigger className={`h-6 w-[76px] text-xs ${overridden ? 'border-orange-300 text-orange-700 font-semibold' : ''}`}>
                                     <span>{rowPct}%</span>
@@ -1566,8 +1574,8 @@ export function ContractDetailPage() {
               )
             })()}
 
-            {/* Add base incentive form */}
-            {canEdit && !isCancelled && (
+            {/* Add base incentive form — 재무 권한자만 */}
+            {financeAccess && !isCancelled && (
               <div className="flex items-end gap-2 pt-2 border-t flex-wrap">
                 <div className="flex-1 min-w-[160px] space-y-1">
                   <label className="text-xs text-muted-foreground">{t('incentive.selectPerson')}</label>
