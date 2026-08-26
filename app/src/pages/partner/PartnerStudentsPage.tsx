@@ -221,6 +221,15 @@ export function PartnerStudentsPage() {
     }).catch(() => {})
   }
 
+  // 관리자/전체열람자 진단·안전망: 어느 학생 이름(영문·한글)과도 매칭되지 않아
+  // 자동으로 학생 카드에 붙지 못한 코멘트를 모아 노출한다(코멘트가 화면에서 완전히 사라지지 않도록).
+  const orphanMeetings = useMemo(() => {
+    if (!canViewAll) return []
+    const keys = new Set<string>()
+    allStudents.forEach(s => { [s.name, s.koreanName].forEach(n => { if (n) keys.add(nrm(n)) }) })
+    return meetings.filter(m => !keys.has(nrm(m.studentName)))
+  }, [canViewAll, allStudents, meetings]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="p-6 space-y-4">
       <div>
@@ -239,6 +248,30 @@ export function PartnerStudentsPage() {
             </SelectContent>
           </Select>
           {partnerFilter !== 'all' && <span className="text-xs text-muted-foreground">“{partnerFilter}” 학생 {students.length}명 · 코멘트도 이 파트너사 것만 표시</span>}
+        </div>
+      )}
+
+      {canViewAll && orphanMeetings.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+          <div className="text-sm font-semibold text-amber-800">
+            미분류 코멘트 {orphanMeetings.length}건
+          </div>
+          <div className="text-xs text-amber-700">
+            저장된 학생 이름이 현재 학생 목록의 이름(영문·한글)과 일치하지 않아 학생 카드에 자동 연결되지 못한 코멘트입니다. (삭제된 게 아니라 이름 표기 차이 때문)
+          </div>
+          <div className="space-y-1.5">
+            {orphanMeetings.map(m => (
+              <div key={m.id} className="rounded border border-amber-200 bg-white p-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                  <span className="font-medium text-gray-800">학생명(저장값): “{m.studentName}”</span>
+                  <span>· {meetingAuthorLabel(m) || m.authorName || '작성자 —'}</span>
+                  <span>· {m.meetingDate || '날짜 없음'}</span>
+                  {m.program && <span>· {m.program}</span>}
+                </div>
+                {m.content && <div className="whitespace-pre-wrap text-sm mt-1">{m.content}</div>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
