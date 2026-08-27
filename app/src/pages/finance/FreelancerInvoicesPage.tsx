@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
-  FileText, Plus, Trash2, Download, CheckCircle2, XCircle,
+  FileText, Plus, Trash2, Download, CheckCircle2, XCircle, Pencil,
   Eye, Loader2, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -665,11 +665,13 @@ function InvoiceDetailDialog({
   onOpenChange,
   invoice,
   canEdit,
+  onEdit,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   invoice: FreelancerInvoice
   canEdit: boolean
+  onEdit?: () => void
 }) {
   const t = useT()
   const { user } = useAuth()
@@ -678,6 +680,8 @@ function InvoiceDetailDialog({
   const deleteInvoice = useDeleteInvoice()
   const isAccounting = canAccessAccount(user)
   const canDelete = isAccounting || (invoice.freelancerId === user?.id && invoice.status !== 'approved')
+  // 제출자 본인(승인 전) 또는 재무가 수정 가능
+  const canEditThis = canEdit && (isAccounting || (invoice.freelancerId === user?.id && invoice.status !== 'approved'))
   const [downloading, setDownloading] = useState(false)
 
   const handleDownload = async () => {
@@ -756,6 +760,12 @@ function InvoiceDetailDialog({
               {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
               엑셀 다운로드
             </Button>
+            {canEditThis && onEdit && (
+              <Button variant="outline" className="gap-1.5" onClick={() => onEdit()}>
+                <Pencil className="size-4" />
+                수정
+              </Button>
+            )}
             {canEdit && canDelete && (
               <Button
                 variant="outline"
@@ -1840,6 +1850,7 @@ export function FreelancerInvoicesPage(
           onOpenChange={open => { if (!open) setDetailInvoice(undefined) }}
           invoice={detailInvoice}
           canEdit={canEdit}
+          onEdit={() => { const inv = detailInvoice; setDetailInvoice(undefined); setEditInvoice(inv); setFormOpen(true) }}
         />
       )}
     </div>
