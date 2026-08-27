@@ -152,7 +152,7 @@ export function MeetingAgendaPage() {
                 {selected.attendeeIds.length > 0 && (
                   <div className="border-t pt-2 space-y-1.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs text-muted-foreground">참석자</span>
+                      <span className="text-xs text-muted-foreground">참석예정자</span>
                       {selected.attendeeIds.map(id => {
                         const resp = selected.attendeeResponses[id]
                         return (
@@ -488,7 +488,7 @@ function MeetingFormDialog({ open, onOpenChange, editing, profiles, userId, user
     createNotificationsForUsers(targets, {
       type: 'meeting_agenda',
       title: '회의 참석 요청',
-      message: `${userName || '누군가'}님이 "${title}" 회의에 참석자로 지정했습니다.`,
+      message: `${userName || '누군가'}님이 "${title}" 회의에 참석예정자로 지정했습니다.`,
       link: '/common/meeting-agenda',
       metadata: { title },
     }).catch(() => {})
@@ -528,11 +528,11 @@ function MeetingFormDialog({ open, onOpenChange, editing, profiles, userId, user
             <Input value={location} onChange={e => setLocation(e.target.value)} placeholder="회의실 또는 Zoom/Meet 링크" />
           </div>
           <div>
-            <Label className="text-xs">참석자 <span className="text-muted-foreground">({attendees.length}명)</span></Label>
+            <Label className="text-xs">참석예정자 <span className="text-muted-foreground">({attendees.length}명)</span></Label>
             <Popover>
               <PopoverTrigger className="flex h-9 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-ring">
                 <span className={attendees.length ? 'text-foreground truncate' : 'text-muted-foreground'}>
-                  {attendees.length ? attendees.map(id => profiles.find(p => p.id === id)?.name).filter(Boolean).join(', ') : '참석자 선택'}
+                  {attendees.length ? attendees.map(id => profiles.find(p => p.id === id)?.name).filter(Boolean).join(', ') : '참석예정자 선택'}
                 </span>
               </PopoverTrigger>
               <PopoverContent className="w-64 p-1 max-h-72 overflow-y-auto">
