@@ -2,6 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Lead } from '@/types'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function isUuid(v: unknown): boolean {
+  return typeof v === 'string' && UUID_RE.test(v.trim())
+}
+
 export interface GlobalSearchResult {
   type: 'lead' | 'contract' | 'project' | 'student'
   id: string
@@ -206,7 +211,9 @@ export function useGlobalSearch(query: string) {
             title: displayName || '학생',
             subtitle: [row.school, row.grade, row.preferred_language ? `🗣 ${row.preferred_language}` : ''].filter(Boolean).join(' · '),
             meta: row.status || undefined,
-            stage: row.assigned_consultant || undefined,
+            // assigned_consultant 는 담당자 '이름'이어야 하나, 일부 학생은 프로필 id(UUID)로
+            // 잘못 저장돼 있어 뱃지에 UUID가 노출됨 → UUID 형태면 표시하지 않음.
+            stage: isUuid(row.assigned_consultant) ? undefined : (row.assigned_consultant || undefined),
             navigateTo: `/service/student-360?student=${row.id}`,
             raw: row,
             personNames: [row.name as string, row.korean_name as string].filter(Boolean),
