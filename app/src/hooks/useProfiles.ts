@@ -152,6 +152,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/person', labelKey: 'nav.personProfile', module: 'dashboard', hidden: true },
   { path: '/common/coupang-orders', labelKey: 'nav.coupangOrders', module: 'dashboard' },
   { path: '/common/archive', labelKey: 'nav.archive', module: 'dashboard' },
+  { path: '/common/meeting-agenda', labelKey: 'nav.meetingAgenda', module: 'dashboard' },
   // ── Sales ──
   { path: '/sales/leads', labelKey: 'nav.leadManagement', module: 'sales' },
   { path: '/sales/cold-call', labelKey: 'nav.coldCall', module: 'sales' },
@@ -264,7 +265,7 @@ export const INTERNAL_ONLY_ROUTES: string[] = ['/common/archive']
 export const PARTNER_BOARD_ROUTES: string[] = ['/partner/students', '/partner/companies', '/partner/contracts']
 
 /** 전 직원에게 열람·편집 오픈되는 게시판(역할·모듈·커스텀 설정과 무관하게 항상 허용) */
-export const OPEN_TO_ALL_ROUTES: string[] = ['/partner/tutors']
+export const OPEN_TO_ALL_ROUTES: string[] = ['/partner/tutors', '/common/meeting-agenda']
 
 /** Get all route paths for a module */
 export function getRoutesForModule(mod: FeatureModule): string[] {

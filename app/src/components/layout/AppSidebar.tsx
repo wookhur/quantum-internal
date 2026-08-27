@@ -44,6 +44,7 @@ import {
   NotebookPen,
   Tag,
   FolderArchive,
+  CalendarClock,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -72,6 +73,7 @@ export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; i
       { labelKey: 'nav.messages', to: '/messages', icon: MessageSquare },
       { labelKey: 'nav.coupangOrders', to: '/common/coupang-orders', icon: ShoppingCart },
       { labelKey: 'nav.archive', to: '/common/archive', icon: FolderArchive },
+      { labelKey: 'nav.meetingAgenda', to: '/common/meeting-agenda', icon: CalendarClock },
     ],
   },
   {

@@ -61,6 +61,7 @@ import { SalesPriceGuidePage } from '@/pages/partner/SalesPriceGuidePage'
 import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
 import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
 import { ArchivePage } from '@/pages/common/ArchivePage'
+import { MeetingAgendaPage } from '@/pages/common/MeetingAgendaPage'
 import { SeminarsPage } from '@/pages/marketing/SeminarsPage'
 import { QnaPage } from '@/pages/marketing/QnaPage'
 import { SeminarRegisterPage } from '@/pages/public/SeminarRegisterPage'
@@ -170,6 +171,7 @@ export default function App() {
 
                 <Route path="/common/coupang-orders" element={<CoupangOrdersPage />} />
                 <Route path="/common/archive" element={<ArchivePage />} />
+                <Route path="/common/meeting-agenda" element={<MeetingAgendaPage />} />
                 <Route path="/game" element={<GamePage />} />
               </Route>
             </Route>
