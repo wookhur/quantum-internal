@@ -150,10 +150,10 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/my-todos', labelKey: 'nav.myTodo', module: 'dashboard' },
   { path: '/messages', labelKey: 'nav.messages', module: 'dashboard' },
   { path: '/person', labelKey: 'nav.personProfile', module: 'dashboard', hidden: true },
+  { path: '/common/meeting-agenda', labelKey: 'nav.meetingAgenda', module: 'dashboard' },
   { path: '/common/expense-requests', labelKey: 'nav.expenseRequests', module: 'dashboard' },
   { path: '/common/coupang-orders', labelKey: 'nav.coupangOrders', module: 'dashboard' },
   { path: '/common/archive', labelKey: 'nav.archive', module: 'dashboard' },
-  { path: '/common/meeting-agenda', labelKey: 'nav.meetingAgenda', module: 'dashboard' },
   // ── Sales ──
   { path: '/sales/leads', labelKey: 'nav.leadManagement', module: 'sales' },
   { path: '/sales/cold-call', labelKey: 'nav.coldCall', module: 'sales' },
@@ -260,7 +260,7 @@ export function canAccessAccount(
 /** 재무 권한자만 열람 가능한 라우트(재정대시보드). admin이라도 account 없으면 차단. */
 export const ACCOUNT_ONLY_ROUTES: string[] = ['/finance/dashboard']
 // 내부직원(내부 스태프) 전용 — 외부/프리랜서/외부표시 계정은 기본 제외 (명시 부여 시 허용)
-export const INTERNAL_ONLY_ROUTES: string[] = ['/common/archive']
+export const INTERNAL_ONLY_ROUTES: string[] = ['/common/archive', '/common/meeting-agenda', '/common/expense-requests']
 
 /** 파트너 게시판 3종 — 서비스팀(department='service') 소속에게 열람 허용 */
 export const PARTNER_BOARD_ROUTES: string[] = ['/partner/students', '/partner/companies', '/partner/contracts']

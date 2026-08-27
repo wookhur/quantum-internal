@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
 export type MeetingStatus = 'scheduled' | 'done' | 'cancelled'
-export type ItemStatus = 'open' | 'in_progress' | 'done'
+export type ItemStatus = 'open' | 'in_progress' | 'hold' | 'done' | 'cancelled'
 export type AttendeeResponse = 'yes' | 'no' | 'maybe'
 
 export interface MeetingAgenda {

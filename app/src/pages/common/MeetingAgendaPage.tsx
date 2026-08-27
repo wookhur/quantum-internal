@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarDays, Clock, MapPin, Users, Plus, Trash2, Pencil, MessageSquare, Send, Check, X, Paperclip, ArrowRightCircle, ClipboardCheck } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useCreateTask } from '@/hooks/useTasks'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import {
   useMeetingAgendas, useCreateMeeting, useUpdateMeeting, useDeleteMeeting, useSetAttendeeResponse,
@@ -27,8 +28,10 @@ const MEETING_STATUS: Record<MeetingStatus, { label: string; cls: string }> = {
 }
 const ITEM_STATUS: Record<ItemStatus, { label: string; cls: string }> = {
   open: { label: '예정', cls: 'bg-gray-100 text-gray-600 border-gray-200' },
-  in_progress: { label: '진행중', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  in_progress: { label: '진행', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  hold: { label: '보류', cls: 'bg-orange-50 text-orange-700 border-orange-200' },
   done: { label: '완료', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  cancelled: { label: '취소', cls: 'bg-gray-100 text-gray-400 border-gray-200' },
 }
 const RESPONSE_META: Record<AttendeeResponse, { label: string; cls: string }> = {
   yes: { label: '참석', cls: 'bg-emerald-100 text-emerald-700' },
@@ -280,8 +283,25 @@ function AgendaItems({ meeting, profiles, profileName, userId, userName, onSelec
   const updateItem = useUpdateItem()
   const deleteItem = useDeleteItem()
   const createMeeting = useCreateMeeting()
+  const createTask = useCreateTask()
   const [newContent, setNewContent] = useState('')
   const [newOwner, setNewOwner] = useState('')
+
+  // 안건을 업무요청(TaskBoard)으로 전송
+  const sendToTaskBoard = (content: string, ownerId?: string) => {
+    if (!userId) { alert('로그인 정보가 없어 업무요청으로 보낼 수 없습니다.'); return }
+    createTask.mutate(
+      { title: content, description: `회의 "${meeting.title}"의 안건에서 생성`, requesterId: userId, assigneeId: ownerId },
+      { onSuccess: () => alert('업무요청으로 전송했습니다.') },
+    )
+  }
+  // 상태 변경 — '진행' 선택 시 업무요청 연동 팝업
+  const changeStatus = (it: { id: string; content: string; ownerId?: string; status: ItemStatus }, next: ItemStatus) => {
+    updateItem.mutate({ id: it.id, meetingId, status: next })
+    if (next === 'in_progress' && it.status !== 'in_progress') {
+      if (confirm('이 안건을 업무요청으로 보낼까요?')) sendToTaskBoard(it.content, it.ownerId)
+    }
+  }
 
   const addItem = () => {
     if (!newContent.trim()) return
@@ -291,7 +311,7 @@ function AgendaItems({ meeting, profiles, profileName, userId, userName, onSelec
     )
   }
 
-  const incomplete = items.filter(i => i.status !== 'done')
+  const incomplete = items.filter(i => i.status !== 'done' && i.status !== 'cancelled')
   // 미완료 안건을 후속 회의로 이월 (새 회의 생성 + 항목 복사)
   const carryOver = async () => {
     if (!incomplete.length) { alert('이월할 미완료 안건이 없습니다.'); return }
@@ -325,12 +345,18 @@ function AgendaItems({ meeting, profiles, profileName, userId, userName, onSelec
             <div key={it.id} className="rounded-lg border p-3 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-start gap-2 min-w-0">
+                  {/* 독립 체크박스 — 완료 토글 */}
+                  <button
+                    onClick={() => updateItem.mutate({ id: it.id, meetingId, status: it.status === 'done' ? 'open' : 'done' })}
+                    className={`mt-0.5 size-4 rounded border flex items-center justify-center shrink-0 ${it.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-input hover:border-primary'}`}
+                    title="완료 체크"
+                  >{it.status === 'done' && <Check className="size-3" />}</button>
                   <span className="text-xs text-muted-foreground mt-0.5 shrink-0">{idx + 1}.</span>
-                  <span className="text-sm whitespace-pre-wrap">{it.content}</span>
+                  <span className={`text-sm whitespace-pre-wrap ${it.status === 'done' || it.status === 'cancelled' ? 'line-through text-muted-foreground' : ''}`}>{it.content}</span>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <Select value={it.status} onValueChange={(v) => v && updateItem.mutate({ id: it.id, meetingId, status: v as ItemStatus })}>
-                    <SelectTrigger className={`h-6 w-[76px] text-[11px] ${ITEM_STATUS[it.status].cls}`}><span>{ITEM_STATUS[it.status].label}</span></SelectTrigger>
+                  <Select value={it.status} onValueChange={(v) => v && changeStatus(it, v as ItemStatus)}>
+                    <SelectTrigger className={`h-6 w-[72px] text-[11px] ${ITEM_STATUS[it.status].cls}`}><span>{ITEM_STATUS[it.status].label}</span></SelectTrigger>
                     <SelectContent>
                       {(Object.keys(ITEM_STATUS) as ItemStatus[]).map(s => <SelectItem key={s} value={s}>{ITEM_STATUS[s].label}</SelectItem>)}
                     </SelectContent>

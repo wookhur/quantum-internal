@@ -71,10 +71,10 @@ export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; i
       { labelKey: 'nav.dailyTask', to: '/daily-tasks', icon: CalendarDays },
       { labelKey: 'nav.myTodo', to: '/my-todos', icon: CheckSquare },
       { labelKey: 'nav.messages', to: '/messages', icon: MessageSquare },
+      { labelKey: 'nav.meetingAgenda', to: '/common/meeting-agenda', icon: CalendarClock },
       { labelKey: 'nav.expenseRequests', to: '/common/expense-requests', icon: Receipt },
       { labelKey: 'nav.coupangOrders', to: '/common/coupang-orders', icon: ShoppingCart },
       { labelKey: 'nav.archive', to: '/common/archive', icon: FolderArchive },
-      { labelKey: 'nav.meetingAgenda', to: '/common/meeting-agenda', icon: CalendarClock },
     ],
   },
   {
