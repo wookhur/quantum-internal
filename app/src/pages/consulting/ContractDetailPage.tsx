@@ -835,7 +835,7 @@ export function ContractDetailPage() {
   const [chargeForm, setChargeForm] = useState({ label: '', amount: '', dueDate: '', notes: '' })
   const [revenueShareRows, setRevenueShareRows] = useState<{ name: string; amount: string; role: string }[]>([])
   const [editInstDialogOpen, setEditInstDialogOpen] = useState(false)
-  const [editInstForm, setEditInstForm] = useState({ id: '', label: '', amount: '', dueDate: '', paidDate: '', paidAmount: '', paymentMethod: '', notes: '', isPaid: false })
+  const [editInstForm, setEditInstForm] = useState({ id: '', label: '', amount: '', dueDate: '', paidDate: '', paidAmount: '', paymentMethod: '', notes: '', isPaid: false, refundStatus: '' as '' | 'requested' | 'completed', refundAmount: '', refundDate: '', refundReason: '', refundAccount: '' })
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [selectedInstallment, setSelectedInstallment] = useState<PaymentInstallment | null>(null)
   const [payForm, setPayForm] = useState({
@@ -1039,6 +1039,11 @@ export function ContractDetailPage() {
       paymentMethod: inst.paymentMethod || '',
       notes: inst.notes || '',
       isPaid: hasPaid,
+      refundStatus: inst.refundStatus || '',
+      refundAmount: inst.refundAmount != null ? String(inst.refundAmount) : '',
+      refundDate: inst.refundDate || '',
+      refundReason: inst.refundReason || '',
+      refundAccount: inst.refundAccount || '',
     })
     setEditInstDialogOpen(true)
   }, [canEdit])
@@ -1058,6 +1063,14 @@ export function ContractDetailPage() {
       payload.paidDate = editInstForm.paidDate || ''
       payload.paidAmount = Number(editInstForm.paidAmount) || 0
       if (editInstForm.paymentMethod) payload.paymentMethod = editInstForm.paymentMethod
+    }
+    // 환불 정보 수정(환불액·환불일·사유·계좌) — 추가 환불/2차 환불 반영
+    if (editInstForm.refundStatus) {
+      payload.refundStatus = editInstForm.refundStatus
+      payload.refundAmount = editInstForm.refundAmount ? Number(editInstForm.refundAmount.replace(/,/g, '')) : null
+      payload.refundDate = editInstForm.refundDate || null
+      payload.refundReason = editInstForm.refundReason.trim() || null
+      payload.refundAccount = editInstForm.refundAccount.trim() || null
     }
     updateInstallment.mutate(payload, {
       onSuccess: () => {
@@ -2281,6 +2294,31 @@ export function ContractDetailPage() {
                 placeholder={t('contracts.memoPlaceholder')}
               />
             </div>
+            {/* 환불 정보 (환불신청/완료 건) — 추가·2차 환불 반영을 위해 편집창에서 수정 가능 */}
+            {editInstForm.refundStatus && (
+              <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50/40 p-3">
+                <div className="text-sm font-semibold text-rose-700">환불 정보</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">환불액</Label>
+                    <Input value={editInstForm.refundAmount} inputMode="numeric" onChange={e => setEditInstForm(f => ({ ...f, refundAmount: e.target.value }))} placeholder="0" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">환불일</Label>
+                    <Input type="date" value={editInstForm.refundDate} onChange={e => setEditInstForm(f => ({ ...f, refundDate: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">환불 계좌</Label>
+                  <Input value={editInstForm.refundAccount} onChange={e => setEditInstForm(f => ({ ...f, refundAccount: e.target.value }))} placeholder="환불 계좌 (선택)" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">환불 사유</Label>
+                  <Textarea value={editInstForm.refundReason} onChange={e => setEditInstForm(f => ({ ...f, refundReason: e.target.value }))} rows={3} placeholder="환불 사유·경위 (2차 환불 등 추가 내역 포함)" />
+                </div>
+                <p className="text-[11px] text-muted-foreground">환불액·환불일·사유를 수정하면 추가 환불(2차 환불)까지 반영됩니다.</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditInstDialogOpen(false)}>
