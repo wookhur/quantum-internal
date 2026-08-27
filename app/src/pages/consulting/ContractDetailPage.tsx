@@ -72,7 +72,7 @@ function useInstallmentStatusConfig() {
 }
 
 /** Unified dropdown: profiles + saved recipients in one flat list + inline add */
-function IncentivePersonSelect({
+export function IncentivePersonSelect({
   profiles,
   recipients,
   value,

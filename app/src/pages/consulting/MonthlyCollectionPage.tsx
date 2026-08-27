@@ -319,7 +319,10 @@ export function MonthlyCollectionPage() {
   // Profile name lookup
   const profileName = useCallback((id?: string) => {
     if (!id) return undefined
-    return profiles.find(p => p.id === id)?.name
+    const found = profiles.find(p => p.id === id)?.name
+    if (found) return found
+    // 프로필 id로 안 잡히면: UUID면 표시 안 함, 아니면 커스텀 담당자 이름이므로 그대로 표시
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? undefined : id
   }, [profiles])
 
   // Sales-incentive recipients by contract (the person who made the initial sale

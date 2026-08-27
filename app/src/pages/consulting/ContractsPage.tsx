@@ -18,6 +18,8 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { useCreateInstallments } from '@/hooks/useInstallments'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAuth } from '@/contexts/AuthContext'
+import { IncentivePersonSelect } from '@/pages/consulting/ContractDetailPage'
+import { useIncentiveRecipients, useCreateIncentiveRecipient, useCreateIncentive, INCENTIVE_TYPES } from '@/hooks/useIncentives'
 import { Textarea } from '@/components/ui/textarea'
 import { ContractPdfUploadDialog } from '@/components/ContractPdfUploadDialog'
 import { formatCurrency } from '@/types'
@@ -103,6 +105,7 @@ const INITIAL_CONTRACT_FORM = {
   currency: 'KRW' as 'KRW' | 'USD',
   paymentAccount: 'KR' as 'KR' | 'US',
   salesRep: '',
+  salesRepName: '',
   serviceRep: '',
   notes: '',
 }
@@ -212,6 +215,9 @@ export function ContractsPage() {
   const [expandedContract, setExpandedContract] = useState<string | null>(null)
   const [fromLead, setFromLead] = useState(false)
   const createContract = useCreateContract()
+  const { data: incentiveRecipients = [] } = useIncentiveRecipients()
+  const createRecipient = useCreateIncentiveRecipient()
+  const createIncentive = useCreateIncentive()
   const createInstallments = useCreateInstallments()
 
   // Auto-open create dialog when navigated from lead stage change
@@ -255,7 +261,7 @@ export function ContractsPage() {
         phone: form.phone || leadInfoRef.current?.phone || undefined,
         address: form.address || undefined,
         paymentAccount: form.paymentAccount,
-        salesRep: form.salesRep || undefined,
+        salesRep: form.salesRep || form.salesRepName.trim() || undefined,
         serviceRep: form.serviceRep || undefined,
         notes: form.notes || undefined,
         leadId: leadInfoRef.current?.leadId,
@@ -277,6 +283,16 @@ export function ContractsPage() {
             }))
           if (data?.id && validItems.length > 0) {
             createInstallments.mutate({ contractId: data.id, items: validItems })
+          }
+          // 세일즈 담당자를 인센티브 설정에 자동 연동 (기본 콜드콜 4% — 계약 상세에서 수정 가능)
+          if (data?.id && (form.salesRep || form.salesRepName.trim())) {
+            createIncentive.mutate({
+              contract_id: data.id,
+              profile_id: form.salesRep || null,
+              custom_name: form.salesRep ? null : (form.salesRepName.trim() || null),
+              incentive_type: 'cold_call',
+              percentage: INCENTIVE_TYPES.cold_call.defaultPct,
+            })
           }
           setDialogOpen(false)
           setForm(INITIAL_CONTRACT_FORM)
@@ -466,14 +482,16 @@ export function ContractsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{t('leadDetail.salesRep')}</Label>
-                    <Select value={form.salesRep} onValueChange={v => setForm(f => ({ ...f, salesRep: v || '' }))}>
-                      <SelectTrigger><span>{profiles.find(p => p.id === form.salesRep)?.name || t('common.select')}</span></SelectTrigger>
-                      <SelectContent>
-                        {profiles.map(p => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <IncentivePersonSelect
+                      profiles={profiles}
+                      recipients={incentiveRecipients}
+                      value={form.salesRep}
+                      customName={form.salesRepName}
+                      onChange={(profileId, customName) => setForm(f => ({ ...f, salesRep: profileId, salesRepName: customName }))}
+                      onAddRecipient={(name) => createRecipient.mutate(name)}
+                      placeholder={t('common.select')}
+                      addNewLabel={t('incentive.addNewPerson')}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>{t('leadDetail.serviceRep')}</Label>
