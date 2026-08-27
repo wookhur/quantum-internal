@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,15 +8,16 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarDays, Clock, MapPin, Users, Plus, Trash2, Pencil, MessageSquare, Send, Check } from 'lucide-react'
+import { CalendarDays, Clock, MapPin, Users, Plus, Trash2, Pencil, MessageSquare, Send, Check, X, Paperclip, ArrowRightCircle, ClipboardCheck } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import {
-  useMeetingAgendas, useCreateMeeting, useUpdateMeeting, useDeleteMeeting,
+  useMeetingAgendas, useCreateMeeting, useUpdateMeeting, useDeleteMeeting, useSetAttendeeResponse,
   useMeetingItems, useCreateItem, useUpdateItem, useDeleteItem,
   useMeetingComments, useCreateComment, useDeleteComment,
-  type MeetingAgenda, type ItemStatus, type MeetingStatus,
+  useMeetingFiles, useUploadMeetingFile, useDeleteMeetingFile,
+  type MeetingAgenda, type ItemStatus, type MeetingStatus, type AttendeeResponse,
 } from '@/hooks/useMeetingAgendas'
 
 const MEETING_STATUS: Record<MeetingStatus, { label: string; cls: string }> = {
@@ -29,11 +30,28 @@ const ITEM_STATUS: Record<ItemStatus, { label: string; cls: string }> = {
   in_progress: { label: '진행중', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   done: { label: '완료', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
 }
+const RESPONSE_META: Record<AttendeeResponse, { label: string; cls: string }> = {
+  yes: { label: '참석', cls: 'bg-emerald-100 text-emerald-700' },
+  no: { label: '불참', cls: 'bg-red-100 text-red-700' },
+  maybe: { label: '미정', cls: 'bg-amber-100 text-amber-700' },
+}
 
 function fmtDate(d?: string) {
   if (!d) return '날짜 미정'
   const [y, m, day] = d.split('-')
   return `${y}.${m}.${day}`
+}
+
+type ProfileLite = { id: string; name: string }
+
+// 댓글 텍스트에서 @이름 멘션을 찾아 해당 프로필 id 반환
+function findMentions(text: string, profiles: ProfileLite[]): string[] {
+  if (!text.includes('@')) return []
+  const ids: string[] = []
+  for (const p of profiles) {
+    if (p.name && text.includes(`@${p.name}`)) ids.push(p.id)
+  }
+  return [...new Set(ids)]
 }
 
 export function MeetingAgendaPage() {
@@ -42,6 +60,7 @@ export function MeetingAgendaPage() {
   const { data: meetings = [], isLoading } = useMeetingAgendas()
   const updateMeeting = useUpdateMeeting()
   const deleteMeeting = useDeleteMeeting()
+  const setResponse = useSetAttendeeResponse()
 
   const profileName = (id?: string) => profiles.find(p => p.id === id)?.name || '—'
   const activeProfiles = useMemo(
@@ -125,18 +144,53 @@ export function MeetingAgendaPage() {
                   </div>
                 </div>
                 {selected.notes && <p className="text-sm whitespace-pre-wrap text-muted-foreground border-t pt-2">{selected.notes}</p>}
+
+                {/* 참석자 + 참석 여부 응답 */}
                 {selected.attendeeIds.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap border-t pt-2">
-                    <span className="text-xs text-muted-foreground">참석자</span>
-                    {selected.attendeeIds.map(id => (
-                      <Badge key={id} variant="outline" className="text-[11px] font-normal">{profileName(id)}</Badge>
-                    ))}
+                  <div className="border-t pt-2 space-y-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs text-muted-foreground">참석자</span>
+                      {selected.attendeeIds.map(id => {
+                        const resp = selected.attendeeResponses[id]
+                        return (
+                          <Badge key={id} variant="outline" className="text-[11px] font-normal gap-1">
+                            {profileName(id)}
+                            {resp && <span className={`px-1 rounded ${RESPONSE_META[resp].cls}`}>{RESPONSE_META[resp].label}</span>}
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                    {user && selected.attendeeIds.includes(user.id) && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-muted-foreground">내 참석 여부</span>
+                        {(Object.keys(RESPONSE_META) as AttendeeResponse[]).map(r => (
+                          <button
+                            key={r}
+                            onClick={() => setResponse.mutate({ meetingId: selected.id, profileId: user.id, response: r, current: selected.attendeeResponses })}
+                            className={`text-[11px] px-2 py-0.5 rounded border ${selected.attendeeResponses[user.id] === r ? RESPONSE_META[r].cls + ' border-transparent font-medium' : 'text-muted-foreground border-input hover:bg-muted'}`}
+                          >{RESPONSE_META[r].label}</button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* 결정사항 / 액션아이템 */}
+                <DecisionsEditor meeting={selected} />
+
+                {/* 파일 첨부 */}
+                <MeetingFiles meetingId={selected.id} profileName={profileName} userId={user?.id} isAdmin={user?.role === 'admin'} />
               </CardContent>
             </Card>
 
-            <AgendaItems meetingId={selected.id} profiles={activeProfiles} profileName={profileName} userId={user?.id} />
+            <AgendaItems
+              meeting={selected}
+              profiles={activeProfiles}
+              profileName={profileName}
+              userId={user?.id}
+              userName={user?.name}
+              onSelectMeeting={setSelectedId}
+            />
           </div>
         ) : (
           <Card><CardContent className="py-16 text-center text-sm text-muted-foreground">왼쪽에서 회의를 선택하거나 새 회의를 만드세요.</CardContent></Card>
@@ -157,17 +211,75 @@ export function MeetingAgendaPage() {
   )
 }
 
-// ─── 안건 항목 + 댓글 ───
-function AgendaItems({ meetingId, profiles, profileName, userId }: {
-  meetingId: string
-  profiles: { id: string; name: string }[]
+// ─── 결정사항 / 액션아이템 (인라인 편집) ───
+function DecisionsEditor({ meeting }: { meeting: MeetingAgenda }) {
+  const update = useUpdateMeeting()
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(meeting.decisions || '')
+  return (
+    <div className="border-t pt-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground flex items-center gap-1"><ClipboardCheck className="size-3.5" />결정사항 · 액션아이템</span>
+        {!editing && <button className="text-[11px] text-primary" onClick={() => { setText(meeting.decisions || ''); setEditing(true) }}>{meeting.decisions ? '편집' : '추가'}</button>}
+      </div>
+      {editing ? (
+        <div className="mt-1 space-y-1.5">
+          <Textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="회의 결정사항·후속 액션아이템 정리" />
+          <div className="flex gap-1.5">
+            <Button size="sm" className="h-7" onClick={() => update.mutate({ id: meeting.id, decisions: text }, { onSuccess: () => setEditing(false) })}>저장</Button>
+            <Button size="sm" variant="outline" className="h-7" onClick={() => setEditing(false)}>취소</Button>
+          </div>
+        </div>
+      ) : (
+        meeting.decisions
+          ? <p className="text-sm whitespace-pre-wrap mt-1">{meeting.decisions}</p>
+          : <p className="text-xs text-muted-foreground mt-1">아직 없음</p>
+      )}
+    </div>
+  )
+}
+
+// ─── 파일 첨부 ───
+function MeetingFiles({ meetingId, profileName, userId, isAdmin }: { meetingId: string; profileName: (id?: string) => string; userId?: string; isAdmin?: boolean }) {
+  const { data: files = [] } = useMeetingFiles(meetingId)
+  const upload = useUploadMeetingFile()
+  const del = useDeleteMeetingFile()
+  const inputRef = useRef<HTMLInputElement>(null)
+  return (
+    <div className="border-t pt-2 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Paperclip className="size-3.5" />첨부파일 {files.length > 0 && `(${files.length})`}</span>
+        <button className="text-[11px] text-primary" onClick={() => inputRef.current?.click()} disabled={upload.isPending}>{upload.isPending ? '업로드 중…' : '파일 추가'}</button>
+        <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) upload.mutate({ meetingId, file: f, uploadedBy: userId }); if (inputRef.current) inputRef.current.value = '' }} />
+      </div>
+      {files.map(f => (
+        <div key={f.id} className="flex items-center gap-2 text-sm">
+          <a href={f.url} target="_blank" rel="noreferrer" className="text-primary underline truncate">{f.name}</a>
+          <span className="text-[11px] text-muted-foreground">· {profileName(f.uploadedBy)}</span>
+          {(f.uploadedBy === userId || isAdmin) && (
+            <button className="text-muted-foreground hover:text-red-600 shrink-0" onClick={() => { if (confirm('첨부파일을 삭제할까요?')) del.mutate({ id: f.id, meetingId, path: f.path }) }}><X className="size-3.5" /></button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── 안건 항목 + 댓글 + 이월 ───
+function AgendaItems({ meeting, profiles, profileName, userId, userName, onSelectMeeting }: {
+  meeting: MeetingAgenda
+  profiles: ProfileLite[]
   profileName: (id?: string) => string
   userId?: string
+  userName?: string
+  onSelectMeeting: (id: string) => void
 }) {
+  const meetingId = meeting.id
   const { data: items = [] } = useMeetingItems(meetingId)
   const createItem = useCreateItem()
   const updateItem = useUpdateItem()
   const deleteItem = useDeleteItem()
+  const createMeeting = useCreateMeeting()
   const [newContent, setNewContent] = useState('')
   const [newOwner, setNewOwner] = useState('')
 
@@ -179,10 +291,32 @@ function AgendaItems({ meetingId, profiles, profileName, userId }: {
     )
   }
 
+  const incomplete = items.filter(i => i.status !== 'done')
+  // 미완료 안건을 후속 회의로 이월 (새 회의 생성 + 항목 복사)
+  const carryOver = async () => {
+    if (!incomplete.length) { alert('이월할 미완료 안건이 없습니다.'); return }
+    if (!confirm(`미완료 안건 ${incomplete.length}건을 후속 회의로 이월할까요? (새 회의가 생성됩니다)`)) return
+    const created = await createMeeting.mutateAsync({
+      title: `${meeting.title} (후속)`, attendeeIds: meeting.attendeeIds, createdBy: userId,
+      notes: `"${meeting.title}" 미완료 안건 이월`,
+    })
+    for (let i = 0; i < incomplete.length; i++) {
+      await createItem.mutateAsync({ meetingId: created.id, content: incomplete[i].content, ownerId: incomplete[i].ownerId, position: i, createdBy: userId })
+    }
+    onSelectMeeting(created.id)
+  }
+
   return (
     <Card>
       <CardContent className="py-4 space-y-3">
-        <div className="text-sm font-semibold flex items-center gap-2">안건 <span className="text-muted-foreground font-normal">({items.length})</span></div>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold flex items-center gap-2">안건 <span className="text-muted-foreground font-normal">({items.length})</span></div>
+          {incomplete.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={carryOver} disabled={createMeeting.isPending}>
+              <ArrowRightCircle className="size-3.5 mr-1" />미완료 {incomplete.length}건 이월
+            </Button>
+          )}
+        </div>
 
         {items.length === 0 && <p className="text-sm text-muted-foreground py-2">아직 안건이 없습니다. 아래에서 추가하세요.</p>}
 
@@ -214,7 +348,7 @@ function AgendaItems({ meetingId, profiles, profileName, userId }: {
                   </SelectContent>
                 </Select>
               </div>
-              <ItemComments meetingId={meetingId} itemId={it.id} profileName={profileName} userId={userId} />
+              <ItemComments meetingId={meetingId} itemId={it.id} profiles={profiles} profileName={profileName} userId={userId} userName={userName} />
             </div>
           ))}
         </div>
@@ -239,12 +373,14 @@ function AgendaItems({ meetingId, profiles, profileName, userId }: {
   )
 }
 
-// ─── 항목별 댓글 ───
-function ItemComments({ meetingId, itemId, profileName, userId }: {
+// ─── 항목별 댓글 (+ @멘션 알림) ───
+function ItemComments({ meetingId, itemId, profiles, profileName, userId, userName }: {
   meetingId: string
   itemId: string
+  profiles: ProfileLite[]
   profileName: (id?: string) => string
   userId?: string
+  userName?: string
 }) {
   const { data: allComments = [] } = useMeetingComments(meetingId)
   const createComment = useCreateComment()
@@ -254,8 +390,23 @@ function ItemComments({ meetingId, itemId, profileName, userId }: {
   const [open, setOpen] = useState(false)
 
   const send = () => {
-    if (!text.trim()) return
-    createComment.mutate({ meetingId, itemId, content: text.trim(), authorId: userId }, { onSuccess: () => setText('') })
+    const content = text.trim()
+    if (!content) return
+    createComment.mutate({ meetingId, itemId, content, authorId: userId }, {
+      onSuccess: () => {
+        setText('')
+        const mentioned = findMentions(content, profiles).filter(id => id !== userId)
+        if (mentioned.length) {
+          createNotificationsForUsers(mentioned, {
+            type: 'meeting_agenda',
+            title: '회의 안건 언급',
+            message: `${userName || '누군가'}님이 회의 안건 댓글에서 회원님을 언급했습니다.`,
+            link: '/common/meeting-agenda',
+            metadata: {},
+          }).catch(() => {})
+        }
+      },
+    })
   }
 
   return (
@@ -277,7 +428,7 @@ function ItemComments({ meetingId, itemId, profileName, userId }: {
             </div>
           ))}
           <div className="flex items-center gap-1.5">
-            <Input value={text} onChange={e => setText(e.target.value)} placeholder="피드백 또는 진행 결과 남기기" className="h-8 text-sm" onKeyDown={e => { if (e.key === 'Enter') send() }} />
+            <Input value={text} onChange={e => setText(e.target.value)} placeholder="피드백/진행 결과 (@이름 으로 언급 시 알림)" className="h-8 text-sm" onKeyDown={e => { if (e.key === 'Enter') send() }} />
             <Button size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={send} disabled={!text.trim()}><Send className="size-3.5" /></Button>
           </div>
         </div>
@@ -291,7 +442,7 @@ function MeetingFormDialog({ open, onOpenChange, editing, profiles, userId, user
   open: boolean
   onOpenChange: (v: boolean) => void
   editing: MeetingAgenda | null
-  profiles: { id: string; name: string }[]
+  profiles: ProfileLite[]
   userId?: string
   userName?: string
 }) {

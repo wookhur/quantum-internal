@@ -10,7 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import {
   Loader2, Megaphone, Plus, Pencil, Trash2, Pin, Building2, Globe, Smartphone, Landmark,
   Phone, Mail, Users, ExternalLink, MonitorSmartphone, MessageCircle, Paperclip, X,
+  CalendarClock, ChevronRight,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { useMeetingAgendas } from '@/hooks/useMeetingAgendas'
 import { todayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import {
@@ -160,6 +163,9 @@ export function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 회의 일정 */}
+      <MeetingWidget userId={user?.id} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 공지사항 */}
@@ -317,5 +323,51 @@ export function DashboardPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// 대시보드 회의 일정 위젯 — 이번 주 예정 회의 + 내가 참석하는 회의
+function MeetingWidget({ userId }: { userId?: string }) {
+  const { data: meetings = [] } = useMeetingAgendas()
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const in7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const upcoming = meetings
+    .filter(m => m.status === 'scheduled' && m.meetingDate && m.meetingDate >= todayStr)
+    .sort((a, b) => (a.meetingDate || '').localeCompare(b.meetingDate || '') || (a.meetingTime || '').localeCompare(b.meetingTime || ''))
+  const thisWeekCount = upcoming.filter(m => (m.meetingDate || '') <= in7).length
+  const mineCount = upcoming.filter(m => userId && m.attendeeIds.includes(userId)).length
+  const rows = upcoming.slice(0, 6)
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2"><CalendarClock className="size-4 text-primary" /> 회의 일정
+            <span className="text-xs font-normal text-muted-foreground">이번 주 {thisWeekCount} · 내 회의 {mineCount}</span>
+          </CardTitle>
+          <Link to="/common/meeting-agenda" className="text-xs text-primary flex items-center gap-0.5">전체 <ChevronRight className="size-3" /></Link>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2">예정된 회의가 없습니다.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {rows.map(m => {
+              const mine = !!userId && m.attendeeIds.includes(userId)
+              const soon = (m.meetingDate || '') <= in7
+              return (
+                <Link key={m.id} to="/common/meeting-agenda" className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/50 text-sm">
+                  <span className="font-mono text-xs text-muted-foreground w-24 shrink-0">{(m.meetingDate || '').replace(/-/g, '.')}{m.meetingTime ? ` ${m.meetingTime}` : ''}</span>
+                  <span className="truncate flex-1">{m.title}</span>
+                  {soon && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 shrink-0">이번주</span>}
+                  {mine && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 shrink-0">참석</span>}
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
