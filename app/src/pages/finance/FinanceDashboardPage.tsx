@@ -24,6 +24,8 @@ import { useAllClawbacks, useSetClawbackStatus, useDeleteClawback } from '@/hook
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { canAccessAccount } from '@/hooks/useProfiles'
+import { useExpenseRequests } from '@/hooks/useExpenseRequests'
+import { Link } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
 
 
@@ -451,6 +453,9 @@ export function FinanceDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 지출결의 요약 (선택 월) */}
+      <ExpenseSummaryCard month={month} />
 
       {/* 인센티브 지급 원장 (월 선택 · 계약·서비스 인센티브) */}
       <IncentivePayoutLedger
@@ -1382,6 +1387,50 @@ function PayoutCard({ title, color, persons, icon, t }: {
             </div>
           </div>
         ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+// 지출결의 요약 카드 (재무대시보드) — 선택 월 기준
+function ExpenseSummaryCard({ month }: { month: string }) {
+  const { data: requests = [] } = useExpenseRequests()
+  const inMonth = (ym?: string) => month === 'all' || (ym || '').slice(0, 7) === month
+  const paid = requests.filter(r => r.status === 'paid' && inMonth(r.paidAt))
+  const pending = requests.filter(r => r.status === 'pending' && inMonth(r.createdAt))
+  const approved = requests.filter(r => r.status === 'approved' && inMonth(r.createdAt))
+  const paidTotal = paid.reduce((s, r) => s + r.amount, 0)
+  const pendingTotal = pending.reduce((s, r) => s + r.amount, 0)
+  const approvedTotal = approved.reduce((s, r) => s + r.amount, 0)
+  const byCat = new Map<string, number>()
+  for (const r of paid) byCat.set(r.category || '기타', (byCat.get(r.category || '기타') || 0) + r.amount)
+  const cats = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2"><Receipt className="size-4 text-primary" /> 지출결의 <span className="text-xs font-normal text-muted-foreground">{month === 'all' ? '전체' : month}</span></CardTitle>
+          <Link to="/common/expense-requests" className="text-xs text-primary">전체 보기</Link>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg bg-muted/50 p-3"><div className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="size-3.5 text-amber-500" />승인 대기</div><div className="text-lg font-bold text-amber-600 mt-0.5">{formatCurrency(pendingTotal)}</div><div className="text-[11px] text-muted-foreground">{pending.length}건</div></div>
+          <div className="rounded-lg bg-muted/50 p-3"><div className="text-xs text-muted-foreground flex items-center gap-1"><CheckCircle2 className="size-3.5 text-blue-500" />승인(지급예정)</div><div className="text-lg font-bold text-blue-600 mt-0.5">{formatCurrency(approvedTotal)}</div><div className="text-[11px] text-muted-foreground">{approved.length}건</div></div>
+          <div className="rounded-lg bg-muted/50 p-3"><div className="text-xs text-muted-foreground flex items-center gap-1"><Banknote className="size-3.5 text-emerald-500" />지급 완료</div><div className="text-lg font-bold text-emerald-600 mt-0.5">{formatCurrency(paidTotal)}</div><div className="text-[11px] text-muted-foreground">{paid.length}건</div></div>
+        </div>
+        {cats.length > 0 && (
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">지급 완료 · 분류별</div>
+            {cats.map(([c, amt]) => (
+              <div key={c} className="flex items-center justify-between text-sm">
+                <span>{c}</span>
+                <span className="font-mono tabular-nums">{formatCurrency(amt)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

@@ -7,7 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
-import { Plus, Trash2, Pencil, X, Check, XCircle, Banknote, AlertTriangle, MessageSquare, Send, Receipt, FileText } from 'lucide-react'
+import { Plus, Trash2, Pencil, X, Check, XCircle, Banknote, AlertTriangle, MessageSquare, Send, Receipt, FileText, Download, PieChart } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { saveAs } from 'file-saver'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
@@ -16,6 +18,7 @@ import {
   useExpenseRequests, useCreateExpense, useUpdateExpense, useSetExpenseStatus, useDeleteExpense,
   useExpenseFiles, useUploadExpenseFile, useDeleteExpenseFile,
   useExpenseComments, useCreateExpenseComment, useDeleteExpenseComment,
+  useCategoryBudgets, useSetCategoryBudget,
   type ExpenseRequest, type ExpenseStatus, type ExpenseFileKind,
 } from '@/hooks/useExpenseRequests'
 
@@ -43,15 +46,60 @@ export function ExpenseRequestsPage() {
   )
 
   const [filter, setFilter] = useState<ExpenseStatus | 'all'>('all')
+  const [month, setMonth] = useState<string>('all') // 'all' | 'YYYY-MM'
   const [selectedId, setSelectedId] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<ExpenseRequest | null>(null)
+  const { data: budgets = [] } = useCategoryBudgets()
+  const setBudget = useSetCategoryBudget()
 
-  const filtered = filter === 'all' ? requests : requests.filter(r => r.status === filter)
+  const availableMonths = useMemo(
+    () => [...new Set(requests.map(r => r.createdAt.slice(0, 7)))].sort((a, b) => b.localeCompare(a)),
+    [requests],
+  )
+  const filtered = requests.filter(r =>
+    (filter === 'all' || r.status === filter) &&
+    (month === 'all' || r.createdAt.slice(0, 7) === month),
+  )
   const selected = filtered.find(r => r.id === selectedId) || filtered[0]
 
   const pendingCount = requests.filter(r => r.status === 'pending').length
   const monthPaidTotal = requests.filter(r => r.status === 'paid' && (r.paidAt || '').slice(0, 7) === CURRENT_MONTH()).reduce((s, r) => s + r.amount, 0)
+
+  // 카테고리별 이번달(또는 선택월) 실지출(지급완료 기준, paidAt 월) + 예산 대비
+  const budgetMonth = month === 'all' ? CURRENT_MONTH() : month
+  const categoryStats = useMemo(() => {
+    const spent = new Map<string, number>()
+    for (const r of requests) {
+      if (r.status !== 'paid') continue
+      if ((r.paidAt || '').slice(0, 7) !== budgetMonth) continue
+      const c = r.category || '기타'
+      spent.set(c, (spent.get(c) || 0) + r.amount)
+    }
+    const cats = [...new Set([...CATEGORIES, ...budgets.map(b => b.category), ...spent.keys()])]
+    return cats.map(c => ({
+      category: c,
+      spent: spent.get(c) || 0,
+      budget: budgets.find(b => b.category === c)?.monthlyBudget || 0,
+    })).filter(s => s.spent > 0 || s.budget > 0)
+  }, [requests, budgets, budgetMonth])
+
+  const exportExcel = () => {
+    const rows = [
+      ['신청일', '제목', '분류', '금액', '통화', '거래처', '결제수단', '상태', '신청자', '처리자', '지급일', '희망지급일', '사유'],
+      ...filtered.map(r => [
+        r.createdAt.slice(0, 10), r.title, r.category || '', r.amount, r.currency, r.vendor || '',
+        r.paymentMethod || '', STATUS_META[r.status].label, profileName(r.requestedBy), profileName(r.approverId),
+        r.paidAt || '', r.neededBy || '', r.description || '',
+      ]),
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!cols'] = [12, 24, 14, 12, 6, 16, 12, 10, 10, 10, 12, 12, 30].map(w => ({ wch: w }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '지출결의')
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    saveAs(new Blob([buf], { type: 'application/octet-stream' }), `지출결의-${month === 'all' ? '전체' : month}.xlsx`)
+  }
 
   const notifyDecision = (req: ExpenseRequest, status: ExpenseStatus) => {
     if (!req.requestedBy || req.requestedBy === user?.id) return
@@ -73,7 +121,17 @@ export function ExpenseRequestsPage() {
           <h1 className="text-xl font-bold">지출결의</h1>
           <p className="text-sm text-muted-foreground mt-0.5">주문요청 외의 지출을 올리고 승인·지급·증빙까지 관리하세요.</p>
         </div>
-        <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true) }}><Plus className="size-4 mr-1" /> 새 지출결의</Button>
+        <div className="flex items-center gap-2">
+          <Select value={month} onValueChange={v => v && setMonth(v)}>
+            <SelectTrigger className="h-9 w-32 text-sm"><span>{month === 'all' ? '전체 기간' : month}</span></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 기간</SelectItem>
+              {availableMonths.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="outline" onClick={exportExcel} disabled={filtered.length === 0}><Download className="size-4 mr-1" />엑셀</Button>
+          <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true) }}><Plus className="size-4 mr-1" /> 새 지출결의</Button>
+        </div>
       </div>
 
       {/* 요약 */}
@@ -82,6 +140,14 @@ export function ExpenseRequestsPage() {
         <div className="rounded-lg bg-muted/50 p-3"><div className="text-xs text-muted-foreground">이번달 지급 합계</div><div className="text-xl font-bold">{formatCurrency(monthPaidTotal, 'KRW')}</div></div>
         <div className="rounded-lg bg-muted/50 p-3"><div className="text-xs text-muted-foreground">전체</div><div className="text-xl font-bold">{requests.length}건</div></div>
       </div>
+
+      {/* 카테고리별 예산 대비 */}
+      <CategoryBudgetPanel
+        month={budgetMonth}
+        stats={categoryStats}
+        canEdit={canApprove}
+        onSetBudget={(category, amount) => setBudget.mutate({ category, monthlyBudget: amount, updatedBy: user?.id })}
+      />
 
       {/* 필터 */}
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -138,6 +204,66 @@ export function ExpenseRequestsPage() {
         <ExpenseFormDialog open={formOpen} onOpenChange={setFormOpen} editing={editing} userId={user?.id} userName={user?.name} approverIds={approverIds} />
       )}
     </div>
+  )
+}
+
+function CategoryBudgetPanel({ month, stats, canEdit, onSetBudget }: {
+  month: string
+  stats: { category: string; spent: number; budget: number }[]
+  canEdit: boolean
+  onSetBudget: (category: string, amount: number) => void
+}) {
+  const [open, setOpen] = useState(true)
+  const [editCat, setEditCat] = useState<string | null>(null)
+  const [editVal, setEditVal] = useState('')
+  const totalSpent = stats.reduce((s, r) => s + r.spent, 0)
+  const totalBudget = stats.reduce((s, r) => s + r.budget, 0)
+  if (stats.length === 0 && !canEdit) return null
+
+  const startEdit = (cat: string, cur: number) => { setEditCat(cat); setEditVal(cur ? String(cur) : '') }
+  const saveEdit = (cat: string) => { onSetBudget(cat, Number(editVal.replace(/,/g, '')) || 0); setEditCat(null) }
+
+  return (
+    <Card>
+      <CardContent className="py-3">
+        <button className="w-full flex items-center justify-between" onClick={() => setOpen(o => !o)}>
+          <span className="text-sm font-semibold flex items-center gap-2"><PieChart className="size-4 text-primary" />카테고리별 예산 대비 <span className="text-xs font-normal text-muted-foreground">{month} · 지출 {formatCurrency(totalSpent, 'KRW')}{totalBudget > 0 ? ` / 예산 ${formatCurrency(totalBudget, 'KRW')}` : ''}</span></span>
+          <span className="text-xs text-muted-foreground">{open ? '접기' : '펼치기'}</span>
+        </button>
+        {open && (
+          <div className="mt-3 space-y-2">
+            {stats.length === 0 && <p className="text-xs text-muted-foreground">이 달의 지급 내역·예산이 없습니다. {canEdit && '카테고리별 예산은 아래에서 지정할 수 있어요.'}</p>}
+            {stats.map(s => {
+              const pct = s.budget > 0 ? Math.min(100, Math.round(s.spent / s.budget * 100)) : 0
+              const over = s.budget > 0 && s.spent > s.budget
+              return (
+                <div key={s.category} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium">{s.category}</span>
+                    <span className="flex items-center gap-2">
+                      <span className={`tabular-nums ${over ? 'text-red-600 font-semibold' : ''}`}>{formatCurrency(s.spent, 'KRW')}</span>
+                      <span className="text-muted-foreground">/</span>
+                      {canEdit && editCat === s.category ? (
+                        <input autoFocus value={editVal} onChange={e => setEditVal(e.target.value)} onBlur={() => saveEdit(s.category)} onKeyDown={e => { if (e.key === 'Enter') saveEdit(s.category) }} className="w-24 h-6 rounded border px-1 text-right text-xs" placeholder="예산" />
+                      ) : (
+                        <button className="tabular-nums text-muted-foreground hover:text-primary" onClick={() => canEdit && startEdit(s.category, s.budget)} disabled={!canEdit}>
+                          {s.budget > 0 ? formatCurrency(s.budget, 'KRW') : (canEdit ? '예산 설정' : '—')}
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                  {s.budget > 0 && (
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full ${over ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.max(2, pct)}%` }} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

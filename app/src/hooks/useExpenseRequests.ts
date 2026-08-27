@@ -226,3 +226,31 @@ export function useDeleteExpenseComment() {
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['expense_request_comments', v.requestId] }),
   })
 }
+
+// ── 카테고리 월 예산 ──
+export interface CategoryBudget { category: string; monthlyBudget: number }
+
+export function useCategoryBudgets() {
+  return useQuery({
+    queryKey: ['expense_category_budgets'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('expense_category_budgets').select('category, monthly_budget')
+      if (error) return [] as CategoryBudget[] // 테이블 미생성 시 조용히 빈 값
+      return (data || []).map(r => ({ category: r.category as string, monthlyBudget: Number(r.monthly_budget) || 0 }))
+    },
+  })
+}
+
+export function useSetCategoryBudget() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ category, monthlyBudget, updatedBy }: { category: string; monthlyBudget: number; updatedBy?: string }) => {
+      const { error } = await supabase.from('expense_category_budgets').upsert(
+        { category, monthly_budget: monthlyBudget, updated_by: updatedBy || null, updated_at: new Date().toISOString() },
+        { onConflict: 'category' },
+      )
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['expense_category_budgets'] }),
+  })
+}
