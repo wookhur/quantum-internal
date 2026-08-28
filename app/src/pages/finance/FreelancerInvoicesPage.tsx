@@ -543,14 +543,14 @@ function saveBlob(buf: ArrayBuffer, name: string) {
 async function downloadBusinessTemplate() {
   const res = await fetch('/business-invoice-template.xlsx')
   if (!res.ok) throw new Error('양식 파일을 불러올 수 없습니다.')
-  saveBlob(await res.arrayBuffer(), '인보이스-사업자-final.xlsx')
+  saveBlob(await res.arrayBuffer(), '인보이스-사업자.xlsx')
 }
 
 // 프리랜서(개인)용 양식 — 품목표: C=날짜, D=영상명, E=단가, G=비고 (헤더 11행)
 async function downloadFreelancerTemplate() {
   const res = await fetch('/freelancer-individual-template.xlsx')
   if (!res.ok) throw new Error('양식 파일을 불러올 수 없습니다.')
-  saveBlob(await res.arrayBuffer(), '인보이스-개인-final.xlsx')
+  saveBlob(await res.arrayBuffer(), '인보이스-개인.xlsx')
 }
 
 
