@@ -184,7 +184,6 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/finance/incentives/by-person', labelKey: 'nav.incentives', module: 'finance', hidden: true },
 
   { path: '/invoices/freelancer-individual', labelKey: 'nav.invoiceFreelancerIndividual', module: 'invoice' },
-  { path: '/invoices/freelancer-business', labelKey: 'nav.invoiceFreelancerBusiness', module: 'invoice' },
   { path: '/invoices/sales-incentive', labelKey: 'nav.invoiceSalesIncentive', module: 'invoice' },
   { path: '/invoices/partner-individual', labelKey: 'nav.invoicePartnerIndividual', module: 'invoice' },
   { path: '/invoices/partner-business', labelKey: 'nav.invoicePartnerBusiness', module: 'invoice' },

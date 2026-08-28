@@ -129,8 +129,11 @@ export default function App() {
                 <Route path="/finance/incentives/by-contract" element={<IncentiveByContractPage />} />
                 <Route path="/finance/incentives/by-person" element={<IncentiveByPersonPage />} />
                 {/* Invoice management (consolidated) */}
+                {/* 프리랜서 개인·사업자를 한 화면으로 합쳤다. 발행 폼에서 고른다.
+                    주소는 그대로 둔다 — 게시판 권한이 경로로 저장돼 있어서
+                    경로를 바꾸면 지금까지 준 권한이 전부 풀린다. */}
                 <Route path="/invoices/freelancer-individual" element={<FreelancerInvoicesPage kind="freelancer" />} />
-                <Route path="/invoices/freelancer-business" element={<FreelancerInvoicesPage kind="freelancer" business />} />
+                <Route path="/invoices/freelancer-business" element={<Navigate to="/invoices/freelancer-individual" replace />} />
                 <Route path="/invoices/sales-incentive" element={<FreelancerInvoicesPage kind="sales_incentive" />} />
                 <Route path="/invoices/partner-individual" element={<FreelancerInvoicesPage kind="partner" />} />
                 <Route path="/invoices/partner-business" element={<FreelancerInvoicesPage kind="partner" business />} />

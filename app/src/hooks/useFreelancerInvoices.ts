@@ -74,14 +74,20 @@ function mapItem(r: Record<string, unknown>): InvoiceItem {
   }
 }
 
-export function useFreelancerInvoices(month?: string, kind: string = 'freelancer') {
+/** 프리랜서 인보이스는 개인·사업자를 한 화면에서 다룬다. 저장은 여전히
+ *  kind 로 나뉘어 있으므로(freelancer / freelancer_business) 조회할 때 둘을 함께 읽는다. */
+type Kinds = string | string[]
+const kindList = (k: Kinds) => (Array.isArray(k) ? k : [k])
+const kindKey = (k: Kinds) => kindList(k).join(',')
+
+export function useFreelancerInvoices(month?: string, kind: Kinds = 'freelancer') {
   return useQuery({
-    queryKey: ['freelancer-invoices', month, kind],
+    queryKey: ['freelancer-invoices', month, kindKey(kind)],
     queryFn: async () => {
       let q = supabase
         .from('freelancer_invoices')
         .select('*, profiles!freelancer_invoices_freelancer_id_fkey(name, email)')
-        .eq('kind', kind)
+        .in('kind', kindList(kind))
         .order('invoice_date', { ascending: false })
       if (month) q = q.eq('invoice_month', month)
       const { data, error } = await q
@@ -108,16 +114,16 @@ export function useAllInvoices(month?: string) {
   })
 }
 
-export function useMyInvoices(userId?: string, kind: string = 'freelancer') {
+export function useMyInvoices(userId?: string, kind: Kinds = 'freelancer') {
   return useQuery({
-    queryKey: ['my-invoices', userId, kind],
+    queryKey: ['my-invoices', userId, kindKey(kind)],
     enabled: !!userId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('freelancer_invoices')
         .select('*, profiles!freelancer_invoices_freelancer_id_fkey(name, email)')
         .eq('freelancer_id', userId!)
-        .eq('kind', kind)
+        .in('kind', kindList(kind))
         .order('invoice_date', { ascending: false })
       if (error) throw error
       return (data || []).map(r => mapInvoice(r as Record<string, unknown>))
@@ -127,16 +133,16 @@ export function useMyInvoices(userId?: string, kind: string = 'freelancer') {
 
 /** Signatures ("itemName|unitPrice") of all items already on a worker's
  *  (non-rejected) invoices of a kind — used to avoid re-billing an incentive. */
-export function useMyInvoiceItemSignatures(userId?: string, kind: string = 'freelancer') {
+export function useMyInvoiceItemSignatures(userId?: string, kind: Kinds = 'freelancer') {
   return useQuery({
-    queryKey: ['my-invoice-item-sigs', userId, kind],
+    queryKey: ['my-invoice-item-sigs', userId, kindKey(kind)],
     enabled: !!userId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('freelancer_invoice_items')
         .select('item_name, unit_price, freelancer_invoices!inner(freelancer_id, kind, status)')
         .eq('freelancer_invoices.freelancer_id', userId!)
-        .eq('freelancer_invoices.kind', kind)
+        .in('freelancer_invoices.kind', kindList(kind))
       const set = new Set<string>()
       if (error) return set
       ;(data || []).forEach((r: Record<string, unknown>) => {

@@ -128,6 +128,7 @@ export function InvoiceFormDialog({
   kind,
   allowAddItems,
   businessLabels,
+  issuerSelectable,
   canEdit,
 }: {
   open: boolean
@@ -139,11 +140,24 @@ export function InvoiceFormDialog({
   kind?: string
   allowAddItems?: boolean
   businessLabels?: boolean
+  /** 폼 안에서 개인/사업자를 직접 고르게 한다 (게시판을 나누지 않고 한 곳에서 발행) */
+  issuerSelectable?: boolean
   canEdit: boolean
 }) {
   const t = useT()
   const createInvoice = useCreateInvoice()
   const updateInvoice = useUpdateInvoice()
+
+  // 개인이냐 사업자냐는 발행하는 사람이 그때 고른다. 게시판을 둘로 나눠 두면
+  // 같은 목록·같은 계산을 두 곳에서 관리하게 되고, 어느 쪽에서 냈는지 헷갈린다.
+  // 저장은 기존과 같이 kind 로 구분한다 — 'freelancer' / 'freelancer_business'.
+  const baseKind = (kind || 'freelancer').replace(/_business$/, '')
+  const [issuerType, setIssuerType] = useState<'individual' | 'business'>(
+    (invoice?.kind || kind || '').endsWith('_business') ? 'business' : 'individual',
+  )
+  const isBiz = issuerSelectable ? issuerType === 'business' : !!businessLabels
+  const effectiveKind = issuerSelectable ? (isBiz ? `${baseKind}_business` : baseKind) : kind
+  const canAddItems = allowAddItems || (issuerSelectable && isBiz)
 
   const [invoiceDate, setInvoiceDate] = useState(initialData?.invoiceDate || invoice?.invoiceDate || new Date().toISOString().slice(0, 10))
   const [invoiceMonth, setInvoiceMonth] = useState(invoice?.invoiceMonth || initialData?.invoiceMonth || getCurrentMonth())
@@ -226,7 +240,7 @@ export function InvoiceFormDialog({
           freelancerId: userId,
           invoiceDate,
           invoiceMonth,
-          kind,
+          kind: effectiveKind,
           clientName,
           residentNumber,
           phone,
@@ -267,6 +281,22 @@ export function InvoiceFormDialog({
             </div>
           </div>
 
+          {/* 개인이냐 사업자냐 — 아래 신분증 칸의 이름과 형식이 여기에 따라 바뀐다 */}
+          {issuerSelectable && (
+            <div className="space-y-1.5 rounded-md border bg-muted/30 p-3">
+              <Label className="text-xs">발행 형태</Label>
+              <Select value={issuerType} onValueChange={v => v && setIssuerType(v as 'individual' | 'business')}>
+                <SelectTrigger className="h-9 w-full">
+                  <span>{isBiz ? '사업자 — 사업자등록번호로 발행' : '개인 — 주민등록번호로 발행'}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="individual">개인 — 주민등록번호로 발행</SelectItem>
+                  <SelectItem value="business">사업자 — 사업자등록번호로 발행</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* 수령인(신청인) 성명 — 대리작성 시 로그인 계정이 아닌 이 이름으로 표시 */}
           <div className="space-y-1.5">
             <Label className="text-xs">성명 (수령인) <span className="text-[10px] text-muted-foreground">· 미입력 시 로그인 계정 이름으로 표시</span></Label>
@@ -276,8 +306,8 @@ export function InvoiceFormDialog({
           {/* Personal Info */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">{businessLabels ? '사업자등록번호' : t('fInvoice.residentNumber')}</Label>
-              <Input value={residentNumber} onChange={e => setResidentNumber(e.target.value)} placeholder={businessLabels ? '000-00-00000' : '000000-0000000'} className="h-9" />
+              <Label className="text-xs">{isBiz ? '사업자등록번호' : t('fInvoice.residentNumber')}</Label>
+              <Input value={residentNumber} onChange={e => setResidentNumber(e.target.value)} placeholder={isBiz ? '000-00-00000' : '000000-0000000'} className="h-9" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">{t('fInvoice.phone')}</Label>
@@ -373,7 +403,7 @@ export function InvoiceFormDialog({
                 </TableBody>
               </Table>
             </div>
-            {canEdit && allowAddItems && (
+            {canEdit && canAddItems && (
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setItems(prev => [...prev, emptyItem()])}>
                 <Plus className="size-3.5" />항목 추가
               </Button>
@@ -1127,17 +1157,23 @@ export function FreelancerInvoicesPage(
   const isAccounting = canAccessAccount(user)
   const isIncentive = kind === 'sales_incentive'
   const isPartner = kind === 'partner'
-  // Distinct storage kind so each list is separate (e.g. 'freelancer_business')
-  const storageKind = business ? `${kind}_business` : kind
+  // 저장은 여전히 kind 로 나뉜다(freelancer / freelancer_business). 다만 프리랜서는
+  // 한 화면에서 둘을 함께 보고, 발행할 때 폼에서 개인/사업자를 고른다.
+  // 게시판을 나눠 두면 같은 목록·같은 계산을 두 곳에서 관리하게 되고
+  // 어느 쪽에서 냈는지 헷갈린다.
+  const mergeIssuerTypes = kind === 'freelancer'
+  const storageKind: string | string[] = mergeIssuerTypes
+    ? ['freelancer', 'freelancer_business']
+    : business ? `${kind}_business` : kind
   // Auto-issue from a data source only for freelancer/incentive individual flows
-  const isAuto = !business && (kind === 'freelancer' || kind === 'sales_incentive')
+  const isAuto = mergeIssuerTypes || (!business && kind === 'sales_incentive')
   const [uploadError, setUploadError] = useState<string | undefined>()
   const [uploading, setUploading] = useState(false)
 
   const invoiceTitle = (
     isIncentive ? '세일즈인센티브 인보이스'
     : isPartner ? `파트너사 인보이스${business ? ' (사업자)' : ' (개인)'}`
-    : `프리랜서 인보이스${business ? ' (사업자)' : ' (개인)'}`
+    : '프리랜서 인보이스'
   )
 
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth())
@@ -1494,7 +1530,17 @@ export function FreelancerInvoicesPage(
                   <TableRow key={inv.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setDetailInvoice(inv)}>
                     {isAccounting && (
                       <TableCell className="font-medium">
-                        <div>{invoiceDisplayName(inv)}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span>{invoiceDisplayName(inv)}</span>
+                          {/* 한 화면에 개인·사업자가 섞이므로 어느 쪽으로 낸 것인지 표시한다 */}
+                          {mergeIssuerTypes && (
+                            <Badge variant="outline" className={`text-[10px] ${
+                              inv.kind === 'freelancer_business' ? 'border-indigo-200 text-indigo-700' : 'border-gray-200 text-gray-500'
+                            }`}>
+                              {inv.kind === 'freelancer_business' ? '사업자' : '개인'}
+                            </Badge>
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground">{inv.freelancerEmail}</div>
                       </TableCell>
                     )}
@@ -1739,8 +1785,8 @@ export function FreelancerInvoicesPage(
 
       {/* 자동 반영 대상이 아닌 프리랜서는 엑셀 양식으로 제출.
           발행자가 사업자면 사업자등록번호가 들어가는 양식을 준다. */}
-      {kind === 'freelancer' && business && businessExcelCard}
-      {kind === 'freelancer' && !business && (
+      {kind === 'freelancer' && businessExcelCard}
+      {kind === 'freelancer' && (
         <Card>
           <CardContent className="p-4 space-y-3">
             <div className="text-sm font-medium">위 목록에 해당하지 않는 프리랜서 — 엑셀 양식으로 제출</div>
@@ -1787,8 +1833,8 @@ export function FreelancerInvoicesPage(
         <p className="text-sm text-muted-foreground mt-0.5">
           {isAccounting
             ? '제출된 인보이스를 확인·승인하고 엑셀로 다운로드합니다. 본인 청구는 아래 「내 청구 대상」에서 발행합니다.'
-            : (business
-                ? '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요. 발행자 정보는 사업자등록번호로 들어갑니다.'
+            : (mergeIssuerTypes
+                ? '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요. 발행 폼에서 개인/사업자를 고르면 주민등록번호·사업자등록번호 칸이 바뀝니다.'
                 : isIncentive ? '이 달 발생한 세일즈 인센티브로 정산 인보이스를 발행하세요.'
                 : isPartner ? '이름을 직접 입력해 인보이스를 발행합니다.'
                 : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
@@ -1846,9 +1892,10 @@ export function FreelancerInvoicesPage(
           existingItems={editItems || undefined}
           userId={editInvoice?.freelancerId || user.id}
           initialData={uploadedData}
-          kind={storageKind}
+          kind={mergeIssuerTypes ? 'freelancer' : (storageKind as string)}
           allowAddItems={business || isPartner}
           businessLabels={business}
+          issuerSelectable={mergeIssuerTypes}
           canEdit={canEdit}
         />
       )}
@@ -1870,7 +1917,10 @@ export function FreelancerInvoicesPage(
 
 function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: string; kind?: string; canEdit: boolean }) {
   const isIncentive = kind === 'sales_incentive'
-  const { data: invoices = [] } = useFreelancerInvoices(month, kind)
+  // 사업자로 낸 사람이 '미제출'로 잡히면 안 된다 — 두 종류를 함께 본다
+  const { data: invoices = [] } = useFreelancerInvoices(
+    month, kind === 'freelancer' ? ['freelancer', 'freelancer_business'] : kind,
+  )
   const { data: profiles = [] } = useProfiles()
   const payees = useBillablePayees(month, kind)
   const send = useSendMessage()
