@@ -543,14 +543,14 @@ function saveBlob(buf: ArrayBuffer, name: string) {
 async function downloadBusinessTemplate() {
   const res = await fetch('/business-invoice-template.xlsx')
   if (!res.ok) throw new Error('양식 파일을 불러올 수 없습니다.')
-  saveBlob(await res.arrayBuffer(), '프리랜서 인보이스 샘플.xlsx')
+  saveBlob(await res.arrayBuffer(), '인보이스-사업자-final.xlsx')
 }
 
 // 프리랜서(개인)용 양식 — 품목표: C=날짜, D=영상명, E=단가, G=비고 (헤더 11행)
 async function downloadFreelancerTemplate() {
   const res = await fetch('/freelancer-individual-template.xlsx')
   if (!res.ok) throw new Error('양식 파일을 불러올 수 없습니다.')
-  saveBlob(await res.arrayBuffer(), '프리랜서 인보이스 샘플.xlsx')
+  saveBlob(await res.arrayBuffer(), '인보이스-개인-final.xlsx')
 }
 
 
@@ -590,7 +590,7 @@ async function parseInvoiceTemplate(file: File): Promise<ParsedInvoice> {
 
   const MAX_R = 14, MAX_C = 12
   // 라벨 칸을 값으로 착각하지 않도록, 아는 라벨은 모두 모아 둔다
-  const LABELS = /^(날짜|수신|성명|사업자명|상호|주민등록번호|사업자번호|사업자등록번호|전화번호|이메일|입금은행명|은행명|계좌번호|예금주|No\.?|이름|품명|수량|단가|공급가액|비고|합계)$/
+  const LABELS = /^(날짜|수신|성명|사업자명|상호|주민등록번호|사업자번호|사업자등록번호|전화번호|이메일|입금은행명|은행명|계좌번호|예금주|No\.?|이름|품명|수량|단가|공급가액|비고|합계|공급자정보|공급자|발신인정보|청구인정보)$/
 
   const valueOf = (pattern: RegExp): string => {
     for (let r = 1; r <= MAX_R; r++) {
