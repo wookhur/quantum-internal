@@ -1202,8 +1202,10 @@ export function FreelancerInvoicesPage(
 
   const { data: editItems } = useInvoiceItems(editInvoice?.id)
 
+  // 재무가 아니면 전원 조회를 아예 보내지 않는다. 예전에는 조회는 그대로 나가고
+  // 화면에서만 가려, 다른 사람의 계좌·주민번호·금액이 브라우저까지 내려왔다.
   const { data: allInvoices = [], isLoading: allLoading } = useFreelancerInvoices(
-    isAccounting ? (selectedMonth === 'all' ? undefined : selectedMonth) : undefined, storageKind,
+    isAccounting ? (selectedMonth === 'all' ? undefined : selectedMonth) : undefined, storageKind, isAccounting,
   )
   const { data: myInvoices = [], isLoading: myLoading } = useMyInvoices(
     !isAccounting ? user?.id : undefined, storageKind,

@@ -80,9 +80,13 @@ type Kinds = string | string[]
 const kindList = (k: Kinds) => (Array.isArray(k) ? k : [k])
 const kindKey = (k: Kinds) => kindList(k).join(',')
 
-export function useFreelancerInvoices(month?: string, kind: Kinds = 'freelancer') {
+/** 전원의 인보이스. 재무만 본다 — enabled 를 반드시 넘겨 막을 것.
+ *  가려서 안 보여주는 것만으로는 부족하다. 조회 자체가 나가면 다른 사람의
+ *  계좌·주민번호·금액이 그 사람 브라우저까지 내려온다. */
+export function useFreelancerInvoices(month?: string, kind: Kinds = 'freelancer', enabled: boolean = true) {
   return useQuery({
     queryKey: ['freelancer-invoices', month, kindKey(kind)],
+    enabled,
     queryFn: async () => {
       let q = supabase
         .from('freelancer_invoices')
