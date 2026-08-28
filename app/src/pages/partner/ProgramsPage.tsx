@@ -545,7 +545,7 @@ function AddLeadBox({ programId, existingLeadIds }: { programId: string; existin
 }
 
 // ── Program title (inline 편집) ─────────────────────────────────
-function ProgramTitle({ program, canEdit }: { program: PartnerProgram; canEdit: boolean }) {
+function ProgramTitle({ program, canEdit, tutoring }: { program: PartnerProgram; canEdit: boolean; tutoring?: boolean }) {
   const { language: lang } = useLanguage()
   const updateProgram = useUpdateProgram()
   const [editing, setEditing] = useState(false)
@@ -569,19 +569,33 @@ function ProgramTitle({ program, canEdit }: { program: PartnerProgram; canEdit: 
           if (e.key === 'Escape') { setName(program.name); setEditing(false) }
         }}
         className="h-8 text-lg font-bold"
-        placeholder={lang === 'en' ? 'Program name' : '프로그램 이름'}
+        placeholder={tutoring
+          ? (lang === 'en' ? 'Tutor name' : '과외선생님 이름')
+          : (lang === 'en' ? 'Program name' : '프로그램 이름')}
       />
     )
   }
+  // 수정 단추는 늘 보이게 둔다. 마우스를 올려야 연필이 나타나는 방식이었는데,
+  // 그러면 고칠 수 있다는 것 자체를 알 수 없어 기능이 없는 것과 같았다.
   return (
-    <h2
-      className={`text-lg font-bold inline-flex items-center gap-1.5 ${canEdit ? 'group cursor-text' : ''}`}
-      onClick={() => canEdit && setEditing(true)}
-      title={canEdit ? (lang === 'en' ? 'Click to rename' : '클릭하여 이름 수정') : undefined}
-    >
-      <span className="truncate">{program.name}</span>
-      {canEdit && <Pencil className="size-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100" />}
-    </h2>
+    <div className="flex min-w-0 items-center gap-2">
+      <h2
+        className={`truncate text-lg font-bold ${canEdit ? 'cursor-text' : ''}`}
+        onClick={() => canEdit && setEditing(true)}
+        title={canEdit ? (lang === 'en' ? 'Click to rename' : '클릭하여 이름 수정') : undefined}
+      >
+        {program.name}
+      </h2>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-normal text-muted-foreground transition hover:bg-accent hover:text-foreground"
+        >
+          <Pencil className="size-3" />{lang === 'en' ? 'Edit' : '수정'}
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -968,7 +982,7 @@ export function ProgramsPage({ variant = PARTNER_VARIANT }: { variant?: Programs
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
-                    <ProgramTitle program={selected} canEdit={canEdit} />
+                    <ProgramTitle program={selected} canEdit={canEdit} tutoring={variant.tutoring} />
                     {!variant.tutoring && <p className="text-xs text-muted-foreground">{selected.partnerName || (lang === 'en' ? 'No partner assigned' : '파트너사 미지정')}</p>}
                   </div>
                   {canEdit && (
