@@ -1558,7 +1558,12 @@ export function FreelancerInvoicesPage(
   )
 
   // Creation panel varies: auto issue / manual add / business Excel upload
-  const creationPanel = business ? (
+  //
+  // 사업자도 개인과 똑같이 자동 집계(이 달 청구 가능한 학생)를 쓴다.
+  // 예전에는 사업자면 엑셀 제출만 되게 막아 두어, 개인 화면에서 대상을 눈으로
+  // 확인한 뒤 엑셀에 손으로 옮겨 적어야 했다. 계산은 같은데 발행자 정보만
+  // 사업자등록번호로 바뀌는 것이라 나눌 이유가 없다.
+  const businessExcelCard = (
     <Card>
       <CardContent className="p-4 space-y-3">
         <div className="text-sm font-medium">사업자 인보이스 — 엑셀 양식으로 제출</div>
@@ -1586,7 +1591,9 @@ export function FreelancerInvoicesPage(
         {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
       </CardContent>
     </Card>
-  ) : isPartner ? (
+  )
+
+  const creationPanel = isPartner ? (
     <Card>
       <CardContent className="p-4 space-y-3">
         <div className="text-sm font-medium">파트너사 인보이스 — 엑셀 양식 업로드 또는 직접 입력 (대리 발행)</div>
@@ -1730,8 +1737,10 @@ export function FreelancerInvoicesPage(
         </CardContent>
       </Card>
 
-      {/* 프리랜서 개인: 자동 반영 대상이 아닌 프리랜서는 엑셀 양식으로 제출 */}
-      {kind === 'freelancer' && (
+      {/* 자동 반영 대상이 아닌 프리랜서는 엑셀 양식으로 제출.
+          발행자가 사업자면 사업자등록번호가 들어가는 양식을 준다. */}
+      {kind === 'freelancer' && business && businessExcelCard}
+      {kind === 'freelancer' && !business && (
         <Card>
           <CardContent className="p-4 space-y-3">
             <div className="text-sm font-medium">위 목록에 해당하지 않는 프리랜서 — 엑셀 양식으로 제출</div>
@@ -1779,7 +1788,7 @@ export function FreelancerInvoicesPage(
           {isAccounting
             ? '제출된 인보이스를 확인·승인하고 엑셀로 다운로드합니다. 본인 청구는 아래 「내 청구 대상」에서 발행합니다.'
             : (business
-                ? '엑셀 양식을 내려받아 작성한 뒤 업로드하여 인보이스를 제출합니다.'
+                ? '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요. 발행자 정보는 사업자등록번호로 들어갑니다.'
                 : isIncentive ? '이 달 발생한 세일즈 인센티브로 정산 인보이스를 발행하세요.'
                 : isPartner ? '이름을 직접 입력해 인보이스를 발행합니다.'
                 : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
@@ -1789,7 +1798,7 @@ export function FreelancerInvoicesPage(
       {/* 재무 권한자가 컨설턴트를 겸하는 경우 — 재무 화면에서도 본인 청구를 바로 할 수 있게 한다.
           권한이 붙는 순간 화면이 재무용으로 갈라져, 컨설턴트로서 청구할 자리가 사라졌었다.
           청구할 것이 있을 때만 펼쳐 보여 재무 업무에 방해되지 않게 한다. */}
-      {isAccounting && !business && (
+      {isAccounting && (
         <div className="rounded-lg border bg-card">
           {/* details 의 open 속성을 값으로 묶으면 다른 필터를 만질 때마다 React 가
               열림 상태를 되돌려 버린다. 사용자가 접고 펴는 것을 그대로 두려면
