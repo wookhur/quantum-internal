@@ -555,155 +555,118 @@ async function downloadFreelancerTemplate() {
 
 
 /**
- * Parse the freelancer-individual 견적서 template.
- *  F6=성명, H6=주민등록번호, F7=전화번호, F8=이메일, C5=날짜,
- *  품목표: 12행부터 (D=영상명/품명, E=단가, G=비고), 'B열 합 계' 행 전까지,
- *  'B열 입금계좌 : ...' 행에 입금계좌.
+ * 채워진 견적서 양식을 읽는다 (개인·사업자 공통).
+ *
+ * 좌표를 박아 두지 않는다. 예전에는 F6=성명, H6=번호 하는 식으로 칸을 고정해
+ * 두었는데, 양식을 한 번 다시 만들자 전부 어긋나 아무것도 읽히지 않았다.
+ * 라벨 글자를 찾아 그 오른쪽 첫 값을 읽는다. 칸이 한두 칸 옮겨져도 견딘다.
+ *
+ * 개인·사업자 양식은 라벨만 다르고(성 명/사업자명, 주민등록번호/사업자번호)
+ * 짜임새가 같아 한 함수로 읽는다.
  */
-async function parseFreelancerInvoice(file: File): Promise<ParsedInvoice> {
+async function parseInvoiceTemplate(file: File): Promise<ParsedInvoice> {
   const { default: ExcelJS } = await import('exceljs')
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(await file.arrayBuffer())
   const ws = wb.worksheets[0]
   if (!ws) throw new Error('엑셀에서 시트를 찾을 수 없습니다.')
-  const cell = (ref: string) => {
-    const v = ws.getCell(ref).value as unknown
+
+  const raw = (r: number, c: number): unknown => ws.getRow(r).getCell(c).value
+  const text = (r: number, c: number): string => {
+    const v = raw(r, c)
     if (v == null) return ''
-    if (typeof v === 'object' && v !== null) {
+    if (v instanceof Date) return v.toISOString().slice(0, 10)
+    if (typeof v === 'object') {
       const o = v as Record<string, unknown>
       if ('text' in o) return String(o.text).trim()
       if ('result' in o) return String(o.result).trim()
       if ('richText' in o) return (o.richText as { text: string }[]).map(t => t.text).join('').trim()
+      return ''
     }
     return String(v).trim()
   }
   const num = (s: string) => Number(String(s).replace(/[,₩\s]/g, '')) || 0
+  const norm = (s: string) => s.replace(/\s+/g, '')
 
-  const name = cell('F6')
-  const bizNo = cell('H6')
-  const phone = cell('F7')
-  const email = cell('F8')
-  const rawDate = cell('C5')
+  const MAX_R = 14, MAX_C = 12
+  // 라벨 칸을 값으로 착각하지 않도록, 아는 라벨은 모두 모아 둔다
+  const LABELS = /^(날짜|수신|성명|사업자명|상호|주민등록번호|사업자번호|사업자등록번호|전화번호|이메일|입금은행명|은행명|계좌번호|예금주|No\.?|이름|품명|수량|단가|공급가액|비고|합계)$/
 
-  let sumRow = 28
-  let bankAccount = ''
-  for (let r = 11; r <= 120; r++) {
-    const b = cell(`B${r}`)
-    if (b.includes('합') || /^total$/i.test(b)) { sumRow = r; break }
+  const valueOf = (pattern: RegExp): string => {
+    for (let r = 1; r <= MAX_R; r++) {
+      for (let c = 1; c <= MAX_C; c++) {
+        if (!pattern.test(norm(text(r, c)))) continue
+        for (let k = c + 1; k <= MAX_C; k++) {
+          const v = text(r, k)
+          if (!v) continue
+          return LABELS.test(norm(v)) ? '' : v   // 옆 칸이 또 라벨이면 값이 비어 있는 것
+        }
+      }
+    }
+    return ''
   }
-  for (let r = 11; r <= 140; r++) {
-    const b = cell(`B${r}`)
-    if (b.includes('입금') || b.includes('은행계좌') || /bank|account/i.test(b)) {
-      bankAccount = b.replace(/^.*(입금계좌|은행계좌\s*정보|bank account)\s*:?\s*/i, '').trim()
-      break
+
+  const name = valueOf(/^(성명|사업자명|상호)$/)
+  const idNumber = valueOf(/^(주민등록번호|사업자번호|사업자등록번호)$/)
+  const phone = valueOf(/^전화번호$/)
+  const email = valueOf(/^이메일$/)
+  const bankName = valueOf(/^(입금은행명|은행명)$/)
+  const accountNumber = valueOf(/^계좌번호$/)
+  const holder = valueOf(/^예금주$/) || name
+  const rawDate = valueOf(/^날짜$/)
+
+  // 품목표: '수량'과 '단가'가 함께 있는 줄이 머리글이다
+  let head = 0, colName = 2, colQty = 3, colPrice = 4, colRemark = 6
+  for (let r = 1; r <= 40 && !head; r++) {
+    const row: Record<string, number> = {}
+    for (let c = 1; c <= MAX_C; c++) {
+      const t = norm(text(r, c))
+      if (t) row[t] = c
+    }
+    if (row['수량'] && row['단가']) {
+      head = r
+      colQty = row['수량']; colPrice = row['단가']
+      colName = row['이름'] || row['품명'] || colQty - 1
+      colRemark = row['비고'] || row['공급가액'] + 1 || colPrice + 2
     }
   }
+  if (!head) throw new Error('양식에서 품목표를 찾을 수 없습니다. 받은 양식을 그대로 사용해 주세요.')
 
   const items: ItemRow[] = []
-  for (let r = 12; r < sumRow; r++) {
-    const itemName = cell(`D${r}`)
-    const price = num(cell(`E${r}`))
+  for (let r = head + 1; r <= head + 60; r++) {
+    const first = norm(text(r, 1))
+    if (/^합계$/.test(first) || /^합/.test(first)) break
+    const itemName = text(r, colName)
+    const price = num(text(r, colPrice))
     if (!itemName && !price) continue
     items.push({
       itemName: itemName || '(품명 없음)',
-      quantity: 1,
+      quantity: num(text(r, colQty)) || 1,
       unitPrice: price,
-      remark: cell(`G${r}`),
+      remark: text(r, colRemark),
     })
   }
-  if (items.length === 0) throw new Error('품목이 비어 있습니다. 양식의 영상명·단가를 채워주세요.')
+  if (items.length === 0) throw new Error('품목이 비어 있습니다. 이름과 단가를 채운 뒤 다시 올려주세요.')
 
   let invoiceDate = new Date().toISOString().slice(0, 10)
-  const iso = rawDate.match(/(\d{4})[-.](\d{1,2})[-.](\d{1,2})/)
+  const iso = rawDate.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/)
   if (iso) invoiceDate = `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`
 
   return {
     invoiceDate,
     name,
-    residentNumber: bizNo,
+    residentNumber: idNumber,
     phone,
     email,
-    bankAccount,
-    note: name ? `성명: ${name}` : '',
-    items,
-  }
-}
-
-/**
- * Parse a filled 견적서 template. Layout (matches the sample):
- *  C5=날짜, F6=성명, H6=주민/사업자번호, F7=전화번호, F8=이메일,
- *  품목표: 15행부터 (B=품명, C=수량, D=단가, E=공급가액, F=비고), '합 계' 행 전까지,
- *  '입금계좌 : ...' 행에 입금계좌.
- */
-async function parseBusinessInvoice(file: File): Promise<ParsedInvoice> {
-  const { default: ExcelJS } = await import('exceljs')
-  const wb = new ExcelJS.Workbook()
-  await wb.xlsx.load(await file.arrayBuffer())
-  const ws = wb.worksheets[0]
-  if (!ws) throw new Error('엑셀에서 시트를 찾을 수 없습니다.')
-  const cell = (ref: string) => {
-    const v = ws.getCell(ref).value as unknown
-    if (v == null) return ''
-    if (typeof v === 'object' && v !== null) {
-      const o = v as Record<string, unknown>
-      if ('text' in o) return String(o.text).trim()
-      if ('result' in o) return String(o.result).trim()
-      if ('richText' in o) return (o.richText as { text: string }[]).map(t => t.text).join('').trim()
-    }
-    return String(v).trim()
-  }
-  const num = (s: string) => Number(String(s).replace(/[,₩\s]/g, '')) || 0
-
-  const name = cell('F6')
-  const bizNo = cell('H6')
-  const phone = cell('F7')
-  const email = cell('F8')
-  const rawDate = cell('C5')
-
-  // Find 합계 / 입금계좌 rows (column A)
-  let sumRow = 23
-  let bankAccount = ''
-  for (let r = 14; r <= 80; r++) {
-    const a = cell(`A${r}`)
-    if (a.includes('합')) { sumRow = r; break }
-  }
-  for (let r = 14; r <= 90; r++) {
-    const a = cell(`A${r}`)
-    if (a.includes('입금')) { bankAccount = a.replace(/^.*입금계좌\s*:?\s*/, '').trim(); break }
-  }
-
-  const items: ItemRow[] = []
-  for (let r = 15; r < sumRow; r++) {
-    const itemName = cell(`B${r}`)
-    const price = num(cell(`D${r}`))
-    if (!itemName && !price) continue
-    items.push({
-      itemName: itemName || '(품명 없음)',
-      quantity: num(cell(`C${r}`)) || 1,
-      unitPrice: price,
-      remark: cell(`F${r}`),
-    })
-  }
-  if (items.length === 0) throw new Error('품목이 비어 있습니다. 양식의 품명·단가를 채워주세요.')
-
-  // Normalize date (accept YYYY-MM-DD or MM.DD.YYYY etc.); fallback to today
-  let invoiceDate = new Date().toISOString().slice(0, 10)
-  const iso = rawDate.match(/(\d{4})[-.](\d{1,2})[-.](\d{1,2})/)
-  const mdy = rawDate.match(/(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/)
-  if (iso) invoiceDate = `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`
-  else if (mdy) invoiceDate = `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`
-
-  return {
-    invoiceDate,
-    name,
-    residentNumber: bizNo,
-    phone,
-    email,
-    bankAccount,
+    bankAccount: joinBank(bankName, accountNumber, holder),
     note: name ? `성명/상호: ${name}` : '',
     items,
   }
 }
+
+// 개인·사업자 양식은 짜임새가 같다. 이름만 남겨 부르는 쪽을 그대로 둔다.
+const parseFreelancerInvoice = parseInvoiceTemplate
+const parseBusinessInvoice = parseInvoiceTemplate
 
 function InvoiceDetailDialog({
   open,
