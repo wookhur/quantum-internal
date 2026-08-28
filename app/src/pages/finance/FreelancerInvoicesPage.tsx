@@ -157,7 +157,9 @@ export function InvoiceFormDialog({
   )
   const isBiz = issuerSelectable ? issuerType === 'business' : !!businessLabels
   const effectiveKind = issuerSelectable ? (isBiz ? `${baseKind}_business` : baseKind) : kind
-  const canAddItems = allowAddItems || (issuerSelectable && isBiz)
+  // 프리랜서 인보이스는 조건을 충족한 학생만 자동으로 담긴다. 여기서 항목을 손으로
+  // 늘릴 수 있으면 그 기준이 무의미해진다. 더 청구할 것이 있으면 엑셀 양식으로 낸다.
+  const canAddItems = !!allowAddItems
 
   const [invoiceDate, setInvoiceDate] = useState(initialData?.invoiceDate || invoice?.invoiceDate || new Date().toISOString().slice(0, 10))
   const [invoiceMonth, setInvoiceMonth] = useState(invoice?.invoiceMonth || initialData?.invoiceMonth || getCurrentMonth())
@@ -221,7 +223,13 @@ export function InvoiceFormDialog({
   const handleSave = async () => {
     if (!canEdit) return
     const validItems = items.filter(it => it.itemName.trim())
-    if (validItems.length === 0) return
+    if (validItems.length === 0) {
+      alert('항목이 하나도 없습니다. 이름이 비어 있는 줄은 저장되지 않습니다.')
+      return
+    }
+    // 이름 없는 줄을 조용히 버리면, 넣은 줄이 빠진 채로 제출된 것을 알 수 없다.
+    const dropped = items.length - validItems.length
+    if (dropped > 0 && !confirm(`이름이 비어 있는 ${dropped}줄은 저장되지 않습니다. 그대로 제출할까요?`)) return
     setSaving(true)
     try {
       if (invoice) {
@@ -333,7 +341,7 @@ export function InvoiceFormDialog({
                 <TableHeader>
                   <TableRow className="text-xs">
                     <TableHead className="w-8">No</TableHead>
-                    <TableHead>{t('fInvoice.itemName')}</TableHead>
+                    <TableHead className="min-w-[180px]">{t('fInvoice.itemName')}</TableHead>
                     <TableHead className="w-20">{t('fInvoice.quantity')}</TableHead>
                     <TableHead className="w-28">{t('fInvoice.unitPrice')}</TableHead>
                     <TableHead className="w-28">{t('fInvoice.supplyAmount')}</TableHead>
@@ -407,6 +415,13 @@ export function InvoiceFormDialog({
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setItems(prev => [...prev, emptyItem()])}>
                 <Plus className="size-3.5" />항목 추가
               </Button>
+            )}
+            {canEdit && !canAddItems && (
+              <p className="text-[12px] text-muted-foreground">
+                항목은 이 달 조건을 충족한 학생만 자동으로 담깁니다. 여기서 늘릴 수 없습니다.
+                <br />
+                기본급·할인처럼 따로 청구할 것이 있으면 <b>엑셀 양식</b>을 내려받아 작성한 뒤 업로드해 주세요.
+              </p>
             )}
           </div>
 
