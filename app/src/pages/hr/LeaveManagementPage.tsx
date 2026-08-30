@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, CalendarDays, Loader2, Trash2, Check, X, Info, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, CalendarDays, Loader2, Trash2, Check, X, Info, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   useLeaveRequests, useCreateLeaveRequest, useUpdateLeaveStatus, useDeleteLeaveRequest,
@@ -723,7 +723,9 @@ function EmployeeLeaveSummary({ profiles, requests, grants }: { profiles: User[]
       .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isExternal && !LEAVE_HIDDEN_NAMES.has((p.name || '').trim()))
       .map(p => {
         const hire = p.hireDate || p.contractStartDate
-        const ent = computeAnnualEntitlement(hire)
+        // 퇴사자는 퇴사일(계약종료일)까지만 연차 적립 — 이후 적립 방지 (없으면 오늘 기준)
+        const asOf = p.resigned && p.contractEndDate ? new Date(`${p.contractEndDate}T00:00:00`) : new Date()
+        const ent = computeAnnualEntitlement(hire, asOf)
         const aUsed = usedAnnual.get(p.id) || 0
         const pUsed = usedPaid.get(p.id) || 0
         const rGranted = grantedReward.get(p.id) || 0
@@ -753,6 +755,7 @@ function EmployeeLeaveSummary({ profiles, requests, grants }: { profiles: User[]
 
   // 사용 숫자 클릭 시 해당 직원·종류의 실제 신청 내역을 보여준다.
   const [detail, setDetail] = useState<{ name: string; typeLabel: string; items: LeaveRequest[] } | null>(null)
+  const [showResigned, setShowResigned] = useState(false)
   const openDetail = (id: string, name: string, type: LeaveType, typeLabel: string) => {
     const items = requests
       .filter(r => r.requesterId === id && r.leaveType === type && r.status !== 'rejected')
@@ -816,10 +819,15 @@ function EmployeeLeaveSummary({ profiles, requests, grants }: { profiles: User[]
             {activeRows.map(r => renderRow(r))}
             {resignedRows.length > 0 && (
               <>
-                <tr className="bg-gray-100/70 border-y">
-                  <td colSpan={11} className="px-3 py-1.5 text-xs font-semibold text-muted-foreground">퇴사자 (기록용)</td>
+                <tr className="bg-gray-100/70 border-y cursor-pointer hover:bg-gray-100" onClick={() => setShowResigned(v => !v)}>
+                  <td colSpan={11} className="px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      {showResigned ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                      퇴사자 (기록용) · {resignedRows.length}명
+                    </span>
+                  </td>
                 </tr>
-                {resignedRows.map(r => renderRow(r, true))}
+                {showResigned && resignedRows.map(r => renderRow(r, true))}
               </>
             )}
             {rows.length === 0 && (
