@@ -13,9 +13,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Loader2, MessageSquare, Trash2, ExternalLink, Search, Lock, Eye, EyeOff, Globe, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { Loader2, MessageSquare, Trash2, ExternalLink, Search, Lock, Eye, EyeOff, Globe, ThumbsUp, ThumbsDown, Plus } from 'lucide-react'
 import {
-  useQnaQuestions, useAnswerQna, useDeleteQna, useResetQnaPin, useQnaFeedback,
+  useQnaQuestions, useAnswerQna, useDeleteQna, useResetQnaPin, useQnaFeedback, useCreateQna,
   QNA_CATEGORIES, type QnaQuestion, type QnaStatus,
 } from '@/hooks/useQna'
 
@@ -36,6 +36,11 @@ function fmt(d: string | null) {
 export function QnaPage() {
   const canEdit = useCanEdit('/marketing/qna')
   const { data: questions = [], isLoading } = useQnaQuestions()
+  const createQna = useCreateQna()
+  const [adding, setAdding] = useState(false)
+  const [draftNew, setDraftNew] = useState({
+    title: '', body: '', answer: '', category: '기타', askerName: '', grade: '',
+  })
   const { data: feedback } = useQnaFeedback()
   const answer = useAnswerQna()
   const remove = useDeleteQna()
@@ -99,8 +104,16 @@ export function QnaPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             방문자가 홈페이지에서 남긴 질문입니다. 답변을 쓰고 <b>공개</b>로 바꾸면 홈페이지에 올라갑니다.
             <b>잠금</b>으로 표시된 질문은 목록에 제목만 보이고 내용·답변은 가려집니다.
+            <br />
+            상담에서 자주 받는 질문은 <b>질문 추가</b>로 직접 올릴 수 있습니다.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+        {canEdit && (
+          <Button className="gap-1.5" onClick={() => setAdding(true)}>
+            <Plus className="h-4 w-4" />질문 추가
+          </Button>
+        )}
         <a
           href={`${HOMEPAGE}/qna.php`}
           target="_blank"
@@ -109,6 +122,7 @@ export function QnaPage() {
         >
           홈페이지에서 보기 <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
         </a>
+        </div>
       </div>
 
       {(() => {
@@ -330,6 +344,83 @@ export function QnaPage() {
           ))}
         </div>
       )}
+
+      {/* 질문 직접 추가 — 상담에서 실제로 받은 질문을 담당자가 올린다 */}
+      <Dialog open={adding} onOpenChange={o => !o && setAdding(false)}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader><DialogTitle>질문 추가</DialogTitle></DialogHeader>
+
+          <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            상담에서 <b>실제로 받은 질문</b>을 올려 주세요. 저장하면 바로 홈페이지에 공개됩니다.
+          </p>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">분류</Label>
+                <Select value={draftNew.category} onValueChange={v => v && setDraftNew(d => ({ ...d, category: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {QNA_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">학년 <span className="text-muted-foreground">(선택)</span></Label>
+                <Input value={draftNew.grade} onChange={e => setDraftNew(d => ({ ...d, grade: e.target.value }))} placeholder="예: G11" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">
+                질문자 이름 <span className="text-muted-foreground">(선택 · 비우면 홈페이지에 ‘익명’으로 나갑니다)</span>
+              </Label>
+              <Input value={draftNew.askerName} onChange={e => setDraftNew(d => ({ ...d, askerName: e.target.value }))} placeholder="예: 김서연" />
+              <p className="text-[11px] text-muted-foreground">이름을 넣어도 홈페이지에는 김○○ 처럼 가려서 나갑니다.</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">제목</Label>
+              <Input
+                value={draftNew.title}
+                onChange={e => setDraftNew(d => ({ ...d, title: e.target.value }))}
+                placeholder="검색하는 문장 그대로 — 예: 11학년인데 지금 리서치 시작해도 늦지 않을까요?"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">질문 내용</Label>
+              <Textarea rows={4} value={draftNew.body} onChange={e => setDraftNew(d => ({ ...d, body: e.target.value }))} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">답변</Label>
+              <Textarea rows={9} value={draftNew.answer} onChange={e => setDraftNew(d => ({ ...d, answer: e.target.value }))} />
+              <p className="text-[11px] text-muted-foreground">
+                결론을 먼저 쓰고 근거를 잇는 편이 검색·AI 답변에 잘 잡힙니다. 3~4문단은 되어야 합니다.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdding(false)}>취소</Button>
+            <Button
+              disabled={
+                createQna.isPending ||
+                !draftNew.title.trim() || !draftNew.body.trim() || !draftNew.answer.trim()
+              }
+              onClick={async () => {
+                await createQna.mutateAsync(draftNew)
+                setDraftNew({ title: '', body: '', answer: '', category: '기타', askerName: '', grade: '' })
+                setAdding(false)
+              }}
+            >
+              {createQna.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              저장 + 공개
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editing} onOpenChange={o => !o && setEditing(null)}>
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">

@@ -144,6 +144,59 @@ export function useQnaFeedback() {
   })
 }
 
+/**
+ * 질문 직접 추가 — 상담에서 실제로 받은 질문을 담당자가 올린다.
+ *
+ * 방문자가 남기기를 기다리면 게시판이 비어 있고, 비어 있으면 아무도 남기지
+ * 않는다. 상담에서 이미 여러 번 받은 질문을 먼저 채워 두면 검색으로 들어온
+ * 사람이 답을 찾고, 그 자리에서 다음 질문이 붙는다.
+ *
+ * 지어낸 질문이 아니라 실제로 받은 질문이어야 한다. 없는 사람을 만들어
+ * 묻게 하는 것은 다른 일이다.
+ */
+export function useCreateQna() {
+  const qc = useQueryClient()
+  const { user } = useAuth()
+  return useMutation({
+    mutationFn: async (input: {
+      title: string
+      body: string
+      answer: string
+      category: string
+      /** 비워 두면 홈페이지에 '익명'으로 나간다 */
+      askerName?: string
+      grade?: string
+      residence?: 'domestic' | 'overseas'
+      country?: string
+    }) => {
+      const { data, error } = await supabase
+        .from('qna_questions')
+        .insert({
+          asker_name: input.askerName?.trim() || '',
+          category: input.category,
+          title: input.title.trim(),
+          body: input.body.trim(),
+          answer: input.answer.trim(),
+          answered_by: user?.id ?? null,
+          grade: input.grade?.trim() || null,
+          residence: input.residence || 'domestic',
+          country: input.country?.trim() || null,
+          source_path: '내부 등록',
+          status: 'published',
+          is_locked: false,
+        })
+        .select()
+        .single()
+      if (error) throw error
+      return toQuestion(data as Row)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['qna-questions'] })
+      qc.invalidateQueries({ queryKey: ['qna-pending-count'] })
+    },
+  })
+}
+
 export function useAnswerQna() {
   const qc = useQueryClient()
   const { user } = useAuth()
