@@ -609,10 +609,10 @@ function RewardGrantPanel({ profiles, grants, requests, actorId }: {
 
   const nameOf = (id?: string) => profiles.find(p => p.id === id)?.name || '(이름 미설정)'
 
-  // 지급 대상: 정규직(풀타임) 비파트너
+  // 지급 대상: 정규직(풀타임) 내부직원 (파트너여도 내부 정규직이면 포함, 외부만 제외)
   const grantable = useMemo(() =>
     profiles
-      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isPartner)
+      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isExternal)
       .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')),
     [profiles],
   )
@@ -715,8 +715,8 @@ function EmployeeLeaveSummary({ profiles, requests, grants }: { profiles: User[]
     const grantedReward = new Map<string, number>()
     grants.forEach(g => grantedReward.set(g.profileId, (grantedReward.get(g.profileId) || 0) + g.days))
     return profiles
-      // 정규직(풀타임)만 연차 발생 대상
-      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isPartner)
+      // 정규직(풀타임) 내부직원만 연차 발생 대상 (파트너여도 내부 정규직이면 포함, 외부만 제외)
+      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isExternal)
       .map(p => {
         const hire = p.hireDate || p.contractStartDate
         const ent = computeAnnualEntitlement(hire)
