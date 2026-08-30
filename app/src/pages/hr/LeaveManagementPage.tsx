@@ -21,6 +21,9 @@ import { useProfiles } from '@/hooks/useProfiles'
 import { useRewardLeaveGrants, useCreateRewardGrant, useDeleteRewardGrant, type RewardGrant } from '@/hooks/useRewardLeaveGrants'
 import type { User } from '@/types'
 
+// 연차 트래킹(직원 현황·포상 지급 대상)에서 제외할 이름 (부대표·시스템 계정 등)
+const LEAVE_HIDDEN_NAMES = new Set(['재무담당자', '김지현'])
+
 const STATUS_CFG: Record<LeaveStatus, { label: string; className: string }> = {
   requested: { label: '승인대기', className: 'bg-amber-100 text-amber-700' },
   approved: { label: '승인됨', className: 'bg-emerald-100 text-emerald-700' },
@@ -612,7 +615,7 @@ function RewardGrantPanel({ profiles, grants, requests, actorId }: {
   // 지급 대상: 정규직(풀타임) 내부직원 (파트너여도 내부 정규직이면 포함, 외부만 제외)
   const grantable = useMemo(() =>
     profiles
-      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isExternal)
+      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isExternal && !LEAVE_HIDDEN_NAMES.has((p.name || '').trim()))
       .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')),
     [profiles],
   )
@@ -716,7 +719,8 @@ function EmployeeLeaveSummary({ profiles, requests, grants }: { profiles: User[]
     grants.forEach(g => grantedReward.set(g.profileId, (grantedReward.get(g.profileId) || 0) + g.days))
     return profiles
       // 정규직(풀타임) 내부직원만 연차 발생 대상 (파트너여도 내부 정규직이면 포함, 외부만 제외)
-      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isExternal)
+      // 재무담당자·김지현(부대표)은 연차 트래킹 대상에서 제외
+      .filter(p => (p.employmentTypes?.includes('permanent') || p.employmentType === 'permanent') && !p.isExternal && !LEAVE_HIDDEN_NAMES.has((p.name || '').trim()))
       .map(p => {
         const hire = p.hireDate || p.contractStartDate
         const ent = computeAnnualEntitlement(hire)
@@ -741,6 +745,7 @@ function EmployeeLeaveSummary({ profiles, requests, grants }: { profiles: User[]
           rewardLeft,
           totalLeft: annualLeft + paidLeft + rewardLeft, // 연차+유급+포상 통합 잔여
           noHire: !p.contractStartDate,
+          resigned: !!p.resigned,
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
@@ -754,6 +759,38 @@ function EmployeeLeaveSummary({ profiles, requests, grants }: { profiles: User[]
       .sort((a, b) => a.startDate.localeCompare(b.startDate))
     if (items.length) setDetail({ name, typeLabel, items })
   }
+
+  const activeRows = rows.filter(r => !r.resigned)
+  const resignedRows = rows.filter(r => r.resigned)
+  const renderRow = (r: typeof rows[number], dim = false) => (
+    <tr key={r.id} className={`border-b last:border-0 hover:bg-gray-50/50 ${dim ? 'text-muted-foreground bg-gray-50/40' : ''}`}>
+      <td className="px-3 py-2 font-medium">{r.name}</td>
+      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+        {r.hireDate || <span className="text-amber-600">미설정</span>}
+      </td>
+      <td className="px-3 py-2 text-right">{r.annualEnt}</td>
+      <td className="px-3 py-2 text-right text-blue-600">
+        {r.annualUsed > 0 ? (
+          <button className="hover:underline font-medium" onClick={() => openDetail(r.id, r.name, 'annual', '연차')}>{r.annualUsed}</button>
+        ) : r.annualUsed}
+      </td>
+      <td className={`px-3 py-2 text-right font-semibold ${r.annualLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.annualLeft}</td>
+      <td className="px-3 py-2 text-right text-blue-600">
+        {r.paidUsed > 0 ? (
+          <button className="hover:underline font-medium" onClick={() => openDetail(r.id, r.name, 'paid_special', '유급휴가')}>{r.paidUsed}</button>
+        ) : r.paidUsed}
+      </td>
+      <td className={`px-3 py-2 text-right font-semibold ${r.paidLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.paidLeft}</td>
+      <td className="px-3 py-2 text-right text-pink-600 font-medium">{r.rewardGranted > 0 ? r.rewardGranted : '-'}</td>
+      <td className="px-3 py-2 text-right text-blue-600">
+        {r.rewardUsed > 0 ? (
+          <button className="hover:underline font-medium" onClick={() => openDetail(r.id, r.name, 'reward', '포상휴가')}>{r.rewardUsed}</button>
+        ) : (r.rewardGranted > 0 ? r.rewardUsed : '-')}
+      </td>
+      <td className={`px-3 py-2 text-right font-semibold ${r.rewardGranted === 0 ? 'text-muted-foreground' : r.rewardLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.rewardGranted > 0 ? r.rewardLeft : '-'}</td>
+      <td className={`px-3 py-2 text-right font-bold ${r.totalLeft < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{r.totalLeft}</td>
+    </tr>
+  )
 
   return (
     <>
@@ -776,35 +813,15 @@ function EmployeeLeaveSummary({ profiles, requests, grants }: { profiles: User[]
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
-              <tr key={r.id} className="border-b last:border-0 hover:bg-gray-50/50">
-                <td className="px-3 py-2 font-medium">{r.name}</td>
-                <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                  {r.hireDate || <span className="text-amber-600">미설정</span>}
-                </td>
-                <td className="px-3 py-2 text-right">{r.annualEnt}</td>
-                <td className="px-3 py-2 text-right text-blue-600">
-                  {r.annualUsed > 0 ? (
-                    <button className="hover:underline font-medium" onClick={() => openDetail(r.id, r.name, 'annual', '연차')}>{r.annualUsed}</button>
-                  ) : r.annualUsed}
-                </td>
-                <td className={`px-3 py-2 text-right font-semibold ${r.annualLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.annualLeft}</td>
-                <td className="px-3 py-2 text-right text-blue-600">
-                  {r.paidUsed > 0 ? (
-                    <button className="hover:underline font-medium" onClick={() => openDetail(r.id, r.name, 'paid_special', '유급휴가')}>{r.paidUsed}</button>
-                  ) : r.paidUsed}
-                </td>
-                <td className={`px-3 py-2 text-right font-semibold ${r.paidLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.paidLeft}</td>
-                <td className="px-3 py-2 text-right text-pink-600 font-medium">{r.rewardGranted > 0 ? r.rewardGranted : '-'}</td>
-                <td className="px-3 py-2 text-right text-blue-600">
-                  {r.rewardUsed > 0 ? (
-                    <button className="hover:underline font-medium" onClick={() => openDetail(r.id, r.name, 'reward', '포상휴가')}>{r.rewardUsed}</button>
-                  ) : (r.rewardGranted > 0 ? r.rewardUsed : '-')}
-                </td>
-                <td className={`px-3 py-2 text-right font-semibold ${r.rewardGranted === 0 ? 'text-muted-foreground' : r.rewardLeft < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{r.rewardGranted > 0 ? r.rewardLeft : '-'}</td>
-                <td className={`px-3 py-2 text-right font-bold ${r.totalLeft < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{r.totalLeft}</td>
-              </tr>
-            ))}
+            {activeRows.map(r => renderRow(r))}
+            {resignedRows.length > 0 && (
+              <>
+                <tr className="bg-gray-100/70 border-y">
+                  <td colSpan={11} className="px-3 py-1.5 text-xs font-semibold text-muted-foreground">퇴사자 (기록용)</td>
+                </tr>
+                {resignedRows.map(r => renderRow(r, true))}
+              </>
+            )}
             {rows.length === 0 && (
               <tr><td colSpan={11} className="px-3 py-8 text-center text-muted-foreground">표시할 직원이 없습니다.</td></tr>
             )}
