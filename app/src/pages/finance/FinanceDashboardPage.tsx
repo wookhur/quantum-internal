@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Loader2, Users, Receipt, Lock, Clock, CheckCircle2, XCircle, Wallet, Pencil, Trash2 } from 'lucide-react'
+import { Loader2, Users, Receipt, Lock, Clock, CheckCircle2, XCircle, Wallet, Pencil, Trash2, Plus } from 'lucide-react'
 import { useInstallments } from '@/hooks/useInstallments'
 import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
@@ -23,7 +23,9 @@ import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceive
 import { useAllClawbacks, useSetClawbackStatus, useDeleteClawback } from '@/hooks/useClawbacks'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
-import { canAccessAccount } from '@/hooks/useProfiles'
+import { canAccessAccount, useProfiles } from '@/hooks/useProfiles'
+import { useEmployeeBonuses, useCreateBonus, useSetBonusPaid, useDeleteBonus } from '@/hooks/useEmployeeBonuses'
+import { Gift } from 'lucide-react'
 import { useExpenseRequests } from '@/hooks/useExpenseRequests'
 import { Link } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
@@ -456,6 +458,9 @@ export function FinanceDashboardPage() {
 
       {/* 지출결의 요약 (선택 월) */}
       <ExpenseSummaryCard month={month} />
+
+      {/* 상여금 지급 (선택 월) */}
+      <BonusPayoutCard month={month === 'all' ? months[0] : month} />
 
       {/* 인센티브 지급 원장 (월 선택 · 계약·서비스 인센티브) */}
       <IncentivePayoutLedger
@@ -1431,6 +1436,89 @@ function ExpenseSummaryCard({ month }: { month: string }) {
             ))}
           </div>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// 상여금 지급 카드 (재무대시보드) — 재무권한자가 직원·금액 입력, account가 급여 반영 후 지급완료
+function BonusPayoutCard({ month }: { month: string }) {
+  const { user } = useAuth()
+  const { data: profiles = [] } = useProfiles()
+  const { data: bonuses = [] } = useEmployeeBonuses()
+  const createBonus = useCreateBonus()
+  const setPaid = useSetBonusPaid()
+  const delBonus = useDeleteBonus()
+
+  const staff = useMemo(
+    () => [...profiles].filter(p => !p.isExternal).sort((a, b) => Number(a.resigned) - Number(b.resigned) || a.name.localeCompare(b.name, 'ko')),
+    [profiles],
+  )
+  const nameOf = (id?: string) => profiles.find(p => p.id === id)?.name || '—'
+  const rows = bonuses.filter(b => (b.month || '') === month)
+  const total = rows.reduce((s, b) => s + b.amount, 0)
+  const unpaidTotal = rows.filter(b => !b.paid).reduce((s, b) => s + b.amount, 0)
+
+  const [profileId, setProfileId] = useState('')
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  const add = () => {
+    const amt = Number(amount.replace(/,/g, '')) || 0
+    if (!profileId || amt <= 0) return
+    createBonus.mutate(
+      { profileId, amount: amt, month, reason: reason.trim() || undefined, createdBy: user?.id },
+      { onSuccess: () => { setProfileId(''); setAmount(''); setReason('') } },
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Gift className="size-4 text-primary" /> 상여금 지급 <span className="text-xs font-normal text-muted-foreground">{month} · 미지급 {formatCurrency(unpaidTotal)} / 합계 {formatCurrency(total)}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* 입력 */}
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_1fr_auto] gap-2 items-end">
+          <div>
+            <label className="text-xs text-muted-foreground">직원</label>
+            <Select value={profileId} onValueChange={v => setProfileId(v ?? '')}>
+              <SelectTrigger className="h-9"><span>{profileId ? nameOf(profileId) : '선택'}</span></SelectTrigger>
+              <SelectContent>
+                {staff.map(p => <SelectItem key={p.id} value={p.id}>{p.name}{p.resigned ? ' (퇴사)' : ''}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">금액 (원)</label>
+            <Input value={amount} onChange={e => setAmount(e.target.value)} inputMode="numeric" placeholder="0" className="h-9" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">사유 (선택)</label>
+            <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="예: 프로젝트 성과 상여" className="h-9" />
+          </div>
+          <Button className="h-9" onClick={add} disabled={!profileId || !amount || createBonus.isPending}><Plus className="size-4 mr-1" />추가</Button>
+        </div>
+
+        {/* 목록 */}
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2">이 달 상여금 내역이 없습니다.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {rows.map(b => (
+              <div key={b.id} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${b.paid ? 'bg-emerald-50/40 border-emerald-100' : ''}`}>
+                <span className="font-medium text-sm w-24 shrink-0 truncate">{nameOf(b.profileId)}</span>
+                <span className="font-mono font-semibold tabular-nums w-28 text-right">{formatCurrency(b.amount)}</span>
+                <span className="text-xs text-muted-foreground flex-1 truncate">{b.reason || ''} <span className="opacity-70">· 등록 {nameOf(b.createdBy)}</span></span>
+                <Badge variant="outline" className={`text-[10px] shrink-0 ${b.paid ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>{b.paid ? `지급완료${b.paidAt ? ` ${b.paidAt}` : ''}` : '미지급'}</Badge>
+                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPaid.mutate({ id: b.id, paid: !b.paid })}>{b.paid ? '완료취소' : '지급완료'}</Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-600" onClick={() => { if (confirm('이 상여금 내역을 삭제할까요?')) delBonus.mutate(b.id) }}><Trash2 className="size-3.5" /></Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground">재무 담당자가 급여에 상여금을 합산 지급한 뒤 "지급완료"로 표시하세요. (재무·관리자만 열람·편집)</p>
       </CardContent>
     </Card>
   )
