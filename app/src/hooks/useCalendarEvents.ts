@@ -158,10 +158,10 @@ export function useCalendarEvents(year: number, month: number) {
           .from('employee_info')
           .select('profile_id, birth_date')
           .not('birth_date', 'is', null),
-        // Fetch profiles for names
+        // Fetch profiles for names (퇴사자 제외용 resigned 포함)
         supabase
           .from('profiles')
-          .select('id, name, department'),
+          .select('id, name, department, resigned'),
       ])
 
       if (meetingsRes.error) throw meetingsRes.error
@@ -178,9 +178,9 @@ export function useCalendarEvents(year: number, month: number) {
       }))
 
       // Build birthday list for this month
-      const profileMap = new Map<string, { name: string; department?: string }>()
+      const profileMap = new Map<string, { name: string; department?: string; resigned?: boolean }>()
       ;(profilesRes.data || []).forEach((p: Record<string, unknown>) => {
-        profileMap.set(p.id as string, { name: p.name as string, department: p.department as string | undefined })
+        profileMap.set(p.id as string, { name: p.name as string, department: p.department as string | undefined, resigned: !!p.resigned })
       })
 
       const birthdays: BirthdayItem[] = []
@@ -191,7 +191,7 @@ export function useCalendarEvents(year: number, month: number) {
         const bdMonth = parseInt(bd.slice(5, 7), 10)
         if (bdMonth !== month) return
         const profile = profileMap.get(row.profile_id as string)
-        if (!profile) return
+        if (!profile || profile.resigned) return // 퇴사 직원 생일 제외
         // Build a date in this year for display
         const bdDay = bd.slice(8, 10)
         birthdays.push({

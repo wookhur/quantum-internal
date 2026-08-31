@@ -1212,7 +1212,7 @@ export function KpiTargetsPage() {
 
   const isCurrentMonth = currentMonth === getCurrentMonth()
   const [year, month] = currentMonth.split('-').map(Number)
-  const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal), [profiles])
+  const activeProfiles = useMemo(() => profiles.filter(p => !p.isExternal && !p.resigned), [profiles])
 
   const targetMap = useMemo(() => {
     const map = new Map<string, KpiTarget>()

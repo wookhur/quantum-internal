@@ -371,7 +371,7 @@ export function AttendancePage() {
   const activeProfiles = useMemo(
     () => profiles.filter(p => {
       const types = p.employmentTypes?.length ? p.employmentTypes : (p.employmentType ? [p.employmentType] : [])
-      return (types.includes('permanent') || types.includes('intern')) && !excludedSet.has(p.id)
+      return (types.includes('permanent') || types.includes('intern')) && !p.resigned && !excludedSet.has(p.id)
     }),
     [profiles, excludedSet],
   )

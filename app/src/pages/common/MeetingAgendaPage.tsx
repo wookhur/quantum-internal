@@ -67,7 +67,7 @@ export function MeetingAgendaPage() {
 
   const profileName = (id?: string) => profiles.find(p => p.id === id)?.name || '—'
   const activeProfiles = useMemo(
-    () => [...profiles].filter(p => !p.isExternal).sort((a, b) => Number(a.resigned) - Number(b.resigned) || a.name.localeCompare(b.name, 'ko')),
+    () => [...profiles].filter(p => !p.isExternal && !p.resigned).sort((a, b) => a.name.localeCompare(b.name, 'ko')),
     [profiles],
   )
 

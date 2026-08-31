@@ -70,7 +70,7 @@ export function AttendanceKioskPage() {
 
   const excludedSet = useMemo(() => new Set(kioskExcludedIds), [kioskExcludedIds])
   const activeProfiles = useMemo(
-    () => profiles.filter(p => !p.isExternal && !excludedSet.has(p.id)),
+    () => profiles.filter(p => !p.isExternal && !p.resigned && !excludedSet.has(p.id)),
     [profiles, excludedSet],
   )
 
