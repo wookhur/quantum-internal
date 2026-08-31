@@ -612,6 +612,52 @@ export async function downloadSalesIncentiveExcel(
   await save(wb, `${name}_세일즈인센티브_${formType === 'business' ? '사업자' : '개인'}.xlsx`)
 }
 
+/** 프리랜서 인보이스 발행 — 개인/사업자 2종 폼 (새 양식). 비고는 원본 그대로. */
+export async function downloadFreelancerFormExcel(
+  invoice: FreelancerInvoice,
+  items: { itemName: string; quantity: number; unitPrice: number; supplyAmount: number; remark?: string | null }[],
+  formType: 'individual' | 'business',
+) {
+  const { default: ExcelJS } = await import('exceljs')
+  const total = items.reduce((s, it) => s + (it.supplyAmount || 0), 0)
+  const name = invoice.clientName || invoice.freelancerName || ''
+  const tpl = formType === 'business' ? '/freelancer-form-business.xlsx' : '/freelancer-form-individual.xlsx'
+  const res = await fetch(tpl)
+  if (!res.ok) throw new Error('프리랜서 양식 파일을 불러올 수 없습니다.')
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await res.arrayBuffer())
+  const ws = wb.worksheets[0]
+  const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
+  const bank = splitBank(invoice.bankAccount || '')
+  set('B5', invoice.invoiceDate)
+  set('E6', name)                    // 성명 / 사업자명
+  set('G6', invoice.residentNumber)  // 주민등록번호 / 사업자번호
+  set('E7', invoice.phone)
+  set('E8', invoice.freelancerEmail)
+  set('E9', bank.bankName)
+  set('G9', bank.accountNumber || invoice.bankAccount || '')
+  // 항목: 13행부터, 합계는 A열 '합' 검색
+  const dataStart = 13
+  let sumRow = 23
+  for (let r = dataStart; r <= dataStart + 40; r++) { const va = ws.getCell(r, 1).value; if (va != null && String(va).includes('합')) { sumRow = r; break } }
+  let capacity = sumRow - dataStart
+  if (items.length > capacity) { const extra = items.length - capacity; ws.spliceRows(sumRow, 0, ...Array.from({ length: extra }, () => [] as unknown[])); sumRow += extra; capacity += extra }
+  for (let i = 0; i < capacity; i++) {
+    const r = dataStart + i
+    if (i < items.length) {
+      const it = items[i]
+      ws.getCell(r, 1).value = i + 1; ws.getCell(r, 2).value = it.itemName; ws.getCell(r, 3).value = it.quantity
+      ws.getCell(r, 4).value = it.unitPrice; ws.getCell(r, 5).value = it.supplyAmount; ws.getCell(r, 6).value = it.remark || null
+    } else { ws.getCell(r, 1).value = null; ws.getCell(r, 2).value = null; ws.getCell(r, 3).value = null }
+  }
+  ws.getCell(sumRow, 5).value = total
+  const out = await wb.xlsx.writeBuffer()
+  const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `${name}_인보이스_${formType === 'business' ? '사업자' : '개인'}.xlsx`
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+}
+
 // ─── Business invoice: template download + upload parsing (사업자) ──────────
 
 function saveBlob(buf: ArrayBuffer, name: string) {
@@ -860,6 +906,22 @@ function InvoiceDetailDialog({
                     <SelectItem value="regular">1. 정규직 (세일즈 커미션)</SelectItem>
                     <SelectItem value="individual">2. 프리랜서 (개인)</SelectItem>
                     <SelectItem value="business">3. 프리랜서 (사업자)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (invoice.kind || '').startsWith('freelancer') ? (
+              <div className="mr-auto flex items-center gap-2">
+                <Select value="" onValueChange={async (v) => {
+                  if (!v) return
+                  setDownloading(true)
+                  try { await downloadFreelancerFormExcel(invoice, items, v as 'individual' | 'business') }
+                  catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
+                  finally { setDownloading(false) }
+                }}>
+                  <SelectTrigger className="h-9 w-44"><span className="flex items-center gap-1.5">{downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}양식 발행</span></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="individual">프리랜서 (개인)</SelectItem>
+                    <SelectItem value="business">프리랜서 (사업자)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
