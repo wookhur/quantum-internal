@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
-import { Plus, Trash2, Pencil, X, Check, XCircle, Banknote, AlertTriangle, MessageSquare, Send, Receipt, FileText, Download, PieChart } from 'lucide-react'
+import { Plus, Trash2, Pencil, X, Check, XCircle, Banknote, AlertTriangle, MessageSquare, Send, Receipt, Download, PieChart, FileSpreadsheet } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import { useAuth } from '@/contexts/AuthContext'
@@ -129,7 +129,8 @@ export function ExpenseRequestsPage() {
               {availableMonths.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button size="sm" variant="outline" onClick={exportExcel} disabled={filtered.length === 0}><Download className="size-4 mr-1" />엑셀</Button>
+          <a href="/expense-report-template.xlsx" download="직원개인지출내역서.xlsx" className="inline-flex items-center h-9 px-3 rounded-md border text-sm hover:bg-muted gap-1.5"><FileSpreadsheet className="size-4" />양식 다운로드</a>
+          <Button size="sm" variant="outline" onClick={exportExcel} disabled={filtered.length === 0}><Download className="size-4 mr-1" />목록 엑셀</Button>
           <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true) }}><Plus className="size-4 mr-1" /> 새 지출결의</Button>
         </div>
       </div>
@@ -316,9 +317,9 @@ function ExpenseDetail({ req, canApprove, userId, userName, profileName, isAdmin
         {req.approvalNote && <div className="text-sm"><span className="text-xs text-muted-foreground">승인/반려 메모</span><p className="whitespace-pre-wrap mt-0.5">{req.approvalNote}</p></div>}
 
         {/* 첨부: 견적/근거 */}
-        <ExpenseAttachments requestId={req.id} kind="quote" label="견적·요청근거" icon={<FileText className="size-3.5" />} profileName={profileName} userId={userId} isAdmin={isAdmin} existing={quotes} />
-        {/* 첨부: 지출증빙 */}
-        <ExpenseAttachments requestId={req.id} kind="proof" label="지출증빙 (영수증·세금계산서)" icon={<Receipt className="size-3.5" />} profileName={profileName} userId={userId} isAdmin={isAdmin} existing={proofs} />
+        <ExpenseAttachments requestId={req.id} kind="quote" label="지출내역서 (작성본 업로드) · 견적·근거" icon={<FileSpreadsheet className="size-3.5" />} profileName={profileName} userId={userId} isAdmin={isAdmin} existing={quotes} />
+        {/* 첨부: 영수증·증빙 */}
+        <ExpenseAttachments requestId={req.id} kind="proof" label="영수증·증빙 (영수증·세금계산서)" icon={<Receipt className="size-3.5" />} profileName={profileName} userId={userId} isAdmin={isAdmin} existing={proofs} />
 
         {/* 승인/지급 처리 (재무·관리자) */}
         {canApprove && (
@@ -443,6 +444,14 @@ function ExpenseFormDialog({ open, onOpenChange, editing, userId, userName, appr
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{editing ? '지출결의 편집' : '새 지출결의'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
+          {!editing && (
+            <div className="rounded-md bg-blue-50 border border-blue-100 p-2.5 text-xs text-blue-800 flex items-start gap-2">
+              <FileSpreadsheet className="size-4 shrink-0 mt-0.5" />
+              <span><b>지출내역서 양식</b>을 받아 작성한 뒤 아래 기본정보를 입력해 <b>만들기</b> → 상세에서 <b>작성본·영수증</b>을 첨부하세요.
+                <a href="/expense-report-template.xlsx" download="직원개인지출내역서.xlsx" className="underline font-medium ml-1">양식 다운로드</a>
+              </span>
+            </div>
+          )}
           <div><Label className="text-xs">제목</Label><Input value={title} onChange={e => setTitle(e.target.value)} placeholder="예: 디자인 외주 비용" /></div>
           <div className="grid grid-cols-2 gap-3">
             <div>

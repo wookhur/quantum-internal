@@ -866,12 +866,12 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>인보이스 상세</DialogTitle></DialogHeader>
         {invoice && (
           <div className="space-y-4">
             {/* 헤더 정보 */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">제출자</span><span className="font-medium">{invoiceDisplayName(invoice)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">종류</span><span className="font-medium">{kindLabel(invoice.kind)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">정산월</span><span className="font-medium tabular-nums">{invoice.invoiceMonth}</span></div>
