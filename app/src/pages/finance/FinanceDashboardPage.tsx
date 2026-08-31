@@ -26,6 +26,8 @@ import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { canAccessAccount, useProfiles } from '@/hooks/useProfiles'
 import { useEmployeeBonuses, useCreateBonus, useSetBonusPaid, useDeleteBonus } from '@/hooks/useEmployeeBonuses'
 import { Gift } from 'lucide-react'
+import * as XLSX from 'xlsx'
+import { saveAs } from 'file-saver'
 import { useExpenseRequests } from '@/hooks/useExpenseRequests'
 import { Link } from 'react-router-dom'
 import { AlertTriangle } from 'lucide-react'
@@ -1471,12 +1473,30 @@ function BonusPayoutCard({ month }: { month: string }) {
     )
   }
 
+  const exportExcel = () => {
+    const data = [
+      ['직원', '금액', '사유', '지급월', '지급여부', '지급일', '등록자'],
+      ...rows.map(b => [nameOf(b.profileId), b.amount, b.reason || '', b.month || '', b.paid ? '지급완료' : '미지급', b.paidAt || '', nameOf(b.createdBy)]),
+      [],
+      ['합계', total, '', '', '', '', ''],
+    ]
+    const ws = XLSX.utils.aoa_to_sheet(data)
+    ws['!cols'] = [14, 14, 30, 10, 10, 12, 12].map(w => ({ wch: w }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '상여금')
+    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+    saveAs(new Blob([buf], { type: 'application/octet-stream' }), `상여금-${month}.xlsx`)
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Gift className="size-4 text-primary" /> 상여금 지급 <span className="text-xs font-normal text-muted-foreground">{month} · 미지급 {formatCurrency(unpaidTotal)} / 합계 {formatCurrency(total)}</span>
-        </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Gift className="size-4 text-primary" /> 상여금 지급 <span className="text-xs font-normal text-muted-foreground">{month} · 미지급 {formatCurrency(unpaidTotal)} / 합계 {formatCurrency(total)}</span>
+          </CardTitle>
+          <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={exportExcel} disabled={rows.length === 0}><Download className="size-3.5" />엑셀</Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {/* 입력 */}
