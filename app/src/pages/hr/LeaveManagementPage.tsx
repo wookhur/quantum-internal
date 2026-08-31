@@ -7,10 +7,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, CalendarDays, Loader2, Trash2, Check, X, Info, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { Plus, CalendarDays, Loader2, Trash2, Check, X, Info, ChevronLeft, ChevronRight, ChevronDown, Pencil } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import {
-  useLeaveRequests, useCreateLeaveRequest, useUpdateLeaveStatus, useDeleteLeaveRequest,
+  useLeaveRequests, useCreateLeaveRequest, useUpdateLeaveStatus, useUpdateLeaveRequest, useDeleteLeaveRequest,
   type LeaveRequest, type LeaveStatus,
 } from '@/hooks/useLeaveRequests'
 import {
@@ -37,6 +37,8 @@ export function LeaveManagementPage() {
   const { data: requests = [], isLoading } = useLeaveRequests()
   const { data: profiles = [] } = useProfiles()
   const createReq = useCreateLeaveRequest()
+  const updateReq = useUpdateLeaveRequest()
+  const [editingLeave, setEditingLeave] = useState<LeaveRequest | null>(null)
   const updateStatus = useUpdateLeaveStatus()
   const deleteReq = useDeleteLeaveRequest()
   const { data: rewardGrants = [] } = useRewardLeaveGrants()
@@ -243,6 +245,7 @@ export function LeaveManagementPage() {
               showRequester={tab === 'approve'}
               onStatus={handleStatus}
               onDelete={(id) => deleteReq.mutate(id)}
+              onEdit={setEditingLeave}
             />
           ))}
         </div>
@@ -268,17 +271,47 @@ export function LeaveManagementPage() {
           }}
         />
       )}
+
+      {/* 연차 신청 수정 (승인자/본인 대기건) */}
+      {editingLeave && (
+        <LeaveFormDialog
+          title="휴가 신청 수정"
+          onClose={() => setEditingLeave(null)}
+          pending={updateReq.isPending}
+          rewardAvailable
+          initial={{
+            leaveType: editingLeave.leaveType,
+            eventType: editingLeave.eventType,
+            startDate: editingLeave.startDate,
+            endDate: editingLeave.endDate,
+            days: editingLeave.days,
+            halfDayPeriod: editingLeave.halfDayPeriod,
+            paid: editingLeave.paid,
+            reason: editingLeave.reason,
+          }}
+          onSubmit={async (payload) => {
+            try {
+              await updateReq.mutateAsync({ id: editingLeave.id, ...payload })
+              setEditingLeave(null)
+            } catch (e: unknown) {
+              const err = e as { message?: string }
+              alert(`휴가 수정에 실패했습니다.\n${err?.message || ''}`)
+            }
+          }}
+        />
+      )}
     </div>
   )
 }
 
-function LeaveCard({ req, isApprover, isOwner, showRequester, onStatus, onDelete }: {
+function LeaveCard({ req, isApprover, isOwner, showRequester, onStatus, onDelete, onEdit }: {
   req: LeaveRequest
   isApprover: boolean
   isOwner: boolean
   showRequester: boolean
   onStatus: (r: LeaveRequest, s: LeaveStatus) => void
   onDelete: (id: string) => void
+  onEdit?: (r: LeaveRequest) => void
 }) {
   const cfg = STATUS_CFG[req.status]
   const typeLabel = req.leaveType === 'family_event'
@@ -322,6 +355,11 @@ function LeaveCard({ req, isApprover, isOwner, showRequester, onStatus, onDelete
               </Button>
             </>
           )}
+          {onEdit && (isApprover || (isOwner && req.status === 'requested')) && (
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onEdit(req)}>
+              <Pencil className="h-3 w-3 mr-1" />수정
+            </Button>
+          )}
           {(isApprover || (isOwner && req.status === 'requested')) && (
             <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => onDelete(req.id)}>
               <Trash2 className="h-3 w-3" />
@@ -333,23 +371,25 @@ function LeaveCard({ req, isApprover, isOwner, showRequester, onStatus, onDelete
   )
 }
 
-function LeaveFormDialog({ onClose, onSubmit, pending, rewardAvailable }: {
+function LeaveFormDialog({ onClose, onSubmit, pending, rewardAvailable, initial, title }: {
   onClose: () => void
   onSubmit: (p: {
     leaveType: LeaveType; eventType?: string; startDate: string; endDate: string; days: number; halfDayPeriod?: HalfDayPeriod; paid: boolean; reason?: string
   }) => void
   pending: boolean
   rewardAvailable?: boolean
+  initial?: { leaveType: LeaveType; eventType?: string; startDate: string; endDate: string; days: number; halfDayPeriod?: HalfDayPeriod; paid: boolean; reason?: string }
+  title?: string
 }) {
-  const [leaveType, setLeaveType] = useState<LeaveType>('annual')
-  const [eventType, setEventType] = useState<string>(FAMILY_EVENTS[0].key)
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [reason, setReason] = useState('')
-  const [paid, setPaid] = useState(true)
+  const [leaveType, setLeaveType] = useState<LeaveType>(initial?.leaveType ?? 'annual')
+  const [eventType, setEventType] = useState<string>(initial?.eventType || FAMILY_EVENTS[0].key)
+  const [startDate, setStartDate] = useState(initial?.startDate ?? '')
+  const [endDate, setEndDate] = useState(initial?.endDate ?? '')
+  const [reason, setReason] = useState(initial?.reason ?? '')
+  const [paid, setPaid] = useState(initial?.paid ?? true)
   // 반차(0.5일) 신청 여부 + 오전/오후. 경조사는 일수가 고정이라 반차 불가.
-  const [halfDay, setHalfDay] = useState(false)
-  const [halfDayPeriod, setHalfDayPeriod] = useState<HalfDayPeriod>('morning')
+  const [halfDay, setHalfDay] = useState(!!initial?.halfDayPeriod)
+  const [halfDayPeriod, setHalfDayPeriod] = useState<HalfDayPeriod>(initial?.halfDayPeriod ?? 'morning')
   const halfDayAllowed = leaveType !== 'family_event'
   const useHalfDay = halfDay && halfDayAllowed
 
@@ -362,7 +402,7 @@ function LeaveFormDialog({ onClose, onSubmit, pending, rewardAvailable }: {
     return 1
   }, [leaveType, eventType, startDate, endDate])
 
-  const [daysOverride, setDaysOverride] = useState<string>('')
+  const [daysOverride, setDaysOverride] = useState<string>(initial && !initial.halfDayPeriod ? String(initial.days) : '')
   // 반차면 0.5일 고정, 종료일은 시작일과 동일(단일 날짜).
   const effectiveEndDate = useHalfDay ? startDate : endDate
   const days = useHalfDay ? 0.5 : (daysOverride !== '' ? Number(daysOverride) : autoDays)
@@ -372,7 +412,7 @@ function LeaveFormDialog({ onClose, onSubmit, pending, rewardAvailable }: {
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent>
-        <DialogHeader><DialogTitle>휴가 신청</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{title || '휴가 신청'}</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div>
             <Label>휴가 종류</Label>

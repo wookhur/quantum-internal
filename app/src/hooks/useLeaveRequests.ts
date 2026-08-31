@@ -152,6 +152,37 @@ export function useUpdateLeaveStatus() {
   })
 }
 
+/** 연차 신청 내용 수정 (유형·기간·일수·반차·사유 등). 승인자/관리자용. */
+export function useUpdateLeaveRequest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      leaveType?: LeaveType
+      eventType?: string | null
+      startDate?: string
+      endDate?: string
+      days?: number
+      halfDayPeriod?: HalfDayPeriod | null
+      paid?: boolean
+      reason?: string | null
+    }) => {
+      const row: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (input.leaveType !== undefined) row.leave_type = input.leaveType
+      if (input.eventType !== undefined) row.event_type = input.eventType || null
+      if (input.startDate !== undefined) row.start_date = input.startDate
+      if (input.endDate !== undefined) row.end_date = input.endDate
+      if (input.days !== undefined) row.days = input.days
+      if (input.halfDayPeriod !== undefined) row.half_day_period = input.halfDayPeriod || null
+      if (input.paid !== undefined) row.paid = input.paid
+      if (input.reason !== undefined) row.reason = input.reason || null
+      const { error } = await supabase.from('leave_requests').update(row).eq('id', input.id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['leave-requests'] }),
+  })
+}
+
 export function useDeleteLeaveRequest() {
   const qc = useQueryClient()
   return useMutation({
