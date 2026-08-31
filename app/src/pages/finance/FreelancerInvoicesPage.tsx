@@ -530,6 +530,88 @@ export async function downloadInvoiceExcel(
   URL.revokeObjectURL(url)
 }
 
+// 세일즈 인센티브 비고: "계약 · 계약자 · 회차 · 유형% · 회차키 KEY" → "계약자 · 회차"
+function salesRemark(sd?: string | null): string {
+  if (!sd) return ''
+  const parts = String(sd).split(' · ')
+  if (parts[0] === '계약' && parts.length >= 3) return `${parts[1]} · ${parts[2]}`
+  return String(sd).replace(/\s*·\s*회차키\s+\S+/g, '')
+}
+
+/** 세일즈 인센티브 발행 — 정규직/개인/사업자 3종 폼. */
+export async function downloadSalesIncentiveExcel(
+  invoice: FreelancerInvoice,
+  items: { itemName: string; quantity: number; unitPrice: number; supplyAmount: number; remark?: string | null }[],
+  formType: 'regular' | 'individual' | 'business',
+) {
+  const { default: ExcelJS } = await import('exceljs')
+  const total = items.reduce((s, it) => s + (it.supplyAmount || 0), 0)
+  const name = invoice.clientName || invoice.freelancerName || ''
+  const save = async (wb: import('exceljs').Workbook, fname: string) => {
+    const out = await wb.xlsx.writeBuffer()
+    const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = fname
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+  }
+
+  if (formType === 'regular') {
+    // 정규직 — 세일즈 커미션 명세 (양식 파일 없이 생성)
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('세일즈 커미션')
+    ws.columns = [{ width: 6 }, { width: 24 }, { width: 8 }, { width: 16 }, { width: 22 }]
+    ws.mergeCells('A1:E1'); ws.getCell('A1').value = '세일즈 커미션'
+    ws.getCell('A1').font = { bold: true, size: 16 }; ws.getCell('A1').alignment = { horizontal: 'center' }
+    ws.getCell('A3').value = '성명'; ws.getCell('B3').value = name
+    ws.getCell('D3').value = '정산월'; ws.getCell('E3').value = invoice.invoiceMonth || ''
+    ws.getRow(5).values = ['No.', '이름', '수량', '금액', '비고']; ws.getRow(5).font = { bold: true }
+    ws.getRow(5).eachCell((c: import('exceljs').Cell) => { c.alignment = { horizontal: 'center' }; c.border = { bottom: { style: 'thin' }, top: { style: 'thin' } } })
+    items.forEach((it, i) => {
+      const row = ws.getRow(6 + i)
+      row.values = [i + 1, it.itemName, it.quantity, it.supplyAmount, salesRemark(it.remark)]
+      row.getCell(4).numFmt = '#,##0'; row.getCell(4).alignment = { horizontal: 'right' }
+      row.getCell(3).alignment = { horizontal: 'center' }; row.getCell(1).alignment = { horizontal: 'center' }
+    })
+    const sr = 6 + items.length; const row = ws.getRow(sr)
+    row.getCell(2).value = '합 계'; row.getCell(2).font = { bold: true }
+    row.getCell(4).value = total; row.getCell(4).numFmt = '#,##0'; row.getCell(4).font = { bold: true }; row.getCell(4).alignment = { horizontal: 'right' }
+    row.eachCell((c: import('exceljs').Cell) => { c.border = { top: { style: 'double' } } })
+    await save(wb, `${name}_세일즈커미션.xlsx`)
+    return
+  }
+
+  // 개인/사업자 — 업로드된 양식 파일 채우기
+  const tpl = formType === 'business' ? '/sales-incentive-business.xlsx' : '/sales-incentive-individual.xlsx'
+  const res = await fetch(tpl)
+  if (!res.ok) throw new Error('세일즈 인센티브 양식 파일을 불러올 수 없습니다.')
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await res.arrayBuffer())
+  const ws = wb.worksheets[0]
+  const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
+  const bank = splitBank(invoice.bankAccount || '')
+  set('B5', invoice.invoiceDate)                     // 날짜
+  set('E6', name)                                    // 성명 / 사업자명
+  set('G6', invoice.residentNumber)                  // 주민번호 / 사업자번호
+  set('E7', invoice.phone)
+  set('E8', invoice.freelancerEmail)
+  set('E9', bank.bankName)
+  set('G9', bank.accountNumber || invoice.bankAccount || '')
+  let sumRow = 30
+  for (let r = 15; r <= 45; r++) { const va = ws.getCell(r, 1).value, vd = ws.getCell(r, 4).value; if ((va != null && String(va).includes('합')) || (vd != null && String(vd).includes('합'))) { sumRow = r; break } }
+  const dataStart = 15; let capacity = sumRow - dataStart
+  if (items.length > capacity) { const extra = items.length - capacity; ws.spliceRows(sumRow, 0, ...Array.from({ length: extra }, () => [] as unknown[])); sumRow += extra; capacity += extra }
+  for (let i = 0; i < capacity; i++) {
+    const r = dataStart + i
+    if (i < items.length) {
+      const it = items[i]
+      ws.getCell(r, 1).value = i + 1; ws.getCell(r, 2).value = it.itemName; ws.getCell(r, 3).value = it.quantity
+      ws.getCell(r, 4).value = it.unitPrice; ws.getCell(r, 5).value = it.supplyAmount; ws.getCell(r, 6).value = salesRemark(it.remark)
+    } else { ws.getCell(r, 1).value = null; ws.getCell(r, 2).value = null; ws.getCell(r, 3).value = null }
+  }
+  ws.getCell(sumRow, 5).value = total
+  await save(wb, `${name}_세일즈인센티브_${formType === 'business' ? '사업자' : '개인'}.xlsx`)
+}
+
 // ─── Business invoice: template download + upload parsing (사업자) ──────────
 
 function saveBlob(buf: ArrayBuffer, name: string) {
@@ -764,10 +846,29 @@ function InvoiceDetailDialog({
         </div>
 
         <DialogFooter className="gap-2">
-            <Button variant="outline" className="gap-1.5 mr-auto" disabled={downloading} onClick={handleDownload}>
-              {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-              엑셀 다운로드
-            </Button>
+            {invoice.kind === 'sales_incentive' ? (
+              <div className="mr-auto flex items-center gap-2">
+                <Select value="" onValueChange={async (v) => {
+                  if (!v) return
+                  setDownloading(true)
+                  try { await downloadSalesIncentiveExcel(invoice, items, v as 'regular' | 'individual' | 'business') }
+                  catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
+                  finally { setDownloading(false) }
+                }}>
+                  <SelectTrigger className="h-9 w-44"><span className="flex items-center gap-1.5">{downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}양식 발행</span></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="regular">1. 정규직 (세일즈 커미션)</SelectItem>
+                    <SelectItem value="individual">2. 프리랜서 (개인)</SelectItem>
+                    <SelectItem value="business">3. 프리랜서 (사업자)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <Button variant="outline" className="gap-1.5 mr-auto" disabled={downloading} onClick={handleDownload}>
+                {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                엑셀 다운로드
+              </Button>
+            )}
             {canEditThis && onEdit && (
               <Button variant="outline" className="gap-1.5" onClick={() => onEdit()}>
                 <Pencil className="size-4" />
