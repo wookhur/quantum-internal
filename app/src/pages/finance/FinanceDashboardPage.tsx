@@ -25,7 +25,7 @@ import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceProgramFees } from '@/hooks/useServiceProgramFees'
 import { canAccessAccount, useProfiles } from '@/hooks/useProfiles'
 import { useEmployeeBonuses, useCreateBonus, useSetBonusPaid, useDeleteBonus } from '@/hooks/useEmployeeBonuses'
-import { Gift } from 'lucide-react'
+import { Gift, FileText } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import { useExpenseRequests } from '@/hooks/useExpenseRequests'
@@ -110,6 +110,8 @@ export function FinanceDashboardPage() {
   const [detailInv, setDetailInv] = useState<FreelancerInvoice | null>(null)
   const [editInv, setEditInv] = useState<FreelancerInvoice | null>(null)
   const { data: editInvItems } = useInvoiceItems(editInv?.id)
+  // 외부 파트너 대리발행: 미지급 커미션 카드에서 사람을 골라 인보이스 폼을 채워 연다
+  const [issueFor, setIssueFor] = useState<PersonAmount | null>(null)
   const [exporting, setExporting] = useState(false)
 
   const { data: allIncentives = [], isLoading: incLoading } = useIncentivesByInstallment()
@@ -827,7 +829,7 @@ export function FinanceDashboardPage() {
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <PayoutCard title={t('financeDash.freelancerCommission')} color="purple" persons={freelancerCommission.byPerson} icon={<Users className="size-4 text-purple-500" />} t={t} />
+            <PayoutCard title={t('financeDash.freelancerCommission')} color="purple" persons={freelancerCommission.byPerson} icon={<Users className="size-4 text-purple-500" />} t={t} onIssue={allowed ? setIssueFor : undefined} />
             <PayoutCard title={t('financeDash.serviceFee')} color="amber" persons={serviceFees.byPerson} icon={<Receipt className="size-4 text-amber-500" />} t={t} />
           </div>
         </>
@@ -844,6 +846,31 @@ export function FinanceDashboardPage() {
           userId={editInv.freelancerId}
           kind={editInv.kind}
           allowAddItems
+          canEdit={allowed}
+        />
+      )}
+
+      {/* 외부 파트너 대리발행 — 미지급 커미션에서 선택한 사람의 내역을 채워 인보이스 발행 */}
+      {issueFor && user && (
+        <InvoiceFormDialog
+          open={!!issueFor}
+          onOpenChange={(o) => { if (!o) setIssueFor(null) }}
+          userId={user.id}
+          initialData={{
+            invoiceDate: new Date().toISOString().slice(0, 10),
+            invoiceMonth: month === 'all' ? new Date().toISOString().slice(0, 7) : month,
+            name: issueFor.name,
+            residentNumber: '', phone: '', email: '', bankAccount: '',
+            items: issueFor.details.map((d) => ({
+              itemName: `${d.contractorName || d.studentName || issueFor.name} 세일즈 커미션${d.installmentLabel ? ` (${d.installmentLabel})` : ''}`.trim(),
+              quantity: 1,
+              unitPrice: d.amount,
+              remark: [d.contractorName, d.installmentLabel].filter(Boolean).join(' · '),
+            })),
+          }}
+          kind="freelancer"
+          allowAddItems
+          issuerSelectable
           canEdit={allowed}
         />
       )}
@@ -1402,12 +1429,14 @@ function PaidActionCell({ inv, disabled, onSet }: {
 
 // ─── Payout detail card ──────────────────────────────────────────────────────
 
-function PayoutCard({ title, color, persons, icon, t }: {
+function PayoutCard({ title, color, persons, icon, t, onIssue }: {
   title: string
   color: 'purple' | 'blue' | 'amber'
   persons: PersonAmount[]
   icon?: React.ReactNode
   t: (key: string, params?: Record<string, string | number>) => string
+  /** 있으면 사람별 '인보이스 발행' 버튼 표시 (외부 파트너 대리발행) */
+  onIssue?: (p: PersonAmount) => void
 }) {
   const colorMap = {
     purple: { bg: 'bg-purple-50', text: 'text-purple-700' },
@@ -1425,9 +1454,16 @@ function PayoutCard({ title, color, persons, icon, t }: {
           <p className="text-sm text-muted-foreground text-center py-6">{t('financeDash.noPending')}</p>
         ) : persons.map((p) => (
           <div key={p.name} className={`${c.bg} rounded-lg p-3`}>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 gap-2">
               <span className={`text-sm font-semibold ${c.text}`}>{p.name}</span>
-              <span className={`text-sm font-bold ${c.text}`}>{formatCurrency(p.amount)}</span>
+              <div className="flex items-center gap-2">
+                <span className={`text-sm font-bold ${c.text}`}>{formatCurrency(p.amount)}</span>
+                {onIssue && (
+                  <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={() => onIssue(p)}>
+                    <FileText className="size-3.5" />인보이스 발행
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
               {p.details.map((d, i) => {
