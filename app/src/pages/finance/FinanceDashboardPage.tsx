@@ -145,10 +145,12 @@ export function FinanceDashboardPage() {
     return { byKind, grandTotal, approvedTotal, pendingTotal, paidTotal, paidCount }
   }, [invoices])
 
-  // ─── 미지급 현황 (기존): 프리랜서 커미션 + 서비스 수수료 ───
+  // ─── 미지급 현황 (수금 완료·미정산): 프리랜서 커미션 + 서비스 수수료 ───
+  //  커미션은 회차가 '수금 완료(isPaid)'된 것만 발생한다. 미수금 회차(중도금·잔금 등)는
+  //  아직 커미션이 발생하지 않으므로 제외 — 예전엔 !isPaid 로 미수금분이 잘못 잡혔다.
   const freelancerCommission = useMemo(() => {
-    const unpaid = allIncentives.filter(e => !e.isPaid && FREELANCER_TYPES.includes(e.incentiveType))
-    return { total: unpaid.reduce((s, e) => s + e.incentiveAmount, 0), count: unpaid.length, byPerson: groupByPerson(unpaid) }
+    const collected = allIncentives.filter(e => e.isPaid && FREELANCER_TYPES.includes(e.incentiveType))
+    return { total: collected.reduce((s, e) => s + e.incentiveAmount, 0), count: collected.length, byPerson: groupByPerson(collected) }
   }, [allIncentives])
 
   const serviceFees = useMemo(() => {
