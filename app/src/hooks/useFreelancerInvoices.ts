@@ -380,7 +380,19 @@ export function usePaidCoveredIncentiveKeys() {
  *  대상 = 이름이 일치하는 지급완료 인보이스 중 가장 최근 것. 없으면 NO_PAID_INVOICE 던짐. */
 export function useAttachIncentivesToPaidInvoice() {
   const qc = useQueryClient()
-  const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
+  // 직함/공백 제거 후 비교 — "오현정대표" ↔ "오현정" 같은 표기차를 흡수한다.
+  const TITLES = /(대표님|대표|이사님|이사|부대표|부장|과장|차장|팀장|실장|원장|선생님|선생|사장님|사장|님|씨)$/
+  const norm = (s?: string) => {
+    let v = (s || '').replace(/\s+/g, '').toLowerCase()
+    let prev = ''
+    while (v && v !== prev) { prev = v; v = v.replace(TITLES, '') }  // 직함 반복 제거
+    return v
+  }
+  const nameMatch = (a?: string, b?: string) => {
+    const na = norm(a), nb = norm(b)
+    if (!na || !nb) return false
+    return na === nb || (na.length >= 2 && nb.length >= 2 && (na.includes(nb) || nb.includes(na)))
+  }
   return useMutation({
     mutationFn: async ({ personName, keys }: { personName: string; keys: string[] }) => {
       if (!keys.length) throw new Error('연결할 커미션이 없습니다.')
@@ -392,7 +404,7 @@ export function useAttachIncentivesToPaidInvoice() {
       if (error) throw error
       const target = (data || []).find((r: Record<string, unknown>) => {
         const prof = r.profiles as Record<string, unknown> | null
-        return norm(r.client_name as string) === norm(personName) || norm(prof?.name as string) === norm(personName)
+        return nameMatch(r.client_name as string, personName) || nameMatch(prof?.name as string, personName)
       })
       if (!target) throw new Error('NO_PAID_INVOICE')
       const merged = [...new Set([...(((target as Record<string, unknown>).covered_incentive_keys as string[]) || []), ...keys])]
