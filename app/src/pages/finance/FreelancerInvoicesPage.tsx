@@ -170,6 +170,7 @@ export function InvoiceFormDialog({
   const [clientName, setClientName] = useState(initialData?.name || invoice?.clientName || '')
   const [residentNumber, setResidentNumber] = useState(initialData?.residentNumber || invoice?.residentNumber || '')
   const [phone, setPhone] = useState(initialData?.phone || invoice?.phone || '')
+  const [email, setEmail] = useState(initialData?.email || invoice?.clientEmail || invoice?.freelancerEmail || '')
   const initBank = splitBank(initialData?.bankAccount || invoice?.bankAccount || '')
   const [bankName, setBankName] = useState(initBank.bankName)
   const [accountNumber, setAccountNumber] = useState(initBank.accountNumber)
@@ -194,6 +195,7 @@ export function InvoiceFormDialog({
     setClientName(initialData.name || '')
     setResidentNumber(initialData.residentNumber || '')
     setPhone(initialData.phone || '')
+    if (initialData.email) setEmail(initialData.email)
     setNote(initialData.note || '')
     const b = splitBank(initialData.bankAccount || '')
     setBankName(b.bankName); setAccountNumber(b.accountNumber); setAccountHolder(b.accountHolder)
@@ -243,6 +245,7 @@ export function InvoiceFormDialog({
           clientName,
           residentNumber,
           phone,
+          clientEmail: email,
           bankAccount,
           note,
           items: validItems,
@@ -256,6 +259,7 @@ export function InvoiceFormDialog({
           clientName,
           residentNumber,
           phone,
+          clientEmail: email,
           bankAccount,
           note,
           coveredIncentiveKeys,
@@ -326,6 +330,11 @@ export function InvoiceFormDialog({
               <Label className="text-xs">{t('fInvoice.phone')}</Label>
               <Input value={phone} onChange={e => setPhone(e.target.value)} placeholder="010-0000-0000" className="h-9" />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">이메일 <span className="text-[10px] text-muted-foreground">· 견적서 엑셀에 표기됩니다</span></Label>
+            <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="예: partner@example.com" className="h-9" />
           </div>
 
           <div className="space-y-1.5">
@@ -481,7 +490,7 @@ export async function downloadInvoiceExcel(
   set('F6', invoice.clientName || invoice.freelancerName)
   set('H6', invoice.residentNumber)
   set('F7', invoice.phone)
-  set('F8', invoice.freelancerEmail)
+  set('F8', invoice.clientEmail || invoice.freelancerEmail)
   // 입금 정보(헤더): 은행명 F9, 계좌번호 H9 (bankAccount = "은행명 / 계좌번호 / 예금주")
   const bank = splitBank(invoice.bankAccount || '')
   set('F9', bank.bankName)
@@ -598,7 +607,7 @@ export async function downloadSalesIncentiveExcel(
   set('E6', name)                                    // 성명 / 사업자명
   set('G6', invoice.residentNumber)                  // 주민번호 / 사업자번호
   set('E7', invoice.phone)
-  set('E8', invoice.freelancerEmail)
+  set('E8', invoice.clientEmail || invoice.freelancerEmail)
   set('E9', bank.bankName)
   set('G9', bank.accountNumber || invoice.bankAccount || '')
   let sumRow = 30
@@ -638,7 +647,7 @@ export async function downloadFreelancerFormExcel(
   set('E6', name)                    // 성명 / 사업자명
   set('G6', invoice.residentNumber)  // 주민등록번호 / 사업자번호
   set('E7', invoice.phone)
-  set('E8', invoice.freelancerEmail)
+  set('E8', invoice.clientEmail || invoice.freelancerEmail)
   set('E9', bank.bankName)
   set('G9', bank.accountNumber || invoice.bankAccount || '')
   // 항목: 13행부터, 합계는 A열 '합' 검색
@@ -684,7 +693,7 @@ export async function downloadPartnerBusinessExcel(
   set('E5', name)                    // 사업자명
   set('G5', invoice.residentNumber)  // 사업자등록번호
   set('E7', invoice.phone)
-  set('E8', invoice.freelancerEmail)
+  set('E8', invoice.clientEmail || invoice.freelancerEmail)
   set('E9', bank.bankName)
   set('G9', bank.accountNumber || invoice.bankAccount || '')
   const dataStart = 15
@@ -1064,7 +1073,7 @@ async function exportInvoicesToExcel(invoices: FreelancerInvoice[], month: strin
     ws.addRow({
       no: i + 1,
       name: invoiceDisplayName(inv),
-      email: inv.freelancerEmail || '',
+      email: inv.clientEmail || inv.freelancerEmail || '',
       date: inv.invoiceDate,
       month: inv.invoiceMonth,
       total: inv.totalAmount,

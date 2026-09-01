@@ -19,6 +19,7 @@ export interface FreelancerInvoice {
   invoiceDate: string
   invoiceMonth: string
   clientName?: string   // 대리작성 수령인 이름 (있으면 표시에 우선)
+  clientEmail?: string  // 수령인 이메일 (견적서 엑셀 표기용, 대리발행 시 입력)
   status: 'draft' | 'submitted' | 'approved' | 'rejected'
   paidDate?: string | null   // 지급완료일 (설정되면 지급완료로 표시)
   residentNumber: string | null
@@ -44,6 +45,7 @@ function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
     invoiceDate: r.invoice_date as string,
     invoiceMonth: r.invoice_month as string,
     clientName: (r.client_name as string) || undefined,
+    clientEmail: (r.client_email as string) || undefined,
     status: r.status as FreelancerInvoice['status'],
     paidDate: (r.paid_date as string) || null,
     residentNumber: r.resident_number as string | null,
@@ -187,6 +189,7 @@ export function useCreateInvoice() {
       invoiceMonth: string
       kind?: string
       clientName?: string   // 대리작성 시 수령인(신청인) 이름 — 로그인 계정과 별개
+      clientEmail?: string  // 수령인 이메일 (견적서 표기)
       residentNumber?: string
       phone?: string
       bankAccount?: string
@@ -213,6 +216,7 @@ export function useCreateInvoice() {
       if (input.coveredIncentiveKeys && input.coveredIncentiveKeys.length) {
         insertRow.covered_incentive_keys = input.coveredIncentiveKeys
       }
+      if (input.clientEmail) insertRow.client_email = input.clientEmail   // 값 있을 때만(마이그레이션 전 안전)
       const { data: inv, error: invErr } = await supabase
         .from('freelancer_invoices')
         .insert(insertRow)
@@ -253,6 +257,7 @@ export function useUpdateInvoice() {
       id: string
       invoiceDate?: string
       clientName?: string
+      clientEmail?: string
       residentNumber?: string
       phone?: string
       bankAccount?: string
@@ -262,6 +267,7 @@ export function useUpdateInvoice() {
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (input.invoiceDate) updates.invoice_date = input.invoiceDate
       if (input.clientName !== undefined) updates.client_name = input.clientName || null
+      if (input.clientEmail) updates.client_email = input.clientEmail   // 값 있을 때만(마이그레이션 전 안전)
       if (input.residentNumber !== undefined) updates.resident_number = input.residentNumber || null
       if (input.phone !== undefined) updates.phone = input.phone || null
       if (input.bankAccount !== undefined) updates.bank_account = input.bankAccount || null
