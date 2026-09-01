@@ -55,21 +55,41 @@ function monthOptions(): string[] {
   return out
 }
 
+interface PayoutDetail {
+  label: string
+  amount: number
+  /** 출처 계약 추적용 (프리랜서 커미션만 채워짐) */
+  contractId?: string
+  contractorName?: string
+  studentName?: string
+  installmentLabel?: string
+  incentiveType?: string
+  sourceKey?: string
+}
 interface PersonAmount {
   name: string
   amount: number
-  details: { label: string; amount: number }[]
+  details: PayoutDetail[]
 }
 
 function groupByPerson(
-  items: { displayName: string; incentiveAmount: number; incentiveType: IncentiveType; studentName: string }[],
+  items: { id?: string; displayName: string; incentiveAmount: number; incentiveType: IncentiveType; studentName: string; contractId?: string; contractorName?: string; installmentLabel?: string }[],
 ): PersonAmount[] {
   const map = new Map<string, PersonAmount>()
   for (const item of items) {
     let entry = map.get(item.displayName)
     if (!entry) { entry = { name: item.displayName, amount: 0, details: [] }; map.set(item.displayName, entry) }
     entry.amount += item.incentiveAmount
-    entry.details.push({ label: `${item.studentName} (${item.incentiveType})`, amount: item.incentiveAmount })
+    entry.details.push({
+      label: `${item.studentName} (${item.incentiveType})`,
+      amount: item.incentiveAmount,
+      contractId: item.contractId,
+      contractorName: item.contractorName,
+      studentName: item.studentName,
+      installmentLabel: item.installmentLabel,
+      incentiveType: item.incentiveType,
+      sourceKey: item.id,
+    })
   }
   return [...map.values()].sort((a, b) => b.amount - a.amount)
 }
@@ -1393,6 +1413,7 @@ function PayoutCard({ title, color, persons, icon, t }: {
     amber: { bg: 'bg-amber-50', text: 'text-amber-700' },
   }
   const c = colorMap[color]
+  const [openLine, setOpenLine] = useState<string | null>(null)
 
   return (
     <Card>
@@ -1407,12 +1428,34 @@ function PayoutCard({ title, color, persons, icon, t }: {
               <span className={`text-sm font-bold ${c.text}`}>{formatCurrency(p.amount)}</span>
             </div>
             <div className="space-y-1">
-              {p.details.map((d, i) => (
-                <div key={i} className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span className="truncate mr-2">{d.label}</span>
-                  <span className="shrink-0">{formatCurrency(d.amount)}</span>
-                </div>
-              ))}
+              {p.details.map((d, i) => {
+                const lineKey = `${p.name}#${i}`
+                const traceable = !!(d.contractId || d.contractorName || d.installmentLabel)
+                const isOpen = openLine === lineKey
+                return (
+                  <div key={i}>
+                    <button
+                      type="button"
+                      onClick={() => traceable && setOpenLine(isOpen ? null : lineKey)}
+                      className={`flex w-full items-center justify-between text-xs text-muted-foreground text-left ${traceable ? 'cursor-pointer hover:text-foreground' : 'cursor-default'}`}
+                      title={traceable ? '클릭하면 출처 계약이 열립니다' : undefined}
+                    >
+                      <span className="truncate mr-2">{traceable && <span className="mr-1">{isOpen ? '▾' : '▸'}</span>}{d.label}</span>
+                      <span className="shrink-0 tabular-nums">{formatCurrency(d.amount)}</span>
+                    </button>
+                    {isOpen && traceable && (
+                      <div className="mt-1 mb-1.5 ml-3 rounded-md border bg-white/70 p-2 text-[11px] text-gray-600 space-y-0.5">
+                        {d.contractorName && <div><span className="text-muted-foreground">계약자</span> · <b>{d.contractorName}</b></div>}
+                        {d.studentName && d.studentName !== d.contractorName && <div><span className="text-muted-foreground">학생</span> · {d.studentName}</div>}
+                        {d.installmentLabel && <div><span className="text-muted-foreground">회차</span> · <b>{d.installmentLabel}</b></div>}
+                        {d.incentiveType && <div><span className="text-muted-foreground">유형</span> · {d.incentiveType}</div>}
+                        {d.contractId && <div className="break-all"><span className="text-muted-foreground">계약 ID</span> · <span className="font-mono">{d.contractId}</span></div>}
+                        <div className="pt-0.5 text-muted-foreground">계약관리 → 계약자 <b>{d.contractorName || d.studentName || ''}</b> 검색해 확인하세요.</div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         ))}
