@@ -398,10 +398,14 @@ export function AttendancePage() {
 
   // Dialog
   const openCreate = (date?: string) => {
-    if (!canEdit) return
+    // 근태 대상 내부직원은 누구나 '본인' 기록을 추가할 수 있다(주말 재택 등).
+    // 권한자(canEdit)는 대상자를 골라 전체 직원 기록을 추가할 수 있다.
+    if (!canEdit && !notExternal) return
     setEditId(null)
     setForm({
-      profileId: selectedProfile !== 'all' ? selectedProfile : (activeProfiles[0]?.id || ''),
+      profileId: canEdit
+        ? (selectedProfile !== 'all' ? selectedProfile : (activeProfiles[0]?.id || ''))
+        : (user?.id || ''),   // 권한 없는 직원은 본인 행으로 고정
       date: date || new Date().toISOString().slice(0, 10),
       clockIn: '10:00',
       clockOut: '19:00',
@@ -761,10 +765,10 @@ export function AttendancePage() {
           </SelectContent>
         </Select>
 
-        {canEdit && (
+        {(canEdit || notExternal) && (
           <Button size="sm" className="h-8" onClick={() => openCreate()}>
             <Plus className="h-3.5 w-3.5 mr-1" />
-            {t('attendance.add')}
+            {canEdit ? t('attendance.add') : '내 기록 추가'}
           </Button>
         )}
         {/* 엑셀 다운로드는 전 직원 근태를 받아가므로 근태관리 담당자(canEditAttendance)만 가능 */}
