@@ -130,6 +130,7 @@ export function InvoiceFormDialog({
   allowAddItems,
   businessLabels,
   issuerSelectable,
+  coveredIncentiveKeys,
   canEdit,
 }: {
   open: boolean
@@ -143,6 +144,8 @@ export function InvoiceFormDialog({
   businessLabels?: boolean
   /** 폼 안에서 개인/사업자를 직접 고르게 한다 (게시판을 나누지 않고 한 곳에서 발행) */
   issuerSelectable?: boolean
+  /** 이 발행이 정산하는 커미션 라인 키(대리발행 시 미지급 현황 연결용) */
+  coveredIncentiveKeys?: string[]
   canEdit: boolean
 }) {
   const t = useT()
@@ -255,6 +258,7 @@ export function InvoiceFormDialog({
           phone,
           bankAccount,
           note,
+          coveredIncentiveKeys,
           items: validItems,
         })
       }

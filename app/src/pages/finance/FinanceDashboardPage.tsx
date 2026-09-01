@@ -13,7 +13,7 @@ import { formatCurrency } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useIncentivesByInstallment, type IncentiveType } from '@/hooks/useIncentives'
 import { useAllExtraInstallments } from '@/hooks/useExternalFees'
-import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, useDeleteInvoice, invoiceDisplayName, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
+import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, useDeleteInvoice, invoiceDisplayName, usePaidCoveredIncentiveKeys, useAttachIncentivesToPaidInvoice, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
 import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote, RefreshCw, Download, ChevronDown, ChevronRight } from 'lucide-react'
@@ -73,7 +73,7 @@ interface PersonAmount {
 }
 
 function groupByPerson(
-  items: { id?: string; displayName: string; incentiveAmount: number; incentiveType: IncentiveType; studentName: string; contractId?: string; contractorName?: string; installmentLabel?: string }[],
+  items: { key?: string; displayName: string; incentiveAmount: number; incentiveType: IncentiveType; studentName: string; contractId?: string; contractorName?: string; installmentLabel?: string }[],
 ): PersonAmount[] {
   const map = new Map<string, PersonAmount>()
   for (const item of items) {
@@ -88,7 +88,7 @@ function groupByPerson(
       studentName: item.studentName,
       installmentLabel: item.installmentLabel,
       incentiveType: item.incentiveType,
-      sourceKey: item.id,
+      sourceKey: item.key,
     })
   }
   return [...map.values()].sort((a, b) => b.amount - a.amount)
@@ -112,6 +112,21 @@ export function FinanceDashboardPage() {
   const { data: editInvItems } = useInvoiceItems(editInv?.id)
   // 외부 파트너 대리발행: 미지급 커미션 카드에서 사람을 골라 인보이스 폼을 채워 연다
   const [issueFor, setIssueFor] = useState<PersonAmount | null>(null)
+  // 이미 지급원장에 지급완료된 커미션을 그 인보이스에 연결(미지급에서 제외)
+  const attachPaid = useAttachIncentivesToPaidInvoice()
+  const markPaid = (p: PersonAmount) => {
+    const keys = p.details.map(d => d.sourceKey).filter((k): k is string => !!k)
+    if (!keys.length) { alert('연결할 커미션 라인 정보가 없습니다.'); return }
+    if (!confirm(`${p.name}님의 이 커미션(${formatCurrency(p.amount)})을 이미 지급완료된 인보이스에 연결해 미지급 현황에서 뺄까요?\n(지급원장에 ${p.name} 이름의 지급완료 인보이스가 있어야 합니다.)`)) return
+    attachPaid.mutate({ personName: p.name, keys }, {
+      onSuccess: () => alert('연결했습니다. 미지급 현황에서 제외됩니다.'),
+      onError: (e) => alert(
+        (e as Error).message === 'NO_PAID_INVOICE'
+          ? `${p.name}님의 지급완료된 인보이스를 찾지 못했어요.\n먼저 '인보이스 발행'으로 발행한 뒤 지급원장에서 지급완료 처리하거나, 기존 인보이스를 지급완료로 표시해주세요.`
+          : `연결 실패: ${(e as Error).message}`,
+      ),
+    })
+  }
   const [exporting, setExporting] = useState(false)
 
   const { data: allIncentives = [], isLoading: incLoading } = useIncentivesByInstallment()
@@ -147,13 +162,17 @@ export function FinanceDashboardPage() {
     return { byKind, grandTotal, approvedTotal, pendingTotal, paidTotal, paidCount }
   }, [invoices])
 
+  // 이미 지급완료된 인보이스가 정산한 커미션 키 (미지급에서 제외)
+  const paidCoveredKeys = usePaidCoveredIncentiveKeys()
+
   // ─── 미지급 현황 (수금 완료·미정산): 프리랜서 커미션 + 서비스 수수료 ───
-  //  커미션은 회차가 '수금 완료(isPaid)'된 것만 발생한다. 미수금 회차(중도금·잔금 등)는
-  //  아직 커미션이 발생하지 않으므로 제외 — 예전엔 !isPaid 로 미수금분이 잘못 잡혔다.
+  //  ① 회차가 '수금 완료(isPaid)'된 커미션만 발생 (미수금 회차 제외)
+  //  ② 그 중 '지급완료된 인보이스'가 이미 정산한 커미션(paidCoveredKeys)은 제외 → 진짜 미지급만
   const freelancerCommission = useMemo(() => {
-    const collected = allIncentives.filter(e => e.isPaid && FREELANCER_TYPES.includes(e.incentiveType))
-    return { total: collected.reduce((s, e) => s + e.incentiveAmount, 0), count: collected.length, byPerson: groupByPerson(collected) }
-  }, [allIncentives])
+    const pending = allIncentives.filter(e =>
+      e.isPaid && FREELANCER_TYPES.includes(e.incentiveType) && !paidCoveredKeys.has(e.key))
+    return { total: pending.reduce((s, e) => s + e.incentiveAmount, 0), count: pending.length, byPerson: groupByPerson(pending) }
+  }, [allIncentives, paidCoveredKeys])
 
   const serviceFees = useMemo(() => {
     const unpaid: { name: string; amount: number; studentName: string; label: string }[] = []
@@ -829,7 +848,7 @@ export function FinanceDashboardPage() {
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <PayoutCard title={t('financeDash.freelancerCommission')} color="purple" persons={freelancerCommission.byPerson} icon={<Users className="size-4 text-purple-500" />} t={t} onIssue={allowed ? setIssueFor : undefined} />
+            <PayoutCard title={t('financeDash.freelancerCommission')} color="purple" persons={freelancerCommission.byPerson} icon={<Users className="size-4 text-purple-500" />} t={t} onIssue={allowed ? setIssueFor : undefined} onMarkPaid={allowed ? markPaid : undefined} />
             <PayoutCard title={t('financeDash.serviceFee')} color="amber" persons={serviceFees.byPerson} icon={<Receipt className="size-4 text-amber-500" />} t={t} />
           </div>
         </>
@@ -871,6 +890,7 @@ export function FinanceDashboardPage() {
           kind="freelancer"
           allowAddItems
           issuerSelectable
+          coveredIncentiveKeys={issueFor.details.map((d) => d.sourceKey).filter((k): k is string => !!k)}
           canEdit={allowed}
         />
       )}
@@ -1429,7 +1449,7 @@ function PaidActionCell({ inv, disabled, onSet }: {
 
 // ─── Payout detail card ──────────────────────────────────────────────────────
 
-function PayoutCard({ title, color, persons, icon, t, onIssue }: {
+function PayoutCard({ title, color, persons, icon, t, onIssue, onMarkPaid }: {
   title: string
   color: 'purple' | 'blue' | 'amber'
   persons: PersonAmount[]
@@ -1437,6 +1457,8 @@ function PayoutCard({ title, color, persons, icon, t, onIssue }: {
   t: (key: string, params?: Record<string, string | number>) => string
   /** 있으면 사람별 '인보이스 발행' 버튼 표시 (외부 파트너 대리발행) */
   onIssue?: (p: PersonAmount) => void
+  /** 있으면 '지급완료 처리' 버튼 표시 (이미 지급원장에 지급완료 인보이스가 있는 건 연결) */
+  onMarkPaid?: (p: PersonAmount) => void
 }) {
   const colorMap = {
     purple: { bg: 'bg-purple-50', text: 'text-purple-700' },
@@ -1461,6 +1483,11 @@ function PayoutCard({ title, color, persons, icon, t, onIssue }: {
                 {onIssue && (
                   <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={() => onIssue(p)}>
                     <FileText className="size-3.5" />인보이스 발행
+                  </Button>
+                )}
+                {onMarkPaid && (
+                  <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs text-muted-foreground" title="이미 지급원장에 지급완료된 인보이스가 있으면 이 커미션을 거기에 연결해 미지급에서 뺍니다" onClick={() => onMarkPaid(p)}>
+                    <CheckCircle2 className="size-3.5" />지급완료 처리
                   </Button>
                 )}
               </div>

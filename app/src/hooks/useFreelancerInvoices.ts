@@ -31,6 +31,8 @@ export interface FreelancerInvoice {
   freelancerName?: string
   freelancerEmail?: string
   items?: InvoiceItem[]
+  /** 이 인보이스가 정산하는 커미션 라인 키(`incentiveId-installmentId`) 목록 */
+  coveredIncentiveKeys?: string[]
 }
 
 function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
@@ -51,6 +53,7 @@ function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
     note: r.note as string | null,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
+    coveredIncentiveKeys: (r.covered_incentive_keys as string[]) || undefined,
     freelancerName: profile?.name as string | undefined,
     freelancerEmail: profile?.email as string | undefined,
   }
@@ -188,24 +191,31 @@ export function useCreateInvoice() {
       phone?: string
       bankAccount?: string
       note?: string
+      coveredIncentiveKeys?: string[]   // 이 인보이스가 정산하는 커미션 라인 키
       items: { itemName: string; quantity: number; unitPrice: number; remark?: string }[]
     }) => {
       const totalAmount = input.items.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0)
+      // covered_incentive_keys 는 마이그레이션 전이면 컬럼이 없으므로, 값이 있을 때만 넣는다.
+      // (없을 땐 아예 참조하지 않아 기존 인보이스 생성이 깨지지 않게 한다.)
+      const insertRow: Record<string, unknown> = {
+        freelancer_id: input.freelancerId,
+        invoice_date: input.invoiceDate,
+        invoice_month: input.invoiceMonth,
+        kind: input.kind || 'freelancer',
+        status: 'submitted',
+        client_name: input.clientName || null,
+        resident_number: input.residentNumber || null,
+        phone: input.phone || null,
+        bank_account: input.bankAccount || null,
+        total_amount: totalAmount,
+        note: input.note || null,
+      }
+      if (input.coveredIncentiveKeys && input.coveredIncentiveKeys.length) {
+        insertRow.covered_incentive_keys = input.coveredIncentiveKeys
+      }
       const { data: inv, error: invErr } = await supabase
         .from('freelancer_invoices')
-        .insert({
-          freelancer_id: input.freelancerId,
-          invoice_date: input.invoiceDate,
-          invoice_month: input.invoiceMonth,
-          kind: input.kind || 'freelancer',
-          status: 'submitted',
-          client_name: input.clientName || null,
-          resident_number: input.residentNumber || null,
-          phone: input.phone || null,
-          bank_account: input.bankAccount || null,
-          total_amount: totalAmount,
-          note: input.note || null,
-        })
+        .insert(insertRow)
         .select()
         .single()
       if (invErr) throw invErr
@@ -340,6 +350,62 @@ export function useDeleteInvoice() {
       qc.invalidateQueries({ queryKey: ['my-invoices'] })
       qc.invalidateQueries({ queryKey: ['my-invoice-item-sigs'] })
       qc.invalidateQueries({ queryKey: ['all-invoices'] })  // 재무대시보드 즉시 반영
+    },
+  })
+}
+
+/** 지급완료(paid_date 있음) 인보이스가 정산한 커미션 키 집합.
+ *  재무대시보드 미지급 현황에서 '이미 지급된' 커미션을 빼는 데 쓴다(전월 포함 전체 조회). */
+export function usePaidCoveredIncentiveKeys() {
+  const { data } = useQuery({
+    queryKey: ['paid-covered-incentive-keys'],
+    queryFn: async () => {
+      const set = new Set<string>()
+      const { data, error } = await supabase
+        .from('freelancer_invoices')
+        .select('covered_incentive_keys, paid_date')
+        .not('paid_date', 'is', null)
+      if (error) { console.warn('covered_incentive_keys 조회 실패(마이그레이션 전?):', error.message); return set }
+      for (const r of (data || []) as Record<string, unknown>[]) {
+        for (const k of ((r.covered_incentive_keys as string[]) || [])) set.add(k)
+      }
+      return set
+    },
+    staleTime: 30_000,
+  })
+  return data || new Set<string>()
+}
+
+/** 이미 지급완료된 기존 인보이스에 커미션 키를 연결한다(이시형처럼 발행 전 지급된 건 정리용).
+ *  대상 = 이름이 일치하는 지급완료 인보이스 중 가장 최근 것. 없으면 NO_PAID_INVOICE 던짐. */
+export function useAttachIncentivesToPaidInvoice() {
+  const qc = useQueryClient()
+  const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
+  return useMutation({
+    mutationFn: async ({ personName, keys }: { personName: string; keys: string[] }) => {
+      if (!keys.length) throw new Error('연결할 커미션이 없습니다.')
+      const { data, error } = await supabase
+        .from('freelancer_invoices')
+        .select('id, covered_incentive_keys, client_name, invoice_date, paid_date, profiles!freelancer_invoices_freelancer_id_fkey(name)')
+        .not('paid_date', 'is', null)
+        .order('invoice_date', { ascending: false })
+      if (error) throw error
+      const target = (data || []).find((r: Record<string, unknown>) => {
+        const prof = r.profiles as Record<string, unknown> | null
+        return norm(r.client_name as string) === norm(personName) || norm(prof?.name as string) === norm(personName)
+      })
+      if (!target) throw new Error('NO_PAID_INVOICE')
+      const merged = [...new Set([...(((target as Record<string, unknown>).covered_incentive_keys as string[]) || []), ...keys])]
+      const { error: upErr } = await supabase
+        .from('freelancer_invoices')
+        .update({ covered_incentive_keys: merged, updated_at: new Date().toISOString() })
+        .eq('id', (target as Record<string, unknown>).id as string)
+      if (upErr) throw upErr
+      return { invoiceId: (target as Record<string, unknown>).id as string }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['paid-covered-incentive-keys'] })
+      qc.invalidateQueries({ queryKey: ['all-invoices'] })
     },
   })
 }
