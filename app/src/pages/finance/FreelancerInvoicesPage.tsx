@@ -616,16 +616,14 @@ export async function downloadSalesIncentiveExcel(
 export async function downloadFreelancerFormExcel(
   invoice: FreelancerInvoice,
   items: { itemName: string; quantity: number; unitPrice: number; supplyAmount: number; remark?: string | null }[],
-  formType: 'individual' | 'business' | 'regular',
+  formType: 'individual' | 'business',
 ) {
   const { default: ExcelJS } = await import('exceljs')
   const total = items.reduce((s, it) => s + (it.supplyAmount || 0), 0)
   const name = invoice.clientName || invoice.freelancerName || ''
-  const tpl = formType === 'business' ? '/freelancer-form-business.xlsx'
-    : formType === 'regular' ? '/regular-individual-invoice.xlsx'
-    : '/freelancer-form-individual.xlsx'
+  const tpl = formType === 'business' ? '/freelancer-form-business.xlsx' : '/freelancer-form-individual.xlsx'
   const res = await fetch(tpl)
-  if (!res.ok) throw new Error(formType === 'regular' ? '정규직 개인 양식이 아직 등록되지 않았습니다. (파일 업로드 대기 중)' : '프리랜서 양식 파일을 불러올 수 없습니다.')
+  if (!res.ok) throw new Error('프리랜서 양식 파일을 불러올 수 없습니다.')
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(await res.arrayBuffer())
   const ws = wb.worksheets[0]
@@ -656,7 +654,7 @@ export async function downloadFreelancerFormExcel(
   const out = await wb.xlsx.writeBuffer()
   const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = `${name}_인보이스_${formType === 'business' ? '사업자' : formType === 'regular' ? '정규직개인' : '프리랜서개인'}.xlsx`
+  const a = document.createElement('a'); a.href = url; a.download = `${name}_인보이스_${formType === 'business' ? '사업자' : '프리랜서개인'}.xlsx`
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
 }
 
@@ -962,22 +960,16 @@ function InvoiceDetailDialog({
                 양식 발행 (파트너사)
               </Button>
             ) : (
-              // 개인 파트너 — 프리랜서 개인 / 정규직 개인 2종 폼
-              <div className="mr-auto flex items-center gap-2">
-                <Select value="" onValueChange={async (v) => {
-                  if (!v) return
-                  setDownloading(true)
-                  try { await downloadFreelancerFormExcel(invoice, items, v as 'individual' | 'regular') }
-                  catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
-                  finally { setDownloading(false) }
-                }}>
-                  <SelectTrigger className="h-9 w-44"><span className="flex items-center gap-1.5">{downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}양식 발행</span></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="individual">프리랜서 개인</SelectItem>
-                    <SelectItem value="regular">정규직 개인</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              // 개인 파트너 — 프리랜서 개인 양식 발행
+              <Button variant="outline" className="gap-1.5 mr-auto" disabled={downloading} onClick={async () => {
+                setDownloading(true)
+                try { await downloadFreelancerFormExcel(invoice, items, 'individual') }
+                catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
+                finally { setDownloading(false) }
+              }}>
+                {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                양식 발행 (프리랜서 개인)
+              </Button>
             )}
             {canEditThis && onEdit && (
               <Button variant="outline" className="gap-1.5" onClick={() => onEdit()}>
@@ -1996,7 +1988,7 @@ export function FreelancerInvoicesPage(
             : (isBusinessBoard
                 ? '사업자 파트너(프리랜서 사업자 + 파트너사 사업자) 인보이스를 파트너사 양식 업로드 또는 직접 입력으로 발행합니다.'
                 : isIncentive ? '이 달 발생한 세일즈 인센티브로 정산 인보이스를 발행하세요.'
-                : isIndividualBoard ? '이 달 서비스를 제공한 학생으로 자동 발행하거나, 개인 파트너를 직접 입력해 발행합니다. 발행 후 상세보기에서 프리랜서 개인·정규직 개인 양식을 골라 다운로드합니다.'
+                : isIndividualBoard ? '이 달 서비스를 제공한 학생으로 자동 발행하거나, 개인 파트너를 직접 입력해 발행합니다. 발행 후 상세보기에서 프리랜서 개인 양식으로 다운로드합니다.'
                 : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
         </p>
       </div>

@@ -955,21 +955,17 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
                   양식 발행 (파트너사)
                 </Button>
               ) : (
-                <Select value="" onValueChange={async (v) => {
-                  if (!v) return
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={downloading} onClick={async () => {
                   setDownloading(true)
                   try {
                     const its = items.map(it => ({ itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice, supplyAmount: it.supplyAmount, remark: it.remark }))
-                    await downloadFreelancerFormExcel(invoice, its, v as 'individual' | 'regular')
+                    await downloadFreelancerFormExcel(invoice, its, 'individual')
                   } catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
                   finally { setDownloading(false) }
                 }}>
-                  <SelectTrigger className="h-9 w-44"><span className="flex items-center gap-1.5">{downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}양식 발행</span></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="individual">프리랜서 개인</SelectItem>
-                    <SelectItem value="regular">정규직 개인</SelectItem>
-                  </SelectContent>
-                </Select>
+                  {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                  양식 발행 (프리랜서 개인)
+                </Button>
               )}
               <div className="flex items-center gap-2 flex-wrap">
                 {(invoice.status === 'approved' || invoice.status === 'rejected') && (
