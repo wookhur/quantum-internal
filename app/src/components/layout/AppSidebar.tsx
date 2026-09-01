@@ -138,10 +138,9 @@ export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; i
     titleKey: 'nav.invoiceMgmt',
     module: 'invoice',
     items: [
-      { labelKey: 'nav.invoiceFreelancerIndividual', to: '/invoices/freelancer-individual', icon: FileText },
+      { labelKey: 'nav.invoiceIndividualPartner', to: '/invoices/freelancer-individual', icon: FileText },
+      { labelKey: 'nav.invoiceBusinessPartner', to: '/invoices/partner-business', icon: FileText },
       { labelKey: 'nav.invoiceSalesIncentive', to: '/invoices/sales-incentive', icon: Percent },
-      { labelKey: 'nav.invoicePartnerIndividual', to: '/invoices/partner-individual', icon: FileText },
-      { labelKey: 'nav.invoicePartnerBusiness', to: '/invoices/partner-business', icon: FileText },
     ],
   },
   {

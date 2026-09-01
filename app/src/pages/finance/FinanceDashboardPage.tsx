@@ -18,7 +18,7 @@ import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote, RefreshCw, Download, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useIncentiveLinesByPerson, downloadInvoiceExcel, downloadSalesIncentiveExcel, downloadFreelancerFormExcel, InvoiceFormDialog, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
+import { useIncentiveLinesByPerson, downloadInvoiceExcel, downloadSalesIncentiveExcel, downloadFreelancerFormExcel, downloadPartnerBusinessExcel, InvoiceFormDialog, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
 import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useAllClawbacks, useSetClawbackStatus, useDeleteClawback } from '@/hooks/useClawbacks'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -847,21 +847,6 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
     deleteInvoice.mutate(invoice.id, { onSuccess: onClose })
   }
 
-  // 회사 양식(견적서)으로 다운로드 — 파일명 = 직원 이름
-  const downloadForm = async () => {
-    if (!invoice) return
-    setDownloading(true)
-    try {
-      await downloadInvoiceExcel(invoice, items.map(it => ({
-        itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice, supplyAmount: it.supplyAmount, remark: it.remark,
-      })))
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.')
-    } finally {
-      setDownloading(false)
-    }
-  }
-
   // 승인/반려를 실수로 눌렀을 때 대기(제출) 상태로 되돌림. 지급완료였다면 지급일도 해제.
   const revertToSubmitted = () => {
     if (!invoice) return
@@ -957,28 +942,34 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
                     <SelectItem value="business">3. 프리랜서 (사업자)</SelectItem>
                   </SelectContent>
                 </Select>
-              ) : (invoice.kind || '').startsWith('freelancer') ? (
+              ) : (invoice.kind || '').endsWith('_business') ? (
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={downloading} onClick={async () => {
+                  setDownloading(true)
+                  try {
+                    const its = items.map(it => ({ itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice, supplyAmount: it.supplyAmount, remark: it.remark }))
+                    await downloadPartnerBusinessExcel(invoice, its)
+                  } catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
+                  finally { setDownloading(false) }
+                }}>
+                  {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                  양식 발행 (파트너사)
+                </Button>
+              ) : (
                 <Select value="" onValueChange={async (v) => {
                   if (!v) return
                   setDownloading(true)
                   try {
                     const its = items.map(it => ({ itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice, supplyAmount: it.supplyAmount, remark: it.remark }))
-                    await downloadFreelancerFormExcel(invoice, its, v as 'individual' | 'business')
+                    await downloadFreelancerFormExcel(invoice, its, v as 'individual' | 'regular')
                   } catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
                   finally { setDownloading(false) }
                 }}>
                   <SelectTrigger className="h-9 w-44"><span className="flex items-center gap-1.5">{downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}양식 발행</span></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="individual">프리랜서 (개인)</SelectItem>
-                    <SelectItem value="business">프리랜서 (사업자)</SelectItem>
+                    <SelectItem value="individual">프리랜서 개인</SelectItem>
+                    <SelectItem value="regular">정규직 개인</SelectItem>
                   </SelectContent>
                 </Select>
-              ) : (
-                <Button variant="outline" size="sm" className="gap-1.5"
-                  disabled={downloading} onClick={downloadForm}>
-                  {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
-                  회사 양식 다운로드
-                </Button>
               )}
               <div className="flex items-center gap-2 flex-wrap">
                 {(invoice.status === 'approved' || invoice.status === 'rejected') && (

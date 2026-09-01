@@ -183,10 +183,11 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/finance/incentives/by-contract', labelKey: 'nav.incentives', module: 'finance', hidden: true },
   { path: '/finance/incentives/by-person', labelKey: 'nav.incentives', module: 'finance', hidden: true },
 
-  { path: '/invoices/freelancer-individual', labelKey: 'nav.invoiceFreelancerIndividual', module: 'invoice' },
+  // 3분류: 개인 파트너 / 사업자 파트너 / 세일즈 인센티브.
+  // 권한 보존을 위해 기존 경로를 재사용한다(freelancer-individual=개인, partner-business=사업자).
+  { path: '/invoices/freelancer-individual', labelKey: 'nav.invoiceIndividualPartner', module: 'invoice' },
+  { path: '/invoices/partner-business', labelKey: 'nav.invoiceBusinessPartner', module: 'invoice' },
   { path: '/invoices/sales-incentive', labelKey: 'nav.invoiceSalesIncentive', module: 'invoice' },
-  { path: '/invoices/partner-individual', labelKey: 'nav.invoicePartnerIndividual', module: 'invoice' },
-  { path: '/invoices/partner-business', labelKey: 'nav.invoicePartnerBusiness', module: 'invoice' },
   // ── Planning ──
   { path: '/planning/overview', labelKey: 'nav.overview', module: 'planning' },
   { path: '/planning/projection', labelKey: 'nav.revenueProjection', module: 'planning' },

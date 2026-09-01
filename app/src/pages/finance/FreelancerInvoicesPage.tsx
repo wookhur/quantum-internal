@@ -616,14 +616,16 @@ export async function downloadSalesIncentiveExcel(
 export async function downloadFreelancerFormExcel(
   invoice: FreelancerInvoice,
   items: { itemName: string; quantity: number; unitPrice: number; supplyAmount: number; remark?: string | null }[],
-  formType: 'individual' | 'business',
+  formType: 'individual' | 'business' | 'regular',
 ) {
   const { default: ExcelJS } = await import('exceljs')
   const total = items.reduce((s, it) => s + (it.supplyAmount || 0), 0)
   const name = invoice.clientName || invoice.freelancerName || ''
-  const tpl = formType === 'business' ? '/freelancer-form-business.xlsx' : '/freelancer-form-individual.xlsx'
+  const tpl = formType === 'business' ? '/freelancer-form-business.xlsx'
+    : formType === 'regular' ? '/regular-individual-invoice.xlsx'
+    : '/freelancer-form-individual.xlsx'
   const res = await fetch(tpl)
-  if (!res.ok) throw new Error('프리랜서 양식 파일을 불러올 수 없습니다.')
+  if (!res.ok) throw new Error(formType === 'regular' ? '정규직 개인 양식이 아직 등록되지 않았습니다. (파일 업로드 대기 중)' : '프리랜서 양식 파일을 불러올 수 없습니다.')
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(await res.arrayBuffer())
   const ws = wb.worksheets[0]
@@ -654,7 +656,52 @@ export async function downloadFreelancerFormExcel(
   const out = await wb.xlsx.writeBuffer()
   const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = `${name}_인보이스_${formType === 'business' ? '사업자' : '개인'}.xlsx`
+  const a = document.createElement('a'); a.href = url; a.download = `${name}_인보이스_${formType === 'business' ? '사업자' : formType === 'regular' ? '정규직개인' : '프리랜서개인'}.xlsx`
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+}
+
+/** 사업자 파트너 인보이스 발행 — 파트너사인보이스양식(partner-business-invoice.xlsx) 채우기.
+ *  값칸: B5 날짜 · E5 사업자명 · G5 사업자등록번호 · E7 전화 · E8 이메일 · E9 은행 · G9 계좌.
+ *  항목표 15행부터(A No·B 이름·C 수량·D 단가·E 공급가액·F 비고), 합계는 A열 '합' 검색(E열 합계). */
+export async function downloadPartnerBusinessExcel(
+  invoice: FreelancerInvoice,
+  items: { itemName: string; quantity: number; unitPrice: number; supplyAmount: number; remark?: string | null }[],
+) {
+  const { default: ExcelJS } = await import('exceljs')
+  const total = items.reduce((s, it) => s + (it.supplyAmount || 0), 0)
+  const name = invoice.clientName || invoice.freelancerName || ''
+  const res = await fetch('/partner-business-invoice.xlsx')
+  if (!res.ok) throw new Error('파트너사 인보이스 양식 파일을 불러올 수 없습니다.')
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await res.arrayBuffer())
+  const ws = wb.worksheets[0]
+  const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
+  const bank = splitBank(invoice.bankAccount || '')
+  set('B5', invoice.invoiceDate)
+  set('E5', name)                    // 사업자명
+  set('G5', invoice.residentNumber)  // 사업자등록번호
+  set('E7', invoice.phone)
+  set('E8', invoice.freelancerEmail)
+  set('E9', bank.bankName)
+  set('G9', bank.accountNumber || invoice.bankAccount || '')
+  const dataStart = 15
+  let sumRow = 26
+  for (let r = dataStart; r <= dataStart + 40; r++) { const va = ws.getCell(r, 1).value; if (va != null && String(va).includes('합')) { sumRow = r; break } }
+  let capacity = sumRow - dataStart
+  if (items.length > capacity) { const extra = items.length - capacity; ws.spliceRows(sumRow, 0, ...Array.from({ length: extra }, () => [] as unknown[])); sumRow += extra; capacity += extra }
+  for (let i = 0; i < capacity; i++) {
+    const r = dataStart + i
+    if (i < items.length) {
+      const it = items[i]
+      ws.getCell(r, 1).value = i + 1; ws.getCell(r, 2).value = it.itemName; ws.getCell(r, 3).value = it.quantity
+      ws.getCell(r, 4).value = it.unitPrice; ws.getCell(r, 5).value = it.supplyAmount; ws.getCell(r, 6).value = it.remark || null
+    } else { ws.getCell(r, 1).value = null; ws.getCell(r, 2).value = null; ws.getCell(r, 3).value = null }
+  }
+  ws.getCell(sumRow, 5).value = total
+  const out = await wb.xlsx.writeBuffer()
+  const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `${name}_파트너사인보이스.xlsx`
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
 }
 
@@ -667,18 +714,18 @@ function saveBlob(buf: ArrayBuffer, name: string) {
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
 }
 
-// Serve the real 견적서 template (public/business-invoice-template.xlsx)
-async function downloadBusinessTemplate() {
-  const res = await fetch('/business-invoice-template.xlsx')
-  if (!res.ok) throw new Error('양식 파일을 불러올 수 없습니다.')
-  saveBlob(await res.arrayBuffer(), '인보이스-사업자.xlsx')
-}
-
 // 프리랜서(개인)용 양식 — 품목표: C=날짜, D=영상명, E=단가, G=비고 (헤더 11행)
 async function downloadFreelancerTemplate() {
   const res = await fetch('/freelancer-individual-template.xlsx')
   if (!res.ok) throw new Error('양식 파일을 불러올 수 없습니다.')
   saveBlob(await res.arrayBuffer(), '인보이스-개인.xlsx')
+}
+
+// 사업자 파트너용 빈 양식 — 파트너사인보이스양식(partner-business-invoice.xlsx)
+async function downloadPartnerBusinessTemplate() {
+  const res = await fetch('/partner-business-invoice.xlsx')
+  if (!res.ok) throw new Error('양식 파일을 불러올 수 없습니다.')
+  saveBlob(await res.arrayBuffer(), '파트너사인보이스양식.xlsx')
 }
 
 
@@ -825,17 +872,6 @@ function InvoiceDetailDialog({
   const canEditThis = canEdit && (isAccounting || (invoice.freelancerId === user?.id && invoice.status !== 'approved'))
   const [downloading, setDownloading] = useState(false)
 
-  const handleDownload = async () => {
-    setDownloading(true)
-    try {
-      await downloadInvoiceExcel(invoice, items)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.')
-    } finally {
-      setDownloading(false)
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl w-[calc(100vw-1.5rem)] max-h-[90vh] overflow-y-auto">
@@ -914,27 +950,34 @@ function InvoiceDetailDialog({
                   </SelectContent>
                 </Select>
               </div>
-            ) : (invoice.kind || '').startsWith('freelancer') ? (
+            ) : (invoice.kind || '').endsWith('_business') ? (
+              // 사업자 파트너 — 파트너사인보이스양식 단일 발행
+              <Button variant="outline" className="gap-1.5 mr-auto" disabled={downloading} onClick={async () => {
+                setDownloading(true)
+                try { await downloadPartnerBusinessExcel(invoice, items) }
+                catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
+                finally { setDownloading(false) }
+              }}>
+                {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                양식 발행 (파트너사)
+              </Button>
+            ) : (
+              // 개인 파트너 — 프리랜서 개인 / 정규직 개인 2종 폼
               <div className="mr-auto flex items-center gap-2">
                 <Select value="" onValueChange={async (v) => {
                   if (!v) return
                   setDownloading(true)
-                  try { await downloadFreelancerFormExcel(invoice, items, v as 'individual' | 'business') }
+                  try { await downloadFreelancerFormExcel(invoice, items, v as 'individual' | 'regular') }
                   catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
                   finally { setDownloading(false) }
                 }}>
                   <SelectTrigger className="h-9 w-44"><span className="flex items-center gap-1.5">{downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}양식 발행</span></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="individual">프리랜서 (개인)</SelectItem>
-                    <SelectItem value="business">프리랜서 (사업자)</SelectItem>
+                    <SelectItem value="individual">프리랜서 개인</SelectItem>
+                    <SelectItem value="regular">정규직 개인</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            ) : (
-              <Button variant="outline" className="gap-1.5 mr-auto" disabled={downloading} onClick={handleDownload}>
-                {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                엑셀 다운로드
-              </Button>
             )}
             {canEditThis && onEdit && (
               <Button variant="outline" className="gap-1.5" onClick={() => onEdit()}>
@@ -1295,30 +1338,38 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
 // ─── Main Page ────────────────────────────────────────────────────────────
 
 export function FreelancerInvoicesPage(
-  { kind = 'freelancer', business = false }: { kind?: 'freelancer' | 'sales_incentive' | 'partner'; business?: boolean } = {},
+  { kind = 'freelancer', business = false, category }:
+  { kind?: 'freelancer' | 'sales_incentive' | 'partner'; business?: boolean; category?: 'individual' | 'business' | 'sales_incentive' } = {},
 ) {
   const t = useT()
   const canEdit = useCanEdit(useLocation().pathname)
   const { user } = useAuth()
   const isAccounting = canAccessAccount(user)
-  const isIncentive = kind === 'sales_incentive'
-  const isPartner = kind === 'partner'
-  // 저장은 여전히 kind 로 나뉜다(freelancer / freelancer_business). 다만 프리랜서는
-  // 한 화면에서 둘을 함께 보고, 발행할 때 폼에서 개인/사업자를 고른다.
-  // 게시판을 나눠 두면 같은 목록·같은 계산을 두 곳에서 관리하게 되고
-  // 어느 쪽에서 냈는지 헷갈린다.
-  const mergeIssuerTypes = kind === 'freelancer'
-  const storageKind: string | string[] = mergeIssuerTypes
-    ? ['freelancer', 'freelancer_business']
+  // 새 3분류: 개인 파트너 / 사업자 파트너 / 세일즈 인센티브.
+  //  - 개인 파트너 = 기존 freelancer(개인) + partner(개인) 을 한 화면에 (자동 청구 + 수기)
+  //  - 사업자 파트너 = 기존 freelancer_business + partner_business (수기, 파트너사 양식)
+  // 저장 kind 값은 그대로 두고 게시판에서 묶어서 읽는다(데이터 이동 불필요).
+  const isIncentive = category === 'sales_incentive' || (!category && kind === 'sales_incentive')
+  const isBusinessBoard = category === 'business'
+  const isIndividualBoard = category === 'individual'
+  const storageKind: string | string[] = isIncentive
+    ? 'sales_incentive'
+    : isIndividualBoard ? ['freelancer', 'partner']
+    : isBusinessBoard ? ['freelancer_business', 'partner_business']
     : business ? `${kind}_business` : kind
-  // Auto-issue from a data source only for freelancer/incentive individual flows
-  const isAuto = mergeIssuerTypes || (!business && kind === 'sales_incentive')
+  // 자동 청구(청구 가능 학생/인센티브 발생분)는 개인 파트너·세일즈 인센티브에서만.
+  const isAuto = isIndividualBoard || (isIncentive && !business)
+  // 자동 청구 계산에 쓰는 소스 kind (개인 파트너는 프리랜서 청구목록을 그대로 쓴다)
+  const sourceKind = isIncentive ? 'sales_incentive' : 'freelancer'
   const [uploadError, setUploadError] = useState<string | undefined>()
   const [uploading, setUploading] = useState(false)
+  // 수기 입력/업로드로 폼을 열면 항목을 자유롭게 추가할 수 있게 한다(자동 청구는 고정)
+  const [manualEntry, setManualEntry] = useState(false)
 
   const invoiceTitle = (
-    isIncentive ? '세일즈인센티브 인보이스'
-    : isPartner ? `파트너사 인보이스${business ? ' (사업자)' : ' (개인)'}`
+    isIncentive ? '세일즈 인센티브'
+    : isBusinessBoard ? '사업자 파트너'
+    : isIndividualBoard ? '개인 파트너'
     : '프리랜서 인보이스'
   )
 
@@ -1353,14 +1404,15 @@ export function FreelancerInvoicesPage(
     return list
   }, [invoices, statusFilter, search])
 
-  // 이름 드롭다운 옵션 = 이 달 급여 지급 대상자(모든 소스) + 이미 제출한 사람
-  const dropdownPayees = useBillablePayees(selectedMonth === 'all' ? getCurrentMonth() : selectedMonth, kind)
+  // 이름 드롭다운 옵션 = 이 달 급여 지급 대상자(모든 소스) + 이미 제출한 사람.
+  // 사업자 파트너 게시판은 자동 청구 목록을 쓰지 않으므로(수기 전용) 제출자 이름만.
+  const rawPayees = useBillablePayees(selectedMonth === 'all' ? getCurrentMonth() : selectedMonth, sourceKind)
   const nameOptions = useMemo(() => {
     const set = new Set<string>()
-    dropdownPayees.forEach((_items, name) => set.add(name))
+    if (!isBusinessBoard) rawPayees.forEach((_items, name) => set.add(name))
     for (const inv of invoices) { const n = invoiceDisplayName(inv); if (n) set.add(n) }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [invoices, dropdownPayees])
+  }, [invoices, rawPayees, isBusinessBoard])
 
   const monthOptions = getMonthOptions()
   const grandTotal = filtered.reduce((s, inv) => s + inv.totalAmount, 0)
@@ -1560,6 +1612,7 @@ export function FreelancerInvoicesPage(
         : [emptyItem()],
     }
     setEditInvoice(undefined)
+    setManualEntry(false)
     setUploadedData(initial)
     setFormOpen(true)
   }
@@ -1567,6 +1620,7 @@ export function FreelancerInvoicesPage(
   // Partner 개인: open a blank manual form (add items freely)
   const openManualInvoice = () => {
     if (!canEdit) return
+    setManualEntry(true)
     setEditInvoice(undefined)
     setUploadedData({
       invoiceDate: new Date().toISOString().slice(0, 10),
@@ -1581,6 +1635,7 @@ export function FreelancerInvoicesPage(
     if (!canEdit) return
     setUploadError(undefined)
     setUploading(true)
+    setManualEntry(true)
     try {
       const parsed = await parser(file)
       setEditInvoice(undefined)
@@ -1680,12 +1735,12 @@ export function FreelancerInvoicesPage(
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-1.5">
                           <span>{invoiceDisplayName(inv)}</span>
-                          {/* 한 화면에 개인·사업자가 섞이므로 어느 쪽으로 낸 것인지 표시한다 */}
-                          {mergeIssuerTypes && (
+                          {/* 개인/사업자 파트너 게시판은 프리랜서·파트너 두 출처가 섞이므로 표시 */}
+                          {(isIndividualBoard || isBusinessBoard) && (
                             <Badge variant="outline" className={`text-[10px] ${
-                              inv.kind === 'freelancer_business' ? 'border-indigo-200 text-indigo-700' : 'border-gray-200 text-gray-500'
+                              (inv.kind || '').startsWith('partner') ? 'border-amber-200 text-amber-700' : 'border-gray-200 text-gray-500'
                             }`}>
-                              {inv.kind === 'freelancer_business' ? '사업자' : '개인'}
+                              {(inv.kind || '').startsWith('partner') ? '파트너' : '프리랜서'}
                             </Badge>
                           )}
                         </div>
@@ -1757,66 +1812,41 @@ export function FreelancerInvoicesPage(
   // 예전에는 사업자면 엑셀 제출만 되게 막아 두어, 개인 화면에서 대상을 눈으로
   // 확인한 뒤 엑셀에 손으로 옮겨 적어야 했다. 계산은 같은데 발행자 정보만
   // 사업자등록번호로 바뀌는 것이라 나눌 이유가 없다.
-  const businessExcelCard = (
-    <Card>
-      <CardContent className="p-4 space-y-3">
-        <div className="text-sm font-medium">사업자 인보이스 — 엑셀 양식으로 제출</div>
-        <p className="text-[12px] text-muted-foreground">
-          ① 아래에서 양식을 내려받아 발행자 정보와 품목을 작성한 뒤 ② 그 파일을 업로드하면 내용이 채워진 인보이스 폼이 열립니다. 확인 후 제출하세요.
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" className="gap-1.5" onClick={() => downloadBusinessTemplate().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
-            <Download className="size-4" />샘플 양식 다운로드
-          </Button>
-          {canEdit && (
-            <label>
-              <input
-                type="file"
-                accept=".xlsx"
-                className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseBusinessInvoice); e.target.value = '' }}
-              />
-              <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
-                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}엑셀 업로드
-              </span>
-            </label>
-          )}
-        </div>
-        {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
-      </CardContent>
-    </Card>
+  // 수기 발행 툴바(양식 다운로드 · 업로드 · 직접 입력) — 개인/사업자 파트너 공용
+  const manualToolbar = (downloadTpl: () => Promise<void>, parser: (f: File) => Promise<ParsedInvoice>) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button variant="outline" className="gap-1.5" onClick={() => downloadTpl().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
+        <Download className="size-4" />양식 다운로드
+      </Button>
+      {canEdit && (
+        <label>
+          <input
+            type="file"
+            accept=".xlsx"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parser); e.target.value = '' }}
+          />
+          <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
+            {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}양식 업로드
+          </span>
+        </label>
+      )}
+      {canEdit && (
+        <Button variant="ghost" className="gap-1.5" onClick={openManualInvoice}>
+          <Plus className="size-4" />직접 입력
+        </Button>
+      )}
+    </div>
   )
 
-  const creationPanel = isPartner ? (
+  const creationPanel = isBusinessBoard ? (
     <Card>
       <CardContent className="p-4 space-y-3">
-        <div className="text-sm font-medium">파트너사 인보이스 — 엑셀 양식 업로드 또는 직접 입력 (대리 발행)</div>
+        <div className="text-sm font-medium">사업자 파트너 — 파트너사 인보이스 양식 업로드 또는 직접 입력 (대리 발행)</div>
         <p className="text-[12px] text-muted-foreground">
-          ① 양식을 내려받아 <b>파트너 성명·계좌·주민(사업자)번호·품목</b>을 작성한 뒤 ② 업로드하면 그 정보로 인보이스 폼이 열립니다. (로그인한 사람이 아닌 파트너 정보로 발행) · 또는 ‘직접 입력’으로 수기 작성.
+          ① 양식을 내려받아 <b>사업자명·사업자등록번호·계좌·품목</b>을 작성한 뒤 ② 업로드하면 그 정보로 인보이스 폼이 열립니다. · 또는 ‘직접 입력’으로 수기 작성. (기존 프리랜서 사업자 + 파트너사 사업자 통합)
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" className="gap-1.5" onClick={() => downloadFreelancerTemplate().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
-            <Download className="size-4" />양식 다운로드
-          </Button>
-          {canEdit && (
-            <label>
-              <input
-                type="file"
-                accept=".xlsx"
-                className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseFreelancerInvoice); e.target.value = '' }}
-              />
-              <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
-                {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}양식 업로드
-              </span>
-            </label>
-          )}
-          {canEdit && (
-            <Button variant="ghost" className="gap-1.5" onClick={openManualInvoice}>
-              <Plus className="size-4" />직접 입력
-            </Button>
-          )}
-        </div>
+        {manualToolbar(downloadPartnerBusinessTemplate, parseBusinessInvoice)}
         {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
       </CardContent>
     </Card>
@@ -1931,34 +1961,16 @@ export function FreelancerInvoicesPage(
         </CardContent>
       </Card>
 
-      {/* 자동 반영 대상이 아닌 프리랜서는 엑셀 양식으로 제출.
-          발행자가 사업자면 사업자등록번호가 들어가는 양식을 준다. */}
-      {kind === 'freelancer' && businessExcelCard}
-      {kind === 'freelancer' && (
+      {/* 자동 반영 대상이 아닌 개인 파트너 — 양식 업로드 또는 직접 입력.
+          (기존 프리랜서 개인 + 파트너 개인 통합. 사업자는 사업자 파트너 게시판에서.) */}
+      {isIndividualBoard && (
         <Card>
           <CardContent className="p-4 space-y-3">
-            <div className="text-sm font-medium">위 목록에 해당하지 않는 프리랜서 — 엑셀 양식으로 제출</div>
+            <div className="text-sm font-medium">위 목록에 없는 개인 파트너 — 양식 업로드 또는 직접 입력 (대리 발행)</div>
             <p className="text-[12px] text-muted-foreground">
-              업무영역이 자동 반영 대상이 아닌 경우, ① 양식을 내려받아 작성한 뒤 ② 업로드하면 내용이 채워진 인보이스 폼이 열립니다. 확인 후 제출하세요.
+              자동 반영 대상이 아닌 개인 파트너는 ① 양식을 내려받아 <b>성명·주민등록번호·계좌·품목</b>을 작성한 뒤 ② 업로드하거나, ‘직접 입력’으로 수기 발행하세요.
             </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" className="gap-1.5" onClick={() => downloadFreelancerTemplate().catch(() => setUploadError('양식 다운로드에 실패했습니다.'))}>
-                <Download className="size-4" />양식 다운로드
-              </Button>
-              {canEdit && (
-                <label>
-                  <input
-                    type="file"
-                    accept=".xlsx"
-                    className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleExcelUpload(f, parseFreelancerInvoice); e.target.value = '' }}
-                  />
-                  <span className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm cursor-pointer hover:bg-gray-50 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}>
-                    {uploading ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}엑셀 업로드
-                  </span>
-                </label>
-              )}
-            </div>
+            {manualToolbar(downloadFreelancerTemplate, parseFreelancerInvoice)}
             {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
           </CardContent>
         </Card>
@@ -1981,10 +1993,10 @@ export function FreelancerInvoicesPage(
         <p className="text-sm text-muted-foreground mt-0.5">
           {isAccounting
             ? '제출된 인보이스를 확인·승인하고 엑셀로 다운로드합니다. 본인 청구는 아래 「내 청구 대상」에서 발행합니다.'
-            : (mergeIssuerTypes
-                ? '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요. 발행 폼에서 개인/사업자를 고르면 주민등록번호·사업자등록번호 칸이 바뀝니다.'
+            : (isBusinessBoard
+                ? '사업자 파트너(프리랜서 사업자 + 파트너사 사업자) 인보이스를 파트너사 양식 업로드 또는 직접 입력으로 발행합니다.'
                 : isIncentive ? '이 달 발생한 세일즈 인센티브로 정산 인보이스를 발행하세요.'
-                : isPartner ? '이름을 직접 입력해 인보이스를 발행합니다.'
+                : isIndividualBoard ? '이 달 서비스를 제공한 학생으로 자동 발행하거나, 개인 파트너를 직접 입력해 발행합니다. 발행 후 상세보기에서 프리랜서 개인·정규직 개인 양식을 골라 다운로드합니다.'
                 : '이 달 서비스를 제공한 학생으로 인보이스를 발행하세요.')}
         </p>
       </div>
@@ -2026,7 +2038,7 @@ export function FreelancerInvoicesPage(
               <TabsTrigger value="missing">미제출 현황</TabsTrigger>
             </TabsList>
             <TabsContent value="list">{listView}</TabsContent>
-            <TabsContent value="missing"><MissingInvoices month={issueMonth} kind={kind} canEdit={canEdit} /></TabsContent>
+            <TabsContent value="missing"><MissingInvoices month={issueMonth} kind={sourceKind} canEdit={canEdit} /></TabsContent>
           </Tabs>
         ) : listView
       ) : freelancerView}
@@ -2040,10 +2052,15 @@ export function FreelancerInvoicesPage(
           existingItems={editItems || undefined}
           userId={editInvoice?.freelancerId || user.id}
           initialData={uploadedData}
-          kind={mergeIssuerTypes ? 'freelancer' : (storageKind as string)}
-          allowAddItems={business || isPartner}
-          businessLabels={business}
-          issuerSelectable={mergeIssuerTypes}
+          kind={
+            isIncentive ? 'sales_incentive'
+            : isBusinessBoard ? 'partner_business'
+            : isIndividualBoard ? (manualEntry ? 'partner' : 'freelancer')
+            : (business ? `${kind}_business` : kind)
+          }
+          allowAddItems={manualEntry || isBusinessBoard}
+          businessLabels={isBusinessBoard}
+          issuerSelectable={false}
           canEdit={canEdit}
         />
       )}
@@ -2054,7 +2071,7 @@ export function FreelancerInvoicesPage(
           onOpenChange={open => { if (!open) setDetailInvoice(undefined) }}
           invoice={detailInvoice}
           canEdit={canEdit}
-          onEdit={() => { const inv = detailInvoice; setDetailInvoice(undefined); setEditInvoice(inv); setFormOpen(true) }}
+          onEdit={() => { const inv = detailInvoice; setDetailInvoice(undefined); setManualEntry((inv.kind || '') !== 'freelancer' && inv.kind !== 'sales_incentive'); setEditInvoice(inv); setFormOpen(true) }}
         />
       )}
     </div>

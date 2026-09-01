@@ -132,11 +132,14 @@ export default function App() {
                 {/* 프리랜서 개인·사업자를 한 화면으로 합쳤다. 발행 폼에서 고른다.
                     주소는 그대로 둔다 — 게시판 권한이 경로로 저장돼 있어서
                     경로를 바꾸면 지금까지 준 권한이 전부 풀린다. */}
-                <Route path="/invoices/freelancer-individual" element={<FreelancerInvoicesPage kind="freelancer" />} />
-                <Route path="/invoices/freelancer-business" element={<Navigate to="/invoices/freelancer-individual" replace />} />
-                <Route path="/invoices/sales-incentive" element={<FreelancerInvoicesPage kind="sales_incentive" />} />
-                <Route path="/invoices/partner-individual" element={<FreelancerInvoicesPage kind="partner" />} />
-                <Route path="/invoices/partner-business" element={<FreelancerInvoicesPage kind="partner" business />} />
+                {/* 3분류: 개인 파트너 / 사업자 파트너 / 세일즈 인센티브.
+                    권한 보존을 위해 기존 경로 재사용(freelancer-individual=개인, partner-business=사업자). */}
+                <Route path="/invoices/freelancer-individual" element={<FreelancerInvoicesPage category="individual" />} />
+                <Route path="/invoices/partner-business" element={<FreelancerInvoicesPage category="business" />} />
+                <Route path="/invoices/sales-incentive" element={<FreelancerInvoicesPage category="sales_incentive" />} />
+                {/* 통합으로 은퇴한 경로 → 새 게시판으로 리다이렉트 */}
+                <Route path="/invoices/freelancer-business" element={<Navigate to="/invoices/partner-business" replace />} />
+                <Route path="/invoices/partner-individual" element={<Navigate to="/invoices/freelancer-individual" replace />} />
                 {/* Legacy redirects */}
                 <Route path="/finance/freelancer-invoices" element={<Navigate to="/invoices/freelancer-individual" replace />} />
                 <Route path="/finance/sales-incentive-invoices" element={<Navigate to="/invoices/sales-incentive" replace />} />
