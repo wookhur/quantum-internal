@@ -409,3 +409,34 @@ export function useAttachIncentivesToPaidInvoice() {
     },
   })
 }
+
+/** 지급완료된 인보이스의 (수령인 이름 + 항목 금액) 멀티셋.
+ *  재무대시보드 미지급 현황에서, 이미 지급원장에 지급완료로 잡힌 커미션을
+ *  이름+금액으로 자동 대조해 빼는 데 쓴다. key = `${이름정규화}|${금액}` → 개수.
+ *  (기존 인보이스에 커미션 연결 정보가 없어도 자동 인식되게) */
+export function usePaidCommissionMatches() {
+  const norm = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
+  const { data } = useQuery({
+    queryKey: ['paid-commission-matches'],
+    queryFn: async () => {
+      const m = new Map<string, number>()
+      const { data, error } = await supabase
+        .from('freelancer_invoice_items')
+        .select('supply_amount, freelancer_invoices!inner(client_name, paid_date, profiles!freelancer_invoices_freelancer_id_fkey(name))')
+        .not('freelancer_invoices.paid_date', 'is', null)
+      if (error) { console.warn('지급완료 인보이스 항목 조회 실패:', error.message); return m }
+      for (const r of (data || []) as Record<string, unknown>[]) {
+        const inv = r.freelancer_invoices as Record<string, unknown> | null
+        const prof = inv?.profiles as Record<string, unknown> | null
+        const name = (inv?.client_name as string) || (prof?.name as string) || ''
+        const amt = Math.round(Number(r.supply_amount) || 0)
+        if (!name || !amt) continue
+        const key = `${norm(name)}|${amt}`
+        m.set(key, (m.get(key) || 0) + 1)
+      }
+      return m
+    },
+    staleTime: 30_000,
+  })
+  return data || new Map<string, number>()
+}
