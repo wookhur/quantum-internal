@@ -744,7 +744,7 @@ async function parseInvoiceTemplate(file: File): Promise<ParsedInvoice> {
   const rawDate = valueOf(/^날짜$/)
 
   // 품목표: '수량'과 '단가'가 함께 있는 줄이 머리글이다
-  let head = 0, colName = 2, colQty = 3, colPrice = 4, colRemark = 6
+  let head = 0, colName = 2, colQty = 3, colPrice = 4, colSupply = 5, colRemark = 6
   for (let r = 1; r <= 40 && !head; r++) {
     const row: Record<string, number> = {}
     for (let c = 1; c <= MAX_C; c++) {
@@ -755,7 +755,8 @@ async function parseInvoiceTemplate(file: File): Promise<ParsedInvoice> {
       head = r
       colQty = row['수량']; colPrice = row['단가']
       colName = row['이름'] || row['품명'] || colQty - 1
-      colRemark = row['비고'] || row['공급가액'] + 1 || colPrice + 2
+      colSupply = row['공급가액'] || colPrice + 1
+      colRemark = row['비고'] || colSupply + 1 || colPrice + 2
     }
   }
   if (!head) throw new Error('양식에서 품목표를 찾을 수 없습니다. 받은 양식을 그대로 사용해 주세요.')
@@ -766,11 +767,15 @@ async function parseInvoiceTemplate(file: File): Promise<ParsedInvoice> {
     if (/^합계$/.test(first) || /^합/.test(first)) break
     const itemName = text(r, colName)
     const price = num(text(r, colPrice))
-    if (!itemName && !price) continue
+    const supply = num(text(r, colSupply))    // 공급가액 (할인·직접입력 등 단가 없이 금액만 있는 행 대응)
+    if (!itemName && !price && !supply) continue
+    const qty = num(text(r, colQty)) || 1
+    // 단가가 있으면 단가 사용, 없으면 공급가액에서 역산 → supplyAmount(=수량×단가)이 공급가액과 일치
+    const unit = price || (qty ? supply / qty : supply)
     items.push({
       itemName: itemName || '(품명 없음)',
-      quantity: num(text(r, colQty)) || 1,
-      unitPrice: price,
+      quantity: qty,
+      unitPrice: unit,
       remark: text(r, colRemark),
     })
   }
