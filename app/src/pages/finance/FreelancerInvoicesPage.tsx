@@ -2097,7 +2097,7 @@ export function FreelancerInvoicesPage(
             : isIndividualBoard ? (manualEntry ? 'partner' : 'freelancer')
             : (business ? `${kind}_business` : kind)
           }
-          allowAddItems={manualEntry || isBusinessBoard}
+          allowAddItems={isIndividualBoard || isBusinessBoard || manualEntry}
           businessLabels={isBusinessBoard}
           issuerSelectable={false}
           canEdit={canEdit}
