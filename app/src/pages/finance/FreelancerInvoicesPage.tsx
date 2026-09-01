@@ -27,6 +27,7 @@ import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
 import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
+import { usePartnerInvoiceTypes, useSetPartnerInvoiceType, invoiceTypeOf } from '@/hooks/usePartnerInvoiceTypes'
 import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
 import {
@@ -1450,12 +1451,23 @@ export function FreelancerInvoicesPage(
     return Array.from(names).sort((a, b) => a.localeCompare(b, 'ko'))
   }, [previewProfiles, allMentors])
   const myName = canonicalConsultantName(effectiveName)
+  // 파트너 발행유형(개인/사업자): 자동청구를 어느 게시판에 띄울지 가른다.
+  //  개인 파트너 = 발행유형 '개인'(또는 미지정), 사업자 파트너 = '사업자'. → 한 사람은 한 곳에만.
+  const { data: invoiceTypeMap } = usePartnerInvoiceTypes()
+  const setPartnerType = useSetPartnerInvoiceType()
+  const partnerType = invoiceTypeOf(invoiceTypeMap, effectiveName)
+  const typeMatchesBoard = isIncentive ? true
+    : isBusinessBoard ? partnerType === 'business'
+    : isIndividualBoard ? partnerType !== 'business'
+    : true
   // 수령 상태: 클릭한 것만 그 달에 수령완료. 미수령 건은 다음 달로 자동 이월(원래 달 태그 유지).
   const incentiveStatus = useIncentiveStatus()
   const setIncentiveReceived = useSetIncentiveReceived()
 
   type DItem = { id: string; label: string; amount: number; originMonth?: string; received: boolean; sourceDetail?: string }
   const displayItems = useMemo<DItem[]>(() => {
+    // 이 파트너의 발행유형이 게시판과 안 맞으면(개인 파트너인데 사업자로 지정 등) 자동청구 숨김
+    if (!typeMatchesBoard) return []
     if (isIncentive) {
       const out: DItem[] = []
       for (const l of (linesByPerson.get(myName) || [])) {
@@ -1560,7 +1572,7 @@ export function FreelancerInvoicesPage(
     }
 
     return [...mgmt, ...essay, ...editorLines, ...mentorLines]
-  }, [isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions])
+  }, [typeMatchesBoard, isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions])
 
   // 발행 대상 = 아직 수령완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
@@ -1831,7 +1843,8 @@ export function FreelancerInvoicesPage(
     </div>
   )
 
-  const creationPanel = isBusinessBoard ? (
+  // 사업자 파트너 수기 발행 카드 (자동청구 패널과 함께 표시)
+  const businessManualCard = (
     <Card>
       <CardContent className="p-4 space-y-3">
         <div className="text-sm font-medium">사업자 파트너 — 파트너사 인보이스 양식 업로드 또는 직접 입력 (대리 발행)</div>
@@ -1842,7 +1855,9 @@ export function FreelancerInvoicesPage(
         {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
       </CardContent>
     </Card>
-  ) : (
+  )
+
+  const creationPanel = (
     <>
       <div className="flex items-end gap-3 flex-wrap">
         <div>
@@ -1872,7 +1887,34 @@ export function FreelancerInvoicesPage(
         {isManager && !!previewName && (
           <p className="text-[12px] text-amber-600 self-center">👁 {previewName} 미리보기 중 — 발행하려면 대상을 ‘나’로 바꾸세요</p>
         )}
+        {/* 파트너 발행유형(개인/사업자) — 재무만. 이 사람의 자동청구가 뜨는 게시판이 결정된다. */}
+        {(isIndividualBoard || isBusinessBoard) && isAccounting && effectiveName && (
+          <div className="self-end">
+            <Label className="text-xs">{effectiveName} 발행유형</Label>
+            <div className="flex h-9 items-center gap-1 rounded-md border bg-muted/30 p-0.5">
+              {(['individual', 'business'] as const).map(tp => (
+                <button
+                  key={tp}
+                  type="button"
+                  disabled={setPartnerType.isPending}
+                  onClick={() => setPartnerType.mutate({ name: effectiveName, invoiceType: tp })}
+                  className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                    partnerType === tp ? (tp === 'business' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white') : 'text-muted-foreground hover:bg-white'
+                  }`}
+                >
+                  {tp === 'business' ? '사업자' : '개인'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+      {/* 발행유형이 이 게시판과 안 맞으면 안내 (반대 게시판에서 발행) */}
+      {(isIndividualBoard || isBusinessBoard) && !typeMatchesBoard && (
+        <p className="text-[12px] text-amber-600">
+          {effectiveName}님은 <b>{partnerType === 'business' ? '사업자' : '개인'} 파트너</b>로 지정되어 있어, 자동 청구는 <b>{partnerType === 'business' ? '사업자 파트너' : '개인 파트너'}</b> 게시판에 표시됩니다.
+        </p>
+      )}
 
       <Card>
         <CardContent className="p-4 space-y-2">
@@ -1967,6 +2009,7 @@ export function FreelancerInvoicesPage(
           </CardContent>
         </Card>
       )}
+      {isBusinessBoard && businessManualCard}
     </>
   )
 
