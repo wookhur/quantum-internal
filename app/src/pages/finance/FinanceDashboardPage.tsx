@@ -13,7 +13,7 @@ import { formatCurrency } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { useIncentivesByInstallment, type IncentiveType } from '@/hooks/useIncentives'
 import { useAllExtraInstallments } from '@/hooks/useExternalFees'
-import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, useDeleteInvoice, invoiceDisplayName, usePaidCoveredIncentiveKeys, usePaidCommissionMatches, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
+import { useAllInvoices, useUpdateInvoiceStatus, useSetInvoicePaidDate, useInvoiceItems, useDeleteInvoice, invoiceDisplayName, usePaidCoveredIncentiveKeys, usePaidCommissionMatches, useAttachIncentivesToPaidInvoice, type FreelancerInvoice } from '@/hooks/useFreelancerInvoices'
 import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote, RefreshCw, Download, ChevronDown, ChevronRight } from 'lucide-react'
@@ -112,6 +112,24 @@ export function FinanceDashboardPage() {
   const { data: editInvItems } = useInvoiceItems(editInv?.id)
   // 외부 파트너 대리발행: 미지급 커미션 카드에서 사람을 골라 인보이스 폼을 채워 연다
   const [issueFor, setIssueFor] = useState<PersonAmount | null>(null)
+  // 지급원장 연결: 금액이 안 맞아 자동 대조가 안 된 지급완료 건을 한 줄씩 연결(재확인 1클릭)
+  const attachPaid = useAttachIncentivesToPaidInvoice()
+  const linkLine = (personName: string, sourceKey: string, amount: number) => {
+    if (!confirm(`${personName}님의 이 커미션(${formatCurrency(amount)})을, 이미 지급완료된 인보이스 건으로 정산 처리할까요?\n(지급원장에 ${personName} 이름의 지급완료 인보이스가 있어야 합니다. 금액이 조금 달라도 됩니다.)`)) return
+    attachPaid.mutate({ personName, keys: [sourceKey] }, {
+      onSuccess: () => alert('연결했습니다. 미지급 현황에서 제외됩니다.'),
+      onError: (e) => {
+        const msg = (e as Error).message
+        alert(
+          msg === 'NO_PAID_INVOICE'
+            ? `${personName}님의 지급완료된 인보이스를 찾지 못했어요. 먼저 지급원장에서 지급완료로 표시해주세요.`
+            : /covered_incentive_keys|column/i.test(msg)
+              ? '먼저 마이그레이션(covered_incentive_keys)을 실행해야 연결이 저장됩니다.'
+              : `연결 실패: ${msg}`,
+        )
+      },
+    })
+  }
   const [exporting, setExporting] = useState(false)
 
   const { data: allIncentives = [], isLoading: incLoading } = useIncentivesByInstallment()
@@ -844,7 +862,7 @@ export function FinanceDashboardPage() {
             </div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <PayoutCard title={t('financeDash.freelancerCommission')} color="purple" persons={freelancerCommission.byPerson} icon={<Users className="size-4 text-purple-500" />} t={t} onIssue={allowed ? setIssueFor : undefined} />
+            <PayoutCard title={t('financeDash.freelancerCommission')} color="purple" persons={freelancerCommission.byPerson} icon={<Users className="size-4 text-purple-500" />} t={t} onIssue={allowed ? setIssueFor : undefined} onLinkLine={allowed ? linkLine : undefined} />
             <PayoutCard title={t('financeDash.serviceFee')} color="amber" persons={serviceFees.byPerson} icon={<Receipt className="size-4 text-amber-500" />} t={t} />
           </div>
         </>
@@ -1445,7 +1463,7 @@ function PaidActionCell({ inv, disabled, onSet }: {
 
 // ─── Payout detail card ──────────────────────────────────────────────────────
 
-function PayoutCard({ title, color, persons, icon, t, onIssue }: {
+function PayoutCard({ title, color, persons, icon, t, onIssue, onLinkLine }: {
   title: string
   color: 'purple' | 'blue' | 'amber'
   persons: PersonAmount[]
@@ -1453,6 +1471,8 @@ function PayoutCard({ title, color, persons, icon, t, onIssue }: {
   t: (key: string, params?: Record<string, string | number>) => string
   /** 있으면 사람별 '인보이스 발행' 버튼 표시 (외부 파트너 대리발행) */
   onIssue?: (p: PersonAmount) => void
+  /** 있으면 라인 드릴다운에 '지급완료 정산(지급원장 연결)' 버튼 표시 */
+  onLinkLine?: (personName: string, sourceKey: string, amount: number) => void
 }) {
   const colorMap = {
     purple: { bg: 'bg-purple-50', text: 'text-purple-700' },
@@ -1505,6 +1525,15 @@ function PayoutCard({ title, color, persons, icon, t, onIssue }: {
                         {d.incentiveType && <div><span className="text-muted-foreground">유형</span> · {d.incentiveType}</div>}
                         {d.contractId && <div className="break-all"><span className="text-muted-foreground">계약 ID</span> · <span className="font-mono">{d.contractId}</span></div>}
                         <div className="pt-0.5 text-muted-foreground">계약관리 → 계약자 <b>{d.contractorName || d.studentName || ''}</b> 검색해 확인하세요.</div>
+                        {onLinkLine && d.sourceKey && (
+                          <button
+                            type="button"
+                            onClick={() => onLinkLine(p.name, d.sourceKey!, d.amount)}
+                            className="mt-1 inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                          >
+                            <CheckCircle2 className="size-3" />지급완료 정산 (지급원장 연결)
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
