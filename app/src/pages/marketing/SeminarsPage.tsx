@@ -649,10 +649,22 @@ function SeminarCalendar({ seminars, onSelect }: { seminars: Seminar[]; onSelect
   const today = calYmd(new Date())
   const byDate = useMemo(() => {
     const m = new Map<string, Seminar[]>()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const yearOf = (iso?: string | null) => { const y = iso ? Number(iso.slice(0, 4)) : NaN; return y > 1900 ? y : undefined }
+    // 세션 하나의 실제 날짜(YYYY-MM-DD). datetime 우선, 없으면 라벨("7/18")+세미나 연도로 계산.
+    const sessionDay = (s: Seminar, ss: { datetime?: string | null; label: string }): string | null => {
+      if (ss.datetime) { const d = ss.datetime.slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d }
+      const md = ss.label.match(/(\d{1,2})\s*\/\s*(\d{1,2})/)
+      const year = yearOf(s.date) ?? yearOf(s.createdAt)
+      if (md && year) return `${year}-${pad(Number(md[1]))}-${pad(Number(md[2]))}`
+      return null
+    }
     for (const s of seminars) {
-      const d = (s.date || '').split(' ')[0]
-      if (!d) continue
-      const arr = m.get(d) || []; arr.push(s); m.set(d, arr)
+      // 세션형(전공별 웨비나 등)은 각 세션 날짜에 표시, 아니면 단일 date 에 표시.
+      const daysSet = new Set<string>()
+      for (const ss of s.sessions) { const d = sessionDay(s, ss); if (d) daysSet.add(d) }
+      if (daysSet.size === 0) { const d = (s.date || '').split(' ')[0]; if (d) daysSet.add(d) }
+      for (const d of daysSet) { const arr = m.get(d) || []; arr.push(s); m.set(d, arr) }
     }
     return m
   }, [seminars])
