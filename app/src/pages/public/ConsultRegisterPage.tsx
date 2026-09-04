@@ -14,9 +14,12 @@ const GRADES = Array.from({ length: 12 }, (_, i) => `G${i + 1}`)
 const YEARS = Array.from({ length: 12 }, (_, i) => `Y${i + 1}`)
 const GRADE_OPTIONS = [...GRADES, ...YEARS]
 
+// 'AI 검색' 은 ChatGPT·퍼플렉시티 등을 통해 우리를 알게 된 경우.
+// 검색엔진(구글·네이버)과 답이 나오는 방식이 달라 따로 세야 한다 —
+// 홈페이지 콘텐츠가 AI 답변에 인용되고 있는지를 볼 수 있는 유일한 칸이다.
 const SOURCE_OPTIONS = [
   '인스타그램', '네이버 블로그/카페', '카카오톡 채널', '지인 소개',
-  '구글/네이버 검색', '유튜브', '문자/DM', '기타',
+  '구글/네이버 검색', '유튜브', 'AI 검색', '기타',
 ]
 
 export function ConsultRegisterPage() {
@@ -204,6 +207,9 @@ export function ConsultRegisterPage() {
                 </div>
                 <div>
                   <Label>알게 되신 경로</Label>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    ChatGPT 같은 AI 에게 물어보고 오셨다면 &lsquo;AI 검색&rsquo; 을 골라주세요.
+                  </p>
                   <Select value={form.source} onValueChange={v => set({ source: v ?? '' })}>
                     <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
                     <SelectContent>

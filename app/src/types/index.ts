@@ -89,6 +89,8 @@ export interface Lead {
   residenceCity?: string
   interestArea: string
   sourceChannel: string
+  /** 알게된 경로 (인스타그램·지인 소개·AI 검색 등). 유입 창구인 sourceChannel 과 다르다 */
+  discoverySource?: string
   memo: string
   requiredAction?: string
   pipelineStage: PipelineStage

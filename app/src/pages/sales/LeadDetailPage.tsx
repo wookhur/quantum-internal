@@ -8,7 +8,7 @@ import {
   ArrowLeft, Loader2, Phone, Mail, MapPin, School, GraduationCap,
   Calendar, MessageSquare, Edit, Clock, CheckCircle2, Video, CalendarPlus,
   AlertTriangle, XCircle, RefreshCw, Pencil, Trash2, Save, X,
-  FileText, Users, PhoneCall, Briefcase, User, ChevronRight, Globe,
+  FileText, Users, PhoneCall, Briefcase, User, ChevronRight, Globe, Search,
 } from 'lucide-react'
 import { useLead, useLeadActivities, useCreateActivity, useUpdateActivity, useDeleteActivity } from '@/hooks/useLeads'
 import { useT } from '@/i18n/LanguageContext'
@@ -376,6 +376,15 @@ export function LeadDetailPage() {
             <MessageSquare className="size-4 text-muted-foreground" />
             <span>{lead.sourceChannel}</span>
           </div>
+          {/* 알게된 경로 — 어느 창구로 들어왔나(sourceChannel)와 다른 값이라 따로 보인다.
+              예: 창구는 '홈페이지 상담신청' 인데 알게된 경로는 'AI 검색' 일 수 있다. */}
+          {lead.discoverySource && (
+            <div className="flex items-center gap-2 text-sm">
+              <Search className="size-4 text-muted-foreground" />
+              <span className="text-muted-foreground">알게된 경로</span>
+              <span>{lead.discoverySource}</span>
+            </div>
+          )}
           {lead.assignedUser && (
             <div className="flex items-center gap-2 text-sm">
               <User className="size-4 text-muted-foreground" />

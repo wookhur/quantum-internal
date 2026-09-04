@@ -68,6 +68,7 @@ function mapLead(row: Record<string, unknown>): Lead {
     residenceCity: (row.residence_city as string) || undefined,
     interestArea: (row.interest_area as string) || '',
     sourceChannel: row.source_channel as string,
+    discoverySource: (row.discovery_source as string) || undefined,
     memo: (row.memo as string) || '',
     requiredAction: row.required_action as string | undefined,
     pipelineStage: row.pipeline_stage as PipelineStage,
@@ -127,6 +128,7 @@ function leadToRow(lead: Partial<Lead>): Record<string, unknown> {
   if (lead.residenceCity !== undefined) row.residence_city = lead.residenceCity || null
   if (lead.interestArea !== undefined) row.interest_area = lead.interestArea
   if (lead.sourceChannel !== undefined) row.source_channel = lead.sourceChannel
+  if (lead.discoverySource !== undefined) row.discovery_source = lead.discoverySource
   if (lead.memo !== undefined) row.memo = lead.memo
   if (lead.requiredAction !== undefined) row.required_action = lead.requiredAction
   if (lead.pipelineStage !== undefined) row.pipeline_stage = lead.pipelineStage
