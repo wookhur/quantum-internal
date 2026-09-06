@@ -10,7 +10,10 @@ export interface StudentKpi {
   reportsScore: number      // 0-2 — required-report coverage for this student
   followupScore: number     // 0-2 — % of last-30d meeting diaries that have a next-meeting date
   score: number             // 0-11 total
-  // 원인 설명(왜 이 점수인지)용 원자료 — 최근 30일 기준
+  // 원인 설명(왜 이 점수인지)용 원자료
+  meetingsThisMonth?: number // 이번 달(캘린더) 미팅 수
+  expectedMeetings?: number  // 현재 시점 기대 미팅 수(0/1/2)
+  // 최근 30일 기준
   summaryHave?: number      // 리포트 링크가 있는 미팅 수
   summaryTotal?: number     // 미팅 수
   reportsPresent?: number   // 갖춰진 필수 리포트 항목 수
@@ -75,10 +78,18 @@ async function fetchAllKpi(): Promise<KpiData> {
   type MeetingRow = {
     student_id: string | null
     consultant_id: string | null
+    meeting_date: string | null
     prep_url: string | null
     report_url: string | null
     next_meeting_date: string | null
   }
+
+  // ── 미팅 횟수: 캘린더 월 기준 '월 2회'. 월초 며칠은 유예(학기초·월초 불이익 방지).
+  //    전반기(≤15일) 1회 기대, 후반기(>15일) 2회 기대, 1주차(≤7일)는 0회여도 만점.
+  const now = new Date()
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const dom = now.getDate()
+  const expectedByNow = dom <= 7 ? 0 : dom <= 15 ? 1 : 2
 
   const students = (stRes.data || []) as StudentRow[]
   const meetings = meetingRows as unknown as MeetingRow[]
@@ -104,7 +115,13 @@ async function fetchAllKpi(): Promise<KpiData> {
     const ms = meetingsByStudent[s.id] || []
     const meetings30d = ms.length
 
-    const meetingsScore = Math.min(meetings30d, 2) * 2  // 0 / 2 / 4
+    // ① 미팅 횟수: 이번 달(캘린더) 미팅 수를 '월 2회'와 비교. 현재 시점 기대치(expectedByNow) 대비.
+    const meetingsThisMonth = ms.filter(m => m.meeting_date && m.meeting_date >= monthStart).length
+    const meetingsScore =
+      meetingsThisMonth >= 2 ? 4                       // 월 목표 2회 달성
+      : meetingsThisMonth >= expectedByNow ? 4         // 현재 시점 기준 온트랙(월초 유예 포함)
+      : meetingsThisMonth >= 1 ? 2                     // 일부 진행
+      : 0                                              // 이번 달 0회 & 기대 시점 지남
 
     const summaryHave = ms.filter(m => !!m.report_url).length
     const prepScore = ms.length ? (ms.filter(m => !!m.prep_url).length / ms.length) * 1 : 0
@@ -126,6 +143,7 @@ async function fetchAllKpi(): Promise<KpiData> {
 
     byStudent[s.id] = {
       meetings30d, meetingsScore, prepScore, summaryScore, reportsScore, followupScore, score,
+      meetingsThisMonth, expectedMeetings: expectedByNow,
       summaryHave, summaryTotal: ms.length,
       reportsPresent: present, reportsTotal: REQUIRED_REPORT_CATEGORIES.length,
       followupHave, followupTotal: ms.length,

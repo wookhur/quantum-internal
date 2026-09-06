@@ -22,6 +22,7 @@ export function kpiDotColor(score: number | undefined): string {
  *  (팝오버 용. 최근 30일 기준.) */
 export function kpiBreakdownText(sk: {
   score: number; meetings30d: number; meetingsScore: number
+  meetingsThisMonth?: number; expectedMeetings?: number
   summaryScore: number; summaryHave?: number; summaryTotal?: number
   reportsScore: number; reportsPresent?: number; reportsTotal?: number
   followupScore: number; followupHave?: number; followupTotal?: number
@@ -29,17 +30,18 @@ export function kpiBreakdownText(sk: {
   if (!sk) return 'KPI — (데이터 없음)'
   const n1 = (v: number) => (Math.round(v * 10) / 10).toString()
   const mTotal = sk.summaryTotal ?? sk.meetings30d   // 최근 30일 미팅 수
-  const lines: string[] = [`관리지수 ${n1(sk.score)} / 10  (지난 30일 기준)`, '']
+  const lines: string[] = [`관리지수 ${n1(sk.score)} / 10`, '']
   const actions: string[] = []
 
-  // ① 미팅 횟수
+  // ① 미팅 횟수 (캘린더 월 기준, 월 2회)
+  const mThis = sk.meetingsThisMonth ?? 0
   if (sk.meetingsScore >= 4) {
-    lines.push(`✓ 미팅 횟수 ${n1(sk.meetingsScore)}/4 — 지난 30일 ${sk.meetings30d}회 (충분)`)
+    lines.push(`✓ 미팅 횟수 ${n1(sk.meetingsScore)}/4 — 이번 달 ${mThis}회 (월 2회 기준, 현재 온트랙)`)
   } else {
-    const need = 2 - sk.meetings30d
-    lines.push(`△ 미팅 횟수 ${n1(sk.meetingsScore)}/4 — 지난 30일 ${sk.meetings30d}회 (기준 2회)`)
-    lines.push(`   → 미팅 ${need}회 더 진행·기록하면 +${n1(need * 2)}`)
-    actions.push(`미팅 ${need}회(+${n1(need * 2)})`)
+    const need = Math.max(1, 2 - mThis)
+    lines.push(`△ 미팅 횟수 ${n1(sk.meetingsScore)}/4 — 이번 달 ${mThis}회 (월 2회 기준)`)
+    lines.push(`   → 이번 달 미팅 ${need}회 더 진행·기록`)
+    actions.push(`이번 달 미팅 ${need}회`)
   }
 
   // ② 미팅 요약 리포트 (미팅에 리포트 링크가 있는가)
