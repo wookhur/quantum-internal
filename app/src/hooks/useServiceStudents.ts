@@ -72,6 +72,7 @@ function mapMeeting(row: Record<string, unknown>): ServiceMeeting {
     reportStatus: row.report_status as ServiceReportStatus,
     reportUrl: (row.report_url as string) || undefined,
     reportDate: (row.report_date as string) || undefined,
+    nextMeetingDate: (row.next_meeting_date as string) || undefined,
     status: (row.status as MeetingStatus) || 'held',
     cancellationReason: (row.cancellation_reason as string) || undefined,
     cancelledBy: (row.cancelled_by as MeetingCancelledBy) || undefined,
@@ -405,13 +406,14 @@ export function useCreateServiceMeeting() {
       reportStatus?: ServiceReportStatus
       reportUrl?: string
       reportDate?: string
+      nextMeetingDate?: string
       status?: MeetingStatus
       cancellationReason?: string | null
       cancelledBy?: MeetingCancelledBy | null
       rescheduledTo?: string | null
       createdBy?: string
     }) => {
-      const { data, error } = await supabase.from('service_meetings').insert({
+      const insertRow: Record<string, unknown> = {
         student_id: m.studentId,
         meeting_date: m.meetingDate || null,
         meeting_type: m.meetingType,
@@ -427,7 +429,10 @@ export function useCreateServiceMeeting() {
         cancelled_by: m.cancelledBy || null,
         rescheduled_to: m.rescheduledTo || null,
         created_by: m.createdBy || null,
-      }).select().single()
+      }
+      // 값 있을 때만 참조 (next_meeting_date 마이그레이션 전 저장이 깨지지 않게)
+      if (m.nextMeetingDate) insertRow.next_meeting_date = m.nextMeetingDate
+      const { data, error } = await supabase.from('service_meetings').insert(insertRow).select().single()
       if (error) throw error
       return mapMeeting(data as Record<string, unknown>)
     },
@@ -454,6 +459,7 @@ export function useUpdateServiceMeeting() {
       reportStatus?: ServiceReportStatus
       reportUrl?: string
       reportDate?: string | null
+      nextMeetingDate?: string | null
       status?: MeetingStatus
       cancellationReason?: string | null
       cancelledBy?: MeetingCancelledBy | null
@@ -470,6 +476,7 @@ export function useUpdateServiceMeeting() {
       if (rest.reportStatus !== undefined) update.report_status = rest.reportStatus
       if (rest.reportUrl !== undefined) update.report_url = rest.reportUrl
       if (rest.reportDate !== undefined) update.report_date = rest.reportDate
+      if (rest.nextMeetingDate !== undefined) update.next_meeting_date = rest.nextMeetingDate || null
       if (rest.status !== undefined) update.status = rest.status
       if (rest.cancellationReason !== undefined) update.cancellation_reason = rest.cancellationReason
       if (rest.cancelledBy !== undefined) update.cancelled_by = rest.cancelledBy

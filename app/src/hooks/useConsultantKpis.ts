@@ -42,23 +42,27 @@ async function fetchAllKpi(): Promise<KpiData> {
   since30.setDate(since30.getDate() - 30)
   const sinceIso = since30.toISOString().slice(0, 10)
 
-  const [stRes, mtRes, repRes, fupRes] = await Promise.all([
+  const [stRes, mtRes, repRes] = await Promise.all([
     supabase.from('service_students').select('id, assigned_consultant'),
+    // ⑤ 다음 미팅 일정: 최근 30일 미팅 리포트(service_meetings)에 next_meeting_date 가 적혔는지
     supabase
       .from('service_meetings')
-      .select('id, consultant_id, student_id, meeting_date, prep_url, report_url')
+      .select('id, consultant_id, student_id, meeting_date, prep_url, report_url, next_meeting_date')
       .gte('meeting_date', sinceIso),
     supabase.from('service_reports').select('student_id, category'),
-    // ⑤ 다음 미팅 일정: 최근 30일 미팅 다이어리에 next_meeting_date 가 적혔는지
-    supabase
-      .from('service_diary')
-      .select('student_id, entry_date, next_meeting_date')
-      .gte('entry_date', sinceIso),
   ])
   if (stRes.error) throw stRes.error
-  if (mtRes.error) throw mtRes.error
+  // next_meeting_date 마이그레이션 전이면 그 칸 없이 재조회(KPI 화면이 깨지지 않게)
+  let meetingRows: Record<string, unknown>[] = (mtRes.data as Record<string, unknown>[]) || []
+  if (mtRes.error) {
+    const fb = await supabase
+      .from('service_meetings')
+      .select('id, consultant_id, student_id, meeting_date, prep_url, report_url')
+      .gte('meeting_date', sinceIso)
+    if (fb.error) throw fb.error
+    meetingRows = (fb.data || []).map(r => ({ ...(r as Record<string, unknown>), next_meeting_date: null }))
+  }
   const reports = repRes.error ? [] : (repRes.data || [])
-  const diaries = fupRes.error ? [] : (fupRes.data || [])
 
   type StudentRow = { id: string; assigned_consultant: string | null }
   type MeetingRow = {
@@ -66,10 +70,11 @@ async function fetchAllKpi(): Promise<KpiData> {
     consultant_id: string | null
     prep_url: string | null
     report_url: string | null
+    next_meeting_date: string | null
   }
 
   const students = (stRes.data || []) as StudentRow[]
-  const meetings = (mtRes.data || []) as MeetingRow[]
+  const meetings = meetingRows as unknown as MeetingRow[]
 
   // ─── Index per student ───
   const meetingsByStudent: Record<string, MeetingRow[]> = {}
@@ -84,15 +89,6 @@ async function fetchAllKpi(): Promise<KpiData> {
     const row = r as { student_id: string; category: string }
     if (!reportsByStudent[row.student_id]) reportsByStudent[row.student_id] = new Set()
     reportsByStudent[row.student_id].add(row.category)
-  })
-
-  // 학생별 최근 30일 다이어리 — 다음 미팅 일정이 적혔는지만 본다.
-  const diariesByStudent: Record<string, { hasNext: boolean }[]> = {}
-  diaries.forEach(d => {
-    const row = d as { student_id: string; next_meeting_date: string | null }
-    if (!row.student_id) return
-    if (!diariesByStudent[row.student_id]) diariesByStudent[row.student_id] = []
-    diariesByStudent[row.student_id].push({ hasNext: !!row.next_meeting_date })
   })
 
   // ─── Compute per-student KPI ───
@@ -110,10 +106,9 @@ async function fetchAllKpi(): Promise<KpiData> {
     const present = REQUIRED_REPORT_CATEGORIES.reduce((n, c) => n + (cats.has(c) ? 1 : 0), 0)
     const reportsScore = (present / REQUIRED_REPORT_CATEGORIES.length) * 2
 
-    // ⑤ 다음 미팅 일정 (0-2): 최근 30일 다이어리 중 다음 일정이 기록된 비율.
-    //    체크박스 클릭과 무관하게 "일정을 잡아 기록했는가"만 본다.
-    const dys = diariesByStudent[s.id] || []
-    const followupScore = dys.length ? (dys.filter(d => d.hasNext).length / dys.length) * 2 : 0
+    // ⑤ 다음 미팅 일정 (0-2): 최근 30일 미팅 리포트 중 다음 일정이 기록된 비율.
+    //    (다이어리는 옵션이므로 리포트 기준으로 본다.)
+    const followupScore = ms.length ? (ms.filter(m => !!m.next_meeting_date).length / ms.length) * 2 : 0
 
     // prepScore(사전자료)는 2026-08 부터 점수에서 제외 — 값은 참고용으로 계속 계산한다.
     const score = Math.max(0, Math.min(KPI_MAX,

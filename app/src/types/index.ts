@@ -540,6 +540,8 @@ export interface ServiceMeeting {
   reportStatus: ServiceReportStatus
   reportUrl?: string
   reportDate?: string
+  /** 다음 미팅 일정 (리포트 작성 시 입력). 다이어리가 아니라 리포트가 원천. */
+  nextMeetingDate?: string
   /** Attendance lifecycle for QC reporting. */
   status: MeetingStatus
   cancellationReason?: string
