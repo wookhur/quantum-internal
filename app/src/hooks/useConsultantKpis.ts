@@ -73,21 +73,27 @@ async function fetchAllKpi(): Promise<KpiData> {
 
   // service_reports 는 학생×학년×카테고리로 행이 많아 1000행 기본 제한을 넘을 수 있다.
   // 페이지네이션으로 전부 읽지 않으면 일부 학생의 필수 리포트가 '없음'으로 잘못 집계된다.
-  const reports: { student_id: string; category: string }[] = []
-  {
+  let reports: { student_id: string; category: string }[] = []
+  try {
     const PAGE = 1000
     let from = 0
     for (;;) {
       const { data, error } = await supabase
         .from('service_reports')
         .select('student_id, category')
+        .order('student_id', { ascending: true })
         .range(from, from + PAGE - 1)
-      if (error) break
+      if (error) throw error
       const batch = (data || []) as { student_id: string; category: string }[]
       reports.push(...batch)
       if (batch.length < PAGE) break
       from += PAGE
     }
+  } catch (e) {
+    // 페이지네이션 실패 시 최소한 기본 조회로 폴백 (전량 0 집계 방지)
+    console.warn('service_reports paginated fetch failed, fallback to single fetch:', e)
+    const { data } = await supabase.from('service_reports').select('student_id, category')
+    reports = (data || []) as { student_id: string; category: string }[]
   }
   // next_meeting_date 마이그레이션 전이면 그 칸 없이 재조회(KPI 화면이 깨지지 않게)
   let meetingRows: Record<string, unknown>[] = (mtRes.data as Record<string, unknown>[]) || []

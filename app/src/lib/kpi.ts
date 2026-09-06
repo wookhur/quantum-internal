@@ -30,59 +30,45 @@ export function kpiBreakdownText(sk: {
   if (!sk) return 'KPI — (데이터 없음)'
   const n1 = (v: number) => (Math.round(v * 10) / 10).toString()
   const mTotal = sk.summaryTotal ?? sk.meetings30d   // 최근 30일 미팅 수
-  const lines: string[] = [`관리지수 ${n1(sk.score)} / 10`, '※ 미팅 횟수=이번 달 / 나머지=최근 30일', '']
-  const actions: string[] = []
-
-  // ① 미팅 횟수 (캘린더 월 기준, 월 2회)
   const mThis = sk.meetingsThisMonth ?? 0
-  if (sk.meetingsScore >= 4) {
-    const why = mThis >= 2 ? '월 2회 달성'
-      : mThis >= 1 ? '월 2회 중 1회, 현재까진 충분'
-      : '월초라 아직 감점 없음 (유예)'
-    lines.push(`✓ 미팅 횟수 4/4 — 이번 달 ${mThis}회 · ${why}`)
-  } else {
+
+  // 부족한 항목: '무엇을 하면 +N' 만 모은다.
+  const gaps: { do: string; gain: number }[] = []
+  if (sk.meetingsScore < 4) {
     const need = Math.max(1, 2 - mThis)
-    lines.push(`△ 미팅 횟수 ${n1(sk.meetingsScore)}/4 — 이번 달 ${mThis}회 (월 2회 기준)`)
-    lines.push(`   → 이번 달 미팅 ${need}회 더 진행·기록`)
-    actions.push(`이번 달 미팅 ${need}회`)
+    gaps.push({ do: `이번 달 미팅 ${need}회 더 진행`, gain: 4 - sk.meetingsScore })
   }
-
-  // ② 미팅 요약 리포트 (미팅에 리포트 링크가 있는가)
-  if (mTotal === 0) {
-    lines.push(`— 미팅 요약 리포트 0/2 — 지난 30일 미팅이 없어 평가 불가`)
-  } else if (sk.summaryScore >= 2) {
-    lines.push(`✓ 미팅 요약 리포트 ${n1(sk.summaryScore)}/2 — ${sk.summaryHave}/${mTotal} 미팅에 리포트 있음`)
-  } else {
+  if (mTotal > 0 && sk.summaryScore < 2) {
     const miss = mTotal - (sk.summaryHave ?? 0)
-    lines.push(`△ 미팅 요약 리포트 ${n1(sk.summaryScore)}/2 — ${sk.summaryHave ?? 0}/${mTotal} 미팅만 리포트 있음`)
-    lines.push(`   → 리포트 링크 없는 미팅 ${miss}건에 리포트 등록`)
-    actions.push(`리포트 ${miss}건`)
+    gaps.push({ do: `미팅 요약 리포트 ${miss}건 등록`, gain: 2 - sk.summaryScore })
   }
-
-  // ③ 필수 리포트 항목 (강점분석 결과지·보고서, 성적표, 성적분석 보고서 4종)
-  if (sk.reportsScore >= 2) {
-    lines.push(`✓ 필수 리포트 ${n1(sk.reportsScore)}/2 — 4종 모두 등록됨`)
-  } else {
+  if (sk.reportsScore < 2) {
     const missing = sk.reportsMissing ?? []
-    const miss = missing.length || ((sk.reportsTotal ?? 0) - (sk.reportsPresent ?? 0))
-    lines.push(`△ 필수 리포트 ${n1(sk.reportsScore)}/2 — 4종 중 ${sk.reportsPresent ?? 0}종 등록`)
-    lines.push(`   → 빠진 리포트 등록: ${missing.length ? missing.join(', ') : `${miss}종`}`)
-    actions.push(`리포트 등록(${missing.length ? missing.join('·') : `${miss}종`})`)
+    gaps.push({ do: `${missing.length ? missing.join('·') : '필수 리포트'} 등록`, gain: 2 - sk.reportsScore })
   }
-
-  // ④ 다음 미팅 일정 (미팅 리포트에 다음 일정을 적었는가)
-  if (mTotal === 0) {
-    lines.push(`— 다음 미팅 일정 0/2 — 지난 30일 미팅이 없어 평가 불가`)
-  } else if (sk.followupScore >= 2) {
-    lines.push(`✓ 다음 미팅 일정 ${n1(sk.followupScore)}/2 — ${sk.followupHave}/${mTotal} 미팅에 기록됨`)
-  } else {
+  if (mTotal > 0 && sk.followupScore < 2) {
     const miss = mTotal - (sk.followupHave ?? 0)
-    lines.push(`△ 다음 미팅 일정 ${n1(sk.followupScore)}/2 — ${sk.followupHave ?? 0}/${mTotal} 미팅만 기록`)
-    lines.push(`   → 다음 일정 안 적은 미팅 ${miss}건에 다음 미팅 일정 입력`)
-    actions.push(`다음 일정 ${miss}건`)
+    gaps.push({ do: `다음 미팅 일정 ${miss}건 입력`, gain: 2 - sk.followupScore })
   }
 
-  if (actions.length) { lines.push('', `▶ 지금 올리려면: ${actions.join(' · ')}`) }
-  else lines.push('', '▶ 모든 항목 충족 👍')
+  const lines: string[] = [`관리지수 ${n1(sk.score)} / 10`]
+  if (gaps.length === 0) {
+    lines.push('', '모든 항목 충족 👍 (더 올릴 것 없음)')
+    return lines.join('\n')
+  }
+  const potential = Math.min(10, sk.score + gaps.reduce((s, g) => s + g.gain, 0))
+  lines.push('', '보완하면 오르는 항목:')
+  for (const g of gaps.sort((a, b) => b.gain - a.gain)) {
+    lines.push(`· ${g.do}  → +${n1(g.gain)}`)
+  }
+  lines.push('', `= 다 채우면 ${n1(potential)}점`)
+
+  // 이미 충족한 항목을 한 줄로(안심용)
+  const ok: string[] = []
+  if (sk.meetingsScore >= 4) ok.push('미팅 횟수')
+  if (mTotal > 0 && sk.summaryScore >= 2) ok.push('미팅 요약')
+  if (sk.reportsScore >= 2) ok.push('필수 리포트')
+  if (mTotal > 0 && sk.followupScore >= 2) ok.push('다음 일정')
+  if (ok.length) lines.push(`충족 ✓ ${ok.join(' · ')}`)
   return lines.join('\n')
 }
