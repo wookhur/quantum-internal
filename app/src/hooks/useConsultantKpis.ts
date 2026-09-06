@@ -61,16 +61,34 @@ async function fetchAllKpi(): Promise<KpiData> {
   since30.setDate(since30.getDate() - 30)
   const sinceIso = since30.toISOString().slice(0, 10)
 
-  const [stRes, mtRes, repRes] = await Promise.all([
+  const [stRes, mtRes] = await Promise.all([
     supabase.from('service_students').select('id, assigned_consultant'),
     // ⑤ 다음 미팅 일정: 최근 30일 미팅 리포트(service_meetings)에 next_meeting_date 가 적혔는지
     supabase
       .from('service_meetings')
       .select('id, consultant_id, student_id, meeting_date, prep_url, report_url, next_meeting_date')
       .gte('meeting_date', sinceIso),
-    supabase.from('service_reports').select('student_id, category'),
   ])
   if (stRes.error) throw stRes.error
+
+  // service_reports 는 학생×학년×카테고리로 행이 많아 1000행 기본 제한을 넘을 수 있다.
+  // 페이지네이션으로 전부 읽지 않으면 일부 학생의 필수 리포트가 '없음'으로 잘못 집계된다.
+  const reports: { student_id: string; category: string }[] = []
+  {
+    const PAGE = 1000
+    let from = 0
+    for (;;) {
+      const { data, error } = await supabase
+        .from('service_reports')
+        .select('student_id, category')
+        .range(from, from + PAGE - 1)
+      if (error) break
+      const batch = (data || []) as { student_id: string; category: string }[]
+      reports.push(...batch)
+      if (batch.length < PAGE) break
+      from += PAGE
+    }
+  }
   // next_meeting_date 마이그레이션 전이면 그 칸 없이 재조회(KPI 화면이 깨지지 않게)
   let meetingRows: Record<string, unknown>[] = (mtRes.data as Record<string, unknown>[]) || []
   if (mtRes.error) {
@@ -81,7 +99,6 @@ async function fetchAllKpi(): Promise<KpiData> {
     if (fb.error) throw fb.error
     meetingRows = (fb.data || []).map(r => ({ ...(r as Record<string, unknown>), next_meeting_date: null }))
   }
-  const reports = repRes.error ? [] : (repRes.data || [])
 
   type StudentRow = { id: string; assigned_consultant: string | null }
   type MeetingRow = {
