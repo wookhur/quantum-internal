@@ -88,6 +88,7 @@ import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 // Consultant pool + helpers (shared with KPI page)
 import { useConsultantPool, useConsultantName, consultantNameKey } from '@/lib/consultants'
 import { kpiDotColor, KPI_TIERS, kpiBreakdownText } from '@/lib/kpi'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useStudentKpis, KPI_MAX } from '@/hooks/useConsultantKpis'
 import { useStudentStatusFlags } from '@/hooks/useServiceDashboard'
 
@@ -566,10 +567,13 @@ export function Student360Page() {
             <p className="text-sm text-muted-foreground px-1">{t('student360.noStudents')}</p>
           )}
           {filtered.map(s => (
-            <button
+            <div
               key={s.id}
+              role="button"
+              tabIndex={0}
               onClick={() => setSelectedId(s.id)}
-              className={`w-full text-left rounded-lg border p-3 transition-colors ${
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(s.id) } }}
+              className={`w-full text-left rounded-lg border p-3 transition-colors cursor-pointer ${
                 s.id === selectedId ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
               }`}
             >
@@ -596,10 +600,25 @@ export function Student360Page() {
                       {consultantName(s.assignedConsultant)}
                     </span>
                   )}
-                  <span
-                    className={`inline-block size-2 rounded-full shrink-0 ${kpiDotColor(studentKpis[s.id]?.score)}`}
-                    title={kpiBreakdownText(studentKpis[s.id])}
-                  />
+                  <Popover>
+                    <PopoverTrigger
+                      onClick={(e) => e.stopPropagation()}
+                      title="관리지수 원인 보기"
+                      className="inline-flex items-center justify-center shrink-0 rounded-full p-0.5 -m-0.5 hover:bg-muted"
+                    >
+                      <span className={`inline-block size-2.5 rounded-full ${kpiDotColor(studentKpis[s.id]?.score)}`} />
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end" side="bottom" sideOffset={6}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-72 p-3 text-xs"
+                    >
+                      <div className="font-semibold mb-1.5">관리지수 원인 (최근 30일)</div>
+                      <div className="space-y-0.5 whitespace-pre-line leading-relaxed">
+                        {kpiBreakdownText(studentKpis[s.id])}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 {s.status && (
                   <Badge variant="outline" className={`text-[10px] shrink-0 ${isArchivedStatus(s.status) ? (normalizeStatus(s.status) === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}`}>{statusLabel(s.status)}</Badge>
@@ -617,7 +636,7 @@ export function Student360Page() {
                   </div>
                 )
               })()}
-            </button>
+            </div>
           ))}
         </div>
       </div>
