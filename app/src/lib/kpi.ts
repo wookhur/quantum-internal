@@ -24,19 +24,22 @@ export function kpiBreakdownText(sk: {
   score: number; meetings30d: number; meetingsScore: number
   meetingsThisMonth?: number; expectedMeetings?: number
   summaryScore: number; summaryHave?: number; summaryTotal?: number
-  reportsScore: number; reportsPresent?: number; reportsTotal?: number
+  reportsScore: number; reportsPresent?: number; reportsTotal?: number; reportsMissing?: string[]
   followupScore: number; followupHave?: number; followupTotal?: number
 } | undefined): string {
   if (!sk) return 'KPI — (데이터 없음)'
   const n1 = (v: number) => (Math.round(v * 10) / 10).toString()
   const mTotal = sk.summaryTotal ?? sk.meetings30d   // 최근 30일 미팅 수
-  const lines: string[] = [`관리지수 ${n1(sk.score)} / 10`, '']
+  const lines: string[] = [`관리지수 ${n1(sk.score)} / 10`, '※ 미팅 횟수=이번 달 / 나머지=최근 30일', '']
   const actions: string[] = []
 
   // ① 미팅 횟수 (캘린더 월 기준, 월 2회)
   const mThis = sk.meetingsThisMonth ?? 0
   if (sk.meetingsScore >= 4) {
-    lines.push(`✓ 미팅 횟수 ${n1(sk.meetingsScore)}/4 — 이번 달 ${mThis}회 (월 2회 기준, 현재 온트랙)`)
+    const why = mThis >= 2 ? '월 2회 달성'
+      : mThis >= 1 ? '월 2회 중 1회, 현재까진 충분'
+      : '월초라 아직 감점 없음 (유예)'
+    lines.push(`✓ 미팅 횟수 4/4 — 이번 달 ${mThis}회 · ${why}`)
   } else {
     const need = Math.max(1, 2 - mThis)
     lines.push(`△ 미팅 횟수 ${n1(sk.meetingsScore)}/4 — 이번 달 ${mThis}회 (월 2회 기준)`)
@@ -56,14 +59,15 @@ export function kpiBreakdownText(sk: {
     actions.push(`리포트 ${miss}건`)
   }
 
-  // ③ 필수 리포트 항목
+  // ③ 필수 리포트 항목 (강점분석 결과지·보고서, 성적표, 성적분석 보고서 4종)
   if (sk.reportsScore >= 2) {
-    lines.push(`✓ 필수 리포트 항목 ${n1(sk.reportsScore)}/2 — ${sk.reportsPresent}/${sk.reportsTotal} 갖춤`)
+    lines.push(`✓ 필수 리포트 ${n1(sk.reportsScore)}/2 — 4종 모두 등록됨`)
   } else {
-    const miss = (sk.reportsTotal ?? 0) - (sk.reportsPresent ?? 0)
-    lines.push(`△ 필수 리포트 항목 ${n1(sk.reportsScore)}/2 — ${sk.reportsPresent ?? 0}/${sk.reportsTotal ?? 0} 갖춤`)
-    lines.push(`   → 빠진 필수 리포트 ${miss}개 등록`)
-    actions.push(`필수 리포트 ${miss}개`)
+    const missing = sk.reportsMissing ?? []
+    const miss = missing.length || ((sk.reportsTotal ?? 0) - (sk.reportsPresent ?? 0))
+    lines.push(`△ 필수 리포트 ${n1(sk.reportsScore)}/2 — 4종 중 ${sk.reportsPresent ?? 0}종 등록`)
+    lines.push(`   → 빠진 리포트 등록: ${missing.length ? missing.join(', ') : `${miss}종`}`)
+    actions.push(`리포트 등록(${missing.length ? missing.join('·') : `${miss}종`})`)
   }
 
   // ④ 다음 미팅 일정 (미팅 리포트에 다음 일정을 적었는가)

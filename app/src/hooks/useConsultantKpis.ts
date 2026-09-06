@@ -11,6 +11,7 @@ export interface StudentKpi {
   followupScore: number     // 0-2 — % of last-30d meeting diaries that have a next-meeting date
   score: number             // 0-11 total
   // 원인 설명(왜 이 점수인지)용 원자료
+  reportsMissing?: string[]  // 빠진 필수 리포트 한글 라벨
   meetingsThisMonth?: number // 이번 달(캘린더) 미팅 수
   expectedMeetings?: number  // 현재 시점 기대 미팅 수(0/1/2)
   // 최근 30일 기준
@@ -39,6 +40,14 @@ export const KPI_MAX = 10
 const REQUIRED_REPORT_CATEGORIES = [
   'strength_result', 'strength_report', 'grade_report', 'grade_analysis',
 ] as const
+
+// 필수 리포트 4종 한글 라벨 (원인 설명에 '빠진 리포트' 이름 표시용)
+const REPORT_LABELS: Record<string, string> = {
+  strength_result: '강점분석 결과지',
+  strength_report: '강점분석 보고서',
+  grade_report: '성적표',
+  grade_analysis: '성적분석 보고서',
+}
 
 interface KpiData {
   byStudent: Record<string, StudentKpi>
@@ -130,6 +139,7 @@ async function fetchAllKpi(): Promise<KpiData> {
     const cats = reportsByStudent[s.id] || new Set<string>()
     const present = REQUIRED_REPORT_CATEGORIES.reduce((n, c) => n + (cats.has(c) ? 1 : 0), 0)
     const reportsScore = (present / REQUIRED_REPORT_CATEGORIES.length) * 2
+    const reportsMissing = REQUIRED_REPORT_CATEGORIES.filter(c => !cats.has(c)).map(c => REPORT_LABELS[c])
 
     // ⑤ 다음 미팅 일정 (0-2): 최근 30일 미팅 리포트 중 다음 일정이 기록된 비율.
     //    (다이어리는 옵션이므로 리포트 기준으로 본다.)
@@ -145,7 +155,7 @@ async function fetchAllKpi(): Promise<KpiData> {
       meetings30d, meetingsScore, prepScore, summaryScore, reportsScore, followupScore, score,
       meetingsThisMonth, expectedMeetings: expectedByNow,
       summaryHave, summaryTotal: ms.length,
-      reportsPresent: present, reportsTotal: REQUIRED_REPORT_CATEGORIES.length,
+      reportsPresent: present, reportsTotal: REQUIRED_REPORT_CATEGORIES.length, reportsMissing,
       followupHave, followupTotal: ms.length,
     }
   })

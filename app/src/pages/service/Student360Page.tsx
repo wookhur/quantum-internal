@@ -613,7 +613,7 @@ export function Student360Page() {
                       onClick={(e) => e.stopPropagation()}
                       className="w-72 p-3 text-xs"
                     >
-                      <div className="font-semibold mb-1.5">관리지수 원인 (최근 30일)</div>
+                      <div className="font-semibold mb-1.5">관리지수 상세 — 왜 이 점수?</div>
                       <div className="space-y-0.5 whitespace-pre-line leading-relaxed">
                         {kpiBreakdownText(studentKpis[s.id])}
                       </div>
