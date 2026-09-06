@@ -87,7 +87,7 @@ import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 
 // Consultant pool + helpers (shared with KPI page)
 import { useConsultantPool, useConsultantName, consultantNameKey } from '@/lib/consultants'
-import { kpiDotColor, KPI_TIERS } from '@/lib/kpi'
+import { kpiDotColor, KPI_TIERS, kpiBreakdownText } from '@/lib/kpi'
 import { useStudentKpis, KPI_MAX } from '@/hooks/useConsultantKpis'
 import { useStudentStatusFlags } from '@/hooks/useServiceDashboard'
 
@@ -598,9 +598,7 @@ export function Student360Page() {
                   )}
                   <span
                     className={`inline-block size-2 rounded-full shrink-0 ${kpiDotColor(studentKpis[s.id]?.score)}`}
-                    title={studentKpis[s.id]
-                      ? `KPI ${studentKpis[s.id].score.toFixed(1)}/${KPI_MAX} (${Math.round((studentKpis[s.id].score / KPI_MAX) * 100)}%)`
-                      : 'KPI —'}
+                    title={kpiBreakdownText(studentKpis[s.id])}
                   />
                 </div>
                 {s.status && (

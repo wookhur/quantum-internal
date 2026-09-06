@@ -10,6 +10,13 @@ export interface StudentKpi {
   reportsScore: number      // 0-2 — required-report coverage for this student
   followupScore: number     // 0-2 — % of last-30d meeting diaries that have a next-meeting date
   score: number             // 0-11 total
+  // 원인 설명(왜 이 점수인지)용 원자료 — 최근 30일 기준
+  summaryHave?: number      // 리포트 링크가 있는 미팅 수
+  summaryTotal?: number     // 미팅 수
+  reportsPresent?: number   // 갖춰진 필수 리포트 항목 수
+  reportsTotal?: number     // 필수 리포트 항목 총수
+  followupHave?: number      // 다음 미팅 일정이 기록된 미팅 수
+  followupTotal?: number     // 미팅 수
 }
 
 // ─── Per-consultant view (average of their students' scores) ───
@@ -99,8 +106,9 @@ async function fetchAllKpi(): Promise<KpiData> {
 
     const meetingsScore = Math.min(meetings30d, 2) * 2  // 0 / 2 / 4
 
+    const summaryHave = ms.filter(m => !!m.report_url).length
     const prepScore = ms.length ? (ms.filter(m => !!m.prep_url).length / ms.length) * 1 : 0
-    const summaryScore = ms.length ? (ms.filter(m => !!m.report_url).length / ms.length) * 2 : 0
+    const summaryScore = ms.length ? (summaryHave / ms.length) * 2 : 0
 
     const cats = reportsByStudent[s.id] || new Set<string>()
     const present = REQUIRED_REPORT_CATEGORIES.reduce((n, c) => n + (cats.has(c) ? 1 : 0), 0)
@@ -108,14 +116,20 @@ async function fetchAllKpi(): Promise<KpiData> {
 
     // ⑤ 다음 미팅 일정 (0-2): 최근 30일 미팅 리포트 중 다음 일정이 기록된 비율.
     //    (다이어리는 옵션이므로 리포트 기준으로 본다.)
-    const followupScore = ms.length ? (ms.filter(m => !!m.next_meeting_date).length / ms.length) * 2 : 0
+    const followupHave = ms.filter(m => !!m.next_meeting_date).length
+    const followupScore = ms.length ? (followupHave / ms.length) * 2 : 0
 
     // prepScore(사전자료)는 2026-08 부터 점수에서 제외 — 값은 참고용으로 계속 계산한다.
     const score = Math.max(0, Math.min(KPI_MAX,
       meetingsScore + summaryScore + reportsScore + followupScore,
     ))
 
-    byStudent[s.id] = { meetings30d, meetingsScore, prepScore, summaryScore, reportsScore, followupScore, score }
+    byStudent[s.id] = {
+      meetings30d, meetingsScore, prepScore, summaryScore, reportsScore, followupScore, score,
+      summaryHave, summaryTotal: ms.length,
+      reportsPresent: present, reportsTotal: REQUIRED_REPORT_CATEGORIES.length,
+      followupHave, followupTotal: ms.length,
+    }
   })
 
   // ─── Aggregate per consultant (average of their students' scores) ───
