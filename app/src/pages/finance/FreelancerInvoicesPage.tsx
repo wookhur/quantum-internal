@@ -27,7 +27,7 @@ import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
 import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
-import { usePartnerInvoiceTypes, useSetPartnerInvoiceType, invoiceTypeOf } from '@/hooks/usePartnerInvoiceTypes'
+import { usePartnerInvoiceTypes, useSetPartnerInvoiceType, invoiceTypeOf, accountRegionOf } from '@/hooks/usePartnerInvoiceTypes'
 import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
 import {
@@ -88,6 +88,7 @@ interface ParsedInvoice {
   email: string
   bankAccount: string
   note?: string
+  accountRegion?: string   // 'domestic' | 'overseas' — 파트너 설정에서 기본값
   items: ItemRow[]
 }
 
@@ -179,7 +180,7 @@ export function InvoiceFormDialog({
   const bankAccount = joinBank(bankName, accountNumber, accountHolder)
   // 국내/해외 계좌 (해외면 SWIFT·IBAN 등 상세 입력 → 해외 인보이스 양식으로 발행)
   const [accountRegion, setAccountRegion] = useState<'domestic' | 'overseas'>(
-    (invoice?.accountRegion as 'domestic' | 'overseas') || 'domestic',
+    (invoice?.accountRegion as 'domestic' | 'overseas') || (initialData?.accountRegion as 'domestic' | 'overseas') || 'domestic',
   )
   const [ovb, setOvb] = useState<OverseasBank>(invoice?.overseasBank || {})
   const setOvbField = (k: keyof OverseasBank, v: string) => setOvb(p => ({ ...p, [k]: v }))
@@ -203,7 +204,7 @@ export function InvoiceFormDialog({
     setResidentNumber(initialData.residentNumber || '')
     setPhone(initialData.phone || '')
     if (initialData.email) setEmail(initialData.email)
-    setAccountRegion('domestic'); setOvb({})
+    setAccountRegion((initialData.accountRegion as 'domestic' | 'overseas') || 'domestic'); setOvb({})
     setNote(initialData.note || '')
     const b = splitBank(initialData.bankAccount || '')
     setBankName(b.bankName); setAccountNumber(b.accountNumber); setAccountHolder(b.accountHolder)
@@ -1566,6 +1567,7 @@ export function FreelancerInvoicesPage(
   const { data: invoiceTypeMap } = usePartnerInvoiceTypes()
   const setPartnerType = useSetPartnerInvoiceType()
   const partnerType = invoiceTypeOf(invoiceTypeMap, effectiveName)
+  const partnerAccountRegion = accountRegionOf(invoiceTypeMap, effectiveName)
   const typeMatchesBoard = isIncentive ? true
     : isBusinessBoard ? partnerType === 'business'
     : isIndividualBoard ? partnerType !== 'business'
@@ -1725,6 +1727,7 @@ export function FreelancerInvoicesPage(
           }))
         : [emptyItem()],
     }
+    initial.accountRegion = partnerAccountRegion   // 파트너 계좌구분(국내/해외) 기본 반영
     setEditInvoice(undefined)
     setManualEntry(false)
     setUploadedData(initial)
@@ -1739,6 +1742,7 @@ export function FreelancerInvoicesPage(
     setUploadedData({
       invoiceDate: new Date().toISOString().slice(0, 10),
       residentNumber: '', phone: '', email: user?.email || '', bankAccount: '',
+      accountRegion: partnerAccountRegion,
       items: [emptyItem()],
     })
     setFormOpen(true)
@@ -2013,6 +2017,27 @@ export function FreelancerInvoicesPage(
                   }`}
                 >
                   {tp === 'business' ? '사업자' : '개인'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* 계좌 구분(국내/해외) — 발행유형 옆. 해외면 해외 인보이스 양식으로 발행 */}
+        {(isIndividualBoard || isBusinessBoard) && isAccounting && effectiveName && (
+          <div className="self-end">
+            <Label className="text-xs">계좌 구분</Label>
+            <div className="flex h-9 items-center gap-1 rounded-md border bg-muted/30 p-0.5">
+              {(['domestic', 'overseas'] as const).map(rg => (
+                <button
+                  key={rg}
+                  type="button"
+                  disabled={setPartnerType.isPending}
+                  onClick={() => setPartnerType.mutate({ name: effectiveName, accountRegion: rg })}
+                  className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                    partnerAccountRegion === rg ? (rg === 'overseas' ? 'bg-sky-500 text-white' : 'bg-slate-500 text-white') : 'text-muted-foreground hover:bg-white'
+                  }`}
+                >
+                  {rg === 'overseas' ? '해외계좌' : '국내계좌'}
                 </button>
               ))}
             </div>
