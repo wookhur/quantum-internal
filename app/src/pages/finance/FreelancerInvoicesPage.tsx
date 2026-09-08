@@ -310,19 +310,36 @@ export function InvoiceFormDialog({
             </div>
           </div>
 
-          {/* 개인이냐 사업자냐 — 아래 신분증 칸의 이름과 형식이 여기에 따라 바뀐다 */}
-          {issuerSelectable && (
-            <div className="space-y-1.5 rounded-md border bg-muted/30 p-3">
-              <Label className="text-xs">발행 형태</Label>
-              <Select value={issuerType} onValueChange={v => v && setIssuerType(v as 'individual' | 'business')}>
-                <SelectTrigger className="h-9 w-full">
-                  <span>{isBiz ? '사업자 — 사업자등록번호로 발행' : '개인 — 주민등록번호로 발행'}</span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="individual">개인 — 주민등록번호로 발행</SelectItem>
-                  <SelectItem value="business">사업자 — 사업자등록번호로 발행</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* 발행 형태(개인/사업자) + 계좌 종류(국내/해외) — 한 줄로 나란히, 눈에 잘 띄게 */}
+          {(issuerSelectable || kind !== 'sales_incentive') && (
+            <div className="flex flex-wrap gap-3">
+              {issuerSelectable && (
+                <div className="flex-1 min-w-[180px] space-y-1.5 rounded-md border bg-muted/30 p-3">
+                  <Label className="text-xs">발행 형태</Label>
+                  <Select value={issuerType} onValueChange={v => v && setIssuerType(v as 'individual' | 'business')}>
+                    <SelectTrigger className="h-9 w-full">
+                      <span>{isBiz ? '사업자 — 사업자등록번호로 발행' : '개인 — 주민등록번호로 발행'}</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="individual">개인 — 주민등록번호로 발행</SelectItem>
+                      <SelectItem value="business">사업자 — 사업자등록번호로 발행</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {kind !== 'sales_incentive' && (
+                <div className="flex-1 min-w-[180px] space-y-1.5 rounded-md border bg-muted/30 p-3">
+                  <Label className="text-xs">계좌 종류</Label>
+                  <div className="flex gap-1 rounded-md border bg-background p-0.5">
+                    {(['domestic', 'overseas'] as const).map(rg => (
+                      <button key={rg} type="button" onClick={() => setAccountRegion(rg)}
+                        className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${accountRegion === rg ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                        {rg === 'overseas' ? '해외계좌' : '국내계좌'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -348,21 +365,6 @@ export function InvoiceFormDialog({
             <Label className="text-xs">이메일 <span className="text-[10px] text-muted-foreground">· 견적서 엑셀에 표기됩니다</span></Label>
             <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="예: partner@example.com" className="h-9" />
           </div>
-
-          {/* 국내/해외 계좌 선택 — 해외면 SWIFT·IBAN 등 상세 + 해외 인보이스 양식으로 발행 */}
-          {kind !== 'sales_incentive' && (
-            <div className="space-y-1.5 rounded-md border bg-muted/30 p-3">
-              <Label className="text-xs">계좌 종류</Label>
-              <div className="flex gap-1 rounded-md border bg-background p-0.5 w-fit">
-                {(['domestic', 'overseas'] as const).map(rg => (
-                  <button key={rg} type="button" onClick={() => setAccountRegion(rg)}
-                    className={`rounded px-3 py-1 text-xs font-medium transition-colors ${accountRegion === rg ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
-                    {rg === 'overseas' ? '해외계좌' : '국내계좌'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {accountRegion === 'overseas' ? (
             <div className="space-y-1.5">
