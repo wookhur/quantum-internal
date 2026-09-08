@@ -18,7 +18,7 @@ import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote, RefreshCw, Download, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useIncentiveLinesByPerson, downloadInvoiceExcel, downloadSalesIncentiveExcel, downloadFreelancerFormExcel, downloadPartnerBusinessExcel, InvoiceFormDialog, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
+import { useIncentiveLinesByPerson, downloadInvoiceExcel, downloadSalesIncentiveExcel, downloadFreelancerFormExcel, downloadPartnerBusinessExcel, downloadOverseasInvoiceExcel, InvoiceFormDialog, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
 import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useAllClawbacks, useSetClawbackStatus, useDeleteClawback } from '@/hooks/useClawbacks'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -1008,7 +1008,19 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
 
             {/* 액션: 회사 양식 다운로드 + 승인/반려 되돌리기 */}
             <div className="flex items-center justify-between gap-2 border-t pt-3 flex-wrap">
-              {invoice.kind === 'sales_incentive' ? (
+              {invoice.accountRegion === 'overseas' ? (
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={downloading} onClick={async () => {
+                  setDownloading(true)
+                  try {
+                    const its = items.map(it => ({ itemName: it.itemName, quantity: it.quantity, unitPrice: it.unitPrice, supplyAmount: it.supplyAmount, remark: it.remark }))
+                    await downloadOverseasInvoiceExcel(invoice, its)
+                  } catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
+                  finally { setDownloading(false) }
+                }}>
+                  {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                  양식 발행 (해외계좌)
+                </Button>
+              ) : invoice.kind === 'sales_incentive' ? (
                 <Select value="" onValueChange={async (v) => {
                   if (!v) return
                   setDownloading(true)

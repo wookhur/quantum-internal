@@ -34,6 +34,23 @@ export interface FreelancerInvoice {
   items?: InvoiceItem[]
   /** 이 인보이스가 정산하는 커미션 라인 키(`incentiveId-installmentId`) 목록 */
   coveredIncentiveKeys?: string[]
+  /** 국내/해외 계좌 구분: 'domestic' | 'overseas' */
+  accountRegion?: string
+  /** 해외 송금 상세 (accountRegion='overseas'일 때) */
+  overseasBank?: OverseasBank
+}
+
+export interface OverseasBank {
+  country?: string
+  bankName?: string
+  bankAddress?: string
+  swift?: string
+  routing?: string
+  iban?: string
+  accountNumber?: string
+  accountName?: string
+  accountType?: string
+  beneficiaryEmail?: string
 }
 
 function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
@@ -56,6 +73,8 @@ function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
     coveredIncentiveKeys: (r.covered_incentive_keys as string[]) || undefined,
+    accountRegion: (r.account_region as string) || undefined,
+    overseasBank: (r.overseas_bank as OverseasBank) || undefined,
     freelancerName: profile?.name as string | undefined,
     freelancerEmail: profile?.email as string | undefined,
   }
@@ -195,6 +214,8 @@ export function useCreateInvoice() {
       bankAccount?: string
       note?: string
       coveredIncentiveKeys?: string[]   // 이 인보이스가 정산하는 커미션 라인 키
+      accountRegion?: string            // 'domestic' | 'overseas'
+      overseasBank?: OverseasBank
       items: { itemName: string; quantity: number; unitPrice: number; remark?: string }[]
     }) => {
       const totalAmount = input.items.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0)
@@ -217,6 +238,11 @@ export function useCreateInvoice() {
         insertRow.covered_incentive_keys = input.coveredIncentiveKeys
       }
       if (input.clientEmail) insertRow.client_email = input.clientEmail   // 값 있을 때만(마이그레이션 전 안전)
+      // 해외계좌일 때만 컬럼 참조(국내=기본, 마이그레이션 전에도 국내 발행은 안 깨짐)
+      if (input.accountRegion === 'overseas') {
+        insertRow.account_region = 'overseas'
+        if (input.overseasBank) insertRow.overseas_bank = input.overseasBank
+      }
       const { data: inv, error: invErr } = await supabase
         .from('freelancer_invoices')
         .insert(insertRow)
@@ -262,12 +288,18 @@ export function useUpdateInvoice() {
       phone?: string
       bankAccount?: string
       note?: string
+      accountRegion?: string
+      overseasBank?: OverseasBank
       items?: { itemName: string; quantity: number; unitPrice: number; remark?: string }[]
     }) => {
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (input.invoiceDate) updates.invoice_date = input.invoiceDate
       if (input.clientName !== undefined) updates.client_name = input.clientName || null
       if (input.clientEmail) updates.client_email = input.clientEmail   // 값 있을 때만(마이그레이션 전 안전)
+      if (input.accountRegion === 'overseas') {
+        updates.account_region = 'overseas'
+        if (input.overseasBank) updates.overseas_bank = input.overseasBank
+      }
       if (input.residentNumber !== undefined) updates.resident_number = input.residentNumber || null
       if (input.phone !== undefined) updates.phone = input.phone || null
       if (input.bankAccount !== undefined) updates.bank_account = input.bankAccount || null

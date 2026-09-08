@@ -41,6 +41,7 @@ import {
   invoiceDisplayName,
   type FreelancerInvoice,
   type InvoiceItem,
+  type OverseasBank,
 } from '@/hooks/useFreelancerInvoices'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -176,6 +177,12 @@ export function InvoiceFormDialog({
   const [accountNumber, setAccountNumber] = useState(initBank.accountNumber)
   const [accountHolder, setAccountHolder] = useState(initBank.accountHolder)
   const bankAccount = joinBank(bankName, accountNumber, accountHolder)
+  // 국내/해외 계좌 (해외면 SWIFT·IBAN 등 상세 입력 → 해외 인보이스 양식으로 발행)
+  const [accountRegion, setAccountRegion] = useState<'domestic' | 'overseas'>(
+    (invoice?.accountRegion as 'domestic' | 'overseas') || 'domestic',
+  )
+  const [ovb, setOvb] = useState<OverseasBank>(invoice?.overseasBank || {})
+  const setOvbField = (k: keyof OverseasBank, v: string) => setOvb(p => ({ ...p, [k]: v }))
   const [note, setNote] = useState(initialData?.note || invoice?.note || '')
   const [items, setItems] = useState<ItemRow[]>(
     initialData?.items?.length
@@ -196,6 +203,7 @@ export function InvoiceFormDialog({
     setResidentNumber(initialData.residentNumber || '')
     setPhone(initialData.phone || '')
     if (initialData.email) setEmail(initialData.email)
+    setAccountRegion('domestic'); setOvb({})
     setNote(initialData.note || '')
     const b = splitBank(initialData.bankAccount || '')
     setBankName(b.bankName); setAccountNumber(b.accountNumber); setAccountHolder(b.accountHolder)
@@ -248,6 +256,8 @@ export function InvoiceFormDialog({
           clientEmail: email,
           bankAccount,
           note,
+          accountRegion,
+          overseasBank: accountRegion === 'overseas' ? ovb : undefined,
           items: validItems,
         })
       } else {
@@ -263,6 +273,8 @@ export function InvoiceFormDialog({
           bankAccount,
           note,
           coveredIncentiveKeys,
+          accountRegion,
+          overseasBank: accountRegion === 'overseas' ? ovb : undefined,
           items: validItems,
         })
       }
@@ -337,14 +349,47 @@ export function InvoiceFormDialog({
             <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="예: partner@example.com" className="h-9" />
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs">{t('fInvoice.bankAccount')}</Label>
-            <div className="grid grid-cols-3 gap-2">
-              <Input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="은행명 (예: 국민)" className="h-9" />
-              <Input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="계좌번호" className="h-9" />
-              <Input value={accountHolder} onChange={e => setAccountHolder(e.target.value)} placeholder="예금주" className="h-9" />
+          {/* 국내/해외 계좌 선택 — 해외면 SWIFT·IBAN 등 상세 + 해외 인보이스 양식으로 발행 */}
+          {kind !== 'sales_incentive' && (
+            <div className="space-y-1.5 rounded-md border bg-muted/30 p-3">
+              <Label className="text-xs">계좌 종류</Label>
+              <div className="flex gap-1 rounded-md border bg-background p-0.5 w-fit">
+                {(['domestic', 'overseas'] as const).map(rg => (
+                  <button key={rg} type="button" onClick={() => setAccountRegion(rg)}
+                    className={`rounded px-3 py-1 text-xs font-medium transition-colors ${accountRegion === rg ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                    {rg === 'overseas' ? '해외계좌' : '국내계좌'}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {accountRegion === 'overseas' ? (
+            <div className="space-y-1.5">
+              <Label className="text-xs">해외 송금 정보 (Wire Transfer Details)</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <Input value={ovb.country || ''} onChange={e => setOvbField('country', e.target.value)} placeholder="Country of Bank Account" className="h-9" />
+                <Input value={ovb.bankName || ''} onChange={e => setOvbField('bankName', e.target.value)} placeholder="Bank Name" className="h-9" />
+                <Input value={ovb.bankAddress || ''} onChange={e => setOvbField('bankAddress', e.target.value)} placeholder="Bank address" className="h-9 col-span-2" />
+                <Input value={ovb.swift || ''} onChange={e => setOvbField('swift', e.target.value)} placeholder="SWIFT Code" className="h-9" />
+                <Input value={ovb.routing || ''} onChange={e => setOvbField('routing', e.target.value)} placeholder="Routing Number" className="h-9" />
+                <Input value={ovb.iban || ''} onChange={e => setOvbField('iban', e.target.value)} placeholder="IBAN Number" className="h-9" />
+                <Input value={ovb.accountNumber || ''} onChange={e => setOvbField('accountNumber', e.target.value)} placeholder="Account Number" className="h-9" />
+                <Input value={ovb.accountName || ''} onChange={e => setOvbField('accountName', e.target.value)} placeholder="Account Name (예금주)" className="h-9" />
+                <Input value={ovb.accountType || ''} onChange={e => setOvbField('accountType', e.target.value)} placeholder="Account type (checking/saving)" className="h-9" />
+                <Input value={ovb.beneficiaryEmail || ''} onChange={e => setOvbField('beneficiaryEmail', e.target.value)} placeholder="Beneficiary Email" className="h-9 col-span-2" />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label className="text-xs">{t('fInvoice.bankAccount')}</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Input value={bankName} onChange={e => setBankName(e.target.value)} placeholder="은행명 (예: 국민)" className="h-9" />
+                <Input value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="계좌번호" className="h-9" />
+                <Input value={accountHolder} onChange={e => setAccountHolder(e.target.value)} placeholder="예금주" className="h-9" />
+              </div>
+            </div>
+          )}
 
           {/* Items Table (fixed to authorized students — no manual add) */}
           <div className="space-y-2">
@@ -717,6 +762,45 @@ export async function downloadPartnerBusinessExcel(
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
 }
 
+/** 해외계좌 프리랜서 인보이스 발행 — overseas-invoice.xlsx (INVOICE + Wire Transfer Details).
+ *  DATE=B4 · 항목 11~20행(A설명·B단가·C수량·D금액) · 합계 D21 · 해외계좌 B24~B33. */
+export async function downloadOverseasInvoiceExcel(
+  invoice: FreelancerInvoice,
+  items: { itemName: string; quantity: number; unitPrice: number; supplyAmount: number; remark?: string | null }[],
+) {
+  const { default: ExcelJS } = await import('exceljs')
+  const total = items.reduce((s, it) => s + (it.supplyAmount || 0), 0)
+  const name = invoice.clientName || invoice.freelancerName || ''
+  const res = await fetch('/overseas-invoice.xlsx')
+  if (!res.ok) throw new Error('해외 인보이스 양식 파일을 불러올 수 없습니다.')
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(await res.arrayBuffer())
+  const ws = wb.worksheets[0]
+  const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
+  set('B4', invoice.invoiceDate)
+  const dataStart = 11
+  const capacity = 10  // 11~20행
+  for (let i = 0; i < capacity; i++) {
+    const r = dataStart + i
+    if (i < items.length) {
+      const it = items[i]
+      ws.getCell(r, 1).value = it.itemName
+      ws.getCell(r, 2).value = it.unitPrice
+      ws.getCell(r, 3).value = it.quantity
+      ws.getCell(r, 4).value = it.supplyAmount
+    }
+  }
+  set('D21', total)
+  const b = invoice.overseasBank || {}
+  const rows = [b.country, b.bankName, b.bankAddress, b.swift, b.routing, b.iban, b.accountNumber, b.accountName, b.accountType, b.beneficiaryEmail]
+  rows.forEach((v, i) => set(`B${24 + i}`, v))
+  const out = await wb.xlsx.writeBuffer()
+  const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `${name}_INVOICE_overseas.xlsx`
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+}
+
 // ─── Business invoice: template download + upload parsing (사업자) ──────────
 
 function saveBlob(buf: ArrayBuffer, name: string) {
@@ -945,7 +1029,18 @@ function InvoiceDetailDialog({
         </div>
 
         <DialogFooter className="gap-2">
-            {invoice.kind === 'sales_incentive' ? (
+            {invoice.accountRegion === 'overseas' ? (
+              // 해외계좌 — 해외 인보이스 양식(INVOICE + Wire Transfer Details)
+              <Button variant="outline" className="gap-1.5 mr-auto" disabled={downloading} onClick={async () => {
+                setDownloading(true)
+                try { await downloadOverseasInvoiceExcel(invoice, items) }
+                catch (e) { alert(e instanceof Error ? e.message : '다운로드에 실패했습니다.') }
+                finally { setDownloading(false) }
+              }}>
+                {downloading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                양식 발행 (해외계좌)
+              </Button>
+            ) : invoice.kind === 'sales_incentive' ? (
               <div className="mr-auto flex items-center gap-2">
                 <Select value="" onValueChange={async (v) => {
                   if (!v) return
