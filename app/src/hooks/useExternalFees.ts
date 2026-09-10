@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows, fetchAllRowsByIds } from '@/lib/supabasePaging'
 
 export interface ExtraInstallmentWithContext {
   id: string
@@ -40,15 +41,19 @@ export function useAllExtraInstallments() {
     queryKey: ['extra-installments-all'],
     queryFn: async () => {
       // 1. Fetch extra installments with contract info
-      const { data: instDataRaw, error: instErr } = await supabase
-        .from('payment_installments')
-        .select('*, contracts:contract_id(id, contractor_name, student_name, school_name, contract_date, currency, status)')
-        .eq('category', 'extra')
-        .order('created_at', { ascending: false })
+      // 1000행을 넘으면 잘려 외부 수수료 목록·정산액이 조용히 누락된다.
+      const instDataRaw = await fetchAllRows((from, to) =>
+        supabase
+          .from('payment_installments')
+          .select('*, contracts:contract_id(id, contractor_name, student_name, school_name, contract_date, currency, status)')
+          .eq('category', 'extra')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
 
-      if (instErr) throw instErr
       // 취소·해지 계약의 미납 회차는 제외 (더 이상 수금/수수료 대상이 아님. 기납부분은 유지)
-      const instData = (instDataRaw || []).filter(row => {
+      const instData = instDataRaw.filter(row => {
         const cs = (row.contracts as { status?: string } | null)?.status
         return !((cs === 'cancelled' || cs === 'terminated') && (row.status as string) !== 'paid')
       })
@@ -56,14 +61,18 @@ export function useAllExtraInstallments() {
 
       // 2. Fetch all revenue shares for these installments
       const instIds = instData.map(i => i.id as string)
-      const { data: sharesData } = await supabase
-        .from('installment_revenue_shares')
-        .select('*')
-        .in('installment_id', instIds)
-        .order('created_at', { ascending: true })
+      const sharesData = await fetchAllRowsByIds(instIds, (chunk, from, to) =>
+        supabase
+          .from('installment_revenue_shares')
+          .select('*')
+          .in('installment_id', chunk)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
 
       const sharesMap = new Map<string, ExtraInstallmentWithContext['revenueShares']>()
-      for (const s of sharesData || []) {
+      for (const s of sharesData) {
         const iid = s.installment_id as string
         if (!sharesMap.has(iid)) sharesMap.set(iid, [])
         sharesMap.get(iid)!.push({

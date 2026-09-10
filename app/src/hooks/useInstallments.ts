@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/supabasePaging'
 import type { PaymentInstallment, InstallmentStatus, InstallmentCategory, RefundStatus } from '@/types'
 
 function mapInstallment(row: Record<string, unknown>): PaymentInstallment {
@@ -51,12 +52,18 @@ export function useInstallments() {
   return useQuery({
     queryKey: ['installments'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payment_installments')
-        .select('*, contracts(id, contractor_name, student_name, school_name, contract_date, expiry_date, total_amount, currency, payment_account, status, sales_rep, service_rep, created_at, updated_at)')
-        .order('due_date', { ascending: true })
-      if (error) throw error
-      return (data || []).map((r) => mapInstallment(r as Record<string, unknown>))
+      // 회차는 계약 수에 비례해 늘어나 1000행 제한을 넘기므로 전량 페이지네이션 조회한다.
+      // (잘리면 수금·현금흐름·재무 대시보드 금액이 조용히 적게 집계된다)
+      const data = await fetchAllRows((from, to) =>
+        supabase
+          .from('payment_installments')
+          .select('*, contracts(id, contractor_name, student_name, school_name, contract_date, expiry_date, total_amount, currency, payment_account, status, sales_rep, service_rep, created_at, updated_at)')
+          .order('due_date', { ascending: true })
+          // due_date 는 중복되므로 고유키를 보조 정렬로 둬야 페이지 경계에서 누락/중복이 없다.
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
+      return data.map((r) => mapInstallment(r as Record<string, unknown>))
     },
   })
 }

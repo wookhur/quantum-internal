@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows, fetchAllRowsByIds } from '@/lib/supabasePaging'
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -143,33 +144,40 @@ export function useAllIncentives() {
     queryKey: ['incentives', 'all'],
     queryFn: async () => {
       // 1. Fetch incentives with contract info
-      const { data, error } = await supabase
-        .from('contract_incentives')
-        .select(
-          '*, profiles:profile_id(id, name), contracts:contract_id(id, contractor_name, student_name, total_amount, currency, contract_date, status)',
-        )
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
+      // 인센티브·회차 모두 1000행을 넘길 수 있어 전량 페이지네이션 조회한다.
+      const data = await fetchAllRows((from, to) =>
+        supabase
+          .from('contract_incentives')
+          .select(
+            '*, profiles:profile_id(id, name), contracts:contract_id(id, contractor_name, student_name, total_amount, currency, contract_date, status)',
+          )
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
 
       // 2. Collect unique contract IDs and fetch paid installment sums
-      const contractIds = [...new Set((data || []).map((r) => r.contract_id as string))]
+      const contractIds = [...new Set(data.map((r) => r.contract_id as string))]
       const paidMap = new Map<string, number>()
 
-      if (contractIds.length > 0) {
-        const { data: installments } = await supabase
-          .from('payment_installments')
-          .select('contract_id, paid_amount, status')
-          .in('contract_id', contractIds)
-          .eq('status', 'paid')
+      {
+        const installments = await fetchAllRowsByIds(contractIds, (chunk, from, to) =>
+          supabase
+            .from('payment_installments')
+            .select('contract_id, paid_amount, status')
+            .in('contract_id', chunk)
+            .eq('status', 'paid')
+            .order('id', { ascending: true })
+            .range(from, to),
+        )
 
-        for (const inst of installments || []) {
+        for (const inst of installments) {
           const cid = inst.contract_id as string
           paidMap.set(cid, (paidMap.get(cid) || 0) + (Number(inst.paid_amount) || 0))
         }
       }
 
-      const mapped = (data || []).map((r) => {
+      const mapped = data.map((r) => {
         const base = mapIncentiveWithContract(r as Record<string, unknown>)
         return { ...base, paidAmount: paidMap.get(base.contractId) || 0 }
       })
@@ -190,25 +198,32 @@ export function useIncentivesByInstallment() {
     queryKey: ['incentives', 'by-installment'],
     queryFn: async () => {
       // 1. Fetch all incentive definitions with contract info
-      const { data, error } = await supabase
-        .from('contract_incentives')
-        .select(
-          '*, profiles:profile_id(id, name), contracts:contract_id(id, contractor_name, student_name, total_amount, currency, contract_date, status)',
-        )
-        .order('created_at', { ascending: false })
+      const data = await fetchAllRows((from, to) =>
+        supabase
+          .from('contract_incentives')
+          .select(
+            '*, profiles:profile_id(id, name), contracts:contract_id(id, contractor_name, student_name, total_amount, currency, contract_date, status)',
+          )
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
 
-      if (error) throw error
-      if (!data || data.length === 0) return []
+      if (data.length === 0) return []
 
       // 2. Fetch ALL installments (paid + unpaid) for those contracts
       const contractIds = [...new Set(data.map((r) => r.contract_id as string))]
 
-      const { data: installments } = await supabase
-        .from('payment_installments')
-        .select('id, contract_id, label, installment_order, amount, paid_amount, paid_date, due_date, status, category')
-        .in('contract_id', contractIds)
+      const installments = await fetchAllRowsByIds(contractIds, (chunk, from, to) =>
+        supabase
+          .from('payment_installments')
+          .select('id, contract_id, label, installment_order, amount, paid_amount, paid_date, due_date, status, category')
+          .in('contract_id', chunk)
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
 
-      if (!installments || installments.length === 0) return []
+      if (installments.length === 0) return []
 
       // 3. Build per-installment map: contractId -> installments[]
       const instMap = new Map<string, Array<{
@@ -307,21 +322,29 @@ export function useIncentivesByInstallment() {
       //    These show as external_fee type entries in the finance views
       const allContractIds = [...new Set(data.map((r) => r.contract_id as string))]
       // Fetch extra installments for all contracts (paid only for external fees)
-      const { data: extraInsts } = await supabase
-        .from('payment_installments')
-        .select('id, contract_id, label, installment_order, amount, paid_amount, paid_date, due_date, status, category')
-        .in('contract_id', allContractIds)
-        .eq('category', 'extra')
-        .eq('status', 'paid')
+      const extraInsts = await fetchAllRowsByIds(allContractIds, (chunk, from, to) =>
+        supabase
+          .from('payment_installments')
+          .select('id, contract_id, label, installment_order, amount, paid_amount, paid_date, due_date, status, category')
+          .in('contract_id', chunk)
+          .eq('category', 'extra')
+          .eq('status', 'paid')
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
 
-      if (extraInsts && extraInsts.length > 0) {
+      if (extraInsts.length > 0) {
         const extraIds = extraInsts.map(e => e.id as string)
-        const { data: shares } = await supabase
-          .from('installment_revenue_shares')
-          .select('*')
-          .in('installment_id', extraIds)
+        const shares = await fetchAllRowsByIds(extraIds, (chunk, from, to) =>
+          supabase
+            .from('installment_revenue_shares')
+            .select('*')
+            .in('installment_id', chunk)
+            .order('id', { ascending: true })
+            .range(from, to),
+        )
 
-        if (shares && shares.length > 0) {
+        if (shares.length > 0) {
           // Build a lookup: installmentId -> installment + contract info
           const extraLookup = new Map<string, { inst: typeof extraInsts[0]; contract: Record<string, unknown> | null }>()
           for (const ei of extraInsts) {

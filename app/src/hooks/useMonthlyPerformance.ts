@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/supabasePaging'
 import type { MonthlyPerformance } from '@/types'
 
 function mapPerformance(row: Record<string, unknown>): MonthlyPerformance {
@@ -45,23 +46,33 @@ export function useAutoPerformanceData() {
   return useQuery({
     queryKey: ['auto_performance_data'],
     queryFn: async () => {
-      const [installRes, contractRes] = await Promise.all([
-        supabase
-          .from('payment_installments')
-          .select('paid_date, paid_amount, currency')
-          .not('paid_date', 'is', null)
-          .gt('paid_amount', 0),
-        supabase
-          .from('contracts')
-          .select('contract_date, payment_account, currency')
-          .neq('status', 'cancelled'),
+      // 납입 회차·계약 모두 1000행을 넘으므로 전량 페이지네이션 조회한다.
+      // (잘리면 월별 수금액·신규 계약 수가 조용히 적게 집계된다)
+      const [installRows, contractRows] = await Promise.all([
+        fetchAllRows<{ paid_date: string | null; paid_amount: number | null; currency: string | null }>(
+          (from, to) =>
+            supabase
+              .from('payment_installments')
+              .select('paid_date, paid_amount, currency')
+              .not('paid_date', 'is', null)
+              .gt('paid_amount', 0)
+              // 합계만 내므로 정렬 순서는 무관하나, 페이지 경계가 흔들리지 않게 고유키로 정렬한다.
+              .order('id', { ascending: true })
+              .range(from, to),
+        ),
+        fetchAllRows<{ contract_date: string | null; payment_account: string | null; currency: string | null }>(
+          (from, to) =>
+            supabase
+              .from('contracts')
+              .select('contract_date, payment_account, currency')
+              .neq('status', 'cancelled')
+              .order('id', { ascending: true })
+              .range(from, to),
+        ),
       ])
 
-      if (installRes.error) throw installRes.error
-      if (contractRes.error) throw contractRes.error
-
       const collected = new Map<string, number>()
-      for (const row of installRes.data || []) {
+      for (const row of installRows) {
         const paidDate = row.paid_date as string
         if (!paidDate) continue
         const ym = paidDate.substring(0, 7)
@@ -72,7 +83,7 @@ export function useAutoPerformanceData() {
       }
 
       const newContracts = new Map<string, number>()
-      for (const row of contractRes.data || []) {
+      for (const row of contractRows) {
         const cd = row.contract_date as string
         if (!cd) continue
         const ym = cd.substring(0, 7)

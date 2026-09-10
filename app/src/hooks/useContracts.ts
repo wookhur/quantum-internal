@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows, fetchAllRowsByIds } from '@/lib/supabasePaging'
 import type { Contract, ContractStatus, PaymentInstallment } from '@/types'
 import { createNotificationsForUsers, getContractNotificationRecipients } from './useUserNotifications'
 
@@ -101,19 +102,21 @@ export function useContracts(filters?: { status?: ContractStatus; search?: strin
   return useQuery({
     queryKey: ['contracts', filters],
     queryFn: async () => {
-      let query = supabase
-        .from('contracts')
-        .select('*')
-        .order('contract_date', { ascending: false })
-
-      if (filters?.status) query = query.eq('status', filters.status)
-      if (filters?.search) {
-        query = query.or(`contractor_name.ilike.%${filters.search}%,student_name.ilike.%${filters.search}%`)
-      }
-
-      const { data, error } = await query
-      if (error) throw error
-      return (data || []).map(mapContract)
+      // 계약이 1000건을 넘으면 잘려서 목록·합계에서 누락된다. 페이지마다 쿼리를 새로 만든다.
+      const data = await fetchAllRows((from, to) => {
+        let query = supabase
+          .from('contracts')
+          .select('*')
+          .order('contract_date', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to)
+        if (filters?.status) query = query.eq('status', filters.status)
+        if (filters?.search) {
+          query = query.or(`contractor_name.ilike.%${filters.search}%,student_name.ilike.%${filters.search}%`)
+        }
+        return query
+      })
+      return data.map(mapContract)
     },
   })
 }
@@ -459,35 +462,40 @@ export function useContractsWithInstallments(filters?: { status?: ContractStatus
   return useQuery({
     queryKey: ['contracts-with-installments', filters],
     queryFn: async () => {
-      // Fetch contracts
-      let query = supabase
-        .from('contracts')
-        .select('*')
-        .order('contract_date', { ascending: false })
+      // Fetch contracts (1000건 제한을 넘지 않게 페이지마다 쿼리를 새로 만들어 전량 조회)
+      const contractRows = await fetchAllRows((from, to) => {
+        let query = supabase
+          .from('contracts')
+          .select('*')
+          .order('contract_date', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to)
+        if (filters?.status) query = query.eq('status', filters.status)
+        if (filters?.search) {
+          query = query.or(`contractor_name.ilike.%${filters.search}%,student_name.ilike.%${filters.search}%`)
+        }
+        return query
+      })
 
-      if (filters?.status) query = query.eq('status', filters.status)
-      if (filters?.search) {
-        query = query.or(`contractor_name.ilike.%${filters.search}%,student_name.ilike.%${filters.search}%`)
-      }
-
-      const { data: contractRows, error: cErr } = await query
-      if (cErr) throw cErr
-
-      const contracts = (contractRows || []).map((r: Record<string, unknown>) => mapContract(r))
+      const contracts = contractRows.map((r: Record<string, unknown>) => mapContract(r))
       if (contracts.length === 0) return []
 
-      // Fetch all installments for these contracts in one query
+      // Fetch all installments for these contracts (1000행 제한·URL 길이 제한을 넘지 않게 나눠서)
       const contractIds = contracts.map(c => c.id)
-      const { data: installmentRows, error: iErr } = await supabase
-        .from('payment_installments')
-        .select('*')
-        .in('contract_id', contractIds)
-        .order('installment_order', { ascending: true })
-      if (iErr) throw iErr
+      const installmentRows = await fetchAllRowsByIds(contractIds, (chunk, from, to) =>
+        supabase
+          .from('payment_installments')
+          .select('*')
+          .in('contract_id', chunk)
+          .order('installment_order', { ascending: true })
+          // installment_order 는 계약마다 중복되므로 고유키 보조 정렬로 페이지 경계를 고정한다.
+          .order('id', { ascending: true })
+          .range(from, to),
+      )
 
       // Group installments by contract_id
       const installmentMap = new Map<string, PaymentInstallment[]>()
-      for (const r of (installmentRows || []) as Record<string, unknown>[]) {
+      for (const r of installmentRows as Record<string, unknown>[]) {
         const cid = r.contract_id as string
         if (!installmentMap.has(cid)) installmentMap.set(cid, [])
         installmentMap.get(cid)!.push({
