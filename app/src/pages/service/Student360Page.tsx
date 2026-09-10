@@ -2295,7 +2295,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
       region: form.region || undefined,
       grade: form.grade || undefined,
       school: form.school || undefined,
-      assignedConsultant: form.assignedConsultant || undefined,
+      assignedConsultant: form.assignedConsultant,
       essayEditor: form.essayEditor || undefined,
       majors: form.majors || undefined,
       majorTrack: form.majorTrack || undefined,

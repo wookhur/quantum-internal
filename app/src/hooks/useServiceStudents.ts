@@ -264,7 +264,7 @@ export function useUpdateServiceStudent() {
       if (rest.region !== undefined) update.region = rest.region
       if (rest.grade !== undefined) update.grade = rest.grade
       if (rest.school !== undefined) update.school = rest.school
-      if (rest.assignedConsultant !== undefined) update.assigned_consultant = rest.assignedConsultant
+      if (rest.assignedConsultant !== undefined) update.assigned_consultant = rest.assignedConsultant || null
       if (rest.essayEditor !== undefined) update.essay_editor = rest.essayEditor
       if (rest.partners !== undefined) update.partners = rest.partners
       if (rest.majors !== undefined) update.majors = rest.majors
