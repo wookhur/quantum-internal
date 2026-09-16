@@ -43,6 +43,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     startDate: (row.start_date as string) || undefined,
     endDate: (row.end_date as string) || undefined,
     status: (row.status as string) || undefined,
+    scholarship: !!row.scholarship,
     paused: !!row.paused,
     pauseReason: (row.pause_reason as string) || undefined,
     pauseReturnDate: (row.pause_return_date as string) || undefined,
@@ -164,6 +165,7 @@ export function useCreateServiceStudent() {
       startDate?: string
       endDate?: string
       status?: string
+      scholarship?: boolean
       notes?: string
       acceptedUni?: string
       address?: string
@@ -196,6 +198,9 @@ export function useCreateServiceStudent() {
         start_date: s.startDate || null,
         end_date: s.endDate || null,
         status: s.status || 'active',
+        // 장학생일 때만 보낸다(기본값 false는 DB가 채움). 마이그레이션 전 배포에서도
+        // 일반 학생 등록은 계속 되도록 하기 위함.
+        ...(s.scholarship ? { scholarship: true } : {}),
         notes: s.notes,
         accepted_uni: s.acceptedUni,
         address: s.address,
@@ -241,6 +246,7 @@ export function useUpdateServiceStudent() {
       startDate?: string | null
       endDate?: string | null
       status?: string
+      scholarship?: boolean
       paused?: boolean
       pauseReason?: string
       pauseReturnDate?: string
@@ -281,6 +287,7 @@ export function useUpdateServiceStudent() {
       if (rest.startDate !== undefined) update.start_date = rest.startDate
       if (rest.endDate !== undefined) update.end_date = rest.endDate
       if (rest.status !== undefined) update.status = rest.status
+      if (rest.scholarship !== undefined) update.scholarship = rest.scholarship
       if (rest.paused !== undefined) update.paused = rest.paused
       if (rest.pauseReason !== undefined) update.pause_reason = rest.pauseReason || null
       if (rest.pauseReturnDate !== undefined) update.pause_return_date = rest.pauseReturnDate || null

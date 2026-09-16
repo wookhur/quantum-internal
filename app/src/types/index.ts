@@ -508,6 +508,9 @@ export interface ServiceStudent {
   startDate?: string
   endDate?: string
   status?: string
+  /** 장학생 — 서비스는 제공하지만 무료로 진행하는 학생.
+   *  계약관리에 계약 내역이 없는 것이 정상이므로, 누락으로 오해하지 않도록 표시한다. */
+  scholarship?: boolean
   paused?: boolean          // 휴면(여행·휴가 등 일시 부재) — 2회 미팅 요건·관리비 청구 제외
   pauseReason?: string
   pauseReturnDate?: string   // 복귀예정일(안내용)

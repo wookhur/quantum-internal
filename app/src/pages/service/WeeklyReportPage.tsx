@@ -80,9 +80,22 @@ export function WeeklyReportPage() {
     const serviceSet = new Set(serviceNames.map(norm))
     const contractSet = new Set(contractNames.map(norm))
     const onlyInContract = contractNames.filter(n => !serviceSet.has(norm(n)))
-    const onlyInService = serviceNames.filter(n => !contractSet.has(norm(n)))
-    return { count: inServiceContracts.length, onlyInContract, onlyInService }
-  }, [contracts, students])
+
+    // 장학생은 무료로 진행하므로 계약이 없는 것이 정상이다.
+    // '계약 없음' 명단에서 빼고 따로 세어, 매주 계약 누락으로 오해하지 않게 한다.
+    // (장학생이라도 계약이 실제로 있으면 아래 필터에 걸리지 않아 그대로 대조된다)
+    const scholarshipSet = new Set(students.filter(s => s.scholarship && s.name).map(s => norm(s.name)))
+    const missingContract = serviceNames.filter(n => !contractSet.has(norm(n)))
+    const onlyInService = missingContract.filter(n => !scholarshipSet.has(norm(n)))
+    const scholarshipNoContract = missingContract.filter(n => scholarshipSet.has(norm(n)))
+
+    // 합계 비교용: 계약 없이 진행 중인 '활성' 장학생 수. 이만큼은 학생 수가
+    // 계약 수보다 많은 것이 정상이므로 어긋남 판정에서 빼 준다.
+    const activeScholarshipNoContract = activeStudents
+      .filter(s => s.scholarship && s.name && !contractSet.has(norm(s.name))).length
+
+    return { count: inServiceContracts.length, onlyInContract, onlyInService, scholarshipNoContract, activeScholarshipNoContract }
+  }, [contracts, students, activeStudents])
   const inServiceContractCount = contractCheck.count
 
   const consultantPool = useConsultantPool()
@@ -323,11 +336,14 @@ export function WeeklyReportPage() {
                 <tr className="border-t-2 bg-gray-50 font-medium">
                   <td className="text-left p-2 pl-3">{t('weeklyReport.companyTotal')}</td>
                   {(() => {
-                    const mismatch = totals.students !== inServiceContractCount
+                    // 장학생은 계약이 없는 것이 정상이므로 그 수만큼 빼고 비교한다.
+                    const mismatch = totals.students - contractCheck.activeScholarshipNoContract !== inServiceContractCount
                     const memo = [
                       `계약관리 서비스진행중 학생 수: ${inServiceContractCount}명`,
+                      contractCheck.activeScholarshipNoContract ? `\n▸ 장학생 ${contractCheck.activeScholarshipNoContract}명은 무료라 계약이 없는 것이 정상 — 대조에서 제외함` : '',
                       contractCheck.onlyInContract.length ? `\n▸ 계약엔 있으나 Student360 없음 (${contractCheck.onlyInContract.length}): ${contractCheck.onlyInContract.join(', ')}` : '',
                       contractCheck.onlyInService.length ? `\n▸ Student360엔 있으나 서비스중 계약 없음 (${contractCheck.onlyInService.length}): ${contractCheck.onlyInService.join(', ')}` : '',
+                      contractCheck.scholarshipNoContract.length ? `\n▸ 장학생(무료·계약 없음이 정상) (${contractCheck.scholarshipNoContract.length}): ${contractCheck.scholarshipNoContract.join(', ')}` : '',
                     ].join('')
                     return (
                       <td className="p-2">

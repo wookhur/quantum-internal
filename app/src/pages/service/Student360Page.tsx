@@ -172,7 +172,7 @@ function ecSalesFinal(select: string, custom: string): string | undefined {
   return select === '직접입력' ? (custom.trim() || undefined) : select
 }
 
-const ESSAY_EDITORS = ['Danny Kim', 'Soomee Park', '한상범+양은영'] as const
+const ESSAY_EDITORS = ['Danny Kim', 'Soomee Park', '남연서', '한상범+양은영'] as const
 
 // KPI dot color legend, expressed as % of KPI_MAX so it always matches kpiDotColor().
 const KPI_LEGEND = [
@@ -295,6 +295,7 @@ export function Student360Page() {
   const [ecPartnerFilter, setEcPartnerFilter] = useState('all')
   const [showArchive, setShowArchive] = useState(false)
   const [pausedOnly, setPausedOnly] = useState(false)
+  const [scholarshipOnly, setScholarshipOnly] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(searchParams.get('student'))
 
   // Keep ?student= in the URL in sync so links from the KPI page (and back/forward) work.
@@ -395,6 +396,7 @@ export function Student360Page() {
     return students.filter(s => {
       if (mentorStudentIds && !mentorStudentIds.has(s.id)) return false
       if (pausedOnly && !s.paused) return false
+      if (scholarshipOnly && !s.scholarship) return false
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
       if (essayEditorFilter !== 'all' && (s.essayEditor || '') !== essayEditorFilter) return false
       if (gradeFilter !== 'all' && gradeBucket(s.grade) !== gradeFilter) return false
@@ -407,7 +409,7 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     })
-  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, ecPartnerFilter, ecPartnersByStudent, pausedOnly, mentorStudentIds])
+  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, ecPartnerFilter, ecPartnersByStudent, pausedOnly, scholarshipOnly, mentorStudentIds])
   const archiveCount = useMemo(() => baseFiltered.filter(s => isArchivedStatus(s.status)).length, [baseFiltered])
   const activeCount = baseFiltered.length - archiveCount
 
@@ -418,6 +420,7 @@ export function Student360Page() {
   }, [students])
 
   const pausedCount = useMemo(() => students.filter(s => s.paused && !isArchivedStatus(s.status)).length, [students])
+  const scholarshipCount = useMemo(() => students.filter(s => s.scholarship && !isArchivedStatus(s.status)).length, [students])
   const filtered = useMemo(() =>
     baseFiltered
       .filter(s => showArchive ? isArchivedStatus(s.status) : !isArchivedStatus(s.status))
@@ -553,6 +556,14 @@ export function Student360Page() {
             💤 {t('student360.onLeaveOnly')} ({pausedCount}){pausedOnly ? ' ✕' : ''}
           </button>
         )}
+        {!showArchive && scholarshipCount > 0 && (
+          <button
+            onClick={() => setScholarshipOnly(v => !v)}
+            className={`mb-2 w-full py-1.5 rounded-md border text-xs font-medium transition-colors ${scholarshipOnly ? 'bg-violet-500 border-violet-500 text-white' : 'text-violet-700 border-violet-200 bg-violet-50 hover:bg-violet-100'}`}
+          >
+            🎓 {t('student360.scholarshipOnly')} ({scholarshipCount}){scholarshipOnly ? ' ✕' : ''}
+          </button>
+        )}
         <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-muted-foreground">
           <span className="font-medium">KPI</span>
           {KPI_LEGEND.map(l => (
@@ -582,6 +593,9 @@ export function Student360Page() {
                   <span className="font-medium text-sm truncate">
                     {studentPickerLabel(s)}
                   </span>
+                  {s.scholarship && (
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0 bg-violet-50 text-violet-700 border-violet-200">🎓 {t('student360.scholarship')}</Badge>
+                  )}
                   {s.paused && (
                     <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0 bg-amber-50 text-amber-700 border-amber-200">💤 {t('student360.onLeave')}</Badge>
                   )}
@@ -759,6 +773,11 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
           {student.name}
           {student.koreanName && <span className="text-muted-foreground font-normal">· {student.koreanName}</span>}
           {student.status && <Badge variant="outline" className={isArchivedStatus(student.status) ? (normalizeStatus(student.status) === 'canceled' ? 'text-red-600 border-red-200' : 'text-gray-500 border-gray-300') : ''}>{statusLabelFor(t, student.status)}</Badge>}
+          {student.scholarship && (
+            <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-300">
+              🎓 {t('student360.scholarship')}
+            </Badge>
+          )}
           {student.paused && (
             <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
               💤 {t('student360.onLeave')}{student.pauseReturnDate ? ` · ${t('student360.returnExpected')} ${student.pauseReturnDate}` : ''}
@@ -808,7 +827,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
         <ConsultantField student={student} canEdit={canEdit} />
         <Field label={t('student360.essayEditor')} value={student.essayEditor} />
-        <Field label={t('student360.contractType')} value={linkedContract?.contractType ?? student.contractType} />
+        <Field label={t('student360.contractType')} value={linkedContract?.contractType ?? student.contractType ?? (student.scholarship ? `🎓 ${t('student360.scholarshipLabel')}` : undefined)} />
         <Field label={t('contracts.applicationCount')} value={(linkedContract?.applicationCount ?? student.applicationCount) != null ? `${linkedContract?.applicationCount ?? student.applicationCount}개` : undefined} />
         <Field label={t('student360.majorTrack')} value={[student.majorTrack ? MAJOR_TRACK_LABEL[student.majorTrack] : '', student.majorDetail].filter(Boolean).join(' · ') || undefined} />
         <Field label={t('student360.majors')} value={student.majors} />
@@ -827,6 +846,11 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
           <div className="col-span-2">
             <p className="text-xs text-muted-foreground mb-1">{t('student360.notes')}</p>
             <p className="whitespace-pre-wrap">{student.notes}</p>
+          </div>
+        )}
+        {student.scholarship && (
+          <div className="col-span-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800">
+            🎓 {t('student360.scholarshipBanner')}
           </div>
         )}
         {student.paused && (
@@ -2267,6 +2291,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
     startDate: student?.startDate || '',
     endDate: student?.endDate || '',
     status: student?.status || '',
+    scholarship: !!student?.scholarship,
     notes: student?.notes || '',
     acceptedUni: student?.acceptedUni || '',
     address: student?.address || '',
@@ -2309,6 +2334,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
       startDate: form.startDate || undefined,
       endDate: form.endDate || undefined,
       status: form.status || undefined,
+      scholarship: form.scholarship,
       notes: form.notes || undefined,
       acceptedUni: form.acceptedUni || undefined,
       address: form.address || undefined,
@@ -2399,6 +2425,14 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
           <LabeledInput label={t('student360.applicationCount')} value={form.applicationCount} onChange={v => set('applicationCount', v)} />
           <div className="col-span-2">
             <LabeledInput label={t('student360.additionalServices')} value={form.additionalServices} onChange={v => set('additionalServices', v)} />
+          </div>
+          {/* 장학생: 계약이 없는 것이 정상임을 표시 → 주간보고서 대조에서 '계약 누락'으로 잡히지 않는다 */}
+          <div className="col-span-2 rounded-lg border border-input px-3 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-xs font-medium">🎓 {t('student360.scholarshipLabel')}</Label>
+              <Switch checked={form.scholarship} onCheckedChange={v => setForm(f => ({ ...f, scholarship: v }))} />
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{t('student360.scholarshipDesc')}</p>
           </div>
           <div>
             <Label className="text-xs">{t('student360.status')}</Label>
