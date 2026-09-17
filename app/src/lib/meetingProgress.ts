@@ -5,6 +5,25 @@
 
 export const DEFAULT_ANNUAL_MEETING_TARGET = 24
 
+/**
+ * 미팅 횟수(진행분)에 포함되는 상태.
+ *
+ * 노쇼는 학생 사정으로 불발된 것이라 컨설턴트는 시간을 비워 두고 준비까지 마쳤다.
+ * 그래서 '진행한 것'으로 세고, 미팅 일지(리포트)도 요구하지 않는다.
+ * 취소·예약·일정변경은 포함하지 않는다.
+ */
+export const COMPLETED_MEETING_STATUSES = ['held', 'no_show'] as const
+
+/** 미팅 횟수에 포함되는 상태인가 (노쇼 포함). */
+export function isCompletedMeetingStatus(status?: string): boolean {
+  return (COMPLETED_MEETING_STATUSES as readonly string[]).includes(status || '')
+}
+
+/** 노쇼인가 — 화면에서 빨간색으로 구분하고, 리포트 요구에서 빼는 기준. */
+export function isNoShowStatus(status?: string): boolean {
+  return status === 'no_show'
+}
+
 /** 월 단위 가감 (말일 오버플로우는 이전 달 말일로 보정). */
 export function addMonths(base: string | Date, months: number): Date {
   const d = typeof base === 'string' ? new Date(base) : new Date(base.getTime())
@@ -32,10 +51,19 @@ export function contractYearOf(startISO: string | undefined, dateISO: string | u
 export interface MeetingYearCount {
   /** 계약 연차 (1-index) */
   year: number
-  /** 완료(held) 미팅 수 */
+  /** 진행분 미팅 수 (정상 진행 + 노쇼) */
   completed: number
+  /** 그중 노쇼 — 화면에서 빨간색으로 구분한다 */
+  noShow: number
   /** 목표를 넘겨 추가로 진행한 횟수 (목표 이하면 0) */
   extra: number
+}
+
+/** 연차 집계에 넘기는 미팅 한 건. */
+export interface CompletedMeetingEntry {
+  date: string
+  /** 노쇼 여부 (기본 false) */
+  noShow?: boolean
 }
 
 /**
@@ -48,11 +76,11 @@ export interface MeetingYearCount {
  * 현재 연차 집계는 기존 화면과 정확히 같은 기준이다(현재 연차에 속한 완료 미팅만).
  * 시작일이 비어 있으면 contractYearOf 가 항상 1을 주므로 전부 1년차로 잡힌다.
  *
- * @param heldDates 완료(held) 미팅의 날짜들. 상태 필터는 호출 쪽 책임이다.
+ * @param held 진행분 미팅들(정상 진행 + 노쇼). 상태 필터는 호출 쪽 책임이다.
  */
 export function heldByContractYear(
   startDate: string | undefined,
-  heldDates: readonly string[],
+  held: readonly CompletedMeetingEntry[],
   target: number,
   todayISO: string,
 ): {
@@ -64,16 +92,19 @@ export function heldByContractYear(
   future: number
 } {
   const currentYear = contractYearOf(startDate, todayISO)
-  const counts = new Map<number, number>()
+  const counts = new Map<number, { total: number; noShow: number }>()
   let future = 0
-  for (const d of heldDates) {
-    const y = contractYearOf(startDate, d)
+  for (const m of held) {
+    const y = contractYearOf(startDate, m.date)
     if (y > currentYear) { future++; continue }
-    counts.set(y, (counts.get(y) || 0) + 1)
+    const c = counts.get(y) || { total: 0, noShow: 0 }
+    c.total += 1
+    if (m.noShow) c.noShow += 1
+    counts.set(y, c)
   }
   const at = (year: number): MeetingYearCount => {
-    const completed = counts.get(year) || 0
-    return { year, completed, extra: Math.max(0, completed - target) }
+    const c = counts.get(year) || { total: 0, noShow: 0 }
+    return { year, completed: c.total, noShow: c.noShow, extra: Math.max(0, c.total - target) }
   }
   const past: MeetingYearCount[] = []
   for (let y = 1; y < currentYear; y++) past.push(at(y))

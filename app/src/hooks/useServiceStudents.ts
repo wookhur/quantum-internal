@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { COMPLETED_MEETING_STATUSES, isNoShowStatus } from '@/lib/meetingProgress'
 import type {
   ServiceStudent,
   ServiceMeeting,
@@ -367,20 +368,22 @@ export function useServiceMeetings(studentId?: string) {
 }
 
 /**
- * 학생 목록 카드용: 완료(held)된 미팅을 학생별로 집계한 Map.
+ * 학생 목록 카드용: 진행분 미팅을 학생별로 집계한 Map.
+ * 노쇼는 학생 사정으로 불발된 것이라 진행한 것으로 세되(COMPLETED_MEETING_STATUSES),
+ * 화면에서 빨간색으로 구분할 수 있게 noShow 표시를 함께 담는다.
  * 1000행 제한을 넘기기 위해 페이지네이션으로 전량 로드한다.
  */
 export function useHeldMeetingsByStudent() {
   return useQuery({
     queryKey: ['service_meetings_held_all'],
     queryFn: async () => {
-      const map = new Map<string, { date: string }[]>()
+      const map = new Map<string, { date: string; noShow: boolean }[]>()
       const pageSize = 1000
       for (let from = 0; ; from += pageSize) {
         const { data, error } = await supabase
           .from('service_meetings')
-          .select('student_id, meeting_date, created_at')
-          .eq('status', 'held')
+          .select('student_id, meeting_date, created_at, status')
+          .in('status', [...COMPLETED_MEETING_STATUSES])
           .order('created_at', { ascending: true })
           .range(from, from + pageSize - 1)
         if (error) throw error
@@ -389,7 +392,10 @@ export function useHeldMeetingsByStudent() {
           const sid = r.student_id as string
           if (!sid) continue
           const arr = map.get(sid) || []
-          arr.push({ date: (r.meeting_date as string) || (r.created_at as string) })
+          arr.push({
+            date: (r.meeting_date as string) || (r.created_at as string),
+            noShow: isNoShowStatus(r.status as string),
+          })
           map.set(sid, arr)
         }
         if (rows.length < pageSize) break

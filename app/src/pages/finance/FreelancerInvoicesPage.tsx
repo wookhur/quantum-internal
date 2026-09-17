@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
+import { isNoShowStatus } from '@/lib/meetingProgress'
 import { useMentors, useAllMentorAssignments, useAllMentorSessions, majorTierAmount, COACHING_MONTHLY } from '@/hooks/useMentors'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useAllEditorMeetings } from '@/hooks/useEditorMeetings'
@@ -1246,7 +1247,7 @@ function pairDetail(pair: [string, string]): string {
 }
 
 /** Per consultant NAME → active students with 관리비 청구 대상 (정확방식/소급).
- *  리포트완료(미취소) 미팅을 시간순 2개씩 짝지어, 각 짝의 '2번째 미팅이 있는 달'에 관리비 1개월치를 청구.
+ *  리포트완료(미취소) 미팅 + 노쇼를 시간순 2개씩 짝지어, 각 짝의 '2번째 미팅이 있는 달'에 관리비 1개월치를 청구.
  *  누적 계산이라 예: 7월 1회 + 8/2 1회 → 8월(2번째 미팅월)에 1개월치가 잡힘(소급). 짝은 달마다 1번만 청구됨. */
 function useConsultantBillable(month: string) {
   const consultantName = useConsultantName()
@@ -1259,7 +1260,10 @@ function useConsultantBillable(month: string) {
     // 학생별 리포트완료(미취소) 미팅일자 수집
     const datesByStudent = new Map<string, string[]>()
     for (const mt of meetings) {
-      if ((mt.reportStatus === 'submitted' || !!mt.reportUrl) && mt.status !== 'cancelled' && mt.meetingDate) {
+      // 노쇼는 학생 사정으로 불발된 것이라 컨설턴트는 시간을 비우고 준비까지 마쳤다.
+      // 미팅 일지를 요구하지 않고 그대로 청구 대상에 넣는다.
+      const counts = isNoShowStatus(mt.status) || mt.reportStatus === 'submitted' || !!mt.reportUrl
+      if (counts && mt.status !== 'cancelled' && mt.meetingDate) {
         const arr = datesByStudent.get(mt.studentId) || []
         arr.push(mt.meetingDate)
         datesByStudent.set(mt.studentId, arr)

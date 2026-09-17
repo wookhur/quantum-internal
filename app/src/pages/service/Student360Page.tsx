@@ -25,7 +25,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
-import { contractYearOf, heldByContractYear, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
+import { contractYearOf, heldByContractYear, isCompletedMeetingStatus, isNoShowStatus, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
 import {
   useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching,
   useMentorSessions, useAddMentorSession, useDeleteMentorSession, useAllMentorAssignments,
@@ -68,7 +68,7 @@ import {
   useStudentApplications, useUpsertStudentApplication, useDeleteStudentApplication,
   APPLICATION_STATUSES, APPLICATION_TYPES, type StudentApplication,
 } from '@/hooks/useStudentApplications'
-import type { Contract } from '@/types'
+import type { Contract, MeetingStatus } from '@/types'
 import {
   useAcademicSupport, useCreateAcademicSupport, useUpdateAcademicSupport, useDeleteAcademicSupport,
   type AcademicSupportItem,
@@ -172,6 +172,15 @@ function ecSalesFinal(select: string, custom: string): string | undefined {
   if (!select) return undefined
   return select === '직접입력' ? (custom.trim() || undefined) : select
 }
+
+/** 미팅 상태 드롭다운. 자주 쓰는 '진행 완료'와 '노쇼'를 위에 둔다. */
+const MEETING_STATUS_OPTIONS: { value: MeetingStatus; labelKey: string }[] = [
+  { value: 'held',        labelKey: 'serviceDash.meetingStatusHeld' },
+  { value: 'no_show',     labelKey: 'serviceDash.meetingStatusNoShow' },
+  { value: 'scheduled',   labelKey: 'serviceDash.meetingStatusScheduled' },
+  { value: 'cancelled',   labelKey: 'serviceDash.meetingStatusCancelled' },
+  { value: 'rescheduled', labelKey: 'serviceDash.meetingStatusRescheduled' },
+]
 
 const ESSAY_EDITORS = ['Danny Kim', 'Soomee Park', '남연서', '한상범+양은영'] as const
 
@@ -345,8 +354,8 @@ export function Student360Page() {
     const arr = heldByStudent?.get(s.id) || []
     // 계약연차가 넘어가면 카운트가 0부터 다시 시작하므로, 지난 연차 진행 수를
     // 함께 받아 카드 아래에 남긴다(특히 목표 초과분이 사라지지 않게).
-    const { currentYear, current, past } = heldByContractYear(s.startDate, arr.map(m => m.date), target, todayKST())
-    return { completed: current.completed, target, currentYear, past }
+    const { currentYear, current, past } = heldByContractYear(s.startDate, arr, target, todayKST())
+    return { completed: current.completed, noShow: current.noShow, target, currentYear, past }
   }
 
   // Consultants who actually have at least one student (for the filter dropdown).
@@ -644,7 +653,7 @@ export function Student360Page() {
                 {[s.school, s.grade].filter(Boolean).join(' · ') || '—'}
               </div>
               {(() => {
-                const { completed, target, currentYear, past } = meetingProgressFor(s)
+                const { completed, noShow, target, currentYear, past } = meetingProgressFor(s)
                 return (
                   <div className="mt-1.5">
                     <div className="flex items-center gap-1.5">
@@ -652,12 +661,15 @@ export function Student360Page() {
                       {currentYear > 1 && (
                         <span className="text-[10px] font-medium text-muted-foreground shrink-0">{currentYear}년차</span>
                       )}
-                      <MeetingProgressBar completed={completed} target={target} />
+                      <MeetingProgressBar completed={completed} target={target} noShow={noShow} />
                       <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{completed}/{target}</span>
+                      {noShow > 0 && (
+                        <span className="text-[10px] text-red-600 font-medium shrink-0">노쇼 {noShow}</span>
+                      )}
                     </div>
                     {past.length > 0 && (
                       <div className="mt-0.5 text-[10px] text-muted-foreground/80 truncate">
-                        {past.map(y => `${y.year}년차 ${y.completed}회${y.extra > 0 ? ` (+${y.extra})` : ''}`).join(' · ')}
+                        {past.map(y => `${y.year}년차 ${y.completed}회${y.noShow > 0 ? `(노쇼 ${y.noShow})` : ''}${y.extra > 0 ? ` (+${y.extra})` : ''}`).join(' · ')}
                       </div>
                     )}
                   </div>
@@ -706,7 +718,8 @@ export function Student360Page() {
 interface MeetingYearGroup {
   year: number
   meetings: ServiceMeeting[]   // 해당 연차의 모든 미팅(상태 무관), 최신순
-  completed: number            // 완료(held) 미팅 수
+  completed: number            // 진행분 미팅 수 (정상 진행 + 노쇼)
+  noShow: number               // 그중 노쇼
   target: number
   isCurrent: boolean
 }
@@ -734,7 +747,8 @@ function groupMeetingsByYear(
     years.push({
       year: y,
       meetings: ms,
-      completed: ms.filter(m => m.status === 'held').length,
+      completed: ms.filter(m => isCompletedMeetingStatus(m.status)).length,
+      noShow: ms.filter(m => isNoShowStatus(m.status)).length,
       target,
       isCurrent: y === currentYear,
     })
@@ -743,13 +757,23 @@ function groupMeetingsByYear(
 }
 
 /** 총 target칸의 초록색 가로 막대. 완료 1회당 한 칸씩 채워진다. */
-function MeetingProgressBar({ completed, target }: { completed: number; target: number }) {
+function MeetingProgressBar({ completed, target, noShow = 0 }: { completed: number; target: number; noShow?: number }) {
   const filled = Math.min(completed, target)
   const over = Math.max(0, completed - target)
+  // 노쇼는 진행분에 포함하되 빨간 알로 구분한다. 목표 칸이 모자라면(초과 진행)
+  // 보이는 칸 안에서 표시할 수 있는 만큼만 빨갛게 칠한다.
+  const noShowFilled = Math.min(noShow, filled)
+  const greenFilled = filled - noShowFilled
+  const label = noShow > 0 ? `${completed} / ${target} (노쇼 ${noShow})` : `${completed} / ${target}`
   return (
-    <div className="flex items-center gap-0.5 w-full" role="img" aria-label={`${completed} / ${target}`}>
+    <div className="flex items-center gap-0.5 w-full" role="img" aria-label={label} title={noShow > 0 ? `노쇼 ${noShow}회 포함` : undefined}>
       {Array.from({ length: target }).map((_, i) => (
-        <div key={i} className={`flex-1 h-2.5 rounded-sm transition-colors ${i < filled ? 'bg-emerald-500' : 'bg-muted'}`} />
+        <div
+          key={i}
+          className={`flex-1 h-2.5 rounded-sm transition-colors ${
+            i < greenFilled ? 'bg-emerald-500' : i < filled ? 'bg-red-500' : 'bg-muted'
+          }`}
+        />
       ))}
       {over > 0 && <span className="text-[10px] text-emerald-600 font-semibold ml-1 shrink-0">+{over}</span>}
     </div>
@@ -2915,7 +2939,7 @@ function MeetingsSection({ student, createdBy, authorName, canEdit }: {
                 </span>
                 <span className="flex items-center gap-2 flex-1 min-w-0 justify-end">
                   <span className="text-xs text-muted-foreground whitespace-nowrap">{yg.completed} / {yg.target}</span>
-                  <span className="hidden sm:block w-40 max-w-[45%]"><MeetingProgressBar completed={yg.completed} target={yg.target} /></span>
+                  <span className="hidden sm:block w-40 max-w-[45%]"><MeetingProgressBar completed={yg.completed} target={yg.target} noShow={yg.noShow} /></span>
                 </span>
               </button>
               {open && (
@@ -3038,6 +3062,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy, canEdit }: {
   const update = useUpdateServiceMeeting()
   const buildForm = () => ({
     meetingDate: meeting?.meetingDate || '',
+    status: (meeting?.status || 'held') as MeetingStatus,
     meetingType: meeting?.meetingType || '',
     meetingMode: meeting?.meetingMode || '',
     consultantId: meeting?.consultantId || '',
@@ -3060,6 +3085,7 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy, canEdit }: {
       : (form.reportStatus as ServiceReportStatus)
     const payload = {
       meetingDate: form.meetingDate || undefined,
+      status: form.status,
       meetingType: form.meetingType || undefined,
       meetingMode: form.meetingMode || undefined,
       consultantId: form.consultantId || undefined,
@@ -3102,6 +3128,19 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy, canEdit }: {
             </select>
           </div>
           {/* 2줄: 유형 / 진행 형식 */}
+          <div>
+            <Label className="text-xs">{t('student360.meetingStatus')}</Label>
+            <select
+              value={form.status}
+              onChange={e => setForm(f => ({ ...f, status: e.target.value as MeetingStatus }))}
+              className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+              {MEETING_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{t(o.labelKey)}</option>)}
+            </select>
+            {/* 노쇼는 학생 사정이라 미팅 일지 없이도 진행분으로 세고 정산에 포함된다 */}
+            {form.status === 'no_show' && (
+              <p className="text-[11px] text-red-600 mt-1 leading-snug">{t('student360.noShowHint')}</p>
+            )}
+          </div>
           <div>
             <Label className="text-xs">{t('student360.meetingType')}</Label>
             <Select value={form.meetingType} onValueChange={v => set('meetingType', v)}>
