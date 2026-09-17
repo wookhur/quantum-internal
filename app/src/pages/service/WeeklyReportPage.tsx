@@ -320,17 +320,19 @@ export function WeeklyReportPage() {
                   {(() => {
                     // 장학생은 계약이 없는 것이 정상이므로 그 수만큼 빼고 비교한다.
                     const rc = contractCheck
-                    // 장학생·중복계약은 설명 가능한 정상 차이 → 빨간 경고는 사람이 손봐야 할 때만.
+                    // 장학생·재계약은 설명 가능한 정상 차이 → 빨간 경고는 사람이 손봐야 할 때만.
                     const mismatch = rc.needsAttention
                     const memo = [
                       `계약관리 서비스진행중: ${rc.contractCount}건`,
-                      `Student360 활성: ${rc.studentCount}명 (이름 기준)`,
-                      rc.noContract.length ? `\n▸ 활성 학생인데 진행중 계약 없음 (${rc.noContract.length}명): ${rc.noContract.join(', ')}\n   → 계약이 끝났는데 학생 상태가 '진행중'으로 남았거나, 계약 등록 누락` : '',
+                      `Student360 활성: ${rc.studentCount}명`,
+                      `\n※ 계약관리는 '한글 | 영문', 360은 영문/한글 별칸이라 두 이름을 모두 대조함`,
+                      rc.noContract.length ? `\n▸ 활성인데 진행중 계약 없음 (${rc.noContract.length}명): ${rc.noContract.join(', ')}\n   → 계약 만료·종료됐는데 360 상태가 진행중, 또는 계약 등록 누락` : '',
                       rc.scholarshipNoContract.length ? `\n▸ 장학생 — 무료라 계약 없음이 정상 (${rc.scholarshipNoContract.length}명): ${rc.scholarshipNoContract.join(', ')}` : '',
                       rc.noActiveStudent.length ? `\n▸ 진행중 계약인데 활성 학생 없음 (${rc.noActiveStudent.length}건): ${rc.noActiveStudent.join(', ')}\n   → Student360 미등록이거나, 학생만 완료·취소 처리됨` : '',
                       rc.duplicated.length ? `\n▸ 같은 학생 진행중 계약 2건 이상 — 건수가 명수보다 많아짐 (+${rc.duplicateExtra}건): ${rc.duplicated.join(', ')}` : '',
-                      rc.sameNameStudents.length ? `\n▸ 활성 학생 동명이인 (${rc.sameNameStudents.length}): ${rc.sameNameStudents.join(', ')}\n   → 이름으로 계약을 맞추므로 매칭이 틀릴 수 있음` : '',
-                      `\n\n계산: 활성 ${rc.studentCount}명 − 계약없음 ${rc.noContract.length} − 장학생 ${rc.scholarshipNoContract.length} + 활성학생없는계약 ${rc.noActiveStudent.length}건 + 중복 ${rc.duplicateExtra}건 = ${rc.contractCount}건`,
+                      rc.ambiguous.length ? `\n▸ 이름이 여러 학생에 걸려 가릴 수 없음 (${rc.ambiguous.length}건): ${rc.ambiguous.join(', ')}` : '',
+                      rc.sameNameStudents.length ? `\n▸ 이름이 겹치는 활성 학생 (${rc.sameNameStudents.length}): ${rc.sameNameStudents.join(' | ')}` : '',
+                      `\n\n검산: 활성 ${rc.studentCount}명 − 계약없음 ${rc.noContract.length} − 장학생 ${rc.scholarshipNoContract.length} + 학생없는계약 ${rc.noActiveStudent.length}건 + 중복 ${rc.duplicateExtra}건 + 모호 ${rc.ambiguous.length}건 = ${rc.contractCount}건`,
                     ].filter(Boolean).join('')
                     return (
                       <td className="p-2">
