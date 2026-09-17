@@ -39,7 +39,7 @@ import {
   type EditorMeeting,
 } from '@/hooks/useEditorMeetings'
 import {
-  useServiceStudents, useCreateServiceStudent, useUpdateServiceStudent, useDeleteServiceStudent,
+  useServiceStudents, useCreateServiceStudent, useUpdateServiceStudent,
   useServiceMeetings, useCreateServiceMeeting, useUpdateServiceMeeting, useDeleteServiceMeeting,
   useServiceDiary, useCreateServiceDiary, useUpdateServiceDiary, useDeleteServiceDiary,
   useHeldMeetingsByStudent,
@@ -118,6 +118,7 @@ function formatRegularSchedule(schedule?: string): string | undefined {
 
 // ── EC Service constants ──
 import { EC_PARTNERS } from '@/lib/ecPartners'
+import { DeleteStudentDialog } from '@/components/DeleteStudentDialog'
 
 const EC_SALES_PRESETS = [
   'Aidan Lee', 'Cindy', 'Eva', 'Jisoo', 'Maryam', 'Sam', 'Wook', '김지현', '남연서',
@@ -752,8 +753,9 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
   canEdit: boolean
 }) {
   const t = useT()
-  const del = useDeleteServiceStudent()
   const update = useUpdateServiceStudent()
+  const consultantName = useConsultantName()
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [pauseOpen, setPauseOpen] = useState(false)
   const [pReturn, setPReturn] = useState('')
   const [pReason, setPReason] = useState('')
@@ -804,12 +806,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
             />
             <Button
               variant="outline" size="sm"
-              onClick={() => {
-                if (!canEdit) return
-                if (confirm(t('student360.confirmDeleteStudent'))) {
-                  del.mutate(student.id, { onSuccess: onDeleted })
-                }
-              }}
+              onClick={() => { if (canEdit) setDeleteOpen(true) }}
             >
               <Trash2 className="size-4" />
             </Button>
@@ -861,6 +858,15 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
           </div>
         )}
       </CardContent>
+
+      {/* 삭제: 완전 삭제 / 리드관리 보관 선택 */}
+      <DeleteStudentDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        student={student}
+        consultantName={student.assignedConsultant ? consultantName(student.assignedConsultant) : undefined}
+        onDeleted={onDeleted}
+      />
 
       {/* 휴면(On Leave) 처리 다이얼로그 */}
       <Dialog open={pauseOpen} onOpenChange={setPauseOpen}>
