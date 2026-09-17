@@ -25,7 +25,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
-import { contractYearOf, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
+import { contractYearOf, heldByContractYear, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
 import {
   useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching,
   useMentorSessions, useAddMentorSession, useDeleteMentorSession, useAllMentorAssignments,
@@ -343,9 +343,10 @@ export function Student360Page() {
   const meetingProgressFor = (s: ServiceStudent) => {
     const target = s.contractDetails?.annualMeetingTarget || DEFAULT_ANNUAL_MEETING_TARGET
     const arr = heldByStudent?.get(s.id) || []
-    const cy = contractYearOf(s.startDate, todayKST())
-    const completed = arr.filter(m => contractYearOf(s.startDate, m.date) === cy).length
-    return { completed, target }
+    // 계약연차가 넘어가면 카운트가 0부터 다시 시작하므로, 지난 연차 진행 수를
+    // 함께 받아 카드 아래에 남긴다(특히 목표 초과분이 사라지지 않게).
+    const { currentYear, current, past } = heldByContractYear(s.startDate, arr.map(m => m.date), target, todayKST())
+    return { completed: current.completed, target, currentYear, past }
   }
 
   // Consultants who actually have at least one student (for the filter dropdown).
@@ -643,11 +644,22 @@ export function Student360Page() {
                 {[s.school, s.grade].filter(Boolean).join(' · ') || '—'}
               </div>
               {(() => {
-                const { completed, target } = meetingProgressFor(s)
+                const { completed, target, currentYear, past } = meetingProgressFor(s)
                 return (
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <MeetingProgressBar completed={completed} target={target} />
-                    <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{completed}/{target}</span>
+                  <div className="mt-1.5">
+                    <div className="flex items-center gap-1.5">
+                      {/* 1년차뿐이면 기존 화면 그대로 — 연차 표기는 2년차부터 */}
+                      {currentYear > 1 && (
+                        <span className="text-[10px] font-medium text-muted-foreground shrink-0">{currentYear}년차</span>
+                      )}
+                      <MeetingProgressBar completed={completed} target={target} />
+                      <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{completed}/{target}</span>
+                    </div>
+                    {past.length > 0 && (
+                      <div className="mt-0.5 text-[10px] text-muted-foreground/80 truncate">
+                        {past.map(y => `${y.year}년차 ${y.completed}회${y.extra > 0 ? ` (+${y.extra})` : ''}`).join(' · ')}
+                      </div>
+                    )}
                   </div>
                 )
               })()}
