@@ -10,6 +10,7 @@ import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useAllServiceMeetings, useAllServiceDiaryInRange } from '@/hooks/useServiceDashboard'
 import { useServiceFollowupsForDiaries } from '@/hooks/useServiceFollowups'
 import { useContracts } from '@/hooks/useContracts'
+import { reconcileContracts } from '@/lib/contractReconcile'
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { studentPickerLabel } from '@/lib/studentDisplay'
 
@@ -71,32 +72,13 @@ export function WeeklyReportPage() {
   const { data: diaries = [] } = useAllServiceDiaryInRange(start, end)
   const { data: contracts = [] } = useContracts()
 
-  // 계약관리 '서비스 진행중' 계약 + Student360 학생 교차검증 (전사 합계 리마인드용)
-  const contractCheck = useMemo(() => {
-    const norm = (s?: string) => (s || '').replace(/\s+/g, '')
-    const inServiceContracts = contracts.filter(c => c.status === 'active' || c.status === 'expiring_soon')
-    const contractNames = inServiceContracts.map(c => c.studentName).filter(Boolean) as string[]
-    const serviceNames = students.map(s => s.name).filter(Boolean)
-    const serviceSet = new Set(serviceNames.map(norm))
-    const contractSet = new Set(contractNames.map(norm))
-    const onlyInContract = contractNames.filter(n => !serviceSet.has(norm(n)))
-
-    // 장학생은 무료로 진행하므로 계약이 없는 것이 정상이다.
-    // '계약 없음' 명단에서 빼고 따로 세어, 매주 계약 누락으로 오해하지 않게 한다.
-    // (장학생이라도 계약이 실제로 있으면 아래 필터에 걸리지 않아 그대로 대조된다)
-    const scholarshipSet = new Set(students.filter(s => s.scholarship && s.name).map(s => norm(s.name)))
-    const missingContract = serviceNames.filter(n => !contractSet.has(norm(n)))
-    const onlyInService = missingContract.filter(n => !scholarshipSet.has(norm(n)))
-    const scholarshipNoContract = missingContract.filter(n => scholarshipSet.has(norm(n)))
-
-    // 합계 비교용: 계약 없이 진행 중인 '활성' 장학생 수. 이만큼은 학생 수가
-    // 계약 수보다 많은 것이 정상이므로 어긋남 판정에서 빼 준다.
-    const activeScholarshipNoContract = activeStudents
-      .filter(s => s.scholarship && s.name && !contractSet.has(norm(s.name))).length
-
-    return { count: inServiceContracts.length, onlyInContract, onlyInService, scholarshipNoContract, activeScholarshipNoContract }
-  }, [contracts, students, activeStudents])
-  const inServiceContractCount = contractCheck.count
+  // 계약관리 '서비스 진행중'(건수) ↔ Student360 '활성'(명수) 대조.
+  // 차이를 항목별로 분해해 어디서 몇 명/몇 건이 벌어졌는지 그대로 보여준다.
+  const contractCheck = useMemo(
+    () => reconcileContracts(activeStudents, contracts),
+    [activeStudents, contracts],
+  )
+  const inServiceContractCount = contractCheck.contractCount
 
   const consultantPool = useConsultantPool()
   const consultantName = useConsultantName()
@@ -337,14 +319,19 @@ export function WeeklyReportPage() {
                   <td className="text-left p-2 pl-3">{t('weeklyReport.companyTotal')}</td>
                   {(() => {
                     // 장학생은 계약이 없는 것이 정상이므로 그 수만큼 빼고 비교한다.
-                    const mismatch = totals.students - contractCheck.activeScholarshipNoContract !== inServiceContractCount
+                    const rc = contractCheck
+                    // 장학생·중복계약은 설명 가능한 정상 차이 → 빨간 경고는 사람이 손봐야 할 때만.
+                    const mismatch = rc.needsAttention
                     const memo = [
-                      `계약관리 서비스진행중 학생 수: ${inServiceContractCount}명`,
-                      contractCheck.activeScholarshipNoContract ? `\n▸ 장학생 ${contractCheck.activeScholarshipNoContract}명은 무료라 계약이 없는 것이 정상 — 대조에서 제외함` : '',
-                      contractCheck.onlyInContract.length ? `\n▸ 계약엔 있으나 Student360 없음 (${contractCheck.onlyInContract.length}): ${contractCheck.onlyInContract.join(', ')}` : '',
-                      contractCheck.onlyInService.length ? `\n▸ Student360엔 있으나 서비스중 계약 없음 (${contractCheck.onlyInService.length}): ${contractCheck.onlyInService.join(', ')}` : '',
-                      contractCheck.scholarshipNoContract.length ? `\n▸ 장학생(무료·계약 없음이 정상) (${contractCheck.scholarshipNoContract.length}): ${contractCheck.scholarshipNoContract.join(', ')}` : '',
-                    ].join('')
+                      `계약관리 서비스진행중: ${rc.contractCount}건`,
+                      `Student360 활성: ${rc.studentCount}명 (이름 기준)`,
+                      rc.noContract.length ? `\n▸ 활성 학생인데 진행중 계약 없음 (${rc.noContract.length}명): ${rc.noContract.join(', ')}\n   → 계약이 끝났는데 학생 상태가 '진행중'으로 남았거나, 계약 등록 누락` : '',
+                      rc.scholarshipNoContract.length ? `\n▸ 장학생 — 무료라 계약 없음이 정상 (${rc.scholarshipNoContract.length}명): ${rc.scholarshipNoContract.join(', ')}` : '',
+                      rc.noActiveStudent.length ? `\n▸ 진행중 계약인데 활성 학생 없음 (${rc.noActiveStudent.length}건): ${rc.noActiveStudent.join(', ')}\n   → Student360 미등록이거나, 학생만 완료·취소 처리됨` : '',
+                      rc.duplicated.length ? `\n▸ 같은 학생 진행중 계약 2건 이상 — 건수가 명수보다 많아짐 (+${rc.duplicateExtra}건): ${rc.duplicated.join(', ')}` : '',
+                      rc.sameNameStudents.length ? `\n▸ 활성 학생 동명이인 (${rc.sameNameStudents.length}): ${rc.sameNameStudents.join(', ')}\n   → 이름으로 계약을 맞추므로 매칭이 틀릴 수 있음` : '',
+                      `\n\n계산: 활성 ${rc.studentCount}명 − 계약없음 ${rc.noContract.length} − 장학생 ${rc.scholarshipNoContract.length} + 활성학생없는계약 ${rc.noActiveStudent.length}건 + 중복 ${rc.duplicateExtra}건 = ${rc.contractCount}건`,
+                    ].filter(Boolean).join('')
                     return (
                       <td className="p-2">
                         <span className="cursor-pointer hover:underline hover:text-primary"
