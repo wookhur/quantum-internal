@@ -4,22 +4,48 @@
 -- 서비스를 취소한 고객이 같은 값으로 섞인다. 뒤쪽은 환불·정산 이력이 얽혀
 -- 있어 따로 봐야 한다.
 --
--- ── 1. pipeline_stage 를 TEXT 로 ────────────────────────────────────
--- contracts.status 때와 같은 방식이다(migration-contract-status-text.sql).
--- ALTER TYPE ... ADD VALUE 는 트랜잭션 처리에 따라 실패할 수 있고, 무엇보다
--- 앞으로 단계를 늘릴 때마다 SQL 을 또 돌려야 한다. TEXT 로 바꿔 두면 이후
--- 단계 추가는 코드 수정만으로 끝난다.
--- 기존 값은 그대로 보존되며, 여러 번 실행해도 안전하다.
--- (이미 TEXT 라면 아래 구문들은 사실상 아무 것도 바꾸지 않는다)
+-- ── 1. pipeline_stage enum 에 값 추가 ────────────────────────────────
+-- 칸 타입을 TEXT 로 바꾸는 방법도 있으나(contracts.status 전례), leads.pipeline_stage
+-- 는 lead_activity_summary 뷰가 참조하고 있어 타입 변경이 거부된다.
+--   ERROR 0A000: cannot alter type of a column used by a view or rule
+-- 뷰를 지웠다 되살리면 뷰에 걸린 권한(GRANT)까지 다시 맞춰야 하고, 저장소에
+-- 없는 뷰가 라이브에 더 있을 수 있어 위험하다. enum 에 값만 더하면 칸 타입이
+-- 그대로라 뷰를 전혀 건드리지 않는다.
+--
+-- 칸이 이미 TEXT 로 바뀐 환경이면 아무 것도 하지 않는다. 여러 번 실행해도 안전하다.
 
-ALTER TABLE public.leads ALTER COLUMN pipeline_stage DROP DEFAULT;
-ALTER TABLE public.leads ALTER COLUMN pipeline_stage TYPE text USING pipeline_stage::text;
-ALTER TABLE public.leads ALTER COLUMN pipeline_stage SET DEFAULT 'new_lead';
+DO $mig$
+DECLARE
+  v_type text;
+BEGIN
+  SELECT a.atttypid::regtype::text INTO v_type
+    FROM pg_attribute a
+   WHERE a.attrelid = 'public.leads'::regclass
+     AND a.attname = 'pipeline_stage'
+     AND NOT a.attisdropped;
+
+  IF v_type IS NULL THEN
+    RAISE EXCEPTION 'leads.pipeline_stage 칸을 찾을 수 없습니다.';
+  ELSIF v_type = 'text' THEN
+    RAISE NOTICE 'pipeline_stage 가 이미 TEXT 입니다 — enum 추가 불필요.';
+  ELSIF EXISTS (
+    SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+     WHERE t.typname = v_type AND e.enumlabel = 'service_cancelled'
+  ) THEN
+    RAISE NOTICE 'service_cancelled 가 이미 있습니다 — 건너뜀.';
+  ELSE
+    EXECUTE format('ALTER TYPE %s ADD VALUE %L', v_type, 'service_cancelled');
+    RAISE NOTICE '% 에 service_cancelled 를 추가했습니다.', v_type;
+  END IF;
+END
+$mig$;
 
 -- ── 2. 중복 병합 시 단계 순위에 '서비스 취소' 반영 ──────────────────
 -- merge_leads 는 두 리드 중 '더 진행된' 단계를 남긴다. 순위표에 없는 값은
 -- 0점이 되어, 서비스 취소 리드를 병합하면 신규 리드로 되돌아가 버린다.
 -- 아래는 기존 함수와 동일하고 순위표 한 줄만 추가한 것이다.
+-- (순위표의 값은 enum 이 아니라 text 로 비교하므로, 위에서 방금 추가한
+--  값을 같은 트랜잭션에서 써도 문제가 없다)
 
 CREATE OR REPLACE FUNCTION public.merge_leads(p_survivor_id uuid, p_duplicate_id uuid)
 RETURNS uuid
