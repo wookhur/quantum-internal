@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { isNoShowStatus } from '@/lib/meetingProgress'
 
 // ─── Per-student management score ───
 export interface StudentKpi {
@@ -66,7 +67,7 @@ async function fetchAllKpi(): Promise<KpiData> {
     // ⑤ 다음 미팅 일정: 최근 30일 미팅 리포트(service_meetings)에 next_meeting_date 가 적혔는지
     supabase
       .from('service_meetings')
-      .select('id, consultant_id, student_id, meeting_date, prep_url, report_url, next_meeting_date')
+      .select('id, consultant_id, student_id, meeting_date, prep_url, report_url, next_meeting_date, status')
       .gte('meeting_date', sinceIso),
   ])
   if (stRes.error) throw stRes.error
@@ -100,7 +101,7 @@ async function fetchAllKpi(): Promise<KpiData> {
   if (mtRes.error) {
     const fb = await supabase
       .from('service_meetings')
-      .select('id, consultant_id, student_id, meeting_date, prep_url, report_url')
+      .select('id, consultant_id, student_id, meeting_date, prep_url, report_url, status')
       .gte('meeting_date', sinceIso)
     if (fb.error) throw fb.error
     meetingRows = (fb.data || []).map(r => ({ ...(r as Record<string, unknown>), next_meeting_date: null }))
@@ -114,6 +115,7 @@ async function fetchAllKpi(): Promise<KpiData> {
     prep_url: string | null
     report_url: string | null
     next_meeting_date: string | null
+    status: string | null
   }
 
   // ── 미팅 횟수: 캘린더 월 기준 '월 2회'. 월초 며칠은 유예(학기초·월초 불이익 방지).
@@ -155,9 +157,15 @@ async function fetchAllKpi(): Promise<KpiData> {
       : meetingsThisMonth >= 1 ? 2                     // 일부 진행
       : 0                                              // 이번 달 0회 & 기대 시점 지남
 
-    const summaryHave = ms.filter(m => !!m.report_url).length
+    // 노쇼는 학생 사정이라 미팅 일지를 요구하지 않는다 → 리포트 점수 대상에서 제외.
+    // 분자만 빼면 분모가 남아 점수가 깎이므로 분모에서도 뺀다.
+    const msForReport = ms.filter(m => !isNoShowStatus(m.status || undefined))
+    const summaryHave = msForReport.filter(m => !!m.report_url).length
     const prepScore = ms.length ? (ms.filter(m => !!m.prep_url).length / ms.length) * 1 : 0
-    const summaryScore = ms.length ? (summaryHave / ms.length) * 2 : 0
+    const summaryScore = msForReport.length
+      ? (summaryHave / msForReport.length) * 2
+      // 미팅이 전부 노쇼면 요구된 일지가 없으므로 만점. 미팅 자체가 없으면 기존대로 0.
+      : (ms.length ? 2 : 0)
 
     const cats = reportsByStudent[s.id] || new Set<string>()
     const present = REQUIRED_REPORT_CATEGORIES.reduce((n, c) => n + (cats.has(c) ? 1 : 0), 0)
@@ -177,7 +185,7 @@ async function fetchAllKpi(): Promise<KpiData> {
     byStudent[s.id] = {
       meetings30d, meetingsScore, prepScore, summaryScore, reportsScore, followupScore, score,
       meetingsThisMonth, expectedMeetings: expectedByNow,
-      summaryHave, summaryTotal: ms.length,
+      summaryHave, summaryTotal: msForReport.length,
       reportsPresent: present, reportsTotal: REQUIRED_REPORT_CATEGORIES.length, reportsMissing,
       followupHave, followupTotal: ms.length,
     }
