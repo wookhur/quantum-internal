@@ -45,6 +45,7 @@ import {
   Tag,
   FolderArchive,
   CalendarClock,
+  Star,
   type LucideIcon,
 } from 'lucide-react'
 import { useLocation, Link } from 'react-router-dom'
@@ -58,6 +59,9 @@ export interface NavItemDef {
   labelKey: TranslationKeys
   to: string
   icon: LucideIcon
+  /** admin·c_level 에게만 노출. 민감정보 화면(예: 만족도 설문 응답)에 쓴다.
+   *  실제 차단은 테이블 RLS 가 하고, 이건 메뉴를 감추는 용도다. */
+  adminOnly?: boolean
 }
 
 /** Each nav section maps to a feature module for access control */
@@ -105,6 +109,7 @@ export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; i
       { labelKey: 'nav.serviceDashboard', to: '/service/dashboard', icon: LayoutDashboard },
       { labelKey: 'nav.student360', to: '/service/student-360', icon: UserSearch },
       { labelKey: 'nav.weeklyReport', to: '/service/weekly-report', icon: FileText },
+      { labelKey: 'nav.satisfaction', to: '/service/satisfaction', icon: Star, adminOnly: true },
     ],
   },
   {
@@ -233,6 +238,8 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings?: () => void }) 
                   if (hiddenBoards.has(item.to)) return null // 전사 숨김
                   // 재무 대시보드는 account(재무) 권한자만 노출 (admin이라도 account 없으면 숨김)
                   if (item.to === '/finance/dashboard' && !canAccessAccount(user)) return null
+                  // 민감 화면은 admin·c_level 만 (데이터 자체는 RLS 로 막힘)
+                  if (item.adminOnly && !(user?.role === 'admin' || user?.role === 'c_level')) return null
                   const active = isActive(item.to)
                   const Icon = item.icon
                   const hasAccess = enabledRoutes.includes(item.to)
