@@ -311,7 +311,7 @@ function LeadsTableView() {
   // -- Active leads count (not contracted/lost/rejected)
   const activeLeadCount = useMemo(() => {
     if (!stats) return 0
-    const inactiveStages: PipelineStage[] = ['contracted', 'lost', 'rejected']
+    const inactiveStages: PipelineStage[] = ['contracted', 'service_cancelled', 'lost', 'rejected']
     let count = 0
     for (const s of PIPELINE_STAGES) {
       if (!inactiveStages.includes(s.key)) {

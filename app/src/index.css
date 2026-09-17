@@ -55,6 +55,7 @@
   --color-stage-no-response: #C4C4C4;
   --color-stage-rejected: #E2445C;
   --color-stage-lost: #C4C4C4;
+  --color-stage-service-cancelled: #C4462D;
 
   /* Legacy stage aliases for backward compatibility */
   --color-stage-new: #FDAB3D;

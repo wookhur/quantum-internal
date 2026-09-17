@@ -349,6 +349,9 @@ const CONSULT_OR_BEYOND: PipelineStage[] = [
   'third_consultation',
   'contract_review',
   'contracted',
+  // 계약 후 서비스를 취소했어도 '상담 이상'은 실제로 진행된 사실이다.
+  // 빼면 취소가 생길 때마다 지난 세미나 전환 실적까지 줄어든다.
+  'service_cancelled',
 ]
 
 /** Positive contact results — the person actually responded. */
