@@ -8,18 +8,19 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { CalendarDays, Clock, MapPin, Users, Plus, Trash2, Pencil, MessageSquare, Send, Check, X, Paperclip, ArrowRightCircle, ClipboardCheck } from 'lucide-react'
+import { CalendarDays, Clock, MapPin, Users, Plus, Trash2, Pencil, MessageSquare, Send, Check, X, Paperclip, ArrowRightCircle, ClipboardCheck, ChevronUp, ChevronDown } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useCreateTask } from '@/hooks/useTasks'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import {
   useMeetingAgendas, useCreateMeeting, useUpdateMeeting, useDeleteMeeting, useSetAttendeeResponse,
-  useMeetingItems, useCreateItem, useUpdateItem, useDeleteItem,
+  useMeetingItems, useCreateItem, useUpdateItem, useDeleteItem, useReorderItems,
   useMeetingComments, useCreateComment, useDeleteComment,
   useMeetingFiles, useUploadMeetingFile, useDeleteMeetingFile,
   type MeetingAgenda, type ItemStatus, type MeetingStatus, type AttendeeResponse,
 } from '@/hooks/useMeetingAgendas'
+import { reorderPositions } from '@/lib/agendaOrder'
 
 const MEETING_STATUS: Record<MeetingStatus, { label: string; cls: string }> = {
   scheduled: { label: '예정', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -282,6 +283,16 @@ function AgendaItems({ meeting, profiles, profileName, userId, userName, onSelec
   const createItem = useCreateItem()
   const updateItem = useUpdateItem()
   const deleteItem = useDeleteItem()
+  const reorderItems = useReorderItems()
+  // 안건 순서 조정 — 위/아래 한 칸 이동. 오래된 안건은 position 이 모두 0이라
+  // 화면 순서 기준으로 0..n-1 을 다시 매겨 저장한다.
+  const moveItem = (index: number, dir: -1 | 1) => {
+    const updates = reorderPositions(items, index, dir)
+    if (!updates.length) return
+    reorderItems.mutate({ meetingId, updates }, {
+      onError: (e: unknown) => alert(`안건 순서를 저장하지 못했습니다: ${(e as Error).message}`),
+    })
+  }
   // 안건 내용 인라인 수정 (오타·문구 다듬기를 위해 지우고 다시 쓰지 않아도 되게)
   const [editingId, setEditingId] = useState('')
   const [editText, setEditText] = useState('')
@@ -397,6 +408,23 @@ function AgendaItems({ meeting, profiles, profileName, userId, userName, onSelec
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {/* 순서 조정 */}
+                  <div className="flex flex-col">
+                    <button
+                      type="button"
+                      title="위로"
+                      disabled={idx === 0 || reorderItems.isPending}
+                      onClick={() => moveItem(idx, -1)}
+                      className="h-3.5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    ><ChevronUp className="size-3.5" /></button>
+                    <button
+                      type="button"
+                      title="아래로"
+                      disabled={idx === items.length - 1 || reorderItems.isPending}
+                      onClick={() => moveItem(idx, 1)}
+                      className="h-3.5 w-5 flex items-center justify-center rounded text-muted-foreground hover:text-primary hover:bg-muted disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    ><ChevronDown className="size-3.5" /></button>
+                  </div>
                   {editingId !== it.id && (
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary"
                       title="안건 수정" onClick={() => startEdit(it.id, it.content)}>

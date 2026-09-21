@@ -233,6 +233,20 @@ export function useUpdateItem() {
   })
 }
 
+/** 안건 순서 저장 — 여러 행의 position 을 한 번에 갱신한다(안건 수는 많아야 수십 건). */
+export function useReorderItems() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (v: { meetingId: string; updates: { id: string; position: number }[] }) => {
+      for (const u of v.updates) {
+        const { error } = await supabase.from('meeting_agenda_items').update({ position: u.position }).eq('id', u.id)
+        if (error) throw error
+      }
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['meeting_agenda_items', v.meetingId] }),
+  })
+}
+
 export function useDeleteItem() {
   const qc = useQueryClient()
   return useMutation({
