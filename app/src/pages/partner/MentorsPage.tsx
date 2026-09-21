@@ -70,7 +70,7 @@ export function MentorsPage() {
       {/* ── 전공별 멘토 ── */}
       <MentorTable
         title="전공별 멘토 관리"
-        desc="회당 지급 · 등급별 단가 (대학생 5만 · 5년이하 7만 · 5년이상 10만)"
+        desc="회당 지급 · 등급별 단가 (대학생 5만 · 5년이하 7만 · 5년이상 10만 · 전문코치 10만)"
         icon={<GraduationCap className="size-5 text-indigo-600" />}
         mentors={major}
         isMajor

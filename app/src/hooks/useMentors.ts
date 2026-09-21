@@ -4,11 +4,13 @@ import { supabase } from '@/lib/supabase'
 // 멘토 유형: 학습코칭(월 지급) | 전공별(회당 지급)
 export type MentorType = 'coaching' | 'major'
 // 전공별멘토 등급 → 회당 단가
-export type MajorTier = 'college' | 'expert_lt5' | 'expert_gte5'
+export type MajorTier = 'college' | 'expert_lt5' | 'expert_gte5' | 'pro_coach'
 export const MAJOR_TIERS: { key: MajorTier; label: string; amount: number }[] = [
   { key: 'college',     label: '대학생',        amount: 50000 },
   { key: 'expert_lt5',  label: '5년이하 전문가', amount: 70000 },
   { key: 'expert_gte5', label: '5년이상 전문가', amount: 100000 },
+  // 외부 전문코치(예: 이준형 코치). 단가는 5년이상 전문가와 같지만 성격이 달라 따로 둔다.
+  { key: 'pro_coach',   label: '전문코치',      amount: 100000 },
 ]
 export const majorTierAmount = (tier?: string | null): number =>
   MAJOR_TIERS.find(t => t.key === tier)?.amount ?? 0

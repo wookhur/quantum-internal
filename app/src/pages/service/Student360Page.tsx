@@ -2719,7 +2719,7 @@ function MajorMentorBlock({ studentId, createdBy, items, pool, mentorById, showA
               <div className="flex items-center gap-2 text-sm font-medium flex-wrap">
                 <span>{mentorFullName(m)}</span>
                 {m?.tier && <Badge variant="outline" className="text-indigo-700 border-indigo-200 bg-indigo-50">{majorTierLabel(m.tier)} · {wonKR(majorTierAmount(m.tier))}/회</Badge>}
-                {c.startDate && <Badge variant="outline">시작 {c.startDate}</Badge>}
+                {c.startDate && <Badge variant="outline">코칭일 {c.startDate}</Badge>}
               </div>
               {showAdd && (
                 <Button size="sm" variant="ghost" onClick={() => { if (confirm('삭제하시겠습니까? (세션 기록도 함께 삭제됩니다)')) del.mutate({ id: c.id, studentId }) }}><Trash2 className="size-3.5" /></Button>
@@ -2743,7 +2743,7 @@ function MajorMentorBlock({ studentId, createdBy, items, pool, mentorById, showA
               </select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">시작일 (선택)</Label>
+              <Label className="text-xs">코칭일 (선택)</Label>
               <Input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} className="h-9" />
             </div>
           </div>
