@@ -206,7 +206,12 @@ function MentorDialog({ mentor, defaultType, canEdit, onClose }: { mentor: Mento
   })
   const set = (k: keyof typeof f, v: string) => setF(p => ({ ...p, [k]: v }))
   const isMajor = f.type === 'major'
-  const canSave = canEdit && (f.koreanName.trim() || f.englishName.trim()) && (!isMajor || !!f.tier) && !upsert.isPending
+  // 저장이 막힌 이유. 버튼만 비활성이면 왜 안 눌리는지 알 수 없어 등록을 놓친다.
+  const blockedReason = !canEdit ? '이 화면을 수정할 권한이 없습니다.'
+    : !(f.koreanName.trim() || f.englishName.trim()) ? '한글명 또는 영문명을 입력하세요.'
+    : (isMajor && !f.tier) ? '등급을 선택하세요. (등급에 따라 회당 단가가 정해집니다)'
+    : ''
+  const canSave = !blockedReason && !upsert.isPending
 
   const handleSave = () => {
     if (!canSave) return
@@ -285,6 +290,11 @@ function MentorDialog({ mentor, defaultType, canEdit, onClose }: { mentor: Mento
             <Textarea value={f.notes} onChange={e => set('notes', e.target.value)} rows={2} placeholder="배치 코멘트 등" />
           </div>
         </div>
+        {blockedReason && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+            {blockedReason}
+          </p>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={upsert.isPending}>취소</Button>
           <Button onClick={handleSave} disabled={!canSave}>
