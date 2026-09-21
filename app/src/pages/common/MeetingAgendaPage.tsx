@@ -282,6 +282,16 @@ function AgendaItems({ meeting, profiles, profileName, userId, userName, onSelec
   const createItem = useCreateItem()
   const updateItem = useUpdateItem()
   const deleteItem = useDeleteItem()
+  // 안건 내용 인라인 수정 (오타·문구 다듬기를 위해 지우고 다시 쓰지 않아도 되게)
+  const [editingId, setEditingId] = useState('')
+  const [editText, setEditText] = useState('')
+  const startEdit = (id: string, content: string) => { setEditingId(id); setEditText(content) }
+  const cancelEdit = () => { setEditingId(''); setEditText('') }
+  const saveEdit = (id: string) => {
+    const text = editText.trim()
+    if (!text) return                      // 빈 내용으로 덮어쓰지 않는다
+    updateItem.mutate({ id, meetingId, content: text }, { onSuccess: cancelEdit })
+  }
   const createMeeting = useCreateMeeting()
   const createTask = useCreateTask()
   const [newContent, setNewContent] = useState('')
@@ -352,9 +362,47 @@ function AgendaItems({ meeting, profiles, profileName, userId, userName, onSelec
                     title="완료 체크"
                   >{it.status === 'done' && <Check className="size-3" />}</button>
                   <span className="text-xs text-muted-foreground mt-0.5 shrink-0">{idx + 1}.</span>
-                  <span className={`text-sm whitespace-pre-wrap ${it.status === 'done' || it.status === 'cancelled' ? 'line-through text-muted-foreground' : ''}`}>{it.content}</span>
+                  {editingId === it.id ? (
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <Textarea
+                        value={editText}
+                        onChange={e => setEditText(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                          // 줄바꿈은 Shift+Enter. 그냥 Enter 는 저장(추가 입력칸과 같은 방식).
+                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(it.id) }
+                        }}
+                        rows={2}
+                        autoFocus
+                        className="text-sm"
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <Button size="sm" className="h-6 text-[11px] px-2" disabled={!editText.trim() || updateItem.isPending}
+                          onClick={() => saveEdit(it.id)}>
+                          <Check className="size-3 mr-1" />저장
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2" onClick={cancelEdit}>취소</Button>
+                        <span className="text-[10px] text-muted-foreground">Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => startEdit(it.id, it.content)}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit(it.id, it.content) } }}
+                      title="클릭하면 수정"
+                      className={`text-sm whitespace-pre-wrap cursor-text rounded px-0.5 -mx-0.5 hover:bg-muted/60 ${it.status === 'done' || it.status === 'cancelled' ? 'line-through text-muted-foreground' : ''}`}
+                    >{it.content}</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {editingId !== it.id && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary"
+                      title="안건 수정" onClick={() => startEdit(it.id, it.content)}>
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  )}
                   <Select value={it.status} onValueChange={(v) => v && changeStatus(it, v as ItemStatus)}>
                     <SelectTrigger className={`h-6 w-[72px] text-[11px] ${ITEM_STATUS[it.status].cls}`}><span>{ITEM_STATUS[it.status].label}</span></SelectTrigger>
                     <SelectContent>
