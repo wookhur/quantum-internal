@@ -19,7 +19,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { isNoShowStatus } from '@/lib/meetingProgress'
-import { useMentors, useAllMentorAssignments, useAllMentorSessions, majorTierAmount, COACHING_MONTHLY } from '@/hooks/useMentors'
+import { useMentors, useAllMentorAssignments, useAllMentorSessions, majorTierAmount, majorTierLabel, COACHING_MONTHLY } from '@/hooks/useMentors'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useAllEditorMeetings } from '@/hooks/useEditorMeetings'
 import { useConsultantName, canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
@@ -1437,7 +1437,8 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       if ((sess.sessionDate || '').slice(0, 7) !== month) continue
       const s = studentsById.get((sess.studentId || asg?.studentId) || '')
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
-      add(mt.koreanName || mt.englishName, { label: `${who} · 전공별멘토 (${sess.sessionDate})`, amount: majorTierAmount(mt.tier) })
+      // 등급마다 단가가 다르므로 인보이스에도 등급명을 적는다('전공별멘토' 하나로는 구분이 안 됨)
+      add(mt.koreanName || mt.englishName, { label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})`, amount: majorTierAmount(mt.tier) })
     }
     return out
   }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month])
@@ -1684,7 +1685,7 @@ export function FreelancerInvoicesPage(
       if ((sess.sessionDate || '').slice(0, 7) !== issueMonth) continue
       const s = studentsById2.get(sess.studentId || asg?.studentId || '')
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
-      mentorLines.push({ id: `sess:${sess.id}`, label: `${who} · 전공별멘토 (${sess.sessionDate})`, amount: majorTierAmount(mt.tier), received: false, sourceDetail: sess.comment })
+      mentorLines.push({ id: `sess:${sess.id}`, label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})`, amount: majorTierAmount(mt.tier), received: false, sourceDetail: sess.comment })
     }
 
     return [...mgmt, ...essay, ...editorLines, ...mentorLines]

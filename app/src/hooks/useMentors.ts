@@ -9,8 +9,8 @@ export const MAJOR_TIERS: { key: MajorTier; label: string; amount: number }[] = 
   { key: 'college',     label: '대학생',        amount: 50000 },
   { key: 'expert_lt5',  label: '5년이하 전문가', amount: 70000 },
   { key: 'expert_gte5', label: '5년이상 전문가', amount: 100000 },
-  // 외부 전문코치(예: 이준형 코치). 단가는 5년이상 전문가와 같지만 성격이 달라 따로 둔다.
-  { key: 'pro_coach',   label: '전문코치',      amount: 100000 },
+  // 외부 전문가 멘토(예: 이준형). 단가는 5년이상 전문가와 같지만 성격이 달라 따로 둔다.
+  { key: 'pro_coach',   label: '전문가멘토',    amount: 100000 },
 ]
 export const majorTierAmount = (tier?: string | null): number =>
   MAJOR_TIERS.find(t => t.key === tier)?.amount ?? 0
