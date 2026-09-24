@@ -125,7 +125,7 @@ import { classifyStudentRegion, REGION_GROUPS, REGION_GROUP_LABEL, type RegionGr
 function regionFieldText(student: { region?: string; address?: string; school?: string }): string | undefined {
   const group = classifyStudentRegion(student)
   if (student.region?.trim()) return `${student.region} · ${REGION_GROUP_LABEL[group]}`
-  if (group === 'unknown') return undefined
+  if (group === 'unknown' || group === 'unmatched') return undefined
   return `${REGION_GROUP_LABEL[group]} (주소·학교 기준)`
 }
 import { DeleteStudentDialog } from '@/components/DeleteStudentDialog'
@@ -451,7 +451,7 @@ export function Student360Page() {
 
   // 드롭다운에 표시할 지역별 인원(활성 학생 기준) — 분류가 맞는지 바로 눈으로 확인하도록.
   const regionCounts = useMemo(() => {
-    const c: Record<RegionGroup, number> = { kr: 0, us: 0, other: 0, unknown: 0 }
+    const c: Record<RegionGroup, number> = { kr: 0, us: 0, other: 0, unmatched: 0, unknown: 0 }
     for (const s of students) {
       if (isArchivedStatus(s.status)) continue
       c[regionByStudent.get(s.id) || 'unknown']++
