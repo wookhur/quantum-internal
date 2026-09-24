@@ -118,6 +118,16 @@ function formatRegularSchedule(schedule?: string): string | undefined {
 
 // ── EC Service constants ──
 import { EC_PARTNERS } from '@/lib/ecPartners'
+import { classifyStudentRegion, REGION_GROUPS, REGION_GROUP_LABEL, type RegionGroup } from '@/lib/studentRegion'
+
+/** 상세 화면의 '지역' 표시값. 입력한 지역 텍스트와 분류 결과(한국/미국/그 외)를 함께 보여준다.
+ *  지역 칸이 비어 있으면 무엇을 근거로 분류했는지 알 수 있게 '(주소·학교 기준)'을 덧붙인다. */
+function regionFieldText(student: { region?: string; address?: string; school?: string }): string | undefined {
+  const group = classifyStudentRegion(student)
+  if (student.region?.trim()) return `${student.region} · ${REGION_GROUP_LABEL[group]}`
+  if (group === 'unknown') return undefined
+  return `${REGION_GROUP_LABEL[group]} (주소·학교 기준)`
+}
 import { DeleteStudentDialog } from '@/components/DeleteStudentDialog'
 
 const EC_SALES_PRESETS = [
@@ -303,6 +313,7 @@ export function Student360Page() {
   const [essayEditorFilter, setEssayEditorFilter] = useState('all')
   const [gradeFilter, setGradeFilter] = useState('all')
   const [ecPartnerFilter, setEcPartnerFilter] = useState('all')
+  const [regionFilter, setRegionFilter] = useState<'all' | RegionGroup>('all')
   const [showArchive, setShowArchive] = useState(false)
   const [pausedOnly, setPausedOnly] = useState(false)
   const [scholarshipOnly, setScholarshipOnly] = useState(false)
@@ -398,6 +409,13 @@ export function Student360Page() {
 
   const filterName = consultantFilter ? consultantName(consultantFilter) : ''
 
+  // 지역(한국/미국/그 외) — region·address·school 자유 입력값을 해석해 분류한다.
+  const regionByStudent = useMemo(() => {
+    const m = new Map<string, RegionGroup>()
+    for (const s of students) m.set(s.id, classifyStudentRegion(s))
+    return m
+  }, [students])
+
   // Archived = 서비스 완료(finished) / 서비스 취소(canceled). Archived students keep
   // all their data but are hidden from the active list; the 아카이브 tab shows them.
   // 공통 필터(담당자·에세이에디터·학년·검색·멘토·일시중지) — 활성/아카이브 토글만 제외.
@@ -412,6 +430,7 @@ export function Student360Page() {
       if (essayEditorFilter !== 'all' && (s.essayEditor || '') !== essayEditorFilter) return false
       if (gradeFilter !== 'all' && gradeBucket(s.grade) !== gradeFilter) return false
       if (ecPartnerFilter !== 'all' && !(ecPartnersByStudent.get(s.id)?.has(ecPartnerFilter))) return false
+      if (regionFilter !== 'all' && regionByStudent.get(s.id) !== regionFilter) return false
       if (!q) return true
       return (
         s.name.toLowerCase().includes(q) ||
@@ -420,7 +439,7 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     })
-  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, ecPartnerFilter, ecPartnersByStudent, pausedOnly, scholarshipOnly, mentorStudentIds])
+  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, ecPartnerFilter, ecPartnersByStudent, regionFilter, regionByStudent, pausedOnly, scholarshipOnly, mentorStudentIds])
   const archiveCount = useMemo(() => baseFiltered.filter(s => isArchivedStatus(s.status)).length, [baseFiltered])
   const activeCount = baseFiltered.length - archiveCount
 
@@ -429,6 +448,16 @@ export function Student360Page() {
     const present = new Set(students.filter(s => !isArchivedStatus(s.status)).map(s => gradeBucket(s.grade)))
     return ['G12', 'G11', 'G10', 'G9', 'G8', 'G7', 'G6', '기타'].filter(g => present.has(g))
   }, [students])
+
+  // 드롭다운에 표시할 지역별 인원(활성 학생 기준) — 분류가 맞는지 바로 눈으로 확인하도록.
+  const regionCounts = useMemo(() => {
+    const c: Record<RegionGroup, number> = { kr: 0, us: 0, other: 0, unknown: 0 }
+    for (const s of students) {
+      if (isArchivedStatus(s.status)) continue
+      c[regionByStudent.get(s.id) || 'unknown']++
+    }
+    return c
+  }, [students, regionByStudent])
 
   const pausedCount = useMemo(() => students.filter(s => s.paused && !isArchivedStatus(s.status)).length, [students])
   const scholarshipCount = useMemo(() => students.filter(s => s.scholarship && !isArchivedStatus(s.status)).length, [students])
@@ -541,6 +570,17 @@ export function Student360Page() {
             <SelectContent>
               <SelectItem value="all">전체 EC 파트너</SelectItem>
               {ecPartnerOptions.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={regionFilter} onValueChange={v => setRegionFilter((v as 'all' | RegionGroup) ?? 'all')}>
+            <SelectTrigger className="w-full">
+              <span className="truncate">{regionFilter === 'all' ? '전체 지역' : REGION_GROUP_LABEL[regionFilter]}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 지역</SelectItem>
+              {REGION_GROUPS.map(g => (
+                <SelectItem key={g} value={g}>{REGION_GROUP_LABEL[g]} ({regionCounts[g]})</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -855,7 +895,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         <Field icon={<Phone className="size-4" />} label={t('student360.contact')} value={student.contact} />
         <Field icon={<UserIcon className="size-4" />} label={t('student360.parentName')} value={student.parentName} />
         <Field label={t('student360.nationality')} value={student.nationality} />
-        <Field label={t('student360.region')} value={student.region} />
+        <Field label={t('student360.region')} value={regionFieldText(student)} />
         <Field label={t('student360.grade')} value={student.grade} />
         <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
         <ConsultantField student={student} canEdit={canEdit} />
