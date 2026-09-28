@@ -21,6 +21,8 @@ import { contractKeys } from './contractReconcile'
 const EXCLUDED_CONTRACT_STATUSES = new Set(['cancelled', 'canceled'])
 
 export interface ContractLite {
+  /** 계약관리에서 리드와 직접 연결된 경우 — 이름 매칭보다 정확하므로 최우선. */
+  leadId?: string
   studentName?: string
   contractDate?: string
   status?: string
@@ -51,20 +53,28 @@ function phoneKey(raw?: string): string {
   return d.length >= 9 ? d : ''      // 너무 짧은 값은 키로 쓰지 않는다
 }
 
-export interface ContractMatchIndex {
+export interface ContractMatchIndex<T extends ContractLite = ContractLite> {
+  /** 리드 id → 그 리드에 직접 연결된 계약들 */
+  byLeadId: Map<string, T[]>
   /** 이름 후보 키 → 그 이름의 계약들 */
-  byName: Map<string, ContractLite[]>
+  byName: Map<string, T[]>
   /** 전화/이메일 키 → 그 사람의 학생기록 이름 후보 키들 */
   studentNamesByContact: Map<string, string[]>
 }
 
-export function buildContractMatchIndex(
-  contracts: readonly ContractLite[],
+export function buildContractMatchIndex<T extends ContractLite>(
+  contracts: readonly T[],
   students: readonly StudentForContract[],
-): ContractMatchIndex {
-  const byName = new Map<string, ContractLite[]>()
+): ContractMatchIndex<T> {
+  const byLeadId = new Map<string, T[]>()
+  const byName = new Map<string, T[]>()
   for (const c of contracts) {
     if (EXCLUDED_CONTRACT_STATUSES.has((c.status || '').toLowerCase())) continue
+    if (c.leadId) {
+      const arr = byLeadId.get(c.leadId) || []
+      arr.push(c)
+      byLeadId.set(c.leadId, arr)
+    }
     for (const k of contractKeys(c.studentName)) {
       const arr = byName.get(k) || []
       arr.push(c)
@@ -81,15 +91,24 @@ export function buildContractMatchIndex(
       studentNamesByContact.set(contact, [...new Set([...prev, ...keys])])
     }
   }
-  return { byName, studentNamesByContact }
+  return { byLeadId, byName, studentNamesByContact }
 }
 
 /** 리드 한 명에 대응하는 계약을 찾는다. 없으면 null. */
-export function contractForLead(
+export function contractForLead<T extends ContractLite>(
   lead: LeadForContract,
-  index: ContractMatchIndex,
+  index: ContractMatchIndex<T>,
   opts?: { onOrAfter?: string | null },
-): ContractLite | null {
+): T | null {
+  const after0 = opts?.onOrAfter || null
+  const notBefore = (c: T) =>
+    // 세미나보다 먼저 맺은 계약은 그 세미나의 성과가 아니다.
+    // 계약일이 비어 있으면 판단할 근거가 없으므로 그대로 인정한다.
+    !(after0 && c.contractDate && c.contractDate.slice(0, 10) < after0.slice(0, 10))
+  // 계약관리에서 리드를 직접 연결해 둔 경우가 가장 정확하다.
+  for (const c of index.byLeadId.get(lead.id) || []) {
+    if (notBefore(c)) return c
+  }
   const candidates = new Set<string>()
   const own = nameKey(lead.studentName)
   if (own) candidates.add(own)
@@ -97,22 +116,18 @@ export function contractForLead(
     if (!contact) continue
     for (const k of index.studentNamesByContact.get(contact) || []) candidates.add(k)
   }
-  const after = opts?.onOrAfter || null
   for (const k of candidates) {
     for (const c of index.byName.get(k) || []) {
-      // 세미나보다 먼저 맺은 계약은 그 세미나의 성과가 아니다.
-      // 계약일이 비어 있으면 판단할 근거가 없으므로 그대로 인정한다.
-      if (after && c.contractDate && c.contractDate.slice(0, 10) < after.slice(0, 10)) continue
-      return c
+      if (notBefore(c)) return c
     }
   }
   return null
 }
 
 /** 계약한 리드의 id 집합. 한 사람이 여러 계약을 가져도 1명으로 센다. */
-export function contractedLeadIds(
+export function contractedLeadIds<T extends ContractLite>(
   leads: readonly LeadForContract[],
-  index: ContractMatchIndex,
+  index: ContractMatchIndex<T>,
   opts?: { onOrAfter?: string | null },
 ): Set<string> {
   const out = new Set<string>()

@@ -12,7 +12,7 @@ import { useSalesEvents, useCreateSalesEvent, useUpdateSalesEvent, useDeleteSale
 import { useLeads } from '@/hooks/useLeads'
 import { useContracts } from '@/hooks/useContracts'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
-import { buildContractMatchIndex, contractedLeadIds } from '@/lib/seminarContracts'
+import { buildContractMatchIndex, contractedLeadIds, contractForLead } from '@/lib/seminarContracts'
 import {
   useSeminarsWithRegistrations,
   useAllMeetingsSlim,
@@ -151,7 +151,7 @@ export function SalesPerformancePage() {
   // Which cell was clicked → which list to show
   const [detailDialog, setDetailDialog] = useState<{
     row: PerfRow
-    kind: 'leads' | 'registrants' | 'meetings' | 'planned' | 'attendees'
+    kind: 'leads' | 'registrants' | 'meetings' | 'planned' | 'attendees' | 'contracts'
     /** meeting_method filter for kind='meetings'; undefined = all meetings */
     method?: string
   } | null>(null)
@@ -384,6 +384,17 @@ export function SalesPerformancePage() {
     return matched
   }, [detailDialog, allMeetings, dialogLeads])
 
+  // 계약 셀 드릴다운: 이 행의 리드 중 계약관리에 계약이 있는 사람 + 그 계약
+  const dialogContracts = useMemo(() => {
+    if (!detailDialog || detailDialog.kind !== 'contracts') return []
+    // 수동 입력 이벤트의 계약 수는 팀이 직접 적은 값이라 매칭으로 목록을 만들 수 없다.
+    if (!detailDialog.row.auto) return []
+    const after = detailDialog.row.eventDate
+    return dialogLeads
+      .map(lead => ({ lead, contract: contractForLead(lead, contractIndex, { onOrAfter: after }) }))
+      .filter((x): x is { lead: Lead; contract: NonNullable<typeof x.contract> } => !!x.contract)
+  }, [detailDialog, dialogLeads, contractIndex])
+
   // 수동 이벤트는 팀 입력값을 진실로 보여준다(참석·미팅은 계산 목록과 불일치하므로 팀 수치 표시).
   // 신청자(registrants)/리드는 실제 등록 리스트가 유용하므로 계산값 유지(null).
   const manualFigure = useMemo((): number | null => {
@@ -391,6 +402,7 @@ export function SalesPerformancePage() {
     const r = detailDialog.row
     // 실제 참석 등록이 있으면 그 목록(dialogRegistrations)을 쓰고, 없으면 팀 수동값
     if (detailDialog.kind === 'attendees') return (r.seminar && r.seminar.attendees > 0) ? null : r.attendees
+    if (detailDialog.kind === 'contracts') return r.contracts
     if (detailDialog.kind === 'meetings') {
       if (detailDialog.method === 'phone') return r.phoneConsultations
       if (detailDialog.method === 'zoom') return r.zoomBookings
@@ -636,7 +648,10 @@ export function SalesPerformancePage() {
                       >
                         {row.totalMeetings}
                       </TableCell>
-                      <TableCell className="text-right text-sm tabular-nums" onClick={(e) => e.stopPropagation()}>
+                      <TableCell
+                        className="text-right text-sm tabular-nums hover:underline hover:text-primary"
+                        onClick={(e) => { e.stopPropagation(); setDetailDialog({ row, kind: 'contracts' }) }}
+                      >
                         <span className={row.contracts > 0 ? 'text-success font-medium' : ''}>
                           {row.contracts}
                         </span>
@@ -787,6 +802,8 @@ export function SalesPerformancePage() {
                           ? (MEETING_METHODS.find(m => m.value === detailDialog.method)?.label ?? detailDialog.method)
                           : t('salesPerf.allMethods'),
                       )
+                  : detailDialog?.kind === 'contracts'
+                    ? t('salesPerf.contractsDialogTitle').replace('{name}', detailDialog.row.eventName)
                   : detailDialog?.kind === 'planned'
                     ? t('salesPerf.plannedDialogTitle').replace('{name}', detailDialog.row.eventName)
                     : detailDialog?.kind === 'attendees'
@@ -801,6 +818,8 @@ export function SalesPerformancePage() {
                         ? dialogRegistrations.length
                         : detailDialog?.kind === 'attendees'
                         ? (dialogRegistrations.length || attendeeSourceLeads.length)
+                        : detailDialog?.kind === 'contracts'
+                          ? dialogContracts.length
                         : detailDialog?.kind === 'meetings'
                           ? dialogMeetings.length
                           : detailDialog?.kind === 'planned'
@@ -958,6 +977,50 @@ export function SalesPerformancePage() {
                             </Button>
                           </Link>
                         )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          )}
+
+          {/* Contracts list — 이 행에서 계약까지 간 사람 */}
+          {detailDialog?.kind === 'contracts' && (
+            !detailDialog.row.auto ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                {t('salesPerf.manualFigureNote')}
+              </p>
+            ) : dialogContracts.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                {t('salesPerf.noMatchingContracts')}
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('leads.col.parent')}</TableHead>
+                    <TableHead>{t('leads.col.student')}</TableHead>
+                    <TableHead>{t('salesPerf.contractStudentName')}</TableHead>
+                    <TableHead>{t('contracts.col.contractDate')}</TableHead>
+                    <TableHead>{t('student360.contractType')}</TableHead>
+                    <TableHead className="w-[40px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dialogContracts.map(({ lead, contract }) => (
+                    <TableRow key={`${lead.id}-${contract.id}`}>
+                      <TableCell className="text-sm font-medium">{lead.parentName || '-'}</TableCell>
+                      <TableCell className="text-sm">{lead.studentName || '-'}</TableCell>
+                      <TableCell className="text-sm">{contract.studentName || '-'}</TableCell>
+                      <TableCell className="text-sm font-mono">{contract.contractDate || '-'}</TableCell>
+                      <TableCell className="text-sm">{contract.contractType || '-'}</TableCell>
+                      <TableCell>
+                        <Link to={`/sales/leads/${lead.id}`}>
+                          <Button variant="ghost" size="icon" className="size-6" title="리드로 이동">
+                            <ChevronRight className="size-3.5" />
+                          </Button>
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))}
