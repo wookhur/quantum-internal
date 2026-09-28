@@ -13,9 +13,11 @@ import { useLeads } from '@/hooks/useLeads'
 import { useContracts } from '@/hooks/useContracts'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { buildContractMatchIndex, contractedLeadIds, contractForLead } from '@/lib/seminarContracts'
+import { phoneConsultEvents } from '@/lib/phoneConsults'
 import {
   useSeminarsWithRegistrations,
   useAllMeetingsSlim,
+  useAllContactActivities,
   meetingsForLeads,
   leadMatchesSeminar,
   leadMatchesSeminarLoose,
@@ -139,6 +141,8 @@ export function SalesPerformancePage() {
   const { data: allLeads = [] } = useLeads()
   const { data: allMeetings = [] } = useAllMeetingsSlim()
   const { data: leadAttendance = [] } = useAllLeadAttendance()
+  // 전화상담은 리드관리 타임라인의 통화 기록(lead_activities)에 남는다 — meetings 가 아니다.
+  const { data: contactActivities = [] } = useAllContactActivities()
   // 계약은 계약관리(contracts)가 원본이다. 리드의 파이프라인 단계는 사람이 옮겨야 해서
   // 실제 계약이 있어도 0으로 남는 일이 있었다. 학생기록은 리드(전화·이메일)와 계약(이름)을 잇는 다리.
   const { data: allContracts = [] } = useContracts()
@@ -151,7 +155,7 @@ export function SalesPerformancePage() {
   // Which cell was clicked → which list to show
   const [detailDialog, setDetailDialog] = useState<{
     row: PerfRow
-    kind: 'leads' | 'registrants' | 'meetings' | 'planned' | 'attendees' | 'contracts'
+    kind: 'leads' | 'registrants' | 'meetings' | 'planned' | 'attendees' | 'contracts' | 'phoneConsults'
     /** meeting_method filter for kind='meetings'; undefined = all meetings */
     method?: string
   } | null>(null)
@@ -248,6 +252,10 @@ export function SalesPerformancePage() {
         }): PerfRow => {
           const matchedMeetings = meetingsForLeads(allMeetings, opts.matched)
           const byMethod = (m: string) => matchedMeetings.filter(mt => mt.meetingMethod === m).length
+          // 전화상담: 타임라인 통화 성공 + 미팅기록의 전화 방식(같은 날 중복은 1건)
+          const phoneEvents = phoneConsultEvents(
+            new Set(opts.matched.map(l => l.id)), contactActivities, matchedMeetings,
+          )
           // 이벤트 날짜: 세션행은 라벨의 M/D + 세미나 연도, 단일행은 세미나 date 컬럼.
           const yr = (s.date || s.createdAt || `${month}-01`).slice(0, 4)
           let eventDate: string | null = s.date ? s.date.slice(0, 10) : null
@@ -267,7 +275,7 @@ export function SalesPerformancePage() {
             applicants: opts.applicants,
             plannedAttendees: opts.planned,
             attendees: opts.attended,
-            phoneConsultations: byMethod('phone'),
+            phoneConsultations: phoneEvents.length,
             zoomBookings: byMethod('zoom'),
             inPersonBookings: byMethod('in_person'),
             totalMeetings: matchedMeetings.length,
@@ -321,7 +329,7 @@ export function SalesPerformancePage() {
       merged = merged.filter(r => r.month === monthFilter)
     }
     return merged
-  }, [events, seminars, allLeads, allMeetings, leadAttendance, contractIndex, monthFilter])
+  }, [events, seminars, allLeads, allMeetings, leadAttendance, contactActivities, contractIndex, monthFilter])
 
   // Extract unique months for the filter dropdown (from all rows, unfiltered)
   const months = useMemo(() => {
@@ -384,6 +392,16 @@ export function SalesPerformancePage() {
     return matched
   }, [detailDialog, allMeetings, dialogLeads])
 
+  // 전화상담 셀 드릴다운: 타임라인 통화 성공 + 전화 방식 미팅
+  const dialogPhoneConsults = useMemo(() => {
+    if (!detailDialog || detailDialog.kind !== 'phoneConsults') return []
+    if (!detailDialog.row.auto) return []
+    const matchedMeetings = meetingsForLeads(allMeetings, dialogLeads)
+    const byId = new Map(dialogLeads.map(l => [l.id, l]))
+    return phoneConsultEvents(new Set(dialogLeads.map(l => l.id)), contactActivities, matchedMeetings)
+      .map(e => ({ ...e, lead: byId.get(e.leadId) ?? null }))
+  }, [detailDialog, dialogLeads, allMeetings, contactActivities])
+
   // 계약 셀 드릴다운: 이 행의 리드 중 계약관리에 계약이 있는 사람 + 그 계약
   const dialogContracts = useMemo(() => {
     if (!detailDialog || detailDialog.kind !== 'contracts') return []
@@ -403,6 +421,7 @@ export function SalesPerformancePage() {
     // 실제 참석 등록이 있으면 그 목록(dialogRegistrations)을 쓰고, 없으면 팀 수동값
     if (detailDialog.kind === 'attendees') return (r.seminar && r.seminar.attendees > 0) ? null : r.attendees
     if (detailDialog.kind === 'contracts') return r.contracts
+    if (detailDialog.kind === 'phoneConsults') return r.phoneConsultations
     if (detailDialog.kind === 'meetings') {
       if (detailDialog.method === 'phone') return r.phoneConsultations
       if (detailDialog.method === 'zoom') return r.zoomBookings
@@ -626,7 +645,7 @@ export function SalesPerformancePage() {
                       </TableCell>
                       <TableCell
                         className="text-right text-sm tabular-nums hover:underline hover:text-primary"
-                        onClick={(e) => { e.stopPropagation(); setDetailDialog({ row, kind: 'meetings', method: 'phone' }) }}
+                        onClick={(e) => { e.stopPropagation(); setDetailDialog({ row, kind: 'phoneConsults' }) }}
                       >
                         {row.phoneConsultations}
                       </TableCell>
@@ -802,6 +821,8 @@ export function SalesPerformancePage() {
                           ? (MEETING_METHODS.find(m => m.value === detailDialog.method)?.label ?? detailDialog.method)
                           : t('salesPerf.allMethods'),
                       )
+                  : detailDialog?.kind === 'phoneConsults'
+                    ? t('salesPerf.phoneDialogTitle').replace('{name}', detailDialog.row.eventName)
                   : detailDialog?.kind === 'contracts'
                     ? t('salesPerf.contractsDialogTitle').replace('{name}', detailDialog.row.eventName)
                   : detailDialog?.kind === 'planned'
@@ -818,6 +839,8 @@ export function SalesPerformancePage() {
                         ? dialogRegistrations.length
                         : detailDialog?.kind === 'attendees'
                         ? (dialogRegistrations.length || attendeeSourceLeads.length)
+                        : detailDialog?.kind === 'phoneConsults'
+                          ? dialogPhoneConsults.length
                         : detailDialog?.kind === 'contracts'
                           ? dialogContracts.length
                         : detailDialog?.kind === 'meetings'
@@ -973,6 +996,52 @@ export function SalesPerformancePage() {
                         {m.leadId && (
                           <Link to={`/sales/leads/${m.leadId}`}>
                             <Button variant="ghost" size="icon" className="size-6">
+                              <ChevronRight className="size-3.5" />
+                            </Button>
+                          </Link>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          )}
+
+          {/* Phone consults — 타임라인 통화 기록 + 전화 방식 미팅 */}
+          {detailDialog?.kind === 'phoneConsults' && (
+            !detailDialog.row.auto ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                {t('salesPerf.manualFigureNote')}
+              </p>
+            ) : dialogPhoneConsults.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-10">
+                {t('salesPerf.noMatchingPhoneConsults')}
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('meetings.col.meetingDate')}</TableHead>
+                    <TableHead>{t('salesPerf.phoneSource')}</TableHead>
+                    <TableHead>{t('leads.col.parent')}</TableHead>
+                    <TableHead>{t('leads.col.student')}</TableHead>
+                    <TableHead className="w-[40px]" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dialogPhoneConsults.map((e) => (
+                    <TableRow key={e.key}>
+                      <TableCell className="text-sm font-mono">{e.date}</TableCell>
+                      <TableCell className="text-sm">
+                        {e.source === 'call' ? t('salesPerf.phoneSourceCall') : t('salesPerf.phoneSourceMeeting')}
+                      </TableCell>
+                      <TableCell className="text-sm font-medium">{e.lead?.parentName || '-'}</TableCell>
+                      <TableCell className="text-sm">{e.lead?.studentName || '-'}</TableCell>
+                      <TableCell>
+                        {e.leadId && (
+                          <Link to={`/sales/leads/${e.leadId}`}>
+                            <Button variant="ghost" size="icon" className="size-6" title="리드로 이동">
                               <ChevronRight className="size-3.5" />
                             </Button>
                           </Link>

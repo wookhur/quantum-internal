@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/supabasePaging'
 import { sessionSortKey } from '@/hooks/useSeminars'
 import type { Lead, PipelineStage } from '@/types'
 
@@ -310,33 +311,25 @@ export function useAllContactActivities() {
   return useQuery({
     queryKey: ['all-contact-activities'],
     queryFn: async () => {
-      const PAGE = 1000
-      let from = 0
-      const rows: ContactActivitySlim[] = []
-      while (true) {
-        const { data, error } = await supabase
+      // 활동 기록은 금방 1000건을 넘는다. 잘리면 전화상담 집계가 조용히 줄어든다.
+      const raw = await fetchAllRows<Record<string, unknown>>((from, to) =>
+        supabase
           .from('lead_activities')
           .select('lead_id, activity_type, metadata, created_at')
           .in('activity_type', ['call', 'sms', 'katalk', 'email'])
           .order('created_at', { ascending: true })
-          .range(from, from + PAGE - 1)
-        if (error) throw error
-        const batch = (data || []) as Record<string, unknown>[]
-        rows.push(
-          ...batch.map((r) => ({
-            leadId: r.lead_id as string,
-            activityType: r.activity_type as string,
-            callResult:
-              ((r.metadata as Record<string, unknown> | null)?.callResult as string | undefined) ?? null,
-            oneOnOneConsult:
-              ((r.metadata as Record<string, unknown> | null)?.oneOnOneConsult as boolean | undefined) === true,
-            createdAt: r.created_at as string,
-          })),
-        )
-        if (batch.length < PAGE) break
-        from += PAGE
-      }
-      return rows
+          .order('lead_id', { ascending: true })
+          .range(from, to),
+      )
+      return raw.map((r): ContactActivitySlim => ({
+        leadId: r.lead_id as string,
+        activityType: r.activity_type as string,
+        callResult:
+          ((r.metadata as Record<string, unknown> | null)?.callResult as string | undefined) ?? null,
+        oneOnOneConsult:
+          ((r.metadata as Record<string, unknown> | null)?.oneOnOneConsult as boolean | undefined) === true,
+        createdAt: r.created_at as string,
+      }))
     },
   })
 }
