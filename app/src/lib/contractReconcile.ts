@@ -56,7 +56,7 @@ export interface ContractReconciliation {
 const key = (s?: string) => (s || '').replace(/\s+/g, '').toLowerCase()
 
 /** 계약의 student_name 을 구분기호로 쪼개 후보 키를 만든다. 전체 문자열도 후보에 넣는다. */
-function contractKeys(studentName?: string): string[] {
+export function contractKeys(studentName?: string): string[] {
   const raw = studentName || ''
   const parts = raw.split(/[|()/,·\-–]/).map(key).filter(Boolean)
   const whole = key(raw)

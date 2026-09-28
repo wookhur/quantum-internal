@@ -10,12 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Users, Handshake, CalendarCheck, TrendingUp, Plus, Loader2, Pencil, Trash2, ChevronRight, Zap } from 'lucide-react'
 import { useSalesEvents, useCreateSalesEvent, useUpdateSalesEvent, useDeleteSalesEvent } from '@/hooks/useSalesEvents'
 import { useLeads } from '@/hooks/useLeads'
+import { useContracts } from '@/hooks/useContracts'
+import { useServiceStudents } from '@/hooks/useServiceStudents'
+import { buildContractMatchIndex, contractedLeadIds } from '@/lib/seminarContracts'
 import {
   useSeminarsWithRegistrations,
-  useAllContactActivities,
   useAllMeetingsSlim,
   meetingsForLeads,
-  computeColdCallOutcome,
   leadMatchesSeminar,
   leadMatchesSeminarLoose,
   seminarSessionsForLead,
@@ -136,9 +137,16 @@ export function SalesPerformancePage() {
   const { data: events = [], isLoading, error } = useSalesEvents()
   const { data: seminars = [] } = useSeminarsWithRegistrations()
   const { data: allLeads = [] } = useLeads()
-  const { data: contactActivities = [] } = useAllContactActivities()
   const { data: allMeetings = [] } = useAllMeetingsSlim()
   const { data: leadAttendance = [] } = useAllLeadAttendance()
+  // 계약은 계약관리(contracts)가 원본이다. 리드의 파이프라인 단계는 사람이 옮겨야 해서
+  // 실제 계약이 있어도 0으로 남는 일이 있었다. 학생기록은 리드(전화·이메일)와 계약(이름)을 잇는 다리.
+  const { data: allContracts = [] } = useContracts()
+  const { data: serviceStudents = [] } = useServiceStudents()
+  const contractIndex = useMemo(
+    () => buildContractMatchIndex(allContracts, serviceStudents),
+    [allContracts, serviceStudents],
+  )
 
   // Which cell was clicked → which list to show
   const [detailDialog, setDetailDialog] = useState<{
@@ -238,7 +246,6 @@ export function SalesPerformancePage() {
           planned: number
           attended: number
         }): PerfRow => {
-          const outcome = computeColdCallOutcome(opts.matched, contactActivities, opts.applicants)
           const matchedMeetings = meetingsForLeads(allMeetings, opts.matched)
           const byMethod = (m: string) => matchedMeetings.filter(mt => mt.meetingMethod === m).length
           // 이벤트 날짜: 세션행은 라벨의 M/D + 세미나 연도, 단일행은 세미나 date 컬럼.
@@ -248,6 +255,9 @@ export function SalesPerformancePage() {
             const md = opts.sessionLabel.match(/(\d{1,2})\s*\/\s*(\d{1,2})/)
             if (md) eventDate = `${yr}-${String(md[1]).padStart(2, '0')}-${String(md[2]).padStart(2, '0')}`
           }
+          // 계약: 이 세미나로 매칭된 리드 중 계약관리에 계약이 있는 사람 수.
+          // 세미나보다 먼저 맺은 계약은 이 세미나의 성과가 아니므로 제외한다.
+          const contracted = contractedLeadIds(opts.matched, contractIndex, { onOrAfter: eventDate }).size
           return {
             id: `seminar-${s.id}${opts.idSuffix}`,
             month,
@@ -261,8 +271,8 @@ export function SalesPerformancePage() {
             zoomBookings: byMethod('zoom'),
             inPersonBookings: byMethod('in_person'),
             totalMeetings: matchedMeetings.length,
-            contracts: outcome.contracted,
-            contractRate: opts.applicants > 0 ? (outcome.contracted / opts.applicants) * 100 : 0,
+            contracts: contracted,
+            contractRate: opts.applicants > 0 ? (contracted / opts.applicants) * 100 : 0,
             auto: true,
             source: null,
             seminar: s,
@@ -311,7 +321,7 @@ export function SalesPerformancePage() {
       merged = merged.filter(r => r.month === monthFilter)
     }
     return merged
-  }, [events, seminars, allLeads, contactActivities, allMeetings, leadAttendance, monthFilter])
+  }, [events, seminars, allLeads, allMeetings, leadAttendance, contractIndex, monthFilter])
 
   // Extract unique months for the filter dropdown (from all rows, unfiltered)
   const months = useMemo(() => {
