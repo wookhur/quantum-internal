@@ -43,6 +43,8 @@ export function usePartnerStudentMeetings(partnerId?: string) {
         .select('*')
         .eq('partner_id', partnerId as string)
         .order('meeting_date', { ascending: false, nullsFirst: false })
+        // 미팅일이 비어 있는 코멘트가 많아 그것만으로는 순서가 정해지지 않는다 — 작성 시각으로 확정.
+        .order('created_at', { ascending: false })
       if (error) throw error
       return (data || []).map(mapRow)
     },
@@ -64,7 +66,9 @@ export function usePartnerStudentMeetingsForAcademy(academy?: string, partnerId?
       if (partnerId) ors.push(`partner_id.eq.${partnerId}`)
       let q = supabase.from('partner_student_meetings').select('*')
       if (ors.length) q = q.or(ors.join(','))
-      const { data, error } = await q.order('meeting_date', { ascending: false, nullsFirst: false })
+      const { data, error } = await q
+        .order('meeting_date', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
       if (error) throw error
       return (data || []).map(mapRow)
     },
@@ -81,6 +85,8 @@ export function useAllPartnerStudentMeetings(enabled = true) {
         .from('partner_student_meetings')
         .select('*')
         .order('meeting_date', { ascending: false, nullsFirst: false })
+        // 미팅일이 비어 있는 코멘트가 많아 그것만으로는 순서가 정해지지 않는다 — 작성 시각으로 확정.
+        .order('created_at', { ascending: false })
       if (error) throw error
       return (data || []).map(mapRow)
     },

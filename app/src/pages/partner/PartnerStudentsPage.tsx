@@ -16,6 +16,8 @@ import { useProfiles } from '@/hooks/useProfiles'
 import { useMyPartnerInstructor, usePartnerInstructors } from '@/hooks/usePartnerInstructors'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import { canonicalConsultantName } from '@/lib/consultants'
+import { todayKST } from '@/lib/date'
+import { sortMeetingsDesc, meetingDisplayDate } from '@/lib/partnerMeetingOrder'
 import { useCanEdit } from '@/hooks/usePermissions'
 import {
   usePartnerStudentMeetingsForAcademy, useAllPartnerStudentMeetings, useCreatePartnerStudentMeeting,
@@ -165,7 +167,7 @@ export function PartnerStudentsPage() {
     return new Set([so?.name, so?.koreanName].filter(Boolean).map(v => nrm(v as string)))
   }, [students, selected]) // eslint-disable-line react-hooks/exhaustive-deps
   const studentMeetings = useMemo(
-    () => meetings.filter(m => {
+    () => sortMeetingsDesc(meetings.filter(m => {
       if (!selectedNameKeys.has(nrm(m.studentName))) return false
       if (partnerFilter === 'all') return true
       const fb = nrm(partnerFilter)
@@ -175,13 +177,14 @@ export function PartnerStudentsPage() {
       const author = profiles.find(p => p.id === m.partnerId)
       const cands = [author?.partnerAcademy, author?.name].map(nrm).filter(Boolean)
       return cands.some(c => c.includes(fb) || fb.includes(c))
-    }),
+    })),
     [meetings, selectedNameKeys, partnerFilter, profiles], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ meetingDate: '', program: '', content: '' })
-  const reset = () => { setEditingId(null); setForm({ meetingDate: '', program: '', content: '' }) }
+  // 날짜가 비면 순서가 뒤섞이므로 새 코멘트는 오늘 날짜로 시작한다.
+  const [form, setForm] = useState({ meetingDate: todayKST(), program: '', content: '' })
+  const reset = () => { setEditingId(null); setForm({ meetingDate: todayKST(), program: '', content: '' }) }
   const startEdit = (m: PartnerStudentMeeting) => {
     if (!canEdit) return
     setEditingId(m.id)
@@ -189,7 +192,7 @@ export function PartnerStudentsPage() {
   }
   const save = () => {
     if (!canEdit) return
-    if (!selected || (!form.content.trim() && !form.meetingDate)) return
+    if (!selected || !form.content.trim() || !form.meetingDate) return
     const onError = (e: unknown) => alert(`코멘트 저장에 실패했습니다. 다시 시도해주세요.\n${(e as { message?: string })?.message || ''}`)
     if (editingId) {
       update.mutate(
@@ -361,7 +364,8 @@ export function PartnerStudentsPage() {
                 <div key={m.id} className="rounded-lg border p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-sm font-medium flex-wrap">
-                      <span>{m.meetingDate || '—'}</span>
+                      <span>{meetingDisplayDate(m)}</span>
+                      {!m.meetingDate && <span className="text-[11px] text-muted-foreground font-normal">(작성일)</span>}
                       {meetingAuthorLabel(m) && <span className="text-muted-foreground font-normal">· {meetingAuthorLabel(m)}</span>}
                       {m.program && <Badge variant="outline">{m.program}</Badge>}
                     </div>
@@ -383,7 +387,7 @@ export function PartnerStudentsPage() {
                 <div className="text-xs font-medium text-muted-foreground">{editingId ? '미팅 수정' : '미팅 추가'}</div>
                 <div className="flex gap-2 flex-wrap">
                   <div className="space-y-1">
-                    <Label className="text-xs">미팅 일정</Label>
+                    <Label className="text-xs">미팅일 <span className="text-red-500">*</span></Label>
                     <Input type="date" value={form.meetingDate} onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))} className="h-9 w-44" />
                   </div>
                   {!isPartnerViewer && (
@@ -409,7 +413,7 @@ export function PartnerStudentsPage() {
                 </div>
                 <div className="flex justify-end gap-2">
                   {editingId && <Button size="sm" variant="outline" onClick={reset}>취소</Button>}
-                  <Button size="sm" onClick={save} disabled={create.isPending || update.isPending || (!form.content.trim() && !form.meetingDate)}>
+                  <Button size="sm" onClick={save} disabled={create.isPending || update.isPending || !form.content.trim() || !form.meetingDate}>
                     <Plus className="size-3.5 mr-1" />{editingId ? '저장' : '추가'}
                   </Button>
                 </div>

@@ -11,6 +11,7 @@ import { Plus, Trash2, GraduationCap, MessageSquare, CalendarClock, Check, Loade
 import { useAuth } from '@/contexts/AuthContext'
 import { useAllServiceProgramFees, type ServiceProgramFee } from '@/hooks/useServiceProgramFees'
 import { useAllPartnerStudentMeetings } from '@/hooks/usePartnerStudentMeetings'
+import { sortMeetingsDesc, meetingDisplayDate } from '@/lib/partnerMeetingOrder'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { useProfiles } from '@/hooks/useProfiles'
 import {
@@ -161,7 +162,7 @@ export function ECProgramsPage() {
                 {selectedStudent ? (
                   <CardContent className="p-4 space-y-3">
                     {(() => {
-                      const allComments = meetingsByStudent.get(norm(selectedStudent.name)) || []
+                      const allComments = sortMeetingsDesc(meetingsByStudent.get(norm(selectedStudent.name)) || [])
                       // 파트너 필터가 걸려 있으면, 그 파트너가 올린 코멘트만 표시
                       const comments = programFilter === 'all'
                         ? allComments
@@ -210,7 +211,7 @@ export function ECProgramsPage() {
                                 {comments.map(m => (
                                   <div key={m.id} className="text-sm border-l-2 border-indigo-200 pl-2.5">
                                     <div className="text-[11px] text-muted-foreground">
-                                      {m.meetingDate || '날짜 미정'}
+                                      {meetingDisplayDate(m)}{!m.meetingDate && ' (작성일)'}
                                       {(m.authorName || partnerName(m.partnerId)) && ` · ${m.authorName || partnerName(m.partnerId)}`}
                                       {m.program && ` · ${m.program}`}
                                     </div>
