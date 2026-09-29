@@ -1491,7 +1491,11 @@ export function FreelancerInvoicesPage(
   const [exporting, setExporting] = useState(false)
   const [uploadedData, setUploadedData] = useState<ParsedInvoice | undefined>()
 
-  const { data: editItems } = useInvoiceItems(editInvoice?.id)
+  // 수정할 인보이스의 항목은 비동기로 온다. 예전에는 이게 도착하기 전에 폼이 열려
+  // 빈 줄 하나만 든 채로 시작했고, 그대로 저장하면 원래 항목이 전부 교체돼 사라졌다.
+  // 그래서 항목이 도착하기 전에는 폼을 열지 않는다.
+  const { data: editItems, isError: editItemsError, error: editItemsErr } = useInvoiceItems(editInvoice?.id)
+  const editItemsReady = !editInvoice || editItems !== undefined
 
   // 재무가 아니면 전원 조회를 아예 보내지 않는다. 예전에는 조회는 그대로 나가고
   // 화면에서만 가려, 다른 사람의 계좌·주민번호·금액이 브라우저까지 내려왔다.
@@ -2219,8 +2223,24 @@ export function FreelancerInvoicesPage(
       ) : freelancerView}
 
       {/* Dialogs */}
-      {formOpen && user && (
+      {formOpen && user && !editItemsReady && (
+        <Dialog open onOpenChange={open => { if (!open) { setFormOpen(false); setUploadedData(undefined) } }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader><DialogTitle>인보이스 수정</DialogTitle></DialogHeader>
+            {editItemsError ? (
+              <p className="text-sm text-red-600">
+                항목을 불러오지 못했습니다. 이 상태로 저장하면 기존 항목이 지워질 수 있어 폼을 열지 않았습니다.
+                <br />{(editItemsErr as { message?: string })?.message || ''}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">항목을 불러오는 중입니다…</p>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+      {formOpen && user && editItemsReady && (
         <InvoiceFormDialog
+          key={editInvoice?.id ?? 'new'}
           open={formOpen}
           onOpenChange={open => { setFormOpen(open); if (!open) setUploadedData(undefined) }}
           invoice={editInvoice}

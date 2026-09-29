@@ -307,7 +307,39 @@ export function useUpdateInvoice() {
 
       if (input.items) {
         updates.total_amount = input.items.reduce((s, it) => s + it.quantity * it.unitPrice, 0)
-        await supabase.from('freelancer_invoice_items').delete().eq('invoice_id', input.id)
+      }
+
+      // ── 순서가 중요하다 ──
+      // 예전에는 항목을 먼저 지우고 다시 넣은 뒤 인보이스를 수정했는데,
+      //  · 항목 insert 가 실패해도 에러를 보지 않아 항목만 통째로 사라졌고,
+      //  · 인보이스 update 가 권한(RLS)으로 0행만 바꿔도 에러가 없어 금액만 그대로 남았다.
+      // 그래서 ① 인보이스 수정이 실제로 되는지 먼저 확인하고 ② 그 다음에 항목을 교체한다.
+      const { data: updated, error } = await supabase
+        .from('freelancer_invoices')
+        .update(updates)
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      // RLS 로 막히면 에러 없이 0행이 바뀐다 — 저장된 것처럼 보이지 않게 여기서 끊는다.
+      if (!updated || updated.length === 0) {
+        throw new Error('이 인보이스를 수정할 권한이 없습니다. (저장된 내용 없음)')
+      }
+
+      if (input.items) {
+        // 새로 넣다가 실패하면 되돌릴 수 있도록 기존 항목을 먼저 확보해 둔다.
+        const { data: before, error: readErr } = await supabase
+          .from('freelancer_invoice_items')
+          .select('*')
+          .eq('invoice_id', input.id)
+          .order('item_order')
+        if (readErr) throw readErr
+
+        const { error: delErr } = await supabase
+          .from('freelancer_invoice_items')
+          .delete()
+          .eq('invoice_id', input.id)
+        if (delErr) throw delErr
+
         const rows = input.items.map((it, i) => ({
           invoice_id: input.id,
           item_order: i + 1,
@@ -318,15 +350,16 @@ export function useUpdateInvoice() {
           remark: it.remark || null,
         }))
         if (rows.length > 0) {
-          await supabase.from('freelancer_invoice_items').insert(rows)
+          const { error: insErr } = await supabase.from('freelancer_invoice_items').insert(rows)
+          if (insErr) {
+            // 항목이 사라진 채로 두지 않는다 — 원래 항목을 되돌린 뒤 실패를 알린다.
+            if (before && before.length > 0) {
+              await supabase.from('freelancer_invoice_items').insert(before)
+            }
+            throw insErr
+          }
         }
       }
-
-      const { error } = await supabase
-        .from('freelancer_invoices')
-        .update(updates)
-        .eq('id', input.id)
-      if (error) throw error
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['freelancer-invoices'] })
