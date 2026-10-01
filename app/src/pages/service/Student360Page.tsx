@@ -385,17 +385,18 @@ export function Student360Page() {
     return { completed: current.completed, noShow: current.noShow, target, currentYear, past }
   }
 
-  // Consultants who actually have at least one student (for the filter dropdown).
-  // Match by NAME so legacy slug IDs (e.g. 'yeonse') and live profile UUIDs
-  // referring to the same person both count as "in use".
+  // 필터 드롭다운에 쓸 컨설턴트 목록 — 담당 학생 수를 함께 센다.
+  // 예전에는 '학생이 1명 이상 배정된 사람'만 보여줬는데, 새로 합류한 컨설턴트가
+  // 목록에 아예 없어 '빠졌다'고 오해하기 쉬웠다. 전원을 보여주고 학생 수를 적는다.
+  // 이름으로 세는 이유: 과거 slug ID('yeonse')와 현재 프로필 UUID 가 같은 사람을 가리킨다.
   const activeConsultants = useMemo(() => {
-    const usedNames = new Set(
-      students
-        .map(s => s.assignedConsultant)
-        .filter((id): id is string => !!id)
-        .map(id => consultantName(id))
-    )
-    return consultantPool.filter(c => usedNames.has(c.name))
+    const counts = new Map<string, number>()
+    for (const s of students) {
+      if (!s.assignedConsultant) continue
+      const n = consultantName(s.assignedConsultant)
+      if (n) counts.set(n, (counts.get(n) || 0) + 1)
+    }
+    return consultantPool.map(c => ({ ...c, students: counts.get(c.name) || 0 }))
   }, [students, consultantPool, consultantName])
 
   // Selected filter resolves to a canonical name so a pick of 남연서 (live UUID)
@@ -557,7 +558,10 @@ export function Student360Page() {
             <SelectContent>
               <SelectItem value="__all__">{t('student360.allConsultants')}</SelectItem>
               {activeConsultants.map(c => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                  <span className="ml-1.5 text-[11px] text-muted-foreground">{c.students}</span>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
