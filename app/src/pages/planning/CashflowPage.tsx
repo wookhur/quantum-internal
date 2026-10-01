@@ -196,12 +196,36 @@ function ExpenseDialog({
 // Main Page
 // ---------------------------------------------------------------------------
 
+/** Inclusive count of months between two YYYY-MM keys (min 1). */
+function monthSpan(from: string, to: string): number {
+  const [fy, fm] = from.split('-').map(Number)
+  const [ty, tm] = to.split('-').map(Number)
+  return Math.max(1, (ty - fy) * 12 + (tm - fm) + 1)
+}
+
 export function CashflowPage() {
   const t = useT()
   const canEdit = useCanEdit(useLocation().pathname)
   const [currentMonth, setCurrentMonth] = useState(() => getMonthKey(new Date()))
   const isCurrentMonth = currentMonth === getMonthKey(new Date())
   const [year, month] = currentMonth.split('-').map(Number)
+
+  // View mode: single month vs. a date range
+  const [viewMode, setViewMode] = useState<'month' | 'range'>('month')
+  const [rangeFrom, setRangeFrom] = useState(() => getMonthKey(new Date()))
+  const [rangeTo, setRangeTo] = useState(() => getMonthKey(new Date()))
+  // Normalize so from <= to
+  const periodFrom = rangeFrom <= rangeTo ? rangeFrom : rangeTo
+  const periodTo = rangeFrom <= rangeTo ? rangeTo : rangeFrom
+  const monthsInRange = monthSpan(periodFrom, periodTo)
+
+  /** Does an installment date (YYYY-MM-DD) fall within the active period? */
+  const inPeriod = (date: string | undefined | null): boolean => {
+    if (!date) return false
+    const mk = date.slice(0, 7)
+    if (viewMode === 'range') return mk >= periodFrom && mk <= periodTo
+    return mk === currentMonth
+  }
 
   // Data
   const { data: installments = [], isLoading: loadingInst } = useInstallments()
@@ -218,7 +242,7 @@ export function CashflowPage() {
     const monthInst = installments.filter(inst =>
       // 취소·해지 계약은 현금흐름 수입에서 제외
       inst.contract?.status !== 'cancelled' && inst.contract?.status !== 'terminated' &&
-      (inst.dueDate?.startsWith(currentMonth) || inst.paidDate?.startsWith(currentMonth)),
+      (inPeriod(inst.dueDate) || inPeriod(inst.paidDate)),
     )
 
     let paidKrw = 0, paidUsd = 0
@@ -265,7 +289,8 @@ export function CashflowPage() {
         return order[a.status] - order[b.status]
       }),
     }
-  }, [installments, currentMonth])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [installments, currentMonth, viewMode, periodFrom, periodTo])
 
   // ── Expenses: active fixed expenses ──
   const activeExpenses = useMemo(() => expenses.filter(e => e.isActive), [expenses])
@@ -279,10 +304,14 @@ export function CashflowPage() {
   }, [activeExpenses])
 
   // ── Available cash ──
-  const availableKrw = income.paidKrw + income.pendingKrw - expenseTotal.krw
-  const availableUsd = income.paidUsd + income.pendingUsd - expenseTotal.usd
-  const confirmedKrw = income.paidKrw - expenseTotal.krw
-  const hasUsd = income.totalUsd > 0 || expenseTotal.usd > 0
+  // Fixed expenses are monthly; over a range, scale them by the month count.
+  const expenseMultiplier = viewMode === 'range' ? monthsInRange : 1
+  const periodExpenseKrw = expenseTotal.krw * expenseMultiplier
+  const periodExpenseUsd = expenseTotal.usd * expenseMultiplier
+  const availableKrw = income.paidKrw + income.pendingKrw - periodExpenseKrw
+  const availableUsd = income.paidUsd + income.pendingUsd - periodExpenseUsd
+  const confirmedKrw = income.paidKrw - periodExpenseKrw
+  const hasUsd = income.totalUsd > 0 || periodExpenseUsd > 0
 
   const isLoading = loadingInst || loadingExp
 
@@ -323,22 +352,63 @@ export function CashflowPage() {
         <p className="text-muted-foreground text-sm">{t('cashflow.subtitle')}</p>
       </div>
 
-      {/* Month Navigator */}
-      <div className="flex items-center gap-3">
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(m => shiftMonth(m, -1))}>
-          <ChevronLeft className="size-4" />
-        </Button>
-        <h2 className="text-lg font-semibold min-w-[140px] text-center">
-          {year}{t('common.year')} {month}{t('common.month')}
-        </h2>
-        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(m => shiftMonth(m, 1))}>
-          <ChevronRight className="size-4" />
-        </Button>
-        {!isCurrentMonth && (
-          <Button variant="ghost" size="sm" className="text-xs" onClick={() => setCurrentMonth(getMonthKey(new Date()))}>
-            <Calendar className="size-4 mr-1" />
-            {t('common.thisMonth')}
-          </Button>
+      {/* Period Navigator */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Mode toggle: 월별 / 기간 */}
+        <div className="inline-flex items-center bg-muted rounded-lg p-0.5">
+          <button
+            onClick={() => setViewMode('month')}
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+              viewMode === 'month' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t('cashflow.byMonth')}
+          </button>
+          <button
+            onClick={() => setViewMode('range')}
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+              viewMode === 'range' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t('cashflow.byRange')}
+          </button>
+        </div>
+
+        {viewMode === 'month' ? (
+          <>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(m => shiftMonth(m, -1))}>
+              <ChevronLeft className="size-4" />
+            </Button>
+            <h2 className="text-lg font-semibold min-w-[140px] text-center">
+              {year}{t('common.year')} {month}{t('common.month')}
+            </h2>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(m => shiftMonth(m, 1))}>
+              <ChevronRight className="size-4" />
+            </Button>
+            {!isCurrentMonth && (
+              <Button variant="ghost" size="sm" className="text-xs" onClick={() => setCurrentMonth(getMonthKey(new Date()))}>
+                <Calendar className="size-4 mr-1" />
+                {t('common.thisMonth')}
+              </Button>
+            )}
+          </>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Input
+              type="month"
+              className="h-8 w-[150px]"
+              value={rangeFrom}
+              onChange={e => e.target.value && setRangeFrom(e.target.value)}
+            />
+            <span className="text-muted-foreground">~</span>
+            <Input
+              type="month"
+              className="h-8 w-[150px]"
+              value={rangeTo}
+              onChange={e => e.target.value && setRangeTo(e.target.value)}
+            />
+            <Badge variant="secondary" className="text-xs">{monthsInRange}{t('common.month')}</Badge>
+          </div>
         )}
       </div>
 
@@ -361,9 +431,11 @@ export function CashflowPage() {
           <CardContent className="py-3 flex items-center gap-3">
             <TrendingDown className="size-5 text-red-500 shrink-0" />
             <div className="min-w-0">
-              <div className="text-lg font-bold text-red-600 whitespace-nowrap">{formatCurrency(expenseTotal.krw)}</div>
-              {hasUsd && expenseTotal.usd > 0 && <div className="text-sm font-semibold text-red-400 whitespace-nowrap">{formatCurrency(expenseTotal.usd, 'USD')}</div>}
-              <div className="text-xs text-muted-foreground">{t('cashflow.totalExpense')}</div>
+              <div className="text-lg font-bold text-red-600 whitespace-nowrap">{formatCurrency(periodExpenseKrw)}</div>
+              {hasUsd && periodExpenseUsd > 0 && <div className="text-sm font-semibold text-red-400 whitespace-nowrap">{formatCurrency(periodExpenseUsd, 'USD')}</div>}
+              <div className="text-xs text-muted-foreground">
+                {t('cashflow.totalExpense')}{viewMode === 'range' && <span className="ml-1">({monthsInRange}{t('common.month')})</span>}
+              </div>
             </div>
           </CardContent>
         </Card>
