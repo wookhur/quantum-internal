@@ -1,7 +1,7 @@
 # 0003. 학생 사례(B층)는 내부 포털 데이터를 가명화해 받고, CAT DB는 분석 층만 담당
 
 - 날짜: 2026-10-01
-- 상태: 제안
+- 상태: 채택 (2026-10-01, 사용자가 '내부 포털 DB에 분석용 공간' 진행 결정)
 - 관련: ADR 0001(DB 엔진), ADR 0002(두 층 구조)
 
 ## 배경
@@ -18,7 +18,7 @@
 - **원본 위치**: `service_meetings.report_url`을 `sources.url`로 사용한다. 원본은 드라이브와 포털에 그대로 둔다.
 - **LLM 입력 전 가명화**: 보고서 본문에서 학생, 학부모, 형제 이름과 학교, 교회, 지역 고유명사를 치환한 뒤 LLM에 넣는다(매뉴얼 5.8).
 - **승인된 보고서만**: `report_status = 'submitted'`인 보고서만 적재한다.
-- **엔진(ADR 0001 갱신 제안)**: 운영 시 같은 Supabase의 별도 스키마(`cat`)에 둔다. 파일럿은 SQLite + 드라이브 보고서로 진행한다(포털 DB 접속 정보 없이 가능).
+- **엔진**: 파일럿부터 같은 Supabase의 별도 스키마(`cat`, 매핑은 `cat_private`)에 둔다. 마이그레이션: `app/supabase/migration-cat-analysis-schema.sql`, 적용 방법: `docs/supabase-setup.md`
 
 ## 영향
 - 스키마 002: `meetings`, `student_snapshots`, `activities`(상태 이력), `action_items`, `meeting_tags`, `student_issues` 추가

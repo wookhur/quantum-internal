@@ -25,8 +25,8 @@
 
 | 단계 | 내용 | 상태 |
 |---|---|---|
-| 1단계 | 샘플 자료로 태그 체계와 테이블 구조 설계 | 🔄 태그 v0.2와 스키마 002 초안 작성, 사용자 검토 대기 |
-| 2단계 | 샘플 30건 안팎으로 파일럿 구축 및 조회 테스트 | 대기 |
+| 1단계 | 샘플 자료로 태그 체계와 테이블 구조 설계 | ✅ 태그 v0.2, Supabase `cat` 스키마 작성·로컬 검증 완료 (태그 세부 검토는 계속) |
+| 2단계 | 샘플 30건 안팎으로 파일럿 구축 및 조회 테스트 | ⏳ Supabase 적용과 `CAT_DB_URL` 등록 대기 |
 | 3단계 | 전체 자료 일괄 처리 및 정기 운영 자동화 | 대기 |
 
 단계를 넘어갈 때마다 이 표를 갱신합니다.
@@ -41,13 +41,22 @@ cat-db/
 │   ├── WORKLOG.md         # 작업 히스토리 (세션마다 추가)
 │   └── decisions/         # ADR: 설계 결정 기록 (NNNN-제목.md)
 ├── taxonomy/              # 태그 사전(.yaml이 정본, .md는 검토용 자동 생성), 성과 루브릭
-├── schema/                # DDL (NNN_설명.sql 순서대로 적용)
+├── schema/                # 설계용 DDL(SQLite 호환 초안). 운영 DDL은 ../app/supabase/migration-cat-*.sql
 ├── queries/               # 자주 쓰는 조회 SQL (벤치마크, 조건 검색 등)
 ├── scripts/               # 추출, 태깅, 적재, 동기화 스크립트
 ├── samples/redacted/      # 지식 자료(A층) 샘플·합성 테스트 데이터만. 학생 사례는 가명이어도 금지
 ├── data/raw/              # 원본 사본/추출본. git 제외
 └── private/               # 실명 대조표, 비밀키. git 제외
 ```
+
+## DB 위치 (확정)
+
+- 내부 포털 Supabase(`quantum-internal`)의 `cat` 스키마(분석)와 `cat_private` 스키마(실명 매핑)
+- 마이그레이션: `../app/supabase/migration-cat-analysis-schema.sql`, 태그 적재: `../app/supabase/seed-cat-tags-v0.2.sql`
+  (태그 사전을 바꾸면 `scripts/build_tag_seed.py`로 다시 생성)
+- 포털 → cat 동기화: `SELECT * FROM cat.sync_from_portal();` (service_role 전용)
+- 적용·검증 절차: `docs/supabase-setup.md`
+- `cat`, `cat_private`는 Supabase API(Exposed schemas)에 노출하지 않습니다.
 
 ## 작업 규칙
 
@@ -78,7 +87,5 @@ cat-db/
 - **B층(학생 사례) 원천 자료**: 내부 포털(`service_students`, `service_meetings.report_url` 등)이 원천. 가명화해서 받는다 → ADR 0003, `docs/case-source-review-2026-10-01.md`
 - 보고서 태깅용 LLM을 운영 매뉴얼 11.12 승인 AI 도구 목록에 등록할지
 
-- DB 엔진: 파일럿은 SQLite(설치 불필요), 운영은 기존 Supabase(Postgres)로 이전하는 방안을 제안했습니다.
-  1단계에서 확정합니다. → `docs/decisions/0001-db-engine.md`
 - 원본 저장소(구글 드라이브 폴더 구조, 파일 ID 사용 여부)
 - 성과 점수 루브릭(1·2·3년차 평가 항목과 척도): 사내 평가 제도는 아직 없고 회사 웹사이트에서 구축 중. 웹사이트 평가 데이터를 받는 형태로 맞춘다

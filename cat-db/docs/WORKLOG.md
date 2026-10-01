@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-10-01 — 내부 포털 DB에 분석용 공간(cat 스키마) 구축
+
+**한 일**
+- 사용자 결정: 학생 사례 파일럿 데이터는 내부 포털 Supabase에 둔다 → ADR 0003 채택, ADR 0001 대체
+- `app/supabase/migration-cat-analysis-schema.sql`: `cat`(분석) + `cat_private`(실명 매핑) 스키마, RLS(조회 admin·c_level, 쓰기 service_role), 포털 동기화 함수 `cat.sync_from_portal()`, 대리 지표 뷰
+- `app/supabase/seed-cat-tags-v0.2.sql` (`scripts/build_tag_seed.py`로 YAML에서 생성)
+- 로컬 PostgreSQL 16에 Supabase 역할을 흉내 내 가짜 데이터로 검증 → 결과는 `docs/supabase-setup.md`
+
+**확인 / 제약**
+- 이 작업 환경에는 Supabase 접속 정보가 없음 → 실제 적용은 사용자가 SQL Editor에서 실행
+- 포털 `service_meetings.summary`는 실명이 섞일 수 있어 복사하지 않음 (LLM 가명 요약으로 대체)
+- 포털에는 학교별 지원 결과가 없음(`accepted_uni` 자유 텍스트만) → outcomes는 추후 입력 경로 필요
+
+**다음 할 일**
+- 사용자: SQL Editor에서 마이그레이션·시드·동기화 실행, `CAT_DB_URL` 환경 변수 등록, 태깅용 LLM 승인
+- 보고서 추출 파이프라인(가명화 → LLM → cat 적재) 구현
+
+---
+
 ## 2026-10-01 — 상담 보고서·운영 매뉴얼 검토, 태그 v0.2, 스키마 002
 
 **한 일**
