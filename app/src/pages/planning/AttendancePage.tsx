@@ -46,6 +46,7 @@ import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAttendances, useAttendancesRange, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances, useSetLateExempt, type Attendance } from '@/hooks/useAttendances'
+import { leaveTimes, mergeLeaveNote, type LeaveKind } from '@/lib/leaveAttendance'
 import { useLeaveRequests } from '@/hooks/useLeaveRequests'
 import { LEAVE_TYPE_LABELS, HALF_DAY_LABELS, familyEventLabel } from '@/lib/leave'
 import { useKioskExcludedIds, useUpdateKioskExcludedIds } from '@/hooks/useKioskSettings'
@@ -338,11 +339,12 @@ export function AttendancePage() {
   const { data: leaveRequests = [] } = useLeaveRequests()
 
   // ── 연차/반차 → 근태 자동 반영 ──────────────────────────────────────────
-  // 승인된 연차·반차는 해당 워크데이(주말 제외, 오늘까지)를 10:00–19:00 근무로 보이게 하고
-  // 비고에 '연차 사용 / 오전 반차 / 오후 반차 / 경조사' 등을 자동 기록한다. 실제 기록을
-  // 덮지 않고 화면·집계·엑셀에 겹쳐서 반영 → 연차 취소·수정 시 자동으로 사라진다.
+  // 승인된 연차·반차가 걸린 워크데이(주말 제외, 오늘까지)의 비고에 '연차 사용 / 오전 반차 /
+  // 오후 반차 / 경조사' 등을 자동 기록한다. 근무시간은 만들어내지 않는다 —
+  // 연차는 비우고, 반차는 실제로 찍힌 출퇴근을 그대로 쓴다(leaveTimes 참고).
+  // 실제 기록을 덮지 않고 화면·집계·엑셀에 겹쳐서 반영 → 연차 취소·수정 시 자동으로 사라진다.
   const leaveNoteByKey = useMemo(() => {
-    const m = new Map<string, string>()
+    const m = new Map<string, { label: string; kind: LeaveKind }>()
     const todayStr = todayYmd()
     const labelOf = (lr: { leaveType: string; eventType?: string; halfDayPeriod?: string }) => {
       if (lr.halfDayPeriod) return HALF_DAY_LABELS[lr.halfDayPeriod as 'morning' | 'afternoon']
@@ -355,7 +357,7 @@ export function AttendancePage() {
       let d = lr.startDate
       for (let i = 0; i < 366 && d <= lr.endDate; i++) {
         if (d.slice(0, 7) === currentMonth && d <= todayStr && !isWeekend(d)) {
-          m.set(`${lr.requesterId}|${d}`, label)
+          m.set(`${lr.requesterId}|${d}`, { label, kind: lr.halfDayPeriod ? 'half' : 'full' })
         }
         d = addDays(d, 1)
       }
@@ -369,23 +371,26 @@ export function AttendancePage() {
     const out: Attendance[] = rawAttendances.map(a => {
       const k = `${a.profileId}|${a.date}`
       seen.add(k)
-      const label = leaveNoteByKey.get(k)
-      if (!label) return a
+      const leave = leaveNoteByKey.get(k)
+      if (!leave) return a
+      // 연차는 근무시간을 비우고, 반차는 실제로 찍힌 시각을 그대로 둔다.
+      const times = leaveTimes(leave.kind, a)
       return {
         ...a,
-        clockIn: '10:00',
-        clockOut: '19:00',
+        clockIn: times.clockIn,
+        clockOut: times.clockOut,
         lateExempt: true,
-        note: a.note && !a.note.includes(label) ? `${label} · ${a.note}` : label,
+        note: mergeLeaveNote(a.note, leave.label),
       }
     })
-    for (const [k, label] of leaveNoteByKey) {
+    for (const [k, leave] of leaveNoteByKey) {
       if (seen.has(k)) continue
       const [pid, date] = k.split('|')
+      // 출퇴근 기록이 아예 없는 날 — 시각을 지어내지 않고 비고만 남긴다.
       out.push({
         id: `leave:${k}`, profileId: pid, date,
-        clockIn: '10:00', clockOut: '19:00', scheduleStart: null, scheduleEnd: null,
-        note: label, lateExempt: true, createdAt: '', updatedAt: '',
+        clockIn: null, clockOut: null, scheduleStart: null, scheduleEnd: null,
+        note: leave.label, lateExempt: true, createdAt: '', updatedAt: '',
       })
     }
     // 합성(연차) 행이 뒤에 붙으므로 날짜순으로 다시 정렬(기존 목록은 날짜 오름차순)
@@ -1100,7 +1105,7 @@ export function AttendancePage() {
                   }
                   const weekend = isWeekend(att.date)
                   const late = isLate(att.clockIn, att.date, att.lateExempt)
-                  const leaveLbl = leaveNoteByKey.get(`${att.profileId}|${att.date}`)
+                  const leaveLbl = leaveNoteByKey.get(`${att.profileId}|${att.date}`)?.label
                   const isLeaveSynthetic = att.id.startsWith('leave:')
                   return (
                     <TableRow key={att.id} className={`${leaveLbl ? 'bg-sky-50/40' : ''} ${weekend ? 'bg-red-50/30' : ''} ${late ? 'bg-red-50/40' : ''}`}>
