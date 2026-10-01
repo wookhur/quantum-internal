@@ -1,0 +1,15 @@
+# 개인정보·원본 — 절대 커밋 금지
+data/raw/*
+private/*
+!data/raw/.gitkeep
+!private/.gitkeep
+
+# 로컬 DB 파일
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+.venv/
+*.pyc
