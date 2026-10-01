@@ -34,6 +34,8 @@ const CONSULTANT_NAME_ALIASES: Record<string, string> = {
   'julie': '김지현',
   'evelyn': '남연서',
   'somee park': 'Soomee Park',   // 과거 표기(Somee) → 통일된 표기(Soomee Park)
+  'ivitta': 'Isabela',           // 계정 생성 시 쓰인 표기 → 사내 통일 표기(Isabela)
+  'ivatta': 'Isabela',           // 같은 이름의 오타 표기도 함께 흡수
 }
 
 /** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현). */
