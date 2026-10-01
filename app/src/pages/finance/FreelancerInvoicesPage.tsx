@@ -517,6 +517,90 @@ export function InvoiceFormDialog({
 
 // ─── Invoice Detail Dialog ────────────────────────────────────────────────
 
+/**
+ * 견적서 양식의 값칸 위치. 개인·사업자 양식의 짜임새가 달라 한 곳에 모아 둔다.
+ * 양식을 새로 받으면 여기만 고치면 된다.
+ *  · 개인  : 성명/주민등록번호가 6행, 품목표 13행부터, 합계 23행
+ *  · 사업자: 사업자명/사업자등록번호가 5행(5~6행 병합), 품목표 15행부터, 합계 26행
+ */
+interface QuoteLayout {
+  /** 값칸 주소 */
+  date: string; name: string; idNo: string; phone: string; email: string; bank: string; account: string
+  /** 품목표 첫 줄 */
+  dataStart: number
+  /** 합계 줄을 못 찾았을 때 쓸 기본 행 */
+  sumFallback: number
+}
+
+const QUOTE_LAYOUT: Record<'individual' | 'business', QuoteLayout> = {
+  individual: { date: 'B5', name: 'E6', idNo: 'G6', phone: 'E7', email: 'E8', bank: 'E9', account: 'G9', dataStart: 13, sumFallback: 23 },
+  business:   { date: 'B5', name: 'E5', idNo: 'G5', phone: 'E7', email: 'E8', bank: 'E9', account: 'G9', dataStart: 15, sumFallback: 26 },
+}
+
+/** 견적서 양식 한 장을 채운다(머리말 + 품목표 + 합계). 양식 파일만 다르고 절차는 같다. */
+function fillQuoteSheet(
+  ws: import('exceljs').Worksheet,
+  layout: QuoteLayout,
+  invoice: FreelancerInvoice,
+  items: { itemName: string; quantity: number; unitPrice: number; supplyAmount: number; remark?: string | null }[],
+  total: number,
+  remarkOf: (it: { remark?: string | null }) => string | null = (it) => it.remark || null,
+) {
+  const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
+  const bank = splitBank(invoice.bankAccount || '')
+  set(layout.date, invoice.invoiceDate)
+  set(layout.name, invoice.clientName || invoice.freelancerName)
+  set(layout.idNo, invoice.residentNumber)
+  set(layout.phone, invoice.phone)
+  set(layout.email, invoice.clientEmail || invoice.freelancerEmail)
+  set(layout.bank, bank.bankName)
+  set(layout.account, bank.accountNumber || invoice.bankAccount || '')
+
+  // 합계 행은 A열의 '합' 글자로 찾는다 — 양식이 한두 줄 달라져도 품목이 합계를 덮지 않게.
+  // 서식이 들어간 칸은 값이 문자열이 아니라 조각 배열(richText)로 들어와 String() 으로는
+  // '[object Object]' 가 된다. 그대로 두면 '합'을 못 찾아 합계 줄을 품목이 덮어쓴다.
+  const cellText = (v: unknown): string => {
+    if (v == null) return ''
+    if (typeof v === 'object') {
+      const o = v as { richText?: { text: string }[]; text?: string; result?: unknown }
+      if (o.richText) return o.richText.map(t => t.text).join('')
+      if (o.text != null) return String(o.text)
+      if (o.result != null) return String(o.result)
+      return ''
+    }
+    return String(v)
+  }
+  let sumRow = layout.sumFallback
+  for (let r = layout.dataStart; r <= layout.dataStart + 40; r++) {
+    if (cellText(ws.getCell(r, 1).value).includes('합')) { sumRow = r; break }
+  }
+  let capacity = sumRow - layout.dataStart
+  if (items.length > capacity) {
+    const extra = items.length - capacity
+    ws.spliceRows(sumRow, 0, ...Array.from({ length: extra }, () => [] as unknown[]))
+    sumRow += extra; capacity += extra
+  }
+  for (let i = 0; i < capacity; i++) {
+    const r = layout.dataStart + i
+    if (i < items.length) {
+      const it = items[i]
+      ws.getCell(r, 1).value = i + 1
+      ws.getCell(r, 2).value = it.itemName
+      ws.getCell(r, 3).value = it.quantity
+      ws.getCell(r, 4).value = it.unitPrice
+      ws.getCell(r, 5).value = it.supplyAmount
+      ws.getCell(r, 6).value = remarkOf(it)
+    } else {
+      ws.getCell(r, 1).value = null
+      ws.getCell(r, 2).value = null
+      ws.getCell(r, 3).value = null
+    }
+  }
+  // 양식의 합계칸에 SUM 수식이 들어 있어도 실제 합계로 덮는다(줄을 늘리면 범위가 어긋나므로).
+  ws.getCell(sumRow, 5).value = total
+  return sumRow
+}
+
 /** Download a single invoice as the uploaded 견적서 template, filled in. */
 export async function downloadInvoiceExcel(
   invoice: FreelancerInvoice,
@@ -533,50 +617,9 @@ export async function downloadInvoiceExcel(
   const mn = monthNum(invoice.invoiceMonth)
   if (mn) { try { ws.name = `${mn}월` } catch { /* ignore */ } }
 
-  const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
-  // Date + supplier (freelancer) info
-  set('C5', invoice.invoiceDate)
-  set('F6', invoice.clientName || invoice.freelancerName)
-  set('H6', invoice.residentNumber)
-  set('F7', invoice.phone)
-  set('F8', invoice.clientEmail || invoice.freelancerEmail)
-  // 입금 정보(헤더): 은행명 F9, 계좌번호 H9 (bankAccount = "은행명 / 계좌번호 / 예금주")
-  const bank = splitBank(invoice.bankAccount || '')
-  set('F9', bank.bankName)
-  set('H9', bank.accountNumber || invoice.bankAccount || '')
+  const sumRow = fillQuoteSheet(ws, QUOTE_LAYOUT.individual, invoice, items, invoice.totalAmount)
 
-  // Find the 합계(total) row so item rows don't overwrite it.
-  let sumRow = 23
-  for (let r = 15; r <= 80; r++) {
-    const v = ws.getCell(r, 1).value
-    if (v != null && String(v).includes('합')) { sumRow = r; break }
-  }
-  const dataStart = 15
-  let capacity = sumRow - dataStart
-  if (items.length > capacity) {
-    const extra = items.length - capacity
-    ws.spliceRows(sumRow, 0, ...Array.from({ length: extra }, () => [] as unknown[]))
-    sumRow += extra; capacity += extra
-  }
-  for (let i = 0; i < capacity; i++) {
-    const r = dataStart + i
-    if (i < items.length) {
-      const it = items[i]
-      ws.getCell(r, 1).value = i + 1              // No.
-      ws.getCell(r, 2).value = it.itemName        // 품명
-      ws.getCell(r, 3).value = it.quantity        // 수량
-      ws.getCell(r, 4).value = it.unitPrice        // 단가
-      ws.getCell(r, 5).value = it.supplyAmount     // 공급가액
-      ws.getCell(r, 6).value = it.remark || null   // 비고
-    } else {
-      ws.getCell(r, 1).value = null
-      ws.getCell(r, 2).value = null
-      ws.getCell(r, 3).value = null
-    }
-  }
-  ws.getCell(sumRow, 5).value = invoice.totalAmount  // 합계
-
-  // 입금계좌 row (label contains 입금)
+  // 입금계좌 row (label contains 입금) — 양식에 그 줄이 있는 경우에만
   for (let r = sumRow; r <= sumRow + 4; r++) {
     const v = ws.getCell(r, 1).value
     if (v != null && String(v).includes('입금')) { ws.getCell(r, 1).value = `입금계좌 : ${invoice.bankAccount || ''}`; break }
@@ -690,30 +733,8 @@ export async function downloadFreelancerFormExcel(
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(await res.arrayBuffer())
   const ws = wb.worksheets[0]
-  const set = (ref: string, v: unknown) => { try { ws.getCell(ref).value = (v ?? '') as never } catch { /* ignore */ } }
-  const bank = splitBank(invoice.bankAccount || '')
-  set('B5', invoice.invoiceDate)
-  set('E6', name)                    // 성명 / 사업자명
-  set('G6', invoice.residentNumber)  // 주민등록번호 / 사업자번호
-  set('E7', invoice.phone)
-  set('E8', invoice.clientEmail || invoice.freelancerEmail)
-  set('E9', bank.bankName)
-  set('G9', bank.accountNumber || invoice.bankAccount || '')
-  // 항목: 13행부터, 합계는 A열 '합' 검색
-  const dataStart = 13
-  let sumRow = 23
-  for (let r = dataStart; r <= dataStart + 40; r++) { const va = ws.getCell(r, 1).value; if (va != null && String(va).includes('합')) { sumRow = r; break } }
-  let capacity = sumRow - dataStart
-  if (items.length > capacity) { const extra = items.length - capacity; ws.spliceRows(sumRow, 0, ...Array.from({ length: extra }, () => [] as unknown[])); sumRow += extra; capacity += extra }
-  for (let i = 0; i < capacity; i++) {
-    const r = dataStart + i
-    if (i < items.length) {
-      const it = items[i]
-      ws.getCell(r, 1).value = i + 1; ws.getCell(r, 2).value = it.itemName; ws.getCell(r, 3).value = it.quantity
-      ws.getCell(r, 4).value = it.unitPrice; ws.getCell(r, 5).value = it.supplyAmount; ws.getCell(r, 6).value = it.remark || null
-    } else { ws.getCell(r, 1).value = null; ws.getCell(r, 2).value = null; ws.getCell(r, 3).value = null }
-  }
-  ws.getCell(sumRow, 5).value = total
+  // 개인·사업자 양식은 값칸 위치가 다르다(사업자는 사업자명이 5행, 품목표가 15행부터).
+  fillQuoteSheet(ws, QUOTE_LAYOUT[formType], invoice, items, total)
   const out = await wb.xlsx.writeBuffer()
   const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
