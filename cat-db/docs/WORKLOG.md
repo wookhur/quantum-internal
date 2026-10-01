@@ -4,6 +4,27 @@
 
 ---
 
+## 2026-10-01 — 상담 보고서·운영 매뉴얼 검토, 태그 v0.2, 스키마 002
+
+**한 일**
+- 사용자 승인을 받고 상담 요약 보고서 2건(학생 2명)과 컨설턴트 운영 매뉴얼 열람 → `docs/case-source-review-2026-10-01.md`
+- 이 저장소의 내부 포털에 학생 사례 테이블이 이미 있음을 확인 (`service_students`, `service_meetings`, `service_diary`, `service_followups`, `service_reports`, `student_milestones`)
+- ADR 0003(제안): 포털을 원천으로 가명화해 받고, CAT DB는 분석 층만 담당
+- 태그 사전 v0.2 (`student_issue`, `strength_theme`, `activity_status` 신설, 활동 유형 2개 추가), 검토용 표 `tags-v0.2.md`
+- 스키마 `002_consultation_reports.sql`, 추출 프롬프트 초안 `scripts/prompts/extract_consultation_report.md`
+- 합성 테스트 데이터로 SQLite 검증: 이슈 해소 여부 뷰 동작, 사전에 없는 태그 코드는 거부됨
+
+**결정 / 사건**
+- 보고서 2건의 가명 추출본을 `samples/redacted/`에 저장하려다 권한 검토에서 거부됨 → 학생 사례 데이터는 가명이어도 커밋하지 않는 규칙을 CLAUDE.md에 추가. 검토 문서에서도 개별 학생 예시를 제거함
+- 매뉴얼 5.8: 학생 개인정보는 승인된 AI 도구에만 입력 가능 → 태깅용 LLM 승인 필요
+
+**다음 할 일**
+- 사용자 검토: 태그 v0.2, ADR 0003
+- 파일럿 데이터 위치 결정(git 제외 폴더 또는 Supabase `cat` 스키마), 포털 DB 읽기 접근 방법
+- 학생 사례 파일럿: 보고서 30건 안팎 추출 → 조회 테스트
+
+---
+
 ## 2026-10-01 — 학생 사례 원천 자료 탐색
 
 **확인한 것**
