@@ -12,9 +12,9 @@
 2. 포털 테이블을 그대로 분석에 사용 → 실명이 LLM과 분석 결과에 노출됨
 3. 포털을 원천으로, CAT DB는 **가명화된 사본 + LLM 태깅 결과**만 보관
 
-## 결정 (제안)
+## 결정
 3번.
-- **가명 키**: 포털 `service_students.id`(UUID) ↔ `STU-xxxx` 매핑은 접근이 제한된 곳에만 둔다(파일럿: `private/`, 운영: Supabase 제한 스키마). CAT DB에는 `STU-xxxx`만 있다.
+- **가명 키**: 포털 `service_students.id`(UUID) ↔ `STU-xxxx` 매핑은 Supabase `cat_private` 스키마에만 둔다(앱 사용자 접근 불가). CAT DB에는 `STU-xxxx`만 있다.
 - **원본 위치**: `service_meetings.report_url`을 `sources.url`로 사용한다. 원본은 드라이브와 포털에 그대로 둔다.
 - **LLM 입력 전 가명화**: 보고서 본문에서 학생, 학부모, 형제 이름과 학교, 교회, 지역 고유명사를 치환한 뒤 LLM에 넣는다(매뉴얼 5.8).
 - **승인된 보고서만**: `report_status = 'submitted'`인 보고서만 적재한다.
