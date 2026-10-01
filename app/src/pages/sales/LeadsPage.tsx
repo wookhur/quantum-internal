@@ -46,8 +46,11 @@ import {
   CalendarDays,
   BarChart3,
   RefreshCw,
+  Download,
 } from 'lucide-react'
-import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads, useDeleteLead } from '@/hooks/useLeads'
+import * as XLSX from 'xlsx'
+import { saveAs } from 'file-saver'
+import { useLeads, useCreateLead, useLeadStats, useSyncGoogleSheetLeads, useDeleteLead, fetchAllLeadsForExport } from '@/hooks/useLeads'
 import { MergeLeadDialog } from '@/components/MergeLeadDialog'
 import { leadLevelConfig } from '@/lib/leadLevels'
 import { resolveInstant } from '@/lib/leadLocation'
@@ -234,6 +237,63 @@ function LeadsTableView() {
   const createLead = useCreateLead()
   const syncSheet = useSyncGoogleSheetLeads()
 
+  // -- Excel export of ALL leads (ignores on-screen filters)
+  const [exporting, setExporting] = useState(false)
+  const handleExportAll = async () => {
+    setExporting(true)
+    try {
+      const leads = await fetchAllLeadsForExport()
+      const header = [
+        '리드일자', '진행단계', '리드레벨', '학부모', '학생', '연락처', '이메일',
+        '학교', '학년', '지역', '거주국가', '거주도시', '관심분야',
+        '유입채널', '알게된 경로', '담당자', '연락채널', '필요조치', '메모', '등록일',
+      ]
+      const rows = leads.map((l) => [
+        l.leadDate || '',
+        getStageConfig(l.pipelineStage).label,
+        leadLevelConfig(l.leadLevel)?.labelKo ?? '',
+        l.parentName || '',
+        l.studentName || '',
+        l.phone || '',
+        l.email || '',
+        l.currentSchool || '',
+        l.grade || '',
+        l.region || '',
+        l.residenceCountry || '',
+        l.residenceCity || '',
+        l.interestArea || '',
+        l.sourceChannel || '',
+        l.discoverySource || '',
+        l.assignedUser?.name || '',
+        l.contactChannel || '',
+        l.requiredAction || '',
+        l.memo || '',
+        l.createdAt ? l.createdAt.slice(0, 10) : '',
+      ])
+      const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+      ws['!cols'] = [
+        { wch: 11 }, { wch: 10 }, { wch: 9 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 24 },
+        { wch: 22 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 16 },
+        { wch: 22 }, { wch: 14 }, { wch: 8 }, { wch: 10 }, { wch: 16 }, { wch: 40 }, { wch: 11 },
+      ]
+      ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: header.length - 1 } }) }
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, '전체 리드')
+      const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+      const today = new Date()
+      const ymd = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
+      saveAs(
+        new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        `전체리드_${ymd}.xlsx`,
+      )
+    } catch (err) {
+      console.error('Lead export failed:', err)
+      alert('엑셀 다운로드에 실패했습니다. 다시 시도해주세요.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // -- Dynamic source channels from stats (all leads, not filtered)
   const dynamicSourceChannels = useMemo(() => {
     if (!stats?.bySource) return SOURCE_CHANNELS as unknown as string[]
@@ -410,6 +470,15 @@ function LeadsTableView() {
             >
               <RefreshCw className={`size-4 ${syncSheet.isPending ? 'animate-spin' : ''}`} />
               {syncSheet.isPending ? '동기화 중...' : '시트 동기화'}
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              onClick={handleExportAll}
+              disabled={exporting}
+            >
+              {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              {exporting ? '다운로드 중...' : '엑셀 다운로드'}
             </Button>
             <Button className="gap-1.5" onClick={() => setDialogOpen(true)}>
               <Plus className="size-4" />

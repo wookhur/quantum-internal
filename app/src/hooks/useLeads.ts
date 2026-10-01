@@ -143,6 +143,29 @@ function leadToRow(lead: Partial<Lead>): Record<string, unknown> {
 // ============ HOOKS ============
 
 /**
+ * One-shot fetch of every lead (no filters), newest first. Used for Excel
+ * export so the download covers the full list regardless of on-screen filters.
+ */
+export async function fetchAllLeadsForExport(): Promise<Lead[]> {
+  const PAGE_SIZE = 1000
+  const rows: Record<string, unknown>[] = []
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('leads')
+      .select('*, profiles!leads_assigned_to_fkey(id, name, email)')
+      .order('lead_date', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) throw error
+    const batch = (data || []) as Record<string, unknown>[]
+    rows.push(...batch)
+    if (batch.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return rows.map(mapLead)
+}
+
+/**
  * Fetch all leads with filtering, sorting, and assigned-user join.
  */
 export function useLeads(
