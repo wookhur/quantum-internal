@@ -40,7 +40,7 @@ cat-db/
 ├── docs/
 │   ├── WORKLOG.md         # 작업 히스토리 (세션마다 추가)
 │   └── decisions/         # ADR: 설계 결정 기록 (NNNN-제목.md)
-├── taxonomy/              # 태그 사전, 성과 루브릭 (정본, 버전 관리)
+├── taxonomy/              # 태그 사전(.yaml이 정본, .md는 검토용 자동 생성), 성과 루브릭
 ├── schema/                # DDL (NNN_설명.sql 순서대로 적용)
 ├── queries/               # 자주 쓰는 조회 SQL (벤치마크, 조건 검색 등)
 ├── scripts/               # 추출, 태깅, 적재, 동기화 스크립트
@@ -64,6 +64,7 @@ cat-db/
   - 커밋 메시지는 저장소 관례를 따릅니다(`feat(cat-db): ...`, `fix(cat-db): ...`, `docs(cat-db): ...`).
 - **스키마**
   - DDL은 `schema/`에 번호를 붙여 추가만 합니다. 이미 적용한 파일은 고치지 않고 새 마이그레이션을 씁니다.
+  - 태그 사전을 고치면 `python3 scripts/render_taxonomy.py taxonomy/tags-vX.yaml > taxonomy/tags-vX.md`로 검토용 표도 갱신합니다.
   - 태그 값은 자유 텍스트가 아니라 `taxonomy/` 사전의 코드로 저장합니다.
     사전에 없는 값이 나오면 먼저 사전에 추가하고 ADR이나 WORKLOG에 기록합니다.
 - **LLM 활용**
@@ -77,4 +78,4 @@ cat-db/
 - DB 엔진: 파일럿은 SQLite(설치 불필요), 운영은 기존 Supabase(Postgres)로 이전하는 방안을 제안했습니다.
   1단계에서 확정합니다. → `docs/decisions/0001-db-engine.md`
 - 원본 저장소(구글 드라이브 폴더 구조, 파일 ID 사용 여부)
-- 성과 점수 루브릭(1·2·3년차 평가 항목과 척도)
+- 성과 점수 루브릭(1·2·3년차 평가 항목과 척도): 사내 평가 제도는 아직 없고 회사 웹사이트에서 구축 중. 웹사이트 평가 데이터를 받는 형태로 맞춘다
