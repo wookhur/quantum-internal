@@ -397,6 +397,12 @@ export function AttendancePage() {
     out.sort((a, b) => a.date.localeCompare(b.date) || a.profileId.localeCompare(b.profileId))
     return out
   }, [rawAttendances, leaveNoteByKey])
+
+  /** 승인된 연차·반차가 걸린 날인가. 연차는 출근 기록이 없으므로 근무일수 집계에 쓴다. */
+  const isLeaveDay = useCallback(
+    (a: { profileId: string; date: string }) => leaveNoteByKey.has(`${a.profileId}|${a.date}`),
+    [leaveNoteByKey],
+  )
   // Weekly view navigates independently of the month, since a week can
   // straddle two months.
   const [weekStart, setWeekStart] = useState<string>(() => getWeekStart(todayYmd()))
@@ -572,7 +578,9 @@ export function AttendancePage() {
     for (const att of sorted) {
       const name = profileName(att.profileId)
       const cur = summaryMap.get(name) || { days: 0, mins: 0, late: 0 }
-      if (att.clockIn) cur.days += 1
+      // 연차는 출근 기록이 없지만 근무일수에는 포함한다(유급휴가).
+      // 반차는 실제 출근 기록이 있어 clockIn 으로 이미 세어진다.
+      if (att.clockIn || isLeaveDay(att)) cur.days += 1
       const m = getWorkedMinutes(att.clockIn, att.clockOut)
       if (m !== null) cur.mins += m
       if (isLate(att.clockIn, att.date, att.lateExempt)) cur.late += 1
