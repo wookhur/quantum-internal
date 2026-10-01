@@ -46,7 +46,7 @@ import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useAttendances, useAttendancesRange, useUpsertAttendance, useDeleteAttendance, useBulkUpsertAttendances, useSetLateExempt, type Attendance } from '@/hooks/useAttendances'
-import { leaveTimes, mergeLeaveNote, type LeaveKind } from '@/lib/leaveAttendance'
+import { leaveTimes, mergeLeaveNote, type LeaveKind, type HalfPeriod } from '@/lib/leaveAttendance'
 import { useLeaveRequests } from '@/hooks/useLeaveRequests'
 import { LEAVE_TYPE_LABELS, HALF_DAY_LABELS, familyEventLabel } from '@/lib/leave'
 import { useKioskExcludedIds, useUpdateKioskExcludedIds } from '@/hooks/useKioskSettings'
@@ -344,7 +344,7 @@ export function AttendancePage() {
   // 연차는 비우고, 반차는 실제로 찍힌 출퇴근을 그대로 쓴다(leaveTimes 참고).
   // 실제 기록을 덮지 않고 화면·집계·엑셀에 겹쳐서 반영 → 연차 취소·수정 시 자동으로 사라진다.
   const leaveNoteByKey = useMemo(() => {
-    const m = new Map<string, { label: string; kind: LeaveKind }>()
+    const m = new Map<string, { label: string; kind: LeaveKind; period?: HalfPeriod }>()
     const todayStr = todayYmd()
     const labelOf = (lr: { leaveType: string; eventType?: string; halfDayPeriod?: string }) => {
       if (lr.halfDayPeriod) return HALF_DAY_LABELS[lr.halfDayPeriod as 'morning' | 'afternoon']
@@ -357,7 +357,11 @@ export function AttendancePage() {
       let d = lr.startDate
       for (let i = 0; i < 366 && d <= lr.endDate; i++) {
         if (d.slice(0, 7) === currentMonth && d <= todayStr && !isWeekend(d)) {
-          m.set(`${lr.requesterId}|${d}`, { label, kind: lr.halfDayPeriod ? 'half' : 'full' })
+          m.set(`${lr.requesterId}|${d}`, {
+            label,
+            kind: lr.halfDayPeriod ? 'half' : 'full',
+            period: lr.halfDayPeriod as HalfPeriod | undefined,
+          })
         }
         d = addDays(d, 1)
       }
@@ -373,8 +377,8 @@ export function AttendancePage() {
       seen.add(k)
       const leave = leaveNoteByKey.get(k)
       if (!leave) return a
-      // 연차는 근무시간을 비우고, 반차는 실제로 찍힌 시각을 그대로 둔다.
-      const times = leaveTimes(leave.kind, a)
+      // 연차는 근무시간을 비우고, 반차는 실제로 찍힌 시각을 쓴다(안 찍힌 쪽만 기본값).
+      const times = leaveTimes(leave.kind, a, leave.period)
       return {
         ...a,
         clockIn: times.clockIn,
@@ -386,10 +390,11 @@ export function AttendancePage() {
     for (const [k, leave] of leaveNoteByKey) {
       if (seen.has(k)) continue
       const [pid, date] = k.split('|')
-      // 출퇴근 기록이 아예 없는 날 — 시각을 지어내지 않고 비고만 남긴다.
+      // 출퇴근 기록이 아예 없는 날 — 연차는 비우고, 반차는 기본 반차 시간으로 채운다.
+      const times = leaveTimes(leave.kind, { clockIn: null, clockOut: null }, leave.period)
       out.push({
         id: `leave:${k}`, profileId: pid, date,
-        clockIn: null, clockOut: null, scheduleStart: null, scheduleEnd: null,
+        clockIn: times.clockIn, clockOut: times.clockOut, scheduleStart: null, scheduleEnd: null,
         note: leave.label, lateExempt: true, createdAt: '', updatedAt: '',
       })
     }
