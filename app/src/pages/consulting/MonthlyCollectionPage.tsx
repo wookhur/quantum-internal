@@ -20,6 +20,7 @@ import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import type { PaymentInstallment, InstallmentStatus } from '@/types'
+import { carriedOverdue, carriedTotals, originMonthLabelFor, remainingOf } from '@/lib/overdueCarryover'
 
 // ---------------------------------------------------------------------------
 // Action type config
@@ -372,7 +373,7 @@ export function MonthlyCollectionPage() {
   const goToday = () => setCurrentMonth(getMonthKey(new Date()))
 
   // Filter installments for selected month and compute stats
-  const { monthItems, krw, usd, overdueCount } = useMemo(() => {
+  const { monthItems, carried, krw, usd, overdueCount } = useMemo(() => {
     const todayStr = new Date().toISOString().slice(0, 10)
     const items = installments
       // 취소·해지 계약은 수금 대상이 아님 → 전부 제외
@@ -400,7 +401,18 @@ export function MonthlyCollectionPage() {
       }
     }
 
-    return { monthItems: items, krw: stats, usd: statsUsd, overdueCount: overdueN }
+    // 이월 연체: 선택한 달보다 앞선 납기인데 아직 못 받은 돈.
+    // 달이 바뀌면 목록에서 사라지던 미수금을 계속 들고 간다.
+    const carried = carriedOverdue(
+      installments.filter(inst => inst.contract?.status !== 'cancelled' && inst.contract?.status !== 'terminated'),
+      currentMonth,
+    )
+    const ct = carriedTotals(carried)
+    stats.overdue += ct.krw
+    statsUsd.overdue += ct.usd
+    overdueN += ct.count
+
+    return { monthItems: items, carried, krw: stats, usd: statsUsd, overdueCount: overdueN }
   }, [installments, currentMonth])
 
   const hasUsd = usd.expected > 0
@@ -530,7 +542,7 @@ export function MonthlyCollectionPage() {
       {/* Collection Schedule */}
       <Card>
         <CardContent className="p-0">
-          {monthItems.length === 0 ? (
+          {monthItems.length === 0 && carried.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground text-sm">
               <Calendar className="size-10 mx-auto mb-3 opacity-30" />
               <p>{t('collection.noSchedule').replace('{month}', formatMonthLabel(currentMonth))}</p>
@@ -552,6 +564,68 @@ export function MonthlyCollectionPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {carried.length > 0 && (
+                  <TableRow className="bg-red-50/80 hover:bg-red-50/80">
+                    <TableCell colSpan={COL_COUNT} className="py-1.5">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-red-700">
+                        <AlertTriangle className="size-3.5" />
+                        이월 연체 {carried.length}건 — 이전 달 납기인데 아직 못 받은 금액입니다 (위 연체 금액에 합산)
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {carried.map(inst => {
+                  const overdueDays = daysOverdue(inst.dueDate || '')
+                  const remaining = remainingOf(inst)
+                  return (
+                    <TableRow
+                      key={`carried-${inst.id}`}
+                      className="cursor-pointer bg-red-50/40 hover:bg-red-100/60 border-l-[3px] border-l-red-500"
+                      onClick={() => navigate(`/consulting/clients/${inst.contractId}`)}
+                      title="클릭하면 해당 계약으로 이동합니다"
+                    >
+                      <TableCell className="font-mono text-xs text-red-600">
+                        <div className="flex flex-col gap-0.5">
+                          <Badge variant="outline" className="h-4 w-fit text-[10px] bg-red-100 text-red-700 border-red-300 font-semibold">
+                            {originMonthLabelFor(inst.dueDate, currentMonth)}분
+                          </Badge>
+                          <span className="text-[10px] text-red-400">{inst.dueDate}</span>
+                          {overdueDays > 0 && <span className="text-[10px] text-red-400 font-medium">D+{overdueDays}</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium text-sm text-red-700">{inst.contract?.contractorName || '-'}</TableCell>
+                      <TableCell className="text-sm text-red-600">{inst.contract?.studentName || '-'}</TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        {(() => {
+                          const recs = recipientsByContract.get(inst.contractId) || []
+                          if (recs.length === 0) return <span className="text-xs text-muted-foreground">-</span>
+                          return (
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {recs.map(r => (
+                                <Badge key={r.name} variant="outline" className="text-[10px] h-4 bg-indigo-50 text-indigo-700 border-indigo-200">{r.name}</Badge>
+                              ))}
+                            </div>
+                          )
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{inst.contract?.schoolName || '-'}</TableCell>
+                      <TableCell><Badge variant="outline" className="text-[10px] h-4">{inst.label}</Badge></TableCell>
+                      <TableCell className="text-right font-mono text-sm">{formatCurrency(inst.amount, inst.currency)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm text-emerald-600">
+                        {inst.paidAmount > 0 ? formatCurrency(inst.paidAmount, inst.currency) : '-'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm text-red-600 font-semibold underline decoration-dotted underline-offset-2">
+                        {formatCurrency(remaining, inst.currency)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px] h-5 gap-1 bg-red-50 text-red-700 border-red-300 font-semibold">
+                          <AlertTriangle className="size-3" />
+                          {overdueDays > 0 ? `${t('collection.status.overdue')} D+${overdueDays}` : t('collection.status.overdue')}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
                 {dateGroups.map(([date, items]) => (
                   items.map((inst, idx) => {
                     const cfg = STATUS_CONFIG[inst.status]

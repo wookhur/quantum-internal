@@ -277,7 +277,7 @@ export function useUpdateServiceStudent() {
       if (rest.majors !== undefined) update.majors = rest.majors
       if (rest.majorTrack !== undefined) update.major_track = rest.majorTrack || null
       if (rest.majorDetail !== undefined) update.major_detail = rest.majorDetail || null
-      if (rest.contractType !== undefined) update.contract_type = rest.contractType
+      if (rest.contractType !== undefined) update.contract_type = rest.contractType || null
       if (rest.consultantHistory !== undefined) update.consultant_history = rest.consultantHistory
       if (rest.applicationCount !== undefined) update.application_count = rest.applicationCount || null
       if (rest.additionalServices !== undefined) update.additional_services = rest.additionalServices || null

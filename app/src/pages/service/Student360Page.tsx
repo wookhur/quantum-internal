@@ -192,6 +192,22 @@ const MEETING_STATUS_OPTIONS: { value: MeetingStatus; labelKey: string }[] = [
   { value: 'rescheduled', labelKey: 'serviceDash.meetingStatusRescheduled' },
 ]
 
+/** 상세 화면의 '계약 유형' 표시값.
+ *  학생정보에 직접 입력한 값을 우선 보여준다 — 예전에는 계약서 값이 항상 이겨서
+ *  학생정보에서 고쳐도 화면이 그대로였다. 계약서에 다른 값이 있으면 함께 보여
+ *  어느 쪽에서 온 값인지 알 수 있게 한다. */
+function contractTypeText(
+  student: { contractType?: string; scholarship?: boolean },
+  contractValue: string | undefined,
+  scholarshipLabel: string,
+): string | undefined {
+  const own = (student.contractType || '').trim()
+  const fromContract = (contractValue || '').trim()
+  if (own) return fromContract && fromContract !== own ? `${own} · 계약서 ${fromContract}` : own
+  if (fromContract) return fromContract
+  return student.scholarship ? `🎓 ${scholarshipLabel}` : undefined
+}
+
 const ESSAY_EDITORS = ['Danny Kim', 'Soomee Park', '남연서', '한상범+양은영'] as const
 
 // KPI dot color legend, expressed as % of KPI_MAX so it always matches kpiDotColor().
@@ -900,7 +916,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
         <ConsultantField student={student} canEdit={canEdit} />
         <Field label={t('student360.essayEditor')} value={student.essayEditor} />
-        <Field label={t('student360.contractType')} value={linkedContract?.contractType ?? student.contractType ?? (student.scholarship ? `🎓 ${t('student360.scholarshipLabel')}` : undefined)} />
+        <Field label={t('student360.contractType')} value={contractTypeText(student, linkedContract?.contractType, t('student360.scholarshipLabel'))} />
         <Field label={t('contracts.applicationCount')} value={(linkedContract?.applicationCount ?? student.applicationCount) != null ? `${linkedContract?.applicationCount ?? student.applicationCount}개` : undefined} />
         <Field label={t('student360.majorTrack')} value={[student.majorTrack ? MAJOR_TRACK_LABEL[student.majorTrack] : '', student.majorDetail].filter(Boolean).join(' · ') || undefined} />
         <Field label={t('student360.majors')} value={student.majors} />
@@ -2407,7 +2423,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
       majors: form.majors || undefined,
       majorTrack: form.majorTrack || undefined,
       majorDetail: form.majorDetail || undefined,
-      contractType: form.contractType || undefined,
+      contractType: form.contractType,   // 빈 문자열도 그대로 보낸다 — 지우기가 되게
       applicationCount: form.applicationCount ? Number(form.applicationCount) : undefined,
       additionalServices: form.additionalServices || undefined,
       communicationPlatform: form.communicationPlatform || undefined,
