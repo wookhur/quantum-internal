@@ -131,7 +131,7 @@ function regionFieldText(student: { region?: string; address?: string; school?: 
 import { DeleteStudentDialog } from '@/components/DeleteStudentDialog'
 
 const EC_SALES_PRESETS = [
-  'Aidan Lee', 'Cindy', 'Eva', 'Jisoo', 'Maryam', 'Sam', 'Wook', '김지현', '남연서',
+  'Aidan Lee', 'Cindy', 'Eva', 'Isabela', 'Jisoo', 'Maryam', 'Sam', 'Wook', '김지현', '남연서',
 ] as const
 
 const ACADEMY_PRESETS = [
@@ -208,7 +208,7 @@ function contractTypeText(
   return student.scholarship ? `🎓 ${scholarshipLabel}` : undefined
 }
 
-const ESSAY_EDITORS = ['Danny Kim', 'Soomee Park', '남연서', '한상범+양은영'] as const
+const ESSAY_EDITORS = ['Danny Kim', 'Isabela', 'Soomee Park', '남연서', '한상범+양은영'] as const
 
 // KPI dot color legend, expressed as % of KPI_MAX so it always matches kpiDotColor().
 const KPI_LEGEND = [
