@@ -85,6 +85,7 @@ export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; i
       { labelKey: 'nav.adPerformance', to: '/marketing/ads', icon: Megaphone },
       { labelKey: 'nav.seminars', to: '/marketing/seminars', icon: Presentation },
       { labelKey: 'nav.homepageQna', to: '/marketing/qna', icon: MessageSquare },
+      { labelKey: 'nav.marketingWeeklyReport', to: '/marketing/weekly-report', icon: FileText },
     ],
   },
   {

@@ -43,6 +43,7 @@ import { EmployeeFormPage } from '@/pages/hr/EmployeeFormPage'
 import { ServiceDashboardPage } from '@/pages/service/ServiceDashboardPage'
 import { Student360Page } from '@/pages/service/Student360Page'
 import { WeeklyReportPage } from '@/pages/service/WeeklyReportPage'
+import { MarketingWeeklyReportPage } from '@/pages/marketing/MarketingWeeklyReportPage'
 import { ExternalFeesPage } from '@/pages/service/ExternalFeesPage'
 import { MessagesPage } from '@/pages/common/MessagesPage'
 import { TaskBoardPage } from '@/pages/common/TaskBoardPage'
@@ -118,6 +119,7 @@ export default function App() {
                 <Route path="/marketing/videos" element={<VideoProjectsPage />} />
                 <Route path="/marketing/seminars" element={<SeminarsPage />} />
                 <Route path="/marketing/qna" element={<QnaPage />} />
+                <Route path="/marketing/weekly-report" element={<MarketingWeeklyReportPage />} />
 
                 <Route path="/consulting/clients" element={<ContractsPage />} />
                 <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />
