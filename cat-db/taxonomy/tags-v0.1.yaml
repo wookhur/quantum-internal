@@ -1,0 +1,166 @@
+# CAT 자료 DB 태그 사전 — v0.1 (초안)
+# - 이 파일이 정본. DB의 tags 테이블은 여기서 생성한다.
+# - 코드(code)는 영문 snake_case, 한 번 쓰면 바꾸지 않는다(폐기 시 deprecated: true).
+# - layer: A = 지식 자료, B = 학생 사례, AB = 공통
+version: "0.1"
+updated: 2026-10-01
+
+dimensions:
+
+  # ── 공통 (A·B) ──────────────────────────────────────────
+  grade:
+    label: 학년
+    layer: AB
+    multi: true          # 가이드는 여러 학년 대상일 수 있음
+    values:
+      - { code: g8_below, label: 8학년 이하 }
+      - { code: g9,  label: 9학년 }
+      - { code: g10, label: 10학년 }
+      - { code: g11, label: 11학년 }
+      - { code: g12, label: 12학년 }
+      - { code: transfer, label: 편입 }
+
+  major:
+    label: 전공 계열
+    layer: AB
+    multi: true
+    values:
+      - { code: cs, label: 컴퓨터과학·AI }
+      - { code: engineering, label: 공학 }
+      - { code: bio_premed, label: 생명과학·프리메드 }
+      - { code: med_dental, label: 의·치대 }
+      - { code: public_health, label: 보건 }
+      - { code: physical_sci, label: 물리·화학·수학 }
+      - { code: business, label: 경영·경제 }
+      - { code: social_sci, label: 사회과학·법·정치 }
+      - { code: psychology, label: 심리 }
+      - { code: humanities, label: 인문 }
+      - { code: arts, label: 예술·미디어·건축 }
+      - { code: interdisciplinary, label: 다학제·융합 }
+      - { code: undecided, label: 미정 }
+
+  target_school:
+    label: 목표/관련 학교
+    layer: AB
+    multi: true
+    note: 학교 마스터는 schools 테이블로 관리(코드 = 소문자 약칭, 예 upenn, jhu, cambridge, exeter)
+
+  school_level:
+    label: 진학 단계
+    layer: AB
+    values:
+      - { code: undergrad_us, label: 미국 학부 }
+      - { code: undergrad_uk, label: 영국 학부 }
+      - { code: boarding, label: 보딩스쿨 }
+      - { code: grad_med, label: 의대·대학원 }
+
+  project_type:
+    label: 프로젝트/활동 유형
+    layer: AB
+    multi: true
+    values:
+      - { code: research, label: 리서치·논문 }
+      - { code: competition, label: 대회·올림피아드 }
+      - { code: summer_program, label: 여름 프로그램 }
+      - { code: internship, label: 인턴십 }
+      - { code: passion_project, label: 열정 프로젝트·제작 }
+      - { code: social_impact, label: 봉사·소셜임팩트·비영리 }
+      - { code: leadership, label: 리더십·동아리 창립 }
+      - { code: capstone, label: 캡스톤·전공조합 }
+      - { code: essay_competition, label: 에세이 대회 }
+      - { code: arts_portfolio, label: 예술 포트폴리오 }
+      - { code: athletics, label: 운동 }
+      - { code: online_course, label: 온라인 코스 }
+
+  topic:
+    label: 주제 영역
+    layer: AB
+    multi: true
+    values:
+      - { code: academics, label: 학업(GPA·과목 선택) }
+      - { code: testing, label: 시험(SAT·AP·영어) }
+      - { code: ec, label: 비교과(EC) }
+      - { code: essay, label: 에세이 }
+      - { code: application, label: 원서 작성(액티비티·추가정보) }
+      - { code: recommendation, label: 추천서 }
+      - { code: early_round, label: 조기전형 }
+      - { code: financial_aid, label: 재정보조·장학 }
+      - { code: interview, label: 인터뷰 }
+      - { code: school_selection, label: 학교 선정 }
+
+  # ── A층 · 지식 자료 ─────────────────────────────────────
+  doc_type:
+    label: 자료 유형
+    layer: A
+    values:
+      - { code: school_guide, label: 학교별 합격가이드 }
+      - { code: admit_case, label: 합격 사례 프로필 }
+      - { code: data_analysis, label: CDS·소송기록 등 데이터 분석 }
+      - { code: policy_table, label: 시험·전형 정책표 }
+      - { code: timeline, label: 학년별 캘린더·체크리스트 }
+      - { code: opportunity_list, label: EC·대회·프로그램 리스트 }
+      - { code: strategy_guide, label: 전략 가이드 }
+      - { code: major_track, label: 전공 트랙 }
+      - { code: webinar, label: 웨비나(녹음·요약) }
+      - { code: sns_video, label: 인스타·SNS 영상 }
+
+  audience:
+    label: 대상 독자
+    layer: A
+    values:
+      - { code: parent, label: 학부모 }
+      - { code: student, label: 학생 }
+      - { code: internal, label: 내부(컨설턴트) }
+
+  # valid_for_cycle(적용 입시 연도, 예 2026-27)은 태그가 아니라 sources 컬럼으로 둔다.
+
+  # ── B층 · 학생 사례 ─────────────────────────────────────
+  strength:
+    label: 잘한 점
+    layer: B
+    multi: true
+    values:
+      - { code: coherent_narrative, label: 활동이 한 문장/한 관심사로 꿰임 }
+      - { code: major_aligned_awards, label: 전공과 결이 맞는 수상 }
+      - { code: measurable_impact, label: 대상·산출물·측정된 변화가 있음 }
+      - { code: external_validation, label: 외부 검증(게재·입상·채택) }
+      - { code: initiative, label: 자기주도(콜드메일·창립·제안) }
+      - { code: rigor, label: 도전적 과목 선택 }
+      - { code: depth_over_breadth, label: 깊이 있는 소수 트랙 }
+      - { code: gap_explained, label: 공백·어려움을 소명하고 재료로 씀 }
+
+  issue:
+    label: 문제점
+    layer: B
+    multi: true
+    values:
+      - { code: scattered_activities, label: 활동 산만·방향 없음 }
+      - { code: no_target_audience, label: 대상(누구에게) 불명확 }
+      - { code: no_baseline, label: 기준선(Before) 측정 없음 }
+      - { code: no_output, label: 남는 산출물 없음 }
+      - { code: title_only_leadership, label: 직함만 있는 리더십 }
+      - { code: late_start, label: 착수 시기 늦음 }
+      - { code: unrelated_awards, label: 전공과 무관한 수상 나열 }
+      - { code: us_uk_mismatch, label: 미국/영국 트랙 혼선 }
+      - { code: weak_rigor, label: 과목 난이도 부족 }
+
+  # 컨설턴트 코멘트는 자유 텍스트(comments 테이블). 필요 시 위 strength/issue 코드를 함께 단다.
+
+# ── 성과 지표 (B층, evaluations / outcomes 테이블) ─────────
+outcome_scales:
+  evaluation:            # 1·2·3년차 중간 평가 (초안 — 루브릭 확정 필요)
+    periods: [y1, y2, y3]
+    scale: "1~5"
+    criteria:
+      - { code: academics, label: 학업 성취·과목 난이도 }
+      - { code: ec_depth, label: 핵심 트랙 깊이 }
+      - { code: impact, label: 측정 가능한 임팩트 }
+      - { code: external_recognition, label: 외부 인정(수상·게재·선발) }
+      - { code: narrative, label: 서사 일관성 }
+  final_result:
+    values:
+      - { code: admitted, label: 합격 }
+      - { code: waitlisted, label: 대기 }
+      - { code: deferred, label: 보류(조기→정시) }
+      - { code: rejected, label: 불합격 }
+      - { code: enrolled, label: 최종 등록 }
