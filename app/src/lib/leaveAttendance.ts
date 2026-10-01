@@ -6,10 +6,10 @@
  *  · 반차인데 실제로 찍은 출퇴근 시각이 10:00–19:00 으로 덮여,
  * 엑셀을 내려받아 사람이 일일이 고쳐야 했다.
  *
- * 규칙을 바꾼다.
- *  · 연차(종일) → 출근·퇴근을 비운다. 비고에 '연차 사용'만 남는다
- *  · 반차       → 실제로 찍힌 출근·퇴근을 그대로 둔다(기록이 없으면 비어 있는 채로)
- * 어느 쪽도 시각을 만들어내지 않는다.
+ * 규칙:
+ *  · 연차(종일) → 근무시간으로 인정 → 10:00–19:00 으로 기록하고 비고에 '연차 사용'
+ *  · 반차       → 쉬지 않은 반나절만 근무 → 오전 반차 15:00–19:00 / 오후 반차 10:00–14:00
+ * 어느 쪽이든 실제로 찍힌 출퇴근이 있으면 그것이 우선이고, 안 찍힌 쪽만 기본값으로 채운다.
  *
  * 이 겹치기는 화면·집계·엑셀에만 적용되고 저장된 출퇴근 기록은 건드리지 않는다.
  */
@@ -29,27 +29,30 @@ export interface AttendanceTimes {
   clockOut: string | null
 }
 
+/** 기준 근무일. 연차는 근무시간으로 인정하므로 이 시간대로 기록한다. */
+export const FULL_DAY_WORK = { start: '10:00', end: '19:00' }
+
 /**
- * 반차 기본 근무시간. 기준 근무일이 10:00–19:00 이므로 그 절반을 쓴다.
- *  · 오전 반차 = 오전을 쉬고 오후 근무 → 14:00–19:00
+ * 반차 기본 근무시간. 기준 근무일 10:00–19:00 에서 점심 1시간을 뺀 8시간의 절반,
+ * 즉 각 4시간이 되도록 둔다.
+ *  · 오전 반차 = 오전을 쉬고 오후 근무 → 15:00–19:00
  *  · 오후 반차 = 오전 근무 후 퇴근     → 10:00–14:00
- * 실제로 찍힌 기록이 있으면 그것이 우선이고, 비어 있는 쪽만 이 값으로 채운다.
  */
 export const HALF_DAY_WORK: Record<HalfPeriod, { start: string; end: string }> = {
-  morning: { start: '14:00', end: '19:00' },
+  morning: { start: '15:00', end: '19:00' },
   afternoon: { start: '10:00', end: '14:00' },
 }
 
-/** 연차·반차가 걸린 날에 보여줄 출퇴근 시각. */
+/**
+ * 연차·반차가 걸린 날에 보여줄 출퇴근 시각.
+ * 어느 쪽이든 실제로 찍힌 기록이 우선이고, 안 찍힌 쪽만 기본값으로 채운다.
+ */
 export function leaveTimes(
   kind: LeaveKind,
   actual: AttendanceTimes,
   period?: HalfPeriod,
 ): AttendanceTimes {
-  // 연차는 근무가 없다 — 시각을 비운다.
-  if (kind !== 'half') return { clockIn: null, clockOut: null }
-  // 반차는 실제로 찍힌 기록이 우선. 안 찍힌 쪽만 기본 반차 시간으로 채운다.
-  const base = period ? HALF_DAY_WORK[period] : null
+  const base = kind === 'half' ? (period ? HALF_DAY_WORK[period] : null) : FULL_DAY_WORK
   return {
     clockIn: actual.clockIn ?? base?.start ?? null,
     clockOut: actual.clockOut ?? base?.end ?? null,

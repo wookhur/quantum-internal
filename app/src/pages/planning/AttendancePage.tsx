@@ -340,8 +340,9 @@ export function AttendancePage() {
 
   // ── 연차/반차 → 근태 자동 반영 ──────────────────────────────────────────
   // 승인된 연차·반차가 걸린 워크데이(주말 제외, 오늘까지)의 비고에 '연차 사용 / 오전 반차 /
-  // 오후 반차 / 경조사' 등을 자동 기록한다. 근무시간은 만들어내지 않는다 —
-  // 연차는 비우고, 반차는 실제로 찍힌 출퇴근을 그대로 쓴다(leaveTimes 참고).
+  // 오후 반차 / 경조사' 등을 자동 기록하고, 근무시간을 채운다 —
+  // 연차는 10:00–19:00, 반차는 쉬지 않은 반나절(오전 반차 15–19시 / 오후 반차 10–14시).
+  // 실제로 찍힌 출퇴근이 있으면 그것이 우선이다(leaveTimes 참고).
   // 실제 기록을 덮지 않고 화면·집계·엑셀에 겹쳐서 반영 → 연차 취소·수정 시 자동으로 사라진다.
   const leaveNoteByKey = useMemo(() => {
     const m = new Map<string, { label: string; kind: LeaveKind; period?: HalfPeriod }>()
@@ -377,7 +378,7 @@ export function AttendancePage() {
       seen.add(k)
       const leave = leaveNoteByKey.get(k)
       if (!leave) return a
-      // 연차는 근무시간을 비우고, 반차는 실제로 찍힌 시각을 쓴다(안 찍힌 쪽만 기본값).
+      // 실제로 찍힌 시각이 우선이고, 안 찍힌 쪽만 휴가 유형별 기본값으로 채운다.
       const times = leaveTimes(leave.kind, a, leave.period)
       return {
         ...a,
@@ -390,7 +391,7 @@ export function AttendancePage() {
     for (const [k, leave] of leaveNoteByKey) {
       if (seen.has(k)) continue
       const [pid, date] = k.split('|')
-      // 출퇴근 기록이 아예 없는 날 — 연차는 비우고, 반차는 기본 반차 시간으로 채운다.
+      // 출퇴근 기록이 아예 없는 날 — 휴가 유형별 기본 근무시간으로 채운다.
       const times = leaveTimes(leave.kind, { clockIn: null, clockOut: null }, leave.period)
       out.push({
         id: `leave:${k}`, profileId: pid, date,
@@ -403,7 +404,7 @@ export function AttendancePage() {
     return out
   }, [rawAttendances, leaveNoteByKey])
 
-  /** 승인된 연차·반차가 걸린 날인가. 연차는 출근 기록이 없으므로 근무일수 집계에 쓴다. */
+  /** 승인된 연차·반차가 걸린 날인가. 근무일수 집계에서 휴가일을 빠뜨리지 않으려고 쓴다. */
   const isLeaveDay = useCallback(
     (a: { profileId: string; date: string }) => leaveNoteByKey.has(`${a.profileId}|${a.date}`),
     [leaveNoteByKey],
@@ -583,8 +584,8 @@ export function AttendancePage() {
     for (const att of sorted) {
       const name = profileName(att.profileId)
       const cur = summaryMap.get(name) || { days: 0, mins: 0, late: 0 }
-      // 연차는 출근 기록이 없지만 근무일수에는 포함한다(유급휴가).
-      // 반차는 실제 출근 기록이 있어 clockIn 으로 이미 세어진다.
+      // 휴가일도 근무일수에 포함한다(유급휴가). 보통은 기본 근무시간이 채워져 clockIn 으로
+      // 이미 세어지지만, 반차 구분이 없어 시각을 못 채운 기록까지 빠뜨리지 않도록 함께 본다.
       if (att.clockIn || isLeaveDay(att)) cur.days += 1
       const m = getWorkedMinutes(att.clockIn, att.clockOut)
       if (m !== null) cur.mins += m
