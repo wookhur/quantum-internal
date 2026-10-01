@@ -392,6 +392,9 @@ export function Student360Page() {
   const activeConsultants = useMemo(() => {
     const counts = new Map<string, number>()
     for (const s of students) {
+      // 목록 상단의 인원수(활성)와 같은 기준으로 센다 —
+      // 아카이브(서비스 완료·취소)까지 세면 합이 활성 인원보다 커진다.
+      if (isArchivedStatus(s.status)) continue
       if (!s.assignedConsultant) continue
       const n = consultantName(s.assignedConsultant)
       if (n) counts.set(n, (counts.get(n) || 0) + 1)
