@@ -733,7 +733,7 @@ export function Student360Page() {
                       <MeetingProgressBar completed={completed} target={target} noShow={noShow} />
                       <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums">{completed}/{target}</span>
                       {noShow > 0 && (
-                        <span className="text-[10px] text-red-600 font-medium shrink-0">노쇼 {noShow}</span>
+                        <span className="text-[10px] text-violet-700 font-medium shrink-0">노쇼 {noShow}</span>
                       )}
                     </div>
                     {past.length > 0 && (
@@ -836,13 +836,14 @@ function MeetingProgressBar({ completed, target, noShow = 0 }: { completed: numb
   const label = noShow > 0 ? `${completed} / ${target} (노쇼 ${noShow})` : `${completed} / ${target}`
   return (
     <div className="flex items-center gap-0.5 w-full" role="img" aria-label={label} title={noShow > 0 ? `노쇼 ${noShow}회 포함` : undefined}>
-      {/* 진행 알은 연한 보라(violet-400) — KPI 점(초록·노랑·빨강·검정)과 겹치지 않으면서
-          너무 진하지 않게. +N 글자는 같은 톤이면 흐려서 한 단계 진한 violet-500 을 쓴다. */}
+      {/* 진행 알은 연한 보라(violet-400), 노쇼는 진한 보라(violet-700).
+          KPI 점(초록·노랑·빨강·검정) 어느 것과도 겹치지 않게 빨강을 쓰지 않는다.
+          +N 글자는 같은 톤이면 흐려서 한 단계 진한 violet-500 을 쓴다. */}
       {Array.from({ length: target }).map((_, i) => (
         <div
           key={i}
           className={`flex-1 h-2.5 rounded-sm transition-colors ${
-            i < doneFilled ? 'bg-violet-400' : i < filled ? 'bg-red-500' : 'bg-muted'
+            i < doneFilled ? 'bg-violet-400' : i < filled ? 'bg-violet-700' : 'bg-muted'
           }`}
         />
       ))}
