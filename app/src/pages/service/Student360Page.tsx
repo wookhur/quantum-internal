@@ -622,13 +622,14 @@ export function Student360Page() {
             {t('student360.archiveTab')} ({archiveCount})
           </button>
         </div>
-        {/* 장학생 / 휴면 보기 — 활성·비활성 토글처럼 한 줄에 반씩. 둘 다 연노랑(amber) 톤. */}
+        {/* 장학생 / 휴면 보기 — 활성·비활성 토글과 같은 바탕·글자색으로 통일.
+            고른 쪽만 검게 채워 네 버튼의 선택 표시가 같아 보이게 한다. */}
         {!showArchive && (scholarshipCount > 0 || pausedCount > 0) && (
           <div className="mb-2 flex gap-2 text-xs">
             {scholarshipCount > 0 && (
               <button
                 onClick={() => setScholarshipOnly(v => !v)}
-                className={`flex-1 py-1.5 rounded-md border font-medium transition-colors ${scholarshipOnly ? 'bg-amber-500 border-amber-500 text-white' : 'text-amber-700 border-amber-200 bg-amber-50 hover:bg-amber-100'}`}
+                className={`flex-1 py-1.5 rounded-md border font-medium transition-colors ${scholarshipOnly ? 'bg-gray-900 border-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 🎓 {t('student360.scholarshipOnly')} ({scholarshipCount}){scholarshipOnly ? ' ✕' : ''}
               </button>
@@ -636,7 +637,7 @@ export function Student360Page() {
             {pausedCount > 0 && (
               <button
                 onClick={() => setPausedOnly(v => !v)}
-                className={`flex-1 py-1.5 rounded-md border font-medium transition-colors ${pausedOnly ? 'bg-amber-500 border-amber-500 text-white' : 'text-amber-700 border-amber-200 bg-amber-50 hover:bg-amber-100'}`}
+                className={`flex-1 py-1.5 rounded-md border font-medium transition-colors ${pausedOnly ? 'bg-gray-900 border-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 💤 {t('student360.onLeaveOnly')} ({pausedCount}){pausedOnly ? ' ✕' : ''}
               </button>
@@ -835,17 +836,17 @@ function MeetingProgressBar({ completed, target, noShow = 0 }: { completed: numb
   const label = noShow > 0 ? `${completed} / ${target} (노쇼 ${noShow})` : `${completed} / ${target}`
   return (
     <div className="flex items-center gap-0.5 w-full" role="img" aria-label={label} title={noShow > 0 ? `노쇼 ${noShow}회 포함` : undefined}>
-      {/* 진행 알은 보라(violet-700) — 장학생 보기 버튼의 글자색과 같은 톤.
-          KPI 점(초록·노랑·빨강·검정) 어느 것과도 겹치지 않는다. */}
+      {/* 진행 알은 연한 보라(violet-400) — KPI 점(초록·노랑·빨강·검정)과 겹치지 않으면서
+          너무 진하지 않게. +N 글자는 같은 톤이면 흐려서 한 단계 진한 violet-500 을 쓴다. */}
       {Array.from({ length: target }).map((_, i) => (
         <div
           key={i}
           className={`flex-1 h-2.5 rounded-sm transition-colors ${
-            i < doneFilled ? 'bg-violet-700' : i < filled ? 'bg-red-500' : 'bg-muted'
+            i < doneFilled ? 'bg-violet-400' : i < filled ? 'bg-red-500' : 'bg-muted'
           }`}
         />
       ))}
-      {over > 0 && <span className="text-[10px] text-violet-700 font-semibold ml-1 shrink-0">+{over}</span>}
+      {over > 0 && <span className="text-[10px] text-violet-500 font-semibold ml-1 shrink-0">+{over}</span>}
     </div>
   )
 }
