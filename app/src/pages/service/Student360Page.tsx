@@ -820,13 +820,17 @@ function groupMeetingsByYear(
 }
 
 /** 총 target칸의 초록색 가로 막대. 완료 1회당 한 칸씩 채워진다. */
+/** 퀀텀어드미션즈 로고의 네이비. 미팅 진행 알에 쓴다 —
+ *  KPI 점(초록·노랑·빨강·검정)과 색이 겹쳐 헷갈리던 것을 피하기 위해 초록 대신 사용. */
+const QUANTUM_NAVY = '#1B365D'
+
 function MeetingProgressBar({ completed, target, noShow = 0 }: { completed: number; target: number; noShow?: number }) {
   const filled = Math.min(completed, target)
   const over = Math.max(0, completed - target)
   // 노쇼는 진행분에 포함하되 빨간 알로 구분한다. 목표 칸이 모자라면(초과 진행)
   // 보이는 칸 안에서 표시할 수 있는 만큼만 빨갛게 칠한다.
   const noShowFilled = Math.min(noShow, filled)
-  const greenFilled = filled - noShowFilled
+  const doneFilled = filled - noShowFilled
   const label = noShow > 0 ? `${completed} / ${target} (노쇼 ${noShow})` : `${completed} / ${target}`
   return (
     <div className="flex items-center gap-0.5 w-full" role="img" aria-label={label} title={noShow > 0 ? `노쇼 ${noShow}회 포함` : undefined}>
@@ -834,11 +838,14 @@ function MeetingProgressBar({ completed, target, noShow = 0 }: { completed: numb
         <div
           key={i}
           className={`flex-1 h-2.5 rounded-sm transition-colors ${
-            i < greenFilled ? 'bg-emerald-500' : i < filled ? 'bg-red-500' : 'bg-muted'
+            i < doneFilled ? '' : i < filled ? 'bg-red-500' : 'bg-muted'
           }`}
+          style={i < doneFilled ? { backgroundColor: QUANTUM_NAVY } : undefined}
         />
       ))}
-      {over > 0 && <span className="text-[10px] text-emerald-600 font-semibold ml-1 shrink-0">+{over}</span>}
+      {over > 0 && (
+        <span className="text-[10px] font-semibold ml-1 shrink-0" style={{ color: QUANTUM_NAVY }}>+{over}</span>
+      )}
     </div>
   )
 }
