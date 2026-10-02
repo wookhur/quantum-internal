@@ -611,25 +611,25 @@ export function Student360Page() {
         <div className="mb-2 flex rounded-md border overflow-hidden text-xs">
           <button
             onClick={() => { setShowArchive(false); setSelectedId(null) }}
-            className={`flex-1 py-1.5 font-medium transition-colors ${!showArchive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`flex-1 py-1.5 transition-colors ${!showArchive ? 'bg-white text-gray-900 font-semibold ring-1 ring-inset ring-gray-900' : 'text-gray-600 font-medium hover:bg-gray-50'}`}
           >
             {t('student360.activeTab')} ({activeCount})
           </button>
           <button
             onClick={() => { setShowArchive(true); setSelectedId(null) }}
-            className={`flex-1 py-1.5 font-medium border-l transition-colors ${showArchive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`flex-1 py-1.5 border-l transition-colors ${showArchive ? 'bg-white text-gray-900 font-semibold ring-1 ring-inset ring-gray-900' : 'text-gray-600 font-medium hover:bg-gray-50'}`}
           >
             {t('student360.archiveTab')} ({archiveCount})
           </button>
         </div>
         {/* 장학생 / 휴면 보기 — 활성·비활성 토글과 같은 바탕·글자색으로 통일.
-            고른 쪽만 검게 채워 네 버튼의 선택 표시가 같아 보이게 한다. */}
+            네 버튼 모두 흰 바탕이고, 고른 쪽만 글자를 진하게 + 테두리로 표시한다. */}
         {!showArchive && (scholarshipCount > 0 || pausedCount > 0) && (
           <div className="mb-2 flex gap-2 text-xs">
             {scholarshipCount > 0 && (
               <button
                 onClick={() => setScholarshipOnly(v => !v)}
-                className={`flex-1 py-1.5 rounded-md border font-medium transition-colors ${scholarshipOnly ? 'bg-gray-900 border-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`flex-1 py-1.5 rounded-md border transition-colors ${scholarshipOnly ? 'bg-white border-gray-900 text-gray-900 font-semibold' : 'text-gray-600 font-medium hover:bg-gray-50'}`}
               >
                 🎓 {t('student360.scholarshipOnly')} ({scholarshipCount}){scholarshipOnly ? ' ✕' : ''}
               </button>
@@ -637,7 +637,7 @@ export function Student360Page() {
             {pausedCount > 0 && (
               <button
                 onClick={() => setPausedOnly(v => !v)}
-                className={`flex-1 py-1.5 rounded-md border font-medium transition-colors ${pausedOnly ? 'bg-gray-900 border-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`flex-1 py-1.5 rounded-md border transition-colors ${pausedOnly ? 'bg-white border-gray-900 text-gray-900 font-semibold' : 'text-gray-600 font-medium hover:bg-gray-50'}`}
               >
                 💤 {t('student360.onLeaveOnly')} ({pausedCount}){pausedOnly ? ' ✕' : ''}
               </button>
