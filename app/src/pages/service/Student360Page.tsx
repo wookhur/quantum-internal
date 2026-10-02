@@ -830,17 +830,17 @@ function MeetingProgressBar({ completed, target, noShow = 0 }: { completed: numb
   const label = noShow > 0 ? `${completed} / ${target} (노쇼 ${noShow})` : `${completed} / ${target}`
   return (
     <div className="flex items-center gap-0.5 w-full" role="img" aria-label={label} title={noShow > 0 ? `노쇼 ${noShow}회 포함` : undefined}>
-      {/* 진행 알은 파스텔 하늘색 — KPI 점(초록·노랑·빨강·검정) 어느 것과도 겹치지 않게.
-          +N 글자는 같은 색이면 흐려서 안 읽히므로 한 단계 진한 톤을 쓴다. */}
+      {/* 진행 알은 기본 버튼과 같은 파랑(primary, #0073EA) — '새 학생' 버튼과 색을 맞춘다.
+          KPI 점(초록·노랑·빨강·검정) 어느 것과도 겹치지 않는다. */}
       {Array.from({ length: target }).map((_, i) => (
         <div
           key={i}
           className={`flex-1 h-2.5 rounded-sm transition-colors ${
-            i < doneFilled ? 'bg-sky-300' : i < filled ? 'bg-red-500' : 'bg-muted'
+            i < doneFilled ? 'bg-primary' : i < filled ? 'bg-red-500' : 'bg-muted'
           }`}
         />
       ))}
-      {over > 0 && <span className="text-[10px] text-sky-600 font-semibold ml-1 shrink-0">+{over}</span>}
+      {over > 0 && <span className="text-[10px] text-primary font-semibold ml-1 shrink-0">+{over}</span>}
     </div>
   )
 }
