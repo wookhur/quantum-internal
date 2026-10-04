@@ -2542,7 +2542,7 @@ export function ServiceDashboardPage() {
                 onClick={() => setView('student')}
                 className={`px-3 h-8 text-sm font-medium border-l ${view === 'student' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
-                <UserSearch size={14} className="inline mr-1.5" />학생별
+                <UserSearch size={14} className="inline mr-1.5" />학교별
               </button>
               <button
                 onClick={() => setView('majors')}
