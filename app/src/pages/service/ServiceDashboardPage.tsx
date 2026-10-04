@@ -41,6 +41,7 @@ import {
 import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, MAJOR_TRACK_LABEL_EN, gradeBucket, gradesToShow } from '@/lib/majorTaxonomy'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
+import { groupBySchool } from '@/lib/schoolGroups'
 import { normalizeStatus } from './Student360Page'
 import {
   useServicePrograms, useCreateProgram, useUpdateProgram, useDeleteProgram, type ServiceProgram,
@@ -1405,10 +1406,165 @@ interface ScheduleItem {
   cancelled?: boolean
 }
 
+// ─────────────── 학교 × 학년 인원 표 (학생별 뷰 상단) ───────────────
+// 어느 학교에 몇 학년이 몇 명 있는지 한눈에. 숫자를 누르면 그 학생들이 나오고,
+// 이름을 누르면 아래 일정이 그 학생으로 바뀐다.
+// 학교 이름은 자유 입력이라 표기만 다른 같은 학교를 한 줄로 묶는다(schoolGroups).
+const SCHOOL_ROWS_COLLAPSED = 12
+
+function SchoolGradeMatrix({ students, onPickStudent }: {
+  students: ServiceStudent[]
+  onPickStudent: (id: string) => void
+}) {
+  const [cell, setCell] = useState<{ school: string; grade: string } | null>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [q, setQ] = useState('')
+
+  // 현재 서비스 중(활성) 학생만 — 완료/취소된 학생은 인원에서 뺀다.
+  const active = useMemo(() => students.filter(s => isActiveStudent(s.status)), [students])
+
+  const gradeCols = useMemo(() => gradesToShow(active.map(s => gradeBucket(s.grade))), [active])
+
+  const rows = useMemo(() => {
+    return groupBySchool(active, s => s.school).map(g => {
+      const byGrade: Record<string, ServiceStudent[]> = {}
+      for (const st of g.students) {
+        const gb = gradeBucket(st.grade)
+        ;(byGrade[gb] = byGrade[gb] || []).push(st)
+      }
+      return { ...g, byGrade }
+    })
+  }, [active])
+
+  const colTotals = useMemo(() => {
+    const c: Record<string, number> = {}
+    for (const st of active) {
+      const gb = gradeBucket(st.grade)
+      c[gb] = (c[gb] || 0) + 1
+    }
+    return c
+  }, [active])
+
+  const needle = q.trim().toLowerCase()
+  const matched = needle
+    ? rows.filter(r => (r.label || '미입력').toLowerCase().includes(needle))
+    : rows
+  const shown = (expanded || needle) ? matched : matched.slice(0, SCHOOL_ROWS_COLLAPSED)
+  const hiddenCount = matched.length - shown.length
+
+  const picked = cell
+    ? (rows.find(r => r.key === cell.school)?.byGrade[cell.grade] || [])
+    : []
+  const pickedLabel = cell
+    ? `${rows.find(r => r.key === cell.school)?.label || '학교 미입력'} · ${cell.grade}`
+    : ''
+
+  if (active.length === 0) return null
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h3 className="text-sm font-semibold">학교별 · 학년별 인원</h3>
+          <div className="flex items-center gap-2">
+            <Input
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="학교 검색"
+              className="h-7 w-40 text-xs"
+            />
+            <span className="text-xs text-muted-foreground">
+              학교 {rows.filter(r => r.key).length}곳 · 활성 학생 {active.length}명
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left font-medium py-2 pr-3">학교</th>
+                {gradeCols.map(g => <th key={g} className="text-center font-medium py-2 px-2 w-14">{g}</th>)}
+                <th className="text-center font-semibold py-2 px-2 w-14">합계</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map(r => (
+                <tr key={r.key || '__none__'} className="border-b hover:bg-muted/20">
+                  <td className={`py-1.5 pr-3 ${r.key ? '' : 'text-amber-600'}`}>
+                    {r.label || '학교 미입력'}
+                  </td>
+                  {gradeCols.map(g => {
+                    const n = r.byGrade[g]?.length || 0
+                    const isSel = cell?.school === r.key && cell?.grade === g
+                    return (
+                      <td key={g} className="text-center px-2 py-1">
+                        {n > 0 ? (
+                          <button
+                            onClick={() => setCell(isSel ? null : { school: r.key, grade: g })}
+                            className={`inline-flex min-w-7 justify-center rounded px-1.5 py-0.5 tabular-nums ${isSel ? 'bg-primary text-white' : 'text-primary hover:bg-primary/10'}`}
+                          >{n}</button>
+                        ) : <span className="text-muted-foreground/40">·</span>}
+                      </td>
+                    )
+                  })}
+                  <td className="text-center font-semibold tabular-nums">{r.students.length}</td>
+                </tr>
+              ))}
+              {shown.length === 0 && (
+                <tr><td colSpan={gradeCols.length + 2} className="py-6 text-center text-xs text-muted-foreground">
+                  검색한 학교가 없습니다.
+                </td></tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 font-semibold">
+                <td className="py-2 pr-3">합계</td>
+                {gradeCols.map(g => <td key={g} className="text-center tabular-nums">{colTotals[g] || 0}</td>)}
+                <td className="text-center tabular-nums">{active.length}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {hiddenCount > 0 && (
+          <button onClick={() => setExpanded(true)} className="text-xs text-primary hover:underline">
+            학교 {hiddenCount}곳 더 보기
+          </button>
+        )}
+        {expanded && !needle && matched.length > SCHOOL_ROWS_COLLAPSED && (
+          <button onClick={() => setExpanded(false)} className="text-xs text-muted-foreground hover:underline">
+            접기
+          </button>
+        )}
+
+        {cell && (
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <div className="text-xs text-muted-foreground mb-2">{pickedLabel} — {picked.length}명</div>
+            <div className="flex flex-wrap gap-2">
+              {[...picked].sort(compareStudentsKo).map(st => (
+                <button
+                  key={st.id}
+                  onClick={() => onPickStudent(st.id)}
+                  className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs hover:border-primary"
+                  title="이 학생의 일정 보기"
+                >
+                  <span className="font-medium">{studentDisplayName(st.name, st.koreanName)}</span>
+                  {st.grade && <span className="text-muted-foreground">{st.grade}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function StudentScheduleView({
   students, milestones, onSelectMeeting, onEditMilestone,
 }: {
-  students: { id: string; name: string; koreanName?: string; assignedConsultant?: string }[]
+  students: ServiceStudent[]
   milestones: DashboardMilestone[]
   onSelectMeeting: (m: DashboardMeeting) => void
   onEditMilestone: (m: DashboardMilestone) => void
@@ -1481,6 +1637,8 @@ function StudentScheduleView({
 
   return (
     <div className="space-y-4">
+      <SchoolGradeMatrix students={students} onPickStudent={setStudentId} />
+
       <div className="flex items-center gap-3 flex-wrap">
         <Select value={studentId} onValueChange={v => setStudentId(v ?? '')}>
           <SelectTrigger className="h-9 w-72">
@@ -2660,7 +2818,7 @@ export function ServiceDashboardPage() {
         {/* By-student schedule (item 2) */}
         {view === 'student' && (
           <StudentScheduleView
-            students={vStudents.map(s => ({ id: s.id, name: s.name, koreanName: s.koreanName, assignedConsultant: s.assignedConsultant }))}
+            students={vStudents}
             milestones={vMilestones}
             onSelectMeeting={setSelectedMeeting}
             onEditMilestone={openEditMilestone}
