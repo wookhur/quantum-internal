@@ -841,6 +841,9 @@ const koTranslations = {
   // ── Marketing Metrics ──
   'mktMetrics.title': '마케팅 지표',
   'mktMetrics.subtitle': '{year}년 채널별 팔로워 추이 및 성과',
+  'mktMetrics.tabMetrics': '지표 현황',
+  'mktMetrics.tabPlan': '2027 목표',
+  'mktMetrics.planSubtitle': '2027 사업계획에서 자동으로 계산한 월별 마케팅 목표 (2026.10 ~ 2027.12)',
   'mktMetrics.syncDone': '동기화 완료 — {n}개 채널 업데이트됨',
   'mktMetrics.syncFail': '동기화 실패',
   'mktMetrics.apiSync': 'API 동기화',
@@ -3541,6 +3544,9 @@ const enTranslations: Record<string, string> = {
   // ── Marketing Metrics ──
   'mktMetrics.title': 'Marketing Metrics',
   'mktMetrics.subtitle': '{year} channel follower trends & performance',
+  'mktMetrics.tabMetrics': 'Metrics',
+  'mktMetrics.tabPlan': '2027 Targets',
+  'mktMetrics.planSubtitle': 'Monthly marketing targets derived from the 2027 business plan (Oct 2026 – Dec 2027)',
   'mktMetrics.syncDone': 'Sync complete — {n} channels updated',
   'mktMetrics.syncFail': 'Sync failed',
   'mktMetrics.apiSync': 'API Sync',

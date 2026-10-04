@@ -15,6 +15,11 @@ import {
 } from '@/hooks/useMarketingMetrics'
 import type { MarketingMetric } from '@/types'
 import { currentYearKST, currentMonthKST } from '@/lib/date'
+import { useSnsContents } from '@/hooks/useSnsContents'
+import { useLeads } from '@/hooks/useLeads'
+import {
+  monthlyTargets, attainment, FOLLOWER_ANCHORS,
+} from '@/lib/marketingPlan'
 import { useT } from '@/i18n/LanguageContext'
 import { useLocation } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -51,9 +56,213 @@ function formatNum(n: number): string {
   return n.toLocaleString()
 }
 
+// ─────────── 2027 사업계획 → 월별 마케팅 목표 ───────────
+// 계획서에는 '2027년 말 팔로워 4만' 같은 끝점만 있다. 그 사이 매달 무엇을
+// 해야 하는지를 marketingPlan.ts 가 복리 곡선으로 채우고, 여기서는 그 목표를
+// 실제 입력된 숫자(SNS 콘텐츠·리드)와 나란히 보여 준다.
+function pctClass(p: number | null): string {
+  if (p === null) return 'text-muted-foreground'
+  if (p >= 100) return 'text-emerald-600 font-semibold'
+  if (p >= 80) return 'text-amber-600'
+  return 'text-red-500'
+}
+
+function BusinessPlanSection() {
+  const { data: contents = [], isLoading: loadingSns } = useSnsContents()
+  const { data: leads = [], isLoading: loadingLeads } = useLeads()
+  const thisMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
+
+  const targets = useMemo(() => monthlyTargets(), [])
+
+  // 실적: 그 달에 올린 콘텐츠 수와 그 콘텐츠로 늘어난 팔로워
+  const snsByMonth = useMemo(() => {
+    const m = new Map<string, { posts: number; follows: number; views: number }>()
+    for (const c of contents) {
+      const key = (c.postedAt || '').slice(0, 7)
+      if (!key) continue
+      const e = m.get(key) || { posts: 0, follows: 0, views: 0 }
+      e.posts++; e.follows += c.follows || 0; e.views += c.views || 0
+      m.set(key, e)
+    }
+    return m
+  }, [contents])
+
+  // 실적: 그 달에 들어온 신규 문의(리드) 건수
+  const leadsByMonth = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const l of leads) {
+      const key = (l.leadDate || '').slice(0, 7)
+      if (!key) continue
+      m.set(key, (m.get(key) || 0) + 1)
+    }
+    return m
+  }, [leads])
+
+  // 팔로워 누적 실적 — 계획서 기준점(2026년 9월 1만 1,500명)에 그 뒤 콘텐츠로 늘어난 수를 더한다.
+  // 인스타 앱이 보여 주는 실제 팔로워와는 차이가 날 수 있다(언팔·콘텐츠 외 유입).
+  const followersByMonth = useMemo(() => {
+    const m = new Map<string, number>()
+    let acc = FOLLOWER_ANCHORS[0].value
+    let seen = false
+    for (const t of targets) {
+      const s = snsByMonth.get(t.month)
+      if (s) { acc += s.follows; seen = true }
+      if (seen) m.set(t.month, acc)
+    }
+    return m
+  }, [targets, snsByMonth])
+
+  const loading = loadingSns || loadingLeads
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="py-4 space-y-1">
+          <div className="flex items-center gap-2">
+            <Target className="size-4 text-primary" />
+            <h2 className="text-sm font-semibold">2027 사업계획 — 월별 마케팅 목표</h2>
+            <Badge variant="outline" className="text-[10px]">2026.10 ~ 2027.12 · 15개월</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            「2027년 사업계획 — 매출 200억」 ver.2 의 끝점(팔로워 4만 · 유료 구독자 4,000명 · NGA 100명)에서
+            매달 목표를 자동으로 계산합니다. 팔로워·구독자는 매달 같은 <b>비율</b>로 늘도록 복리 곡선으로 잇습니다.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* 최종 목표 요약 */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="bg-pink-50 border-pink-200">
+          <CardContent className="py-3">
+            <p className="text-[11px] text-pink-700">2027년 말 인스타 팔로워</p>
+            <p className="text-xl font-bold text-pink-900">40,000<span className="text-sm font-normal">명</span></p>
+            <p className="text-[11px] text-pink-700/70">현재 기준 11,500명 → 3.5배</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="py-3">
+            <p className="text-[11px] text-blue-700">유료 구독자 (앱)</p>
+            <p className="text-xl font-bold text-blue-900">4,000<span className="text-sm font-normal">명</span></p>
+            <p className="text-[11px] text-blue-700/70">유지율 30% → 누적 가입 1.3만 명</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-amber-50 border-amber-200">
+          <CardContent className="py-3">
+            <p className="text-[11px] text-amber-700">월 콘텐츠 업로드</p>
+            <p className="text-xl font-bold text-amber-900">약 91<span className="text-sm font-normal">개</span></p>
+            <p className="text-[11px] text-amber-700/70">하루 3개 × 주 7일 = 주 21개</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-emerald-50 border-emerald-200">
+          <CardContent className="py-3">
+            <p className="text-[11px] text-emerald-700">2027년 월 상담(문의)</p>
+            <p className="text-xl font-bold text-emerald-900">134<span className="text-sm font-normal">건</span></p>
+            <p className="text-[11px] text-emerald-700/70">컨설팅 50 + NGA 84 · 80%는 인스타</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 월별 목표 표 */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-xs">
+                    <th className="text-left font-medium py-2 px-3">월</th>
+                    <th className="text-right font-medium py-2 px-2">팔로워 목표</th>
+                    <th className="text-right font-medium py-2 px-2">순증</th>
+                    <th className="text-right font-medium py-2 px-2">팔로워 실적</th>
+                    <th className="text-right font-medium py-2 px-2">달성</th>
+                    <th className="text-right font-medium py-2 px-2 border-l">콘텐츠 목표</th>
+                    <th className="text-right font-medium py-2 px-2">실적</th>
+                    <th className="text-right font-medium py-2 px-2">달성</th>
+                    <th className="text-right font-medium py-2 px-2 border-l">문의 목표</th>
+                    <th className="text-right font-medium py-2 px-2">실적</th>
+                    <th className="text-right font-medium py-2 px-2">달성</th>
+                    <th className="text-right font-medium py-2 px-2 border-l">구독자 목표</th>
+                    <th className="text-right font-medium py-2 px-3">필요 가입</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {targets.map(t => {
+                    const sns = snsByMonth.get(t.month)
+                    const posts = sns?.posts ?? null
+                    const followers = followersByMonth.get(t.month) ?? null
+                    const inq = leadsByMonth.get(t.month) ?? null
+                    const isNow = t.month === thisMonth
+                    const isPast = t.month < thisMonth
+                    const dash = <span className="text-muted-foreground/40">—</span>
+                    return (
+                      <tr key={t.month} className={`border-b ${isNow ? 'bg-primary/5 font-medium' : isPast ? '' : 'text-muted-foreground'}`}>
+                        <td className="py-1.5 px-3 whitespace-nowrap">
+                          {t.month.replace('-', '.')}
+                          {isNow && <Badge variant="outline" className="ml-1.5 text-[9px] h-4 px-1">이번 달</Badge>}
+                        </td>
+                        <td className="text-right px-2 tabular-nums">{t.followers.toLocaleString()}</td>
+                        <td className="text-right px-2 tabular-nums text-xs text-muted-foreground">+{t.followerGain.toLocaleString()}</td>
+                        <td className="text-right px-2 tabular-nums">{followers === null ? dash : followers.toLocaleString()}</td>
+                        <td className={`text-right px-2 tabular-nums text-xs ${pctClass(followers === null ? null : attainment(followers, t.followers))}`}>
+                          {followers === null ? dash : `${Math.round(attainment(followers, t.followers) || 0)}%`}
+                        </td>
+                        <td className="text-right px-2 tabular-nums border-l">{t.contents}</td>
+                        <td className="text-right px-2 tabular-nums">{posts === null ? dash : posts}</td>
+                        <td className={`text-right px-2 tabular-nums text-xs ${pctClass(posts === null ? null : attainment(posts, t.contents))}`}>
+                          {posts === null ? dash : `${Math.round(attainment(posts, t.contents) || 0)}%`}
+                        </td>
+                        <td className="text-right px-2 tabular-nums border-l">{t.inquiries}</td>
+                        <td className="text-right px-2 tabular-nums">{inq === null ? dash : inq}</td>
+                        <td className={`text-right px-2 tabular-nums text-xs ${pctClass(inq === null ? null : attainment(inq, t.inquiries))}`}>
+                          {inq === null ? dash : `${Math.round(attainment(inq, t.inquiries) || 0)}%`}
+                        </td>
+                        <td className="text-right px-2 tabular-nums border-l">{t.subscribers.toLocaleString()}</td>
+                        <td className="text-right px-3 tabular-nums text-xs text-muted-foreground">{t.signups.toLocaleString()}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 목표를 어떻게 뽑았는지 — 숫자를 믿으려면 근거가 보여야 한다 */}
+      <Card>
+        <CardContent className="py-4 text-xs space-y-2 text-muted-foreground">
+          <p className="font-semibold text-foreground">이 숫자는 어디서 왔나</p>
+          <ul className="space-y-1 list-disc pl-4">
+            <li><b>팔로워</b> — 계획서 ④: 2026년 9월 11,500명 → 2026년 말 20,000 → 2027년 6월 말 30,000 → 2027년 말 40,000. 그 사이는 복리로 채웠습니다.</li>
+            <li><b>콘텐츠</b> — 계획서 ④: 하루 3개 × 주 7일. 월 목표 = 그 달의 일수 × 3.</li>
+            <li><b>문의(상담)</b> — 계획서 ②: 월 5명 신규 계약 ÷ 전환율 10% = 50건. 2027년부터 계획서의 NGA 상담 1,000건/년을 12개월로 나눈 84건을 더합니다. 그중 80%가 인스타 유입이어야 합니다(계획서 ④).</li>
+            <li><b>구독자</b> — 계획서 ③: 런칭 → 10 → 100 → 1,000 → 2027년 말 4,000명. 유지율 30%이므로 필요 가입 = 순증 ÷ 0.3.</li>
+          </ul>
+          <p className="font-semibold text-foreground pt-1">실적은 어디서 오나</p>
+          <ul className="space-y-1 list-disc pl-4">
+            <li><b>콘텐츠 실적</b> — 마케팅 &gt; 주간보고서에 입력한 SNS 콘텐츠 건수(게시일 기준).</li>
+            <li><b>팔로워 실적</b> — 기준 11,500명 + 그 뒤 콘텐츠별 팔로우 증가 누적. 콘텐츠를 입력한 달부터 표시됩니다. 언팔로우·콘텐츠 외 유입은 반영되지 않아 인스타 앱 숫자와 차이가 날 수 있습니다.</li>
+            <li><b>문의 실적</b> — 리드관리에 등록된 리드 건수(리드일 기준).</li>
+            <li><b>구독자</b>는 아직 받는 곳이 없어 목표만 표시합니다.</li>
+          </ul>
+          <p className="pt-1 text-amber-700">
+            계획서 ④의 제목은 ‘2만 5천 명’, 본문은 ‘2027년 말 4만’으로 서로 다릅니다. 단계가 적힌 본문(2만 → 3만 → 4만)을 따랐습니다.
+            NGA 상담은 2027년 1월부터 균등 배분했습니다 — 2026년 4분기부터 모집한다면 알려 주세요, 앞당겨 다시 계산합니다.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export function MarketingMetricsPage() {
   const t = useT()
   const canEdit = useCanEdit(useLocation().pathname)
+  const [tab, setTab] = useState<'metrics' | 'plan'>('metrics')
   const [year, setYear] = useState(currentYear)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingMetric, setEditingMetric] = useState<MarketingMetric | null>(null)
@@ -198,21 +407,33 @@ export function MarketingMetricsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('mktMetrics.title')}</h1>
           <p className="text-muted-foreground text-sm">
-            {isLoading ? t('common.loading') : t('mktMetrics.subtitle', { year })}
+            {tab === 'plan' ? t('mktMetrics.planSubtitle') : isLoading ? t('common.loading') : t('mktMetrics.subtitle', { year })}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
-            <SelectTrigger className="w-[100px] h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[currentYear - 1, currentYear, currentYear + 1].map(y => (
-                <SelectItem key={y} value={String(y)}>{y}년</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {canEdit && (
+          <div className="flex rounded-md border overflow-hidden mr-1">
+            <button
+              onClick={() => setTab('metrics')}
+              className={`px-3 h-9 text-sm font-medium ${tab === 'metrics' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            >{t('mktMetrics.tabMetrics')}</button>
+            <button
+              onClick={() => setTab('plan')}
+              className={`px-3 h-9 text-sm font-medium border-l ${tab === 'plan' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+            >{t('mktMetrics.tabPlan')}</button>
+          </div>
+          {tab === 'metrics' && (
+            <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
+              <SelectTrigger className="w-[100px] h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[currentYear - 1, currentYear, currentYear + 1].map(y => (
+                  <SelectItem key={y} value={String(y)}>{y}년</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {tab === 'metrics' && canEdit && (
             <Button
               size="sm"
               variant="outline"
@@ -224,7 +445,7 @@ export function MarketingMetricsPage() {
               {syncMetrics.isPending ? t('mktMetrics.syncing') : t('mktMetrics.apiSync')}
             </Button>
           )}
-          {canEdit && (
+          {tab === 'metrics' && canEdit && (
             <Button size="sm" className="h-9" onClick={() => { setEditingMetric(null); setForm(INITIAL_METRIC_FORM); setDialogOpen(true) }}>
               <Plus className="size-4 mr-1" />
               {t('mktMetrics.addMetric')}
@@ -311,7 +532,7 @@ export function MarketingMetricsPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {tab === 'plan' ? <BusinessPlanSection /> : isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
