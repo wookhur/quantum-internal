@@ -63,8 +63,14 @@ export const NEW_CONTRACTS_PER_MONTH = 5
 /** 계획서 인력 프로세스: NGA 100명 모집에 상담 1,000건 → 상담 10건당 1명 계약(10%). */
 export const INQUIRY_TO_CONTRACT = 0.1
 
-/** 계획서 인력 프로세스: NGA 연 상담 1,000건. 2027년 12개월에 균등 배분. */
-export const NGA_CONSULTS_PER_YEAR = 1000
+/**
+ * 계획서 인력 프로세스: NGA 100명 모집에 상담 1,000건.
+ * 모집은 2026년 4분기부터 시작하므로, 계획 기간 15개월에 균등 배분한다.
+ * (계획서의 '일 4건 × 영업일 263일' 속도라면 같은 1,000건을 12개월에 끝낸다 —
+ *  즉 아래 월 목표는 최소선이고, 팀 능력치는 그보다 위에 있다.)
+ */
+export const NGA_TOTAL_CONSULTS = 1000
+export const NGA_START: PlanMonth = '2026-10'
 
 /** 계획서 ④: "현재 신규 문의의 80%가 인스타 유입" — 마케팅이 책임지는 몫. */
 export const INSTAGRAM_SHARE = 0.8
@@ -159,13 +165,17 @@ function round(v: number): number {
 
 // ──────────────────────── 월별 목표 ────────────────────────
 
-/** 그 달의 문의(상담) 목표. 컨설팅 신규 5명에 필요한 상담 + 2027년부터 NGA 상담. */
+/** NGA 모집 기간(2026.10 ~ 2027.12)의 한 달치 상담 건수. */
+export function ngaConsultsPerMonth(): number {
+  const months = monthRange(NGA_START, PLAN_END).length
+  return months > 0 ? Math.ceil(NGA_TOTAL_CONSULTS / months) : 0
+}
+
+/** 그 달의 문의(상담) 목표. 컨설팅 신규 5명에 필요한 상담 + NGA 상담. */
 export function inquiryTarget(month: PlanMonth): number {
   const consulting = Math.round(NEW_CONTRACTS_PER_MONTH / INQUIRY_TO_CONTRACT)
-  const year = Number(month.slice(0, 4))
-  // NGA 100명은 2027년 목표 — 상담도 2027년 12개월에 나눠 싣는다.
-  const nga = year >= 2027 ? Math.ceil(NGA_CONSULTS_PER_YEAR / 12) : 0
-  return consulting + nga
+  const inNga = monthIndex(month) >= monthIndex(NGA_START) && monthIndex(month) <= monthIndex(PLAN_END)
+  return consulting + (inNga ? ngaConsultsPerMonth() : 0)
 }
 
 export function monthlyTargets(start: PlanMonth = PLAN_START, end: PlanMonth = PLAN_END): MonthlyTarget[] {

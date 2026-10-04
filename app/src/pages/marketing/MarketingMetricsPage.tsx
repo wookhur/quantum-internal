@@ -155,9 +155,9 @@ function BusinessPlanSection() {
         </Card>
         <Card className="bg-emerald-50 border-emerald-200">
           <CardContent className="py-3">
-            <p className="text-[11px] text-emerald-700">2027년 월 상담(문의)</p>
-            <p className="text-xl font-bold text-emerald-900">134<span className="text-sm font-normal">건</span></p>
-            <p className="text-[11px] text-emerald-700/70">컨설팅 50 + NGA 84 · 80%는 인스타</p>
+            <p className="text-[11px] text-emerald-700">월 상담(문의)</p>
+            <p className="text-xl font-bold text-emerald-900">117<span className="text-sm font-normal">건</span></p>
+            <p className="text-[11px] text-emerald-700/70">컨설팅 50 + NGA 67 · 80%는 인스타</p>
           </CardContent>
         </Card>
       </div>
@@ -239,7 +239,7 @@ function BusinessPlanSection() {
           <ul className="space-y-1 list-disc pl-4">
             <li><b>팔로워</b> — 계획서 ④: 2026년 9월 11,500명 → 2026년 말 20,000 → 2027년 6월 말 30,000 → 2027년 말 40,000. 그 사이는 복리로 채웠습니다.</li>
             <li><b>콘텐츠</b> — 계획서 ④: 하루 3개 × 주 7일. 월 목표 = 그 달의 일수 × 3.</li>
-            <li><b>문의(상담)</b> — 계획서 ②: 월 5명 신규 계약 ÷ 전환율 10% = 50건. 2027년부터 계획서의 NGA 상담 1,000건/년을 12개월로 나눈 84건을 더합니다. 그중 80%가 인스타 유입이어야 합니다(계획서 ④).</li>
+            <li><b>문의(상담)</b> — 계획서 ②: 월 5명 신규 계약 ÷ 전환율 10% = 50건. 여기에 NGA 100명 모집에 필요한 상담 1,000건을 모집 기간(2026.10 ~ 2027.12, 15개월)에 나눈 67건을 더해 월 117건. 그중 80%(94건)가 인스타 유입이어야 합니다(계획서 ④).</li>
             <li><b>구독자</b> — 계획서 ③: 런칭 → 10 → 100 → 1,000 → 2027년 말 4,000명. 유지율 30%이므로 필요 가입 = 순증 ÷ 0.3.</li>
           </ul>
           <p className="font-semibold text-foreground pt-1">실적은 어디서 오나</p>
@@ -249,9 +249,9 @@ function BusinessPlanSection() {
             <li><b>문의 실적</b> — 리드관리에 등록된 리드 건수(리드일 기준).</li>
             <li><b>구독자</b>는 아직 받는 곳이 없어 목표만 표시합니다.</li>
           </ul>
-          <p className="pt-1 text-amber-700">
-            계획서 ④의 제목은 ‘2만 5천 명’, 본문은 ‘2027년 말 4만’으로 서로 다릅니다. 단계가 적힌 본문(2만 → 3만 → 4만)을 따랐습니다.
-            NGA 상담은 2027년 1월부터 균등 배분했습니다 — 2026년 4분기부터 모집한다면 알려 주세요, 앞당겨 다시 계산합니다.
+          <p className="pt-1">
+            NGA 상담 1,000건은 모집이 시작되는 2026년 4분기부터 2027년 말까지 균등 배분했습니다.
+            계획서의 ‘일 4건 × 영업일 263일’ 속도라면 같은 1,000건을 12개월에 끝내므로, 위 월 목표는 최소선입니다.
           </p>
         </CardContent>
       </Card>
