@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
+import { isOnPause, isPauseEnded } from '@/lib/studentPause'
 import { contractYearOf, heldByContractYear, isCompletedMeetingStatus, isNoShowStatus, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
 import {
   useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching,
@@ -442,9 +443,10 @@ export function Student360Page() {
   // 탭 카운트와 목록이 항상 같은 기준을 쓰도록 여기서 한 번만 거른다.
   const baseFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const today = todayKST()   // 복귀예정일이 지난 휴면은 자동으로 풀린 것으로 본다
     return students.filter(s => {
       if (mentorStudentIds && !mentorStudentIds.has(s.id)) return false
-      if (pausedOnly && !s.paused) return false
+      if (pausedOnly && !isOnPause(s, today)) return false
       if (scholarshipOnly && !s.scholarship) return false
       if (filterName && consultantName(s.assignedConsultant) !== filterName) return false
       if (essayEditorFilter !== 'all' && (s.essayEditor || '') !== essayEditorFilter) return false
@@ -479,7 +481,8 @@ export function Student360Page() {
     return c
   }, [students, regionByStudent])
 
-  const pausedCount = useMemo(() => students.filter(s => s.paused && !isArchivedStatus(s.status)).length, [students])
+  const todayStr = todayKST()
+  const pausedCount = useMemo(() => students.filter(s => isOnPause(s, todayStr) && !isArchivedStatus(s.status)).length, [students, todayStr])
   const scholarshipCount = useMemo(() => students.filter(s => s.scholarship && !isArchivedStatus(s.status)).length, [students])
   const filtered = useMemo(() =>
     baseFiltered
@@ -676,7 +679,7 @@ export function Student360Page() {
                   {s.scholarship && (
                     <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0 bg-violet-50 text-violet-700 border-violet-200">🎓 {t('student360.scholarship')}</Badge>
                   )}
-                  {s.paused && (
+                  {isOnPause(s, todayStr) && (
                     <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0 bg-amber-50 text-amber-700 border-amber-200">💤 {t('student360.onLeave')}</Badge>
                   )}
                   {statusFlags.missingReports.has(s.id) && (
@@ -874,9 +877,13 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
     if (!confirm(t('student360.resumeConfirm'))) return
     update.mutate({ id: student.id, paused: false, pauseReason: '', pauseReturnDate: '' })
   }
+  // 복귀 예정일이 되면 휴면에서 자동으로 벗어난다(저장된 플래그는 그대로 두고 판정만 날짜로 한다).
+  const today = todayKST()
+  const onPause = isOnPause(student, today)
+  const autoReleased = isPauseEnded(student, today)
 
   return (
-    <Card className={student.paused ? 'border-amber-300' : ''}>
+    <Card className={onPause ? 'border-amber-300' : ''}>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 flex-wrap">
           <UserIcon className="size-5 text-primary" />
@@ -888,7 +895,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
               🎓 {t('student360.scholarship')}
             </Badge>
           )}
-          {student.paused && (
+          {onPause && (
             <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
               💤 {t('student360.onLeave')}{student.pauseReturnDate ? ` · ${t('student360.returnExpected')} ${student.pauseReturnDate}` : ''}
             </Badge>
@@ -896,7 +903,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         </CardTitle>
         {canEdit && (
           <div className="flex gap-2">
-            {student.paused ? (
+            {onPause ? (
               <Button variant="outline" size="sm" className="text-emerald-700 border-emerald-200 hover:bg-emerald-50" disabled={update.isPending} onClick={resume}>
                 <Power className="size-4 mr-1" />{t('student360.resume')}
               </Button>
@@ -958,11 +965,17 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
             🎓 {t('student360.scholarshipBanner')}
           </div>
         )}
-        {student.paused && (
+        {onPause && (
           <div className="col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             💤 {t('student360.onLeaveBanner')}
             {student.pauseReturnDate && <> · {t('student360.returnExpected')} <b>{student.pauseReturnDate}</b></>}
             {student.pauseReason && <div className="text-xs text-amber-700 mt-0.5 whitespace-pre-wrap">{t('student360.reasonOptional')}: {student.pauseReason}</div>}
+          </div>
+        )}
+        {autoReleased && (
+          <div className="col-span-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            ✅ {t('student360.onLeaveReleased')}
+            {student.pauseReturnDate && <> · {t('student360.returnedOn')} <b>{student.pauseReturnDate}</b></>}
           </div>
         )}
       </CardContent>
@@ -981,6 +994,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{t('student360.setOnLeave')}</DialogTitle></DialogHeader>
           <p className="text-xs text-muted-foreground">{t('student360.onLeaveDesc')}</p>
+          <p className="text-xs text-emerald-700">{t('student360.onLeaveAutoDesc')}</p>
           <div className="space-y-3">
             <div>
               <Label className="text-xs">{t('student360.returnDateOptional')}</Label>

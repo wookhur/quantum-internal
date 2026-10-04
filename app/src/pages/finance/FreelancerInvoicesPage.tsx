@@ -19,6 +19,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { isNoShowStatus } from '@/lib/meetingProgress'
+import { todayKST } from '@/lib/date'
+import { isOnPause } from '@/lib/studentPause'
 import { useMentors, useAllMentorAssignments, useAllMentorSessions, majorTierAmount, majorTierLabel, COACHING_MONTHLY } from '@/hooks/useMentors'
 import { useAllServiceMeetings } from '@/hooks/useServiceDashboard'
 import { useAllEditorMeetings } from '@/hooks/useEditorMeetings'
@@ -1298,7 +1300,8 @@ function useConsultantBillable(month: string) {
     })
     // 이름 매칭을 대소문자·공백에 견고하게: 정규화 키로 그룹핑, 표시용 이름은 함께 보관
     const byConsultant = new Map<string, { name: string; students: BillableStudent[] }>()
-    students.filter(s => isActiveStudent(s.status) && !s.paused && s.assignedConsultant).forEach(s => {
+    const today = todayKST()   // 복귀예정일이 지난 휴면 학생은 다시 관리비 청구 대상
+    students.filter(s => isActiveStudent(s.status) && !isOnPause(s, today) && s.assignedConsultant).forEach(s => {
       const display = consultantName(s.assignedConsultant)
       const key = consultantNameKey(display)
       const pairs = pairsByStudent.get(s.id) || []
