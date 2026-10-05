@@ -193,6 +193,22 @@ export interface ContractClaimant<T extends ContractLite, L extends LeadForContr
   pairs: readonly ContractedPair<T, L>[]
 }
 
+/** 한 계약을 두 개 이상의 세미나가 주장했을 때, 누가 가져가고 누가 양보했는지. */
+export interface ContractOverlap<T extends ContractLite, L extends LeadForContract> {
+  contract: T
+  /** 대표 리드(가져간 행 기준) */
+  lead: L
+  wonBy: { key: string; eventDate: string | null }
+  lostBy: { key: string; eventDate: string | null }[]
+}
+
+export interface AttributionResult<T extends ContractLite, L extends LeadForContract> {
+  /** 행 키 → 그 행이 최종으로 가져간 계약들 */
+  byRow: Map<string, ContractedPair<T, L>[]>
+  /** 둘 이상이 주장했던 계약들. 숫자가 왜 줄었는지 설명하려면 이게 있어야 한다. */
+  overlaps: ContractOverlap<T, L>[]
+}
+
 /**
  * 같은 계약을 여러 세미나가 동시에 주장할 때 하나에만 돌린다 — '계약 직전 세미나'.
  *
@@ -203,25 +219,44 @@ export interface ContractClaimant<T extends ContractLite, L extends LeadForContr
  * 계약일에 가장 가까운(= 가장 늦은) 세미나가 실제로 계약을 끌어낸 접점이므로 거기에만
  * 싣는다. 날짜가 같으면 행 키 순서로 정해 렌더마다 결과가 흔들리지 않게 한다.
  * 날짜가 없는 행은 비교할 근거가 없어 날짜가 있는 행에 양보한다.
+ *
+ * 정리한 사실은 숨기지 않는다 — 어떤 계약이 어디로 갔는지 overlaps 로 함께 돌려준다.
  */
 export function attributeContractsLastTouch<T extends ContractLite, L extends LeadForContract>(
   claimants: readonly ContractClaimant<T, L>[],
-): Map<string, ContractedPair<T, L>[]> {
-  // 계약 → 그 계약을 가져갈 행
-  const winner = new Map<string, { key: string; date: string }>()
+): AttributionResult<T, L> {
+  // 계약 → 그 계약을 주장한 행들
+  const claimedBy = new Map<string, { key: string; date: string; pair: ContractedPair<T, L> }[]>()
   for (const c of claimants) {
     const date = c.eventDate || ''        // 날짜 없음은 가장 약한 값
     for (const p of c.pairs) {
       const ck = contractKeyOf(p.contract)
-      const cur = winner.get(ck)
-      if (!cur || date > cur.date || (date === cur.date && c.key < cur.key)) {
-        winner.set(ck, { key: c.key, date })
-      }
+      const arr = claimedBy.get(ck) || []
+      arr.push({ key: c.key, date, pair: p })
+      claimedBy.set(ck, arr)
     }
   }
-  const out = new Map<string, ContractedPair<T, L>[]>()
+
+  const winnerOf = new Map<string, string>()
+  const overlaps: ContractOverlap<T, L>[] = []
+  claimedBy.forEach((arr, ck) => {
+    // 가장 늦은 날짜 → 같으면 행 키 순서
+    const sorted = [...arr].sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : a.key.localeCompare(b.key)))
+    const win = sorted[0]
+    winnerOf.set(ck, win.key)
+    if (sorted.length > 1) {
+      overlaps.push({
+        contract: win.pair.contract,
+        lead: win.pair.lead,
+        wonBy: { key: win.key, eventDate: win.date || null },
+        lostBy: sorted.slice(1).map(x => ({ key: x.key, eventDate: x.date || null })),
+      })
+    }
+  })
+
+  const byRow = new Map<string, ContractedPair<T, L>[]>()
   for (const c of claimants) {
-    out.set(c.key, c.pairs.filter(p => winner.get(contractKeyOf(p.contract))?.key === c.key))
+    byRow.set(c.key, c.pairs.filter(p => winnerOf.get(contractKeyOf(p.contract)) === c.key))
   }
-  return out
+  return { byRow, overlaps }
 }

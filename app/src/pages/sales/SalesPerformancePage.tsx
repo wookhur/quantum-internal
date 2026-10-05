@@ -14,7 +14,7 @@ import { useContracts } from '@/hooks/useContracts'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import {
   buildContractMatchIndex, contractedPairs, attributeContractsLastTouch,
-  type ContractedPair, type ContractClaimant,
+  type ContractedPair, type ContractClaimant, type ContractOverlap,
 } from '@/lib/seminarContracts'
 import { phoneConsultEvents } from '@/lib/phoneConsults'
 import {
@@ -198,9 +198,11 @@ export function SalesPerformancePage() {
   // Merge manual sales_events with auto-aggregated seminars
   // 계약은 행마다 따로 셀 수 없다 — 한 사람이 세미나 두 개에 참석하면 같은 계약을
   // 두 행이 주장한다. 그래서 행별 '주장'을 모아 두었다가 마지막에 한 번에 귀속시킨다.
-  const { rows, contractPairsByRow } = useMemo((): {
+  const { rows, contractPairsByRow, contractOverlaps, rowNames } = useMemo((): {
     rows: PerfRow[]
     contractPairsByRow: Map<string, ContractedPair<Contract, Lead>[]>
+    contractOverlaps: ContractOverlap<Contract, Lead>[]
+    rowNames: Map<string, string>
   } => {
     const manualNames = new Set(events.map(e => e.eventName.trim()))
     const claims: ContractClaimant<Contract, Lead>[] = []
@@ -342,7 +344,7 @@ export function SalesPerformancePage() {
 
     // 겹쳐 주장된 계약을 '계약 직전 세미나' 한 곳에만 싣는다.
     // 월 필터보다 먼저 해야 한다 — 다른 달 세미나가 가져갈 계약을 이번 달이 가로채면 안 된다.
-    const attributed = attributeContractsLastTouch(claims)
+    const { byRow: attributed, overlaps } = attributeContractsLastTouch(claims)
     for (const r of autoRows) {
       const n = attributed.get(r.id)?.length ?? 0
       r.contracts = n
@@ -353,8 +355,25 @@ export function SalesPerformancePage() {
     if (monthFilter !== 'all') {
       merged = merged.filter(r => r.month === monthFilter)
     }
-    return { rows: merged, contractPairsByRow: attributed }
+    // 겹침을 사람이 읽을 수 있게 — 행 키는 UUID 라 이름이 필요하다. 월 필터와 무관하게 전부.
+    const names = new Map<string, string>()
+    for (const r of [...manualRows, ...autoRows]) {
+      names.set(r.id, r.seminar && r.sessionLabel ? `${r.seminar.title} · ${r.eventName}` : r.eventName)
+    }
+    return { rows: merged, contractPairsByRow: attributed, contractOverlaps: overlaps, rowNames: names }
   }, [events, seminars, allLeads, allMeetings, leadAttendance, contactActivities, contractIndex, monthFilter])
+
+  // 화면에 보이는 행과 관련된 겹침만 — 다른 달 세미나끼리의 정리까지 띄우면 소음이 된다.
+  const visibleOverlaps = useMemo(() => {
+    const visible = new Set(rows.map(r => r.id))
+    return contractOverlaps.filter(o => visible.has(o.wonBy.key) || o.lostBy.some(l => visible.has(l.key)))
+  }, [contractOverlaps, rows])
+
+  // 이 행이 주장했다가 다른 세미나에 양보한 계약 — 0으로 보이는 이유를 설명하려고.
+  const dialogGivenAway = useMemo(() => {
+    if (!detailDialog || detailDialog.kind !== 'contracts' || !detailDialog.row.auto) return []
+    return contractOverlaps.filter(o => o.lostBy.some(l => l.key === detailDialog.row.id))
+  }, [detailDialog, contractOverlaps])
 
   // Extract unique months for the filter dropdown (from all rows, unfiltered)
   const months = useMemo(() => {
@@ -560,6 +579,32 @@ export function SalesPerformancePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 중복 계약 정리 결과 — 숫자가 왜 줄었는지 바로 확인할 수 있게 */}
+      {visibleOverlaps.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/60">
+          <CardContent className="py-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-amber-900">
+              중복 계약 {visibleOverlaps.length}건을 계약 직전 세미나로 정리했습니다
+            </div>
+            <p className="text-xs text-amber-800/80">
+              한 분이 세미나 여러 개에 참석한 뒤 계약하면 양쪽 모두에 잡힙니다. 계약일에 가장 가까운 세미나 한 곳에만 싣습니다.
+            </p>
+            <div className="divide-y divide-amber-200/70 rounded-md border border-amber-200 bg-white">
+              {visibleOverlaps.map(o => (
+                <div key={`${o.contract.id || o.contract.studentName}-${o.wonBy.key}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-2 text-xs">
+                  <span className="font-medium">{o.contract.studentName || o.lead.studentName || '-'}</span>
+                  <span className="font-mono text-muted-foreground">{o.contract.contractDate || '-'}</span>
+                  <span className="text-emerald-700">→ {rowNames.get(o.wonBy.key) || o.wonBy.key}</span>
+                  <span className="text-muted-foreground">
+                    (제외: {o.lostBy.map(l => rowNames.get(l.key) || l.key).join(', ')})
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Table */}
       <Card>
@@ -1080,13 +1125,36 @@ export function SalesPerformancePage() {
           {/* Contracts list — 이 행에서 계약까지 간 사람 */}
           {detailDialog?.kind === 'contracts' && (
             !detailDialog.row.auto ? (
-              <p className="text-sm text-muted-foreground text-center py-10">
-                {t('salesPerf.manualFigureNote')}
-              </p>
+              // 수동 입력 행: 계약 수가 팀이 적은 값이라 이어진 명단 자체가 없다.
+              // 왜 비어 있는지와 어떻게 해야 명단이 생기는지를 함께 알려 준다.
+              <div className="text-sm text-muted-foreground text-center py-10 space-y-2">
+                <p>이 행은 <b className="text-foreground">팀이 직접 입력한 수치</b>입니다(자동 집계 아님).</p>
+                <p className="text-xs">
+                  계약자 명단이 보이려면 세미나 관리에 같은 이름의 세미나가 있고,
+                  그 세미나로 들어온 리드가 계약관리의 계약과 이어져 있어야 합니다.
+                </p>
+              </div>
             ) : dialogContracts.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-10">
-                {t('salesPerf.noMatchingContracts')}
-              </p>
+              <div className="text-sm text-muted-foreground text-center py-10 space-y-2">
+                {dialogGivenAway.length > 0 ? (
+                  <>
+                    <p>
+                      이 세미나에 매칭된 계약 {dialogGivenAway.length}건은 모두
+                      <b className="text-foreground"> 계약 직전 세미나</b>로 반영되었습니다.
+                    </p>
+                    <div className="inline-block text-left text-xs rounded-md border bg-muted/30 px-3 py-2">
+                      {dialogGivenAway.map(o => (
+                        <div key={o.contract.id || o.contract.studentName}>
+                          {o.contract.studentName || '-'} ({o.contract.contractDate || '-'}) →{' '}
+                          <b className="text-foreground">{rowNames.get(o.wonBy.key) || o.wonBy.key}</b>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p>{t('salesPerf.noMatchingContracts')}</p>
+                )}
+              </div>
             ) : (
               <Table>
                 <TableHeader>
