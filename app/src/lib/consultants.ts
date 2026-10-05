@@ -39,12 +39,20 @@ const CONSULTANT_NAME_ALIASES: Record<string, string> = {
   'ivitta': 'Isabela',
   'ivatta': 'Isabela',           // 오타 표기
   'isabela vitta': 'Isabela',
+  // 프로필이 생기기 전에 슬러그('aidan')로 쓰던 분. 학생 담당자는 아직 그 슬러그로
+  // 저장돼 있어 'Aidan Lee' 로 보이는데, 로그인 계정과 인보이스는 '이준형' 이라
+  // 관리비가 서로 다른 이름에 쌓여 인보이스에서 사라졌다. 실제 프로필 이름으로 모은다.
+  'aidan lee': '이준형',
+  'aidan': '이준형',
 }
 
-/** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현). */
+/** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현).
+ *  별칭을 찾을 때는 띄어쓰기 편차를 먼저 지운다 — 'Aidan  Lee'(두 칸)처럼 저장된 값도
+ *  같은 사람으로 모이게. 별칭이 없으면 적힌 표기를 그대로 돌려준다. */
 export function canonicalConsultantName(name?: string): string {
   const n = (name || '').trim()
-  return CONSULTANT_NAME_ALIASES[n.toLowerCase()] || n
+  const lookup = n.toLowerCase().replace(/\s+/g, ' ')
+  return CONSULTANT_NAME_ALIASES[lookup] || n
 }
 
 /** Normalized key for name matching: canonical form, lowercased, spaces collapsed.

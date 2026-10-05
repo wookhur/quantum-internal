@@ -46,8 +46,18 @@ where name ilike '%aidan%'
    or name ilike '%lee%'
 order by name;
 
--- ④ 9월 인보이스가 어떤 이름으로 발행돼 있는지
-select id, freelancer_name, month, status, created_at
-from public.freelancer_invoices
-where month = '2026-09'
-order by freelancer_name;
+-- ④ 9월 인보이스가 누구 이름으로 발행돼 있는지
+--    인보이스에는 이름 컬럼이 없다 — freelancer_id 로 프로필을 따라가고,
+--    대리작성이면 client_name 이 수령인 이름이다.
+select
+  i.id,
+  coalesce(i.client_name, p.name) as 수령인,
+  p.name                          as 계정이름,
+  p.role                          as 계정역할,
+  i.invoice_month,
+  i.status,
+  i.total_amount
+from public.freelancer_invoices i
+left join public.profiles p on p.id = i.freelancer_id
+where i.invoice_month = '2026-09'
+order by 수령인;
