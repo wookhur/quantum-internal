@@ -19,6 +19,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { isNoShowStatus } from '@/lib/meetingProgress'
+import { consultantAtDate } from '@/lib/consultantAtDate'
 import { todayKST } from '@/lib/date'
 import { isOnPause } from '@/lib/studentPause'
 import { useMentors, useAllMentorAssignments, useAllMentorSessions, majorTierAmount, majorTierLabel, COACHING_MONTHLY } from '@/hooks/useMentors'
@@ -1302,12 +1303,31 @@ function useConsultantBillable(month: string) {
     const byConsultant = new Map<string, { name: string; students: BillableStudent[] }>()
     const today = todayKST()   // 복귀예정일이 지난 휴면 학생은 다시 관리비 청구 대상
     students.filter(s => isActiveStudent(s.status) && !isOnPause(s, today) && s.assignedConsultant).forEach(s => {
-      const display = consultantName(s.assignedConsultant)
-      const key = consultantNameKey(display)
       const pairs = pairsByStudent.get(s.id) || []
-      const entry = byConsultant.get(key) || { name: display, students: [] }
-      entry.students.push({ id: s.id, label: studentLabel(s.name, s.koreanName), done: pairs.length, billable: pairs.length >= 1, billableMonths: pairs.length, pairs })
-      byConsultant.set(key, entry)
+      if (pairs.length === 0) return      // 이번 달 청구분 없음
+      // 관리비는 '지금 담당자'가 아니라 '그 미팅을 맡고 있던 사람' 몫이다.
+      // 10월에 인수인계를 받았다면 9월에 닫힌 짝은 넘겨준 사람의 관리비다.
+      const byWho = new Map<string, { display: string; pairs: [string, string][] }>()
+      for (const pair of pairs) {
+        const whoId = consultantAtDate(s, pair[1]) || s.assignedConsultant
+        const display = consultantName(whoId)
+        const key = consultantNameKey(display)
+        const g = byWho.get(key) || { display, pairs: [] }
+        g.pairs.push(pair)
+        byWho.set(key, g)
+      }
+      byWho.forEach((g, key) => {
+        const entry = byConsultant.get(key) || { name: g.display, students: [] }
+        entry.students.push({
+          id: s.id,
+          label: studentLabel(s.name, s.koreanName),
+          done: g.pairs.length,
+          billable: g.pairs.length >= 1,
+          billableMonths: g.pairs.length,
+          pairs: g.pairs,
+        })
+        byConsultant.set(key, entry)
+      })
     })
     return byConsultant
   }, [students, meetings, consultantName, month])

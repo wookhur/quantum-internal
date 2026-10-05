@@ -74,12 +74,18 @@ order by korean_name;
 
 -- ────────────────────────────────────────────────────────────
 -- ② 담당 컨설턴트를 이준형 프로필로 교체 (여기서 실제로 바뀝니다)
---    ①에서 service_students 말고 다른 표도 나왔다면, 같은 형태로 한 줄씩 추가하세요.
+--    ① 실행 결과: service_students.assigned_consultant 2건, service_meetings.consultant_id 3건.
+--    ①에서 그 밖의 표가 더 나왔다면 같은 형태로 한 줄씩 추가하세요.
 -- ────────────────────────────────────────────────────────────
 update public.service_students
 set assigned_consultant = '02e20da3-8a89-4725-8e06-22bd882a4e8b',
     updated_at = now()
 where assigned_consultant = 'aidan';
+
+-- 미팅 기록에 적힌 진행자도 같은 사람이다.
+update public.service_meetings
+set consultant_id = '02e20da3-8a89-4725-8e06-22bd882a4e8b'
+where consultant_id = 'aidan';
 
 
 -- ────────────────────────────────────────────────────────────
