@@ -16,6 +16,10 @@ import {
 import type { MarketingMetric } from '@/types'
 import { currentYearKST, currentMonthKST } from '@/lib/date'
 import { useSnsContents } from '@/hooks/useSnsContents'
+import {
+  useMarketingPlanActuals, useSavePlanActual, type MarketingPlanActual,
+} from '@/hooks/useMarketingPlanActuals'
+import { useAuth } from '@/contexts/AuthContext'
 import { useLeads } from '@/hooks/useLeads'
 import {
   monthlyTargets, attainment, FOLLOWER_ANCHORS,
@@ -67,21 +71,33 @@ function pctClass(p: number | null): string {
   return 'text-red-500'
 }
 
-function BusinessPlanSection() {
+function BusinessPlanSection({ canEdit }: { canEdit: boolean }) {
+  const { user } = useAuth()
   const { data: contents = [], isLoading: loadingSns } = useSnsContents()
   const { data: leads = [], isLoading: loadingLeads } = useLeads()
+  const { data: actuals = [], isLoading: loadingActuals, error: actualsError } = useMarketingPlanActuals()
+  const savePlanActual = useSavePlanActual()
   const thisMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
+
+  const [editMonth, setEditMonth] = useState<string | null>(null)
+  const [form, setForm] = useState({ followers: '', subscribers: '', signups: '', notes: '' })
 
   const targets = useMemo(() => monthlyTargets(), [])
 
+  const actualByMonth = useMemo(() => {
+    const m = new Map<string, MarketingPlanActual>()
+    for (const a of actuals) m.set(a.month, a)
+    return m
+  }, [actuals])
+
   // 실적: 그 달에 올린 콘텐츠 수와 그 콘텐츠로 늘어난 팔로워
   const snsByMonth = useMemo(() => {
-    const m = new Map<string, { posts: number; follows: number; views: number }>()
+    const m = new Map<string, { posts: number; follows: number }>()
     for (const c of contents) {
       const key = (c.postedAt || '').slice(0, 7)
       if (!key) continue
-      const e = m.get(key) || { posts: 0, follows: 0, views: 0 }
-      e.posts++; e.follows += c.follows || 0; e.views += c.views || 0
+      const e = m.get(key) || { posts: 0, follows: 0 }
+      e.posts++; e.follows += c.follows || 0
       m.set(key, e)
     }
     return m
@@ -98,9 +114,12 @@ function BusinessPlanSection() {
     return m
   }, [leads])
 
-  // 팔로워 누적 실적 — 계획서 기준점(2026년 9월 1만 1,500명)에 그 뒤 콘텐츠로 늘어난 수를 더한다.
-  // 인스타 앱이 보여 주는 실제 팔로워와는 차이가 날 수 있다(언팔·콘텐츠 외 유입).
-  const followersByMonth = useMemo(() => {
+  /**
+   * 팔로워 실적. 직접 입력한 인스타 앱 숫자가 있으면 그것이 맞다.
+   * 없으면 기준 11,500명에 콘텐츠별 팔로우 증가를 더한 추정치로 보여 준다
+   * (언팔로우·콘텐츠 외 유입이 빠져 있어 어긋날 수 있다).
+   */
+  const followerEstimate = useMemo(() => {
     const m = new Map<string, number>()
     let acc = FOLLOWER_ANCHORS[0].value
     let seen = false
@@ -112,7 +131,38 @@ function BusinessPlanSection() {
     return m
   }, [targets, snsByMonth])
 
-  const loading = loadingSns || loadingLeads
+  const openEdit = (month: string) => {
+    if (!canEdit) return
+    const a = actualByMonth.get(month)
+    setForm({
+      followers: a?.instagramFollowers != null ? String(a.instagramFollowers) : '',
+      subscribers: a?.paidSubscribers != null ? String(a.paidSubscribers) : '',
+      signups: a?.appSignups != null ? String(a.appSignups) : '',
+      notes: a?.notes || '',
+    })
+    setEditMonth(month)
+  }
+
+  const submit = () => {
+    if (!editMonth) return
+    const n = (v: string) => (v.trim() === '' ? undefined : Number(v))
+    savePlanActual.mutate(
+      {
+        month: editMonth,
+        instagramFollowers: n(form.followers),
+        paidSubscribers: n(form.subscribers),
+        appSignups: n(form.signups),
+        notes: form.notes.trim() || undefined,
+        createdBy: user?.id,
+      },
+      { onSuccess: () => setEditMonth(null) },
+    )
+  }
+
+  const loading = loadingSns || loadingLeads || loadingActuals
+  const dash = <span className="text-muted-foreground/40">—</span>
+  const pct = (actual: number | null, target: number) =>
+    actual === null ? dash : <span className={pctClass(attainment(actual, target))}>{Math.round(attainment(actual, target) || 0)}%</span>
 
   return (
     <div className="space-y-4">
@@ -129,6 +179,15 @@ function BusinessPlanSection() {
           </p>
         </CardContent>
       </Card>
+
+      {/* 표가 아직 없을 때 — 조용히 비어 보이지 않게 */}
+      {actualsError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          실적을 저장할 표(<code>marketing_plan_actuals</code>)가 아직 없습니다.
+          <code className="mx-1">supabase/migration-marketing-plan-actuals.sql</code> 을 Supabase SQL 편집기에서 한 번 실행해 주세요.
+          그 전까지 목표와 자동 실적(콘텐츠·문의)은 그대로 보입니다.
+        </div>
+      )}
 
       {/* 최종 목표 요약 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -162,7 +221,7 @@ function BusinessPlanSection() {
         </Card>
       </div>
 
-      {/* 월별 목표 표 */}
+      {/* 월별 목표 · 실적 */}
       <Card>
         <CardContent className="p-0">
           {loading ? (
@@ -176,8 +235,7 @@ function BusinessPlanSection() {
                   <tr className="border-b bg-muted/30 text-xs">
                     <th className="text-left font-medium py-2 px-3">월</th>
                     <th className="text-right font-medium py-2 px-2">팔로워 목표</th>
-                    <th className="text-right font-medium py-2 px-2">순증</th>
-                    <th className="text-right font-medium py-2 px-2">팔로워 실적</th>
+                    <th className="text-right font-medium py-2 px-2">실적</th>
                     <th className="text-right font-medium py-2 px-2">달성</th>
                     <th className="text-right font-medium py-2 px-2 border-l">콘텐츠 목표</th>
                     <th className="text-right font-medium py-2 px-2">실적</th>
@@ -186,42 +244,66 @@ function BusinessPlanSection() {
                     <th className="text-right font-medium py-2 px-2">실적</th>
                     <th className="text-right font-medium py-2 px-2">달성</th>
                     <th className="text-right font-medium py-2 px-2 border-l">구독자 목표</th>
-                    <th className="text-right font-medium py-2 px-3">필요 가입</th>
+                    <th className="text-right font-medium py-2 px-2">실적</th>
+                    <th className="text-right font-medium py-2 px-2">달성</th>
+                    <th className="text-right font-medium py-2 px-2 border-l">가입 목표</th>
+                    <th className="text-right font-medium py-2 px-2">실적</th>
+                    {canEdit && <th className="py-2 px-2 w-10" />}
                   </tr>
                 </thead>
                 <tbody>
                   {targets.map(t => {
-                    const sns = snsByMonth.get(t.month)
-                    const posts = sns?.posts ?? null
-                    const followers = followersByMonth.get(t.month) ?? null
+                    const a = actualByMonth.get(t.month)
+                    const posts = snsByMonth.get(t.month)?.posts ?? null
                     const inq = leadsByMonth.get(t.month) ?? null
+                    const estimated = a?.instagramFollowers == null
+                    const followers = a?.instagramFollowers ?? followerEstimate.get(t.month) ?? null
+                    const subs = a?.paidSubscribers ?? null
+                    const signups = a?.appSignups ?? null
                     const isNow = t.month === thisMonth
                     const isPast = t.month < thisMonth
-                    const dash = <span className="text-muted-foreground/40">—</span>
                     return (
                       <tr key={t.month} className={`border-b ${isNow ? 'bg-primary/5 font-medium' : isPast ? '' : 'text-muted-foreground'}`}>
                         <td className="py-1.5 px-3 whitespace-nowrap">
                           {t.month.replace('-', '.')}
                           {isNow && <Badge variant="outline" className="ml-1.5 text-[9px] h-4 px-1">이번 달</Badge>}
                         </td>
-                        <td className="text-right px-2 tabular-nums">{t.followers.toLocaleString()}</td>
-                        <td className="text-right px-2 tabular-nums text-xs text-muted-foreground">+{t.followerGain.toLocaleString()}</td>
-                        <td className="text-right px-2 tabular-nums">{followers === null ? dash : followers.toLocaleString()}</td>
-                        <td className={`text-right px-2 tabular-nums text-xs ${pctClass(followers === null ? null : attainment(followers, t.followers))}`}>
-                          {followers === null ? dash : `${Math.round(attainment(followers, t.followers) || 0)}%`}
+                        <td className="text-right px-2 tabular-nums whitespace-nowrap">
+                          {t.followers.toLocaleString()}
+                          <span className="text-[10px] text-muted-foreground ml-1">+{t.followerGain.toLocaleString()}</span>
                         </td>
+                        <td className="text-right px-2 tabular-nums whitespace-nowrap">
+                          {followers === null ? dash : (
+                            <>
+                              {followers.toLocaleString()}
+                              {estimated && <span className="text-[10px] text-muted-foreground ml-0.5" title="인스타 앱 숫자를 아직 안 적어 콘텐츠 팔로우 증가로 추정한 값">추정</span>}
+                            </>
+                          )}
+                        </td>
+                        <td className="text-right px-2 tabular-nums text-xs">{pct(followers, t.followers)}</td>
+
                         <td className="text-right px-2 tabular-nums border-l">{t.contents}</td>
                         <td className="text-right px-2 tabular-nums">{posts === null ? dash : posts}</td>
-                        <td className={`text-right px-2 tabular-nums text-xs ${pctClass(posts === null ? null : attainment(posts, t.contents))}`}>
-                          {posts === null ? dash : `${Math.round(attainment(posts, t.contents) || 0)}%`}
-                        </td>
+                        <td className="text-right px-2 tabular-nums text-xs">{pct(posts, t.contents)}</td>
+
                         <td className="text-right px-2 tabular-nums border-l">{t.inquiries}</td>
                         <td className="text-right px-2 tabular-nums">{inq === null ? dash : inq}</td>
-                        <td className={`text-right px-2 tabular-nums text-xs ${pctClass(inq === null ? null : attainment(inq, t.inquiries))}`}>
-                          {inq === null ? dash : `${Math.round(attainment(inq, t.inquiries) || 0)}%`}
-                        </td>
+                        <td className="text-right px-2 tabular-nums text-xs">{pct(inq, t.inquiries)}</td>
+
                         <td className="text-right px-2 tabular-nums border-l">{t.subscribers.toLocaleString()}</td>
-                        <td className="text-right px-3 tabular-nums text-xs text-muted-foreground">{t.signups.toLocaleString()}</td>
+                        <td className="text-right px-2 tabular-nums">{subs === null ? dash : subs.toLocaleString()}</td>
+                        <td className="text-right px-2 tabular-nums text-xs">{pct(subs, t.subscribers)}</td>
+
+                        <td className="text-right px-2 tabular-nums border-l text-xs text-muted-foreground">{t.signups.toLocaleString()}</td>
+                        <td className="text-right px-2 tabular-nums">{signups === null ? dash : signups.toLocaleString()}</td>
+
+                        {canEdit && (
+                          <td className="px-2 text-right">
+                            <Button variant="ghost" size="icon" className="size-6" title="이 달 실적 입력" onClick={() => openEdit(t.month)}>
+                              <Pencil className="size-3" />
+                            </Button>
+                          </td>
+                        )}
                       </tr>
                     )
                   })}
@@ -232,6 +314,50 @@ function BusinessPlanSection() {
         </CardContent>
       </Card>
 
+      {/* 한 달치 실적 입력 — 같은 달을 다시 저장하면 덮어쓴다 */}
+      <Dialog open={!!editMonth} onOpenChange={open => { if (!open) setEditMonth(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{editMonth?.replace('-', '년 ')}월 실적 입력</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            밖에서 보고 와야 하는 숫자만 적습니다. 콘텐츠 수와 문의 건수는 주간보고서·리드관리에서 자동으로 집계됩니다.
+            빈칸으로 두면 ‘아직 안 적음’으로 둡니다(0 과 다릅니다).
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs">인스타 팔로워 (월말, 앱 기준)</Label>
+              <Input type="number" inputMode="numeric" value={form.followers}
+                onChange={e => setForm(f => ({ ...f, followers: e.target.value }))} placeholder="예: 13,800 → 13800" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">유료 구독자 (월말)</Label>
+              <Input type="number" inputMode="numeric" value={form.subscribers}
+                onChange={e => setForm(f => ({ ...f, subscribers: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">신규 가입 (그 달)</Label>
+              <Input type="number" inputMode="numeric" value={form.signups}
+                onChange={e => setForm(f => ({ ...f, signups: e.target.value }))} />
+              <p className="text-[11px] text-muted-foreground">가입 대비 구독자 유지율이 계획서 전제 30%에 닿는지 보려면 함께 적어 주세요.</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">메모 (선택)</Label>
+              <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+          </div>
+          {savePlanActual.isError && (
+            <p className="text-xs text-destructive">{(savePlanActual.error as Error)?.message}</p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => setEditMonth(null)}>{'취소'}</Button>
+            <Button onClick={submit} disabled={savePlanActual.isPending}>
+              {savePlanActual.isPending && <Loader2 className="size-4 animate-spin mr-1" />}저장
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* 목표를 어떻게 뽑았는지 — 숫자를 믿으려면 근거가 보여야 한다 */}
       <Card>
         <CardContent className="py-4 text-xs space-y-2 text-muted-foreground">
@@ -240,14 +366,13 @@ function BusinessPlanSection() {
             <li><b>팔로워</b> — 계획서 ④: 2026년 9월 11,500명 → 2026년 말 20,000 → 2027년 6월 말 30,000 → 2027년 말 40,000. 그 사이는 복리로 채웠습니다.</li>
             <li><b>콘텐츠</b> — 계획서 ④: 하루 3개 × 주 7일. 월 목표 = 그 달의 일수 × 3.</li>
             <li><b>문의(상담)</b> — 계획서 ②: 월 5명 신규 계약 ÷ 전환율 10% = 50건. 여기에 NGA 100명 모집에 필요한 상담 1,000건을 모집 기간(2026.10 ~ 2027.12, 15개월)에 나눈 67건을 더해 월 117건. 그중 80%(94건)가 인스타 유입이어야 합니다(계획서 ④).</li>
-            <li><b>구독자</b> — 계획서 ③: 런칭 → 10 → 100 → 1,000 → 2027년 말 4,000명. 유지율 30%이므로 필요 가입 = 순증 ÷ 0.3.</li>
+            <li><b>구독자</b> — 계획서 ③: 런칭 → 10 → 100 → 1,000 → 2027년 말 4,000명. 유지율 30%이므로 가입 목표 = 순증 ÷ 0.3.</li>
           </ul>
           <p className="font-semibold text-foreground pt-1">실적은 어디서 오나</p>
           <ul className="space-y-1 list-disc pl-4">
-            <li><b>콘텐츠 실적</b> — 마케팅 &gt; 주간보고서에 입력한 SNS 콘텐츠 건수(게시일 기준).</li>
-            <li><b>팔로워 실적</b> — 기준 11,500명 + 그 뒤 콘텐츠별 팔로우 증가 누적. 콘텐츠를 입력한 달부터 표시됩니다. 언팔로우·콘텐츠 외 유입은 반영되지 않아 인스타 앱 숫자와 차이가 날 수 있습니다.</li>
-            <li><b>문의 실적</b> — 리드관리에 등록된 리드 건수(리드일 기준).</li>
-            <li><b>구독자</b>는 아직 받는 곳이 없어 목표만 표시합니다.</li>
+            <li><b>콘텐츠·문의</b> — 자동. 마케팅 &gt; 주간보고서의 SNS 콘텐츠(게시일 기준)와 리드관리의 리드(리드일 기준)를 그대로 셉니다.</li>
+            <li><b>팔로워·구독자·가입</b> — 월별로 직접 입력합니다. 각 줄 오른쪽 <Pencil className="inline size-3" /> 을 눌러 그 달 숫자를 적으면 됩니다.</li>
+            <li>팔로워를 안 적은 달은 기준 11,500명 + 콘텐츠별 팔로우 증가로 <b>추정</b>해 보여 줍니다. 언팔로우·콘텐츠 외 유입이 빠져 있어 인스타 앱 숫자와 차이가 납니다 — 월말에 앱 숫자를 적어 주시면 그 값이 우선합니다.</li>
           </ul>
           <p className="pt-1">
             NGA 상담 1,000건은 모집이 시작되는 2026년 4분기부터 2027년 말까지 균등 배분했습니다.
@@ -258,6 +383,7 @@ function BusinessPlanSection() {
     </div>
   )
 }
+
 
 export function MarketingMetricsPage() {
   const t = useT()
@@ -532,7 +658,7 @@ export function MarketingMetricsPage() {
         </div>
       </div>
 
-      {tab === 'plan' ? <BusinessPlanSection /> : isLoading ? (
+      {tab === 'plan' ? <BusinessPlanSection canEdit={canEdit} /> : isLoading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="size-6 animate-spin text-muted-foreground" />
         </div>
