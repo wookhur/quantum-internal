@@ -12,7 +12,10 @@ import { useSalesEvents, useCreateSalesEvent, useUpdateSalesEvent, useDeleteSale
 import { useLeads } from '@/hooks/useLeads'
 import { useContracts } from '@/hooks/useContracts'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
-import { buildContractMatchIndex, contractedPairs } from '@/lib/seminarContracts'
+import {
+  buildContractMatchIndex, contractedPairs, attributeContractsLastTouch,
+  type ContractedPair, type ContractClaimant,
+} from '@/lib/seminarContracts'
 import { phoneConsultEvents } from '@/lib/phoneConsults'
 import {
   useSeminarsWithRegistrations,
@@ -31,7 +34,7 @@ import {
 } from '@/hooks/useSeminarPerformance'
 import { useSeminarRegistrations } from '@/hooks/useSeminars'
 import { useAllLeadAttendance } from '@/hooks/useLeadAttendance'
-import type { Lead, SalesEvent } from '@/types'
+import type { Contract, Lead, SalesEvent } from '@/types'
 import { getStageConfig, MEETING_METHODS } from '@/types'
 import { Link } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -193,8 +196,14 @@ export function SalesPerformancePage() {
   }
 
   // Merge manual sales_events with auto-aggregated seminars
-  const rows = useMemo((): PerfRow[] => {
+  // 계약은 행마다 따로 셀 수 없다 — 한 사람이 세미나 두 개에 참석하면 같은 계약을
+  // 두 행이 주장한다. 그래서 행별 '주장'을 모아 두었다가 마지막에 한 번에 귀속시킨다.
+  const { rows, contractPairsByRow } = useMemo((): {
+    rows: PerfRow[]
+    contractPairsByRow: Map<string, ContractedPair<Contract, Lead>[]>
+  } => {
     const manualNames = new Set(events.map(e => e.eventName.trim()))
+    const claims: ContractClaimant<Contract, Lead>[] = []
 
     const manualRows: PerfRow[] = events.map(e => {
       const seminar = seminars.find(s => s.title === e.eventName) ?? null
@@ -266,9 +275,15 @@ export function SalesPerformancePage() {
           // 계약: 이 세미나로 매칭된 리드에 걸린 '계약 건수'.
           // 한 가족이 리드로 두 번 등록되면 같은 계약이 두 번 잡히므로 계약 기준으로 묶는다.
           // 세미나보다 먼저 맺은 계약은 이 세미나의 성과가 아니므로 제외한다.
-          const contracted = contractedPairs(opts.matched, contractIndex, { onOrAfter: eventDate }).length
+          // 여기서는 '주장'만 모은다 — 여러 세미나가 겹쳐 주장하면 아래에서 한 곳으로 정리한다.
+          const rowId = `seminar-${s.id}${opts.idSuffix}`
+          claims.push({
+            key: rowId,
+            eventDate,
+            pairs: contractedPairs(opts.matched, contractIndex, { onOrAfter: eventDate }),
+          })
           return {
-            id: `seminar-${s.id}${opts.idSuffix}`,
+            id: rowId,
             month,
             eventName: opts.eventName,
             eventDate,
@@ -280,8 +295,8 @@ export function SalesPerformancePage() {
             zoomBookings: byMethod('zoom'),
             inPersonBookings: byMethod('in_person'),
             totalMeetings: matchedMeetings.length,
-            contracts: contracted,
-            contractRate: opts.applicants > 0 ? (contracted / opts.applicants) * 100 : 0,
+            contracts: 0,          // 귀속 후 아래에서 채운다
+            contractRate: 0,
             auto: true,
             source: null,
             seminar: s,
@@ -325,11 +340,20 @@ export function SalesPerformancePage() {
         })]
       })
 
+    // 겹쳐 주장된 계약을 '계약 직전 세미나' 한 곳에만 싣는다.
+    // 월 필터보다 먼저 해야 한다 — 다른 달 세미나가 가져갈 계약을 이번 달이 가로채면 안 된다.
+    const attributed = attributeContractsLastTouch(claims)
+    for (const r of autoRows) {
+      const n = attributed.get(r.id)?.length ?? 0
+      r.contracts = n
+      r.contractRate = r.applicants > 0 ? (n / r.applicants) * 100 : 0
+    }
+
     let merged = [...manualRows, ...autoRows]
     if (monthFilter !== 'all') {
       merged = merged.filter(r => r.month === monthFilter)
     }
-    return merged
+    return { rows: merged, contractPairsByRow: attributed }
   }, [events, seminars, allLeads, allMeetings, leadAttendance, contactActivities, contractIndex, monthFilter])
 
   // Extract unique months for the filter dropdown (from all rows, unfiltered)
@@ -408,10 +432,9 @@ export function SalesPerformancePage() {
     if (!detailDialog || detailDialog.kind !== 'contracts') return []
     // 수동 입력 이벤트의 계약 수는 팀이 직접 적은 값이라 매칭으로 목록을 만들 수 없다.
     if (!detailDialog.row.auto) return []
-    const after = detailDialog.row.eventDate
-    // 성과표 숫자와 같은 기준(계약 건수)으로 — 중복 리드는 한 줄로 합친다.
-    return contractedPairs(dialogLeads, contractIndex, { onOrAfter: after })
-  }, [detailDialog, dialogLeads, contractIndex])
+    // 표의 숫자와 어긋나지 않도록 귀속 결과를 그대로 쓴다.
+    return contractPairsByRow.get(detailDialog.row.id) ?? []
+  }, [detailDialog, contractPairsByRow])
 
   // 수동 이벤트는 팀 입력값을 진실로 보여준다(참석·미팅은 계산 목록과 불일치하므로 팀 수치 표시).
   // 신청자(registrants)/리드는 실제 등록 리스트가 유용하므로 계산값 유지(null).

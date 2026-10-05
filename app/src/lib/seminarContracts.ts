@@ -183,3 +183,45 @@ export function contractedLeadIds<T extends ContractLite>(
   }
   return out
 }
+
+/** 한 세미나(또는 세션) 행이 '내 성과'라고 주장하는 계약들. */
+export interface ContractClaimant<T extends ContractLite, L extends LeadForContract> {
+  /** 행 식별자 */
+  key: string
+  /** 세미나 날짜. 없으면 null — 날짜가 있는 행에 밀린다. */
+  eventDate: string | null
+  pairs: readonly ContractedPair<T, L>[]
+}
+
+/**
+ * 같은 계약을 여러 세미나가 동시에 주장할 때 하나에만 돌린다 — '계약 직전 세미나'.
+ *
+ * 한 사람이 7월 세미나와 8월 세미나에 모두 참석한 뒤 8월 9일에 계약하면, 두 세미나가
+ * 모두 "계약일이 내 날짜보다 뒤"라는 조건을 통과해 한 건이 두 번 세어졌다. 세미나별
+ * 계약률도 그만큼 부풀었다.
+ *
+ * 계약일에 가장 가까운(= 가장 늦은) 세미나가 실제로 계약을 끌어낸 접점이므로 거기에만
+ * 싣는다. 날짜가 같으면 행 키 순서로 정해 렌더마다 결과가 흔들리지 않게 한다.
+ * 날짜가 없는 행은 비교할 근거가 없어 날짜가 있는 행에 양보한다.
+ */
+export function attributeContractsLastTouch<T extends ContractLite, L extends LeadForContract>(
+  claimants: readonly ContractClaimant<T, L>[],
+): Map<string, ContractedPair<T, L>[]> {
+  // 계약 → 그 계약을 가져갈 행
+  const winner = new Map<string, { key: string; date: string }>()
+  for (const c of claimants) {
+    const date = c.eventDate || ''        // 날짜 없음은 가장 약한 값
+    for (const p of c.pairs) {
+      const ck = contractKeyOf(p.contract)
+      const cur = winner.get(ck)
+      if (!cur || date > cur.date || (date === cur.date && c.key < cur.key)) {
+        winner.set(ck, { key: c.key, date })
+      }
+    }
+  }
+  const out = new Map<string, ContractedPair<T, L>[]>()
+  for (const c of claimants) {
+    out.set(c.key, c.pairs.filter(p => winner.get(contractKeyOf(p.contract))?.key === c.key))
+  }
+  return out
+}
