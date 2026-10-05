@@ -63,6 +63,41 @@ export function contractKeys(studentName?: string): string[] {
   return [...new Set([whole, ...parts].filter(Boolean))]
 }
 
+/**
+ * 사람을 특정할 수 없는 이름 키.
+ *
+ * 계약서 학생명에는 '정서영 | Daniel', '김호진 | Daniel' 처럼 영문 애칭이 함께 적힌다.
+ * 쪼갠 조각으로 이으면 'daniel' 하나가 서로 다른 가족의 계약 둘에 걸려, 한쪽 리드에
+ * 남의 계약이 따라붙는다.
+ *
+ * 그래서 '서로 다른 학생명에 동시에 걸리는 키'는 이름만으로 쓰지 않는다.
+ * 그런 키로는 둘 중 누구인지 가릴 수 없으니, 잘못 잇느니 잇지 않는 편이 낫다
+ * (계약관리에서 리드를 직접 연결하면 이름과 무관하게 이어진다).
+ *
+ * 한 글자짜리 키('모', 'J' 등)도 같은 이유로 쓰지 않는다.
+ */
+export const MIN_NAME_KEY_LENGTH = 2
+
+export function ambiguousContractNameKeys(
+  contracts: readonly { studentName?: string }[],
+): Set<string> {
+  const owners = new Map<string, Set<string>>()
+  for (const c of contracts) {
+    const whole = key(c.studentName)
+    if (!whole) continue
+    for (const k of contractKeys(c.studentName)) {
+      const set = owners.get(k) || new Set<string>()
+      set.add(whole)
+      owners.set(k, set)
+    }
+  }
+  const out = new Set<string>()
+  owners.forEach((names, k) => {
+    if (names.size > 1 || k.length < MIN_NAME_KEY_LENGTH) out.add(k)
+  })
+  return out
+}
+
 /** 학생의 영문명·한글명을 모두 후보 키로 만든다. */
 function studentKeys(s: ReconcileStudent): string[] {
   return [...new Set([key(s.name), key(s.koreanName)].filter(Boolean))]

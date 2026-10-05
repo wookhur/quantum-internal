@@ -24,6 +24,7 @@ import { LeadLocalTime } from '@/components/LeadLocalTime'
 import ConsultationBookingDialog from '@/components/ConsultationBookingDialog'
 import LeadEditDialog from '@/components/LeadEditDialog'
 import { CreateContractFromLeadDialog } from '@/components/CreateContractFromLeadDialog'
+import { pickLeadContracts } from '@/lib/leadContracts'
 
 // ─── Linked data hooks ────────────────────────────────────────────────────
 
@@ -31,11 +32,17 @@ function useLinkedContracts(leadId: string | undefined, studentName: string | un
   return useQuery({
     queryKey: ['linked-contracts', leadId, studentName, parentName],
     queryFn: async () => {
-      // Search by lead_id FK first, then also by name match
+      // 1차로 넓게 가져온 뒤(ilike), 실제로 이 리드의 계약인지는 아래에서 가린다.
+      // 계약서 학생명은 '정서영 | Daniel' 처럼 영문 애칭이 함께 적혀서, 포함 검색만으로는
+      // 이름이 'Daniel' 인 리드에 남의 가족 계약까지 따라붙는다.
       const conditions: string[] = []
       if (leadId) conditions.push(`lead_id.eq.${leadId}`)
-      if (studentName) conditions.push(`student_name.ilike.%${studentName}%`)
-      if (parentName) conditions.push(`contractor_name.ilike.%${parentName}%`)
+      // PostgREST or() 는 쉼표·괄호로 조건을 끊는다 — 이름에 그런 글자가 있으면 쿼리가 깨지므로 뺀다.
+      const safe = (v: string) => v.replace(/[,()*\\]/g, ' ').trim()
+      const sn = studentName ? safe(studentName) : ''
+      const pn = parentName ? safe(parentName) : ''
+      if (sn) conditions.push(`student_name.ilike.%${sn}%`)
+      if (pn) conditions.push(`contractor_name.ilike.%${pn}%`)
 
       if (conditions.length === 0) return []
 
@@ -46,10 +53,22 @@ function useLinkedContracts(leadId: string | undefined, studentName: string | un
         .order('contract_date', { ascending: false })
 
       if (error) throw error
-      return (data || []) as (Record<string, unknown> & {
+      const rows = (data || []) as (Record<string, unknown> & {
         sales_profiles: { id: string; name: string } | null
         service_profiles: { id: string; name: string } | null
       })[]
+
+      // 이름 조각이 '통째로' 같을 때만 인정하고, 여러 학생에게 걸리는 조각은 쓰지 않는다.
+      const picked = pickLeadContracts(
+        { id: leadId, studentName, parentName },
+        rows.map(r => ({
+          row: r,
+          leadId: (r.lead_id as string) || undefined,
+          studentName: (r.student_name as string) || undefined,
+          contractorName: (r.contractor_name as string) || undefined,
+        })),
+      )
+      return picked.map(p => p.row)
     },
     enabled: !!(leadId || studentName || parentName),
   })

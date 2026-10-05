@@ -15,7 +15,7 @@
  * 리드의 이름 표기와 계약서 표기가 다를 수 있어(영문/한글), 전화·이메일로 Student360
  * 학생기록을 거쳐 그 학생의 영문명·한글명까지 후보 키에 더한다. 전화번호가 가장 강한 키다.
  */
-import { contractKeys } from './contractReconcile'
+import { contractKeys, ambiguousContractNameKeys } from './contractReconcile'
 
 /** 취소된 계약은 세지 않는다(중복·오등록 정리분이 대부분). */
 const EXCLUDED_CONTRACT_STATUSES = new Set(['cancelled', 'canceled'])
@@ -60,6 +60,8 @@ export interface ContractMatchIndex<T extends ContractLite = ContractLite> {
   byLeadId: Map<string, T[]>
   /** 이름 후보 키 → 그 이름의 계약들 */
   byName: Map<string, T[]>
+  /** 사람을 특정할 수 없는 키(여러 학생에게 걸림, 한 글자). 이름만으로는 잇지 않는다. */
+  ambiguousNames: Set<string>
   /** 전화/이메일 키 → 그 사람의 학생기록 이름 후보 키들 */
   studentNamesByContact: Map<string, string[]>
 }
@@ -83,6 +85,10 @@ export function buildContractMatchIndex<T extends ContractLite>(
       byName.set(k, arr)
     }
   }
+  // 'daniel' 처럼 서로 다른 학생의 계약에 동시에 걸리는 키는 이름만으로 쓸 수 없다.
+  const usable = contracts.filter(c => !EXCLUDED_CONTRACT_STATUSES.has((c.status || '').toLowerCase()))
+  const ambiguousNames = ambiguousContractNameKeys(usable)
+
   const studentNamesByContact = new Map<string, string[]>()
   for (const s of students) {
     const keys = [nameKey(s.name), nameKey(s.koreanName)].filter(Boolean)
@@ -93,7 +99,7 @@ export function buildContractMatchIndex<T extends ContractLite>(
       studentNamesByContact.set(contact, [...new Set([...prev, ...keys])])
     }
   }
-  return { byLeadId, byName, studentNamesByContact }
+  return { byLeadId, byName, studentNamesByContact, ambiguousNames }
 }
 
 /** 리드 한 명에 대응하는 계약을 찾는다. 없으면 null. */
@@ -119,6 +125,8 @@ export function contractForLead<T extends ContractLite>(
     for (const k of index.studentNamesByContact.get(contact) || []) candidates.add(k)
   }
   for (const k of candidates) {
+    // 누구인지 가릴 수 없는 이름은 건너뛴다 — 잘못 이으면 남의 계약이 성과로 잡힌다.
+    if (index.ambiguousNames.has(k)) continue
     for (const c of index.byName.get(k) || []) {
       if (notBefore(c)) return c
     }
