@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { isNoShowStatus } from '@/lib/meetingProgress'
 import { consultantAtDate } from '@/lib/consultantAtDate'
+import { CARRY_OVER_MONTHS, monthsUpTo, carryState, lineKey } from '@/lib/carryOver'
 import { todayKST } from '@/lib/date'
 import { isOnPause } from '@/lib/studentPause'
 import { useMentors, useAllMentorAssignments, useAllMentorSessions, majorTierAmount, majorTierLabel, COACHING_MONTHLY } from '@/hooks/useMentors'
@@ -1253,7 +1254,9 @@ function studentLabel(name?: string, koreanName?: string): string {
 // ─── Shared: accounting access + billable students ─────────────────────────
 
 
-export interface BillableStudent { id: string; label: string; done: number; billable: boolean; billableMonths: number; pairs: [string, string][] }
+/** 짝 한 쌍과 그 짝이 '닫힌 달'(= 2번째 미팅이 있는 달). 소급 표시의 원래 달이 된다. */
+export interface BillablePair { pair: [string, string]; month: string }
+export interface BillableStudent { id: string; label: string; done: number; billable: boolean; billableMonths: number; pairs: BillablePair[] }
 
 /** 미팅일자 배열을 시간순 2개씩 짝지어, 2번째 미팅이 해당 달(YYYY-MM)인 짝들의 [1번째, 2번째] 일자 반환. */
 function pairsClosingInMonth(dates: string[], month: string): [string, string][] {
@@ -1272,7 +1275,7 @@ function pairDetail(pair: [string, string]): string {
 /** Per consultant NAME → active students with 관리비 청구 대상 (정확방식/소급).
  *  리포트완료(미취소) 미팅 + 노쇼를 시간순 2개씩 짝지어, 각 짝의 '2번째 미팅이 있는 달'에 관리비 1개월치를 청구.
  *  누적 계산이라 예: 7월 1회 + 8/2 1회 → 8월(2번째 미팅월)에 1개월치가 잡힘(소급). 짝은 달마다 1번만 청구됨. */
-function useConsultantBillable(month: string) {
+function useConsultantBillable(month: string, lookbackMonths: number = 1) {
   const consultantName = useConsultantName()
   const { data: students = [] } = useServiceStudents()
   const { end } = monthRange(month)
@@ -1292,11 +1295,17 @@ function useConsultantBillable(month: string) {
         datesByStudent.set(mt.studentId, arr)
       }
     }
-    // 학생별: 이번 달에 마감된 짝(들)과 각 짝의 미팅일자
-    const pairsByStudent = new Map<string, [string, string][]>()
+    // 학생별: 조회 범위의 각 달에 마감된 짝(들). 지난 달 짝도 함께 올려 미지급분이
+    // 조용히 사라지지 않게 한다(지급완료로 찍힌 건은 바깥에서 걸러낸다).
+    // 미팅 목록은 처음부터 이번 달 끝까지 한 번에 받아 두므로, 지난 달 짝도 같은 목록에서 나온다.
+    const windowMonths = monthsUpTo(month, lookbackMonths)
+    const pairsByStudent = new Map<string, BillablePair[]>()
     datesByStudent.forEach((dates, sid) => {
-      const pairs = pairsClosingInMonth(dates, month)
-      if (pairs.length) pairsByStudent.set(sid, pairs)
+      const all: BillablePair[] = []
+      for (const m of windowMonths) {
+        for (const pair of pairsClosingInMonth(dates, m)) all.push({ pair, month: m })
+      }
+      if (all.length) pairsByStudent.set(sid, all)
     })
     // 이름 매칭을 대소문자·공백에 견고하게: 정규화 키로 그룹핑, 표시용 이름은 함께 보관
     const byConsultant = new Map<string, { name: string; students: BillableStudent[] }>()
@@ -1306,13 +1315,13 @@ function useConsultantBillable(month: string) {
       if (pairs.length === 0) return      // 이번 달 청구분 없음
       // 관리비는 '지금 담당자'가 아니라 '그 미팅을 맡고 있던 사람' 몫이다.
       // 10월에 인수인계를 받았다면 9월에 닫힌 짝은 넘겨준 사람의 관리비다.
-      const byWho = new Map<string, { display: string; pairs: [string, string][] }>()
-      for (const pair of pairs) {
-        const whoId = consultantAtDate(s, pair[1]) || s.assignedConsultant
+      const byWho = new Map<string, { display: string; pairs: BillablePair[] }>()
+      for (const bp of pairs) {
+        const whoId = consultantAtDate(s, bp.pair[1]) || s.assignedConsultant
         const display = consultantName(whoId)
         const key = consultantNameKey(display)
         const g = byWho.get(key) || { display, pairs: [] }
-        g.pairs.push(pair)
+        g.pairs.push(bp)
         byWho.set(key, g)
       }
       byWho.forEach((g, key) => {
@@ -1329,7 +1338,7 @@ function useConsultantBillable(month: string) {
       })
     })
     return byConsultant
-  }, [students, meetings, consultantName, month])
+  }, [students, meetings, consultantName, month, lookbackMonths])
 }
 
 export interface IncentiveLine { id: string; label: string; amount: number; month: string; source: 'contract' | 'service'; sourceDetail: string }
@@ -1400,7 +1409,7 @@ export interface PayeeItem { label: string; amount: number }
  *  관리비(2회 미팅) · 원서·에세이 · 에세이 에디터 · 멘토(학습코칭·전공별) / 인센티브. */
 function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]> {
   const isIncentive = kind === 'sales_incentive'
-  const byConsultant = useConsultantBillable(month)
+  const byConsultant = useConsultantBillable(month, CARRY_OVER_MONTHS)
   const { data: essayPlans = [] } = useAllEssayPlans()
   const { data: editorMeetings = [] } = useAllEditorMeetings()
   const { data: students = [] } = useServiceStudents()
@@ -1409,6 +1418,8 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
   const { data: sessions = [] } = useAllMentorSessions()
   const { data: profiles = [] } = useProfiles()
   const linesByPerson = useIncentiveLinesByPerson()
+  // 소급 판정은 발행 화면과 같은 표를 쓴다 — 지급완료로 찍은 건은 여기서도 빠진다.
+  const incentiveStatus = useIncentiveStatus()
   return useMemo(() => {
     // 프리랜서 개인 지급 목록에서 내부 임직원/임원 역할 제외 (인센티브 탭은 제외 안 함)
     const EXCLUDED_ROLES = new Set(['admin', 'c_level', 'account', 'sales_manager', 'service_manager', 'marketing_manager'])
@@ -1436,17 +1447,30 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       return out
     }
     const studentsById = new Map(students.map(s => [s.id, s]))
+    const carryMonths = monthsUpTo(month, CARRY_OVER_MONTHS)
+    // 지난 달 미지급분도 함께 센다 — 발행 화면(청구 목록)과 같은 기준이어야 놓치지 않는다.
+    const live = (kind: string, id: string, om: string) =>
+      carryState(incentiveStatus.get(lineKey(kind, id, om)), month) !== 'hide'
+    const aged = (om: string) => (om < month ? ` (${monthNum(om)}월분)` : '')
     // 관리비 (단가는 발행 시 입력 → amount 0)
     byConsultant.forEach(entry => {
-      for (const s of entry.students) if (s.billable) add(entry.name, { label: `${s.label} · 관리비`, amount: 0 })
+      for (const s of entry.students) {
+        s.pairs.forEach((bp, k) => {
+          if (!live('mgmt', `${s.id}#${k + 1}`, bp.month)) return
+          add(entry.name, { label: `${s.label} · 관리비${aged(bp.month)}`, amount: 0 })
+        })
+      }
     })
     // 원서·에세이 (총액÷개월수)
     for (const p of essayPlans) {
-      const line = essayLineForMonth(p, month)
-      if (!p.consultantName || !line) continue
-      const s = studentsById.get(p.studentId)
-      const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ') || (s ? studentLabel(s.name, s.koreanName) : '학생')
-      add(p.consultantName, { label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, amount: line.amount })
+      if (!p.consultantName) continue
+      for (const om of carryMonths) {
+        const line = essayLineForMonth(p, om)
+        if (!line || !live('essay', p.id, om)) continue
+        const s = studentsById.get(p.studentId)
+        const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ') || (s ? studentLabel(s.name, s.koreanName) : '학생')
+        add(p.consultantName, { label: `${who} · 원서에세이 (${line.index}/${line.count}월차)${aged(om)}`, amount: line.amount })
+      }
     }
     // 에세이 에디터 (원서·에세이 플랜 학생 제외, 2회 짝 마감월 · 단가 발행 시 입력)
     const planStudentIds = new Set(essayPlans.map(p => p.studentId))
@@ -1458,33 +1482,41 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       e.dates.push(em.meetingDate); byEditorStudent.set(k, e)
     }
     byEditorStudent.forEach(({ editor, studentId, dates }) => {
-      const pairs = pairsClosingInMonth(dates, month)
-      if (!pairs.length) return
       const s = studentsById.get(studentId)
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
-      pairs.forEach(() => add(editor, { label: `${who} · 에세이에디터`, amount: 0 }))
+      for (const om of carryMonths) {
+        pairsClosingInMonth(dates, om).forEach((_, k) => {
+          if (!live('editor', `${studentId}#${k + 1}`, om)) return
+          add(editor, { label: `${who} · 에세이에디터${aged(om)}`, amount: 0 })
+        })
+      }
     })
     // 멘토 (학습코칭 월정액 · 전공별 회당)
     const mentorById = new Map(mentors.map(mt => [mt.id, mt]))
     const asgById = new Map(assignments.map(a => [a.id, a]))
     for (const a of assignments) {
       const mt = mentorById.get(a.mentorId || ''); if (!mt || mt.type !== 'coaching') continue
-      if (((a.startDate || '').slice(0, 7)) > month) continue
+      const startMonth = (a.startDate || '').slice(0, 7)
       const s = studentsById.get(a.studentId)
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
-      add(mt.koreanName || mt.englishName, { label: `${who} · 학습코칭 (월정액)`, amount: COACHING_MONTHLY })
+      for (const om of carryMonths) {
+        if (startMonth && startMonth > om) continue
+        if (!live('coach', a.id, om)) continue
+        add(mt.koreanName || mt.englishName, { label: `${who} · 학습코칭 (월정액)${aged(om)}`, amount: COACHING_MONTHLY })
+      }
     }
     for (const sess of sessions) {
       const asg = asgById.get(sess.coachingId)
       const mt = mentorById.get((sess.mentorId || asg?.mentorId) || ''); if (!mt || mt.type !== 'major') continue
-      if ((sess.sessionDate || '').slice(0, 7) !== month) continue
+      const om = (sess.sessionDate || '').slice(0, 7)
+      if (!carryMonths.includes(om) || !live('sess', sess.id, om)) continue
       const s = studentsById.get((sess.studentId || asg?.studentId) || '')
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
       // 등급마다 단가가 다르므로 인보이스에도 등급명을 적는다('전공별멘토' 하나로는 구분이 안 됨)
-      add(mt.koreanName || mt.englishName, { label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})`, amount: majorTierAmount(mt.tier) })
+      add(mt.koreanName || mt.englishName, { label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})${aged(om)}`, amount: majorTierAmount(mt.tier) })
     }
     return out
-  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month])
+  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
@@ -1583,7 +1615,7 @@ export function FreelancerInvoicesPage(
   // Pre-fill source for the issue form: billable students (freelancer) or
   // the person's sales-incentive lines (incentive).
   const issueMonth = selectedMonth === 'all' ? getCurrentMonth() : selectedMonth
-  const byConsultant = useConsultantBillable(issueMonth)
+  const byConsultant = useConsultantBillable(issueMonth, CARRY_OVER_MONTHS)
   const linesByPerson = useIncentiveLinesByPerson()
   const { data: essayPlans = [] } = useAllEssayPlans()
   const { data: allEditorMeetings = [] } = useAllEditorMeetings()  // 에세이 에디터 미팅일지(전체)
@@ -1643,6 +1675,8 @@ export function FreelancerInvoicesPage(
       return out
     }
     const myKey = consultantNameKey(effectiveName)
+    // 소급 범위 — 지난 몇 달 치를 함께 올린다. 지급완료로 찍힌 건은 각 라인에서 걸러낸다.
+    const carryMonths = monthsUpTo(issueMonth, CARRY_OVER_MONTHS)
     // 관리비: 2회 미팅 완료 학생 (단가는 발행 시 수기입력 → amount 0)
     //   ⚠️ '내가 원서·에세이를 담당하는' 학생만 관리비에서 제외 → 에세이 라인으로 대체(같은 사람 중복 방지).
     //   관리만 하고 에세이는 다른 사람이 하는 학생은 관리비를 그대로 유지(각자 다른 업무 대가라 중복 아님).
@@ -1651,27 +1685,37 @@ export function FreelancerInvoicesPage(
     )
     const mgmt: DItem[] = (byConsultant.get(myKey)?.students || [])
       .filter(r => r.billable && !myEssayStudentIds.has(r.id))
-      // 짝(2회 미팅)마다 라인 1개 — 소급 등으로 2건 이상이면 각 짝의 미팅일자를 비고에 담음
-      .flatMap(r => r.pairs.map((pair, k) => ({
-        id: r.pairs.length > 1 ? `${r.label}#${k + 1}` : r.label,
-        label: r.pairs.length > 1 ? `${r.label} (${k + 1}/${r.pairs.length}개월분·소급)` : r.label,
-        amount: 0,
-        received: false,
-        sourceDetail: pairDetail(pair),
-      })))
+      // 짝(2회 미팅)마다 라인 1개. 지난 달에 닫힌 짝도 미지급이면 계속 올라온다.
+      .flatMap(r => r.pairs.map((bp, k): DItem | null => {
+        const key = lineKey('mgmt', `${r.id}#${k + 1}`, bp.month)
+        const state = carryState(incentiveStatus.get(key), issueMonth)
+        if (state === 'hide') return null
+        return {
+          id: key,
+          label: r.pairs.length > 1 ? `${r.label} (${k + 1}/${r.pairs.length}개월분)` : r.label,
+          amount: 0,
+          originMonth: bp.month,
+          received: state === 'received',
+          sourceDetail: pairDetail(bp.pair),
+        }
+      }))
+      .filter((x): x is DItem => x !== null)
     // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산(총액÷개월수)
     const studentsByIdEssay = new Map(allStudentsForEditor.map(s => [s.id, s]))
     const essay: DItem[] = essayPlans
       .filter(p => consultantNameKey(p.consultantName || '') === myKey)
-      .map(p => {
-        const line = essayLineForMonth(p, issueMonth)
+      .flatMap(p => carryMonths.map((om): DItem | null => {
+        const line = essayLineForMonth(p, om)
         if (!line) return null
+        const key = lineKey('essay', p.id, om)
+        const state = carryState(incentiveStatus.get(key), issueMonth)
+        if (state === 'hide') return null
         const s = studentsByIdEssay.get(p.studentId)
         const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ')
           || (s ? studentLabel(s.name, s.koreanName) : '')
           || '학생'
-        return { id: `essay:${p.id}:${issueMonth}`, label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, amount: line.amount, received: false }
-      })
+        return { id: key, label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, amount: line.amount, originMonth: om, received: state === 'received' }
+      }))
       .filter((x): x is DItem => x !== null)
 
     // 에세이 에디터(이원화): 본인이 진행한 에디터 미팅을 학생별 2개씩 짝 → 2번째 미팅이 있는 달에 청구(관리비와 동일 정확방식/소급).
@@ -1688,19 +1732,24 @@ export function FreelancerInvoicesPage(
     const studentsById = new Map(allStudentsForEditor.map(s => [s.id, s]))
     const editorLines: DItem[] = []
     editorDates.forEach((dates, sid) => {
-      const pairs = pairsClosingInMonth(dates, issueMonth)
-      if (!pairs.length) return
       const s = studentsById.get(sid)
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
-      pairs.forEach((pair, k) => {
-        editorLines.push({
-          id: pairs.length > 1 ? `editor:${sid}#${k + 1}` : `editor:${sid}`,
-          label: `${who} · 에세이에디터${pairs.length > 1 ? ` (${k + 1}/${pairs.length}개월분·소급)` : ''}`,
-          amount: 0,
-          received: false,
-          sourceDetail: pairDetail(pair),
+      for (const om of carryMonths) {
+        const pairs = pairsClosingInMonth(dates, om)
+        pairs.forEach((pair, k) => {
+          const key = lineKey('editor', `${sid}#${k + 1}`, om)
+          const state = carryState(incentiveStatus.get(key), issueMonth)
+          if (state === 'hide') return
+          editorLines.push({
+            id: key,
+            label: `${who} · 에세이에디터${pairs.length > 1 ? ` (${k + 1}/${pairs.length}개월분)` : ''}`,
+            amount: 0,
+            originMonth: om,
+            received: state === 'received',
+            sourceDetail: pairDetail(pair),
+          })
         })
-      })
+      }
     })
 
     // ── Mentor Support: 학습코칭(월 300,000/학생) + 전공별(회당·등급 단가) ──
@@ -1714,10 +1763,15 @@ export function FreelancerInvoicesPage(
       if (!mt || mt.type !== 'coaching') continue
       if (mentorNameKey(mt) !== myKey) continue
       const startMonth = (a.startDate || '').slice(0, 7)
-      if (startMonth && startMonth > issueMonth) continue
       const s = studentsById2.get(a.studentId)
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
-      mentorLines.push({ id: `coach:${a.id}:${issueMonth}`, label: `${who} · 학습코칭 (월정액)`, amount: COACHING_MONTHLY, received: false })
+      for (const om of carryMonths) {
+        if (startMonth && startMonth > om) continue
+        const key = lineKey('coach', a.id, om)
+        const state = carryState(incentiveStatus.get(key), issueMonth)
+        if (state === 'hide') continue
+        mentorLines.push({ id: key, label: `${who} · 학습코칭 (월정액)`, amount: COACHING_MONTHLY, originMonth: om, received: state === 'received' })
+      }
     }
     // 전공별: 발행월에 진행된 세션마다 등급 단가 1건(회당)
     const asgById = new Map(allMentorAssignments.map(a => [a.id, a]))
@@ -1727,10 +1781,14 @@ export function FreelancerInvoicesPage(
       const mt = mentorsById.get(mentorId || '')
       if (!mt || mt.type !== 'major') continue
       if (mentorNameKey(mt) !== myKey) continue
-      if ((sess.sessionDate || '').slice(0, 7) !== issueMonth) continue
+      const om = (sess.sessionDate || '').slice(0, 7)
+      if (!carryMonths.includes(om)) continue
+      const key = lineKey('sess', sess.id, om)
+      const state = carryState(incentiveStatus.get(key), issueMonth)
+      if (state === 'hide') continue
       const s = studentsById2.get(sess.studentId || asg?.studentId || '')
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
-      mentorLines.push({ id: `sess:${sess.id}`, label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})`, amount: majorTierAmount(mt.tier), received: false, sourceDetail: sess.comment })
+      mentorLines.push({ id: key, label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})`, amount: majorTierAmount(mt.tier), originMonth: om, received: state === 'received', sourceDetail: sess.comment })
     }
 
     return [...mgmt, ...essay, ...editorLines, ...mentorLines]
