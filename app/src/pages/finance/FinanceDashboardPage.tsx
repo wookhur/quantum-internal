@@ -45,6 +45,21 @@ const KIND_META: { key: string; label: string }[] = [
 ]
 const kindLabel = (k?: string) => KIND_META.find(x => x.key === k)?.label || k || '기타'
 
+/**
+ * 현황판은 인보이스관리의 '보드'와 같은 묶음으로 보여 준다.
+ *
+ * 전에는 kind 하나당 카드 하나였다. 그런데 사업자 파트너 보드는 freelancer_business 와
+ * partner_business 를 한 목록으로 보여 주기 때문에, 보드에서 '사업자 파트너 1건'을 보고
+ * 대시보드의 '프리랜서(사업자)' 카드를 열면 0건이라 찾지 못했다.
+ * 어느 카드에도 안 걸리는 kind(빈 값·옛 값)는 '기타'로 받아 조용히 사라지지 않게 한다.
+ */
+const BOARD_GROUPS: { label: string; kinds: string[] }[] = [
+  { label: '개인 파트너', kinds: ['freelancer', 'partner'] },
+  { label: '사업자 파트너', kinds: ['freelancer_business', 'partner_business'] },
+  { label: '세일즈 인센티브', kinds: ['sales_incentive'] },
+]
+const GROUPED_KINDS = new Set(BOARD_GROUPS.flatMap(g => g.kinds))
+
 function monthOptions(): string[] {
   const out: string[] = []
   const d = new Date()
@@ -436,14 +451,24 @@ export function FinanceDashboardPage() {
           <div className="py-12 flex justify-center"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-            {KIND_META.map(km => (
+            {BOARD_GROUPS.map(g => (
               <CategoryBoard
-                key={km.key}
-                label={km.label}
-                invoices={invoices.filter(i => (i.kind || 'etc') === km.key)}
+                key={g.label}
+                label={g.label}
+                invoices={invoices.filter(i => g.kinds.includes(i.kind || ''))}
+                showKind={g.kinds.length > 1}
                 onSelect={setDetailInv}
               />
             ))}
+            {/* 어느 보드에도 안 걸리는 건 — 있을 때만 보여 준다(조용히 사라지지 않게) */}
+            {invoices.some(i => !GROUPED_KINDS.has(i.kind || '')) && (
+              <CategoryBoard
+                label="기타 (분류 없음)"
+                invoices={invoices.filter(i => !GROUPED_KINDS.has(i.kind || ''))}
+                showKind
+                onSelect={setDetailInv}
+              />
+            )}
           </div>
         )}
       </div>
@@ -1408,9 +1433,11 @@ function StatusBadge({ status }: { status?: string }) {
   return <Badge variant="outline" className={`text-[10px] shrink-0 ${m.cls}`}>{m.label}</Badge>
 }
 
-function CategoryBoard({ label, invoices, onSelect }: {
+function CategoryBoard({ label, invoices, showKind, onSelect }: {
   label: string
   invoices: FreelancerInvoice[]
+  /** 한 카드에 여러 종류가 섞일 때만 줄마다 종류를 적는다 */
+  showKind?: boolean
   onSelect: (inv: FreelancerInvoice) => void
 }) {
   const total = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0)
@@ -1441,6 +1468,7 @@ function CategoryBoard({ label, invoices, onSelect }: {
                   <div className="text-sm font-medium truncate">{invoiceDisplayName(inv)}</div>
                   <div className="text-[11px] text-muted-foreground tabular-nums">
                     {inv.invoiceMonth}{inv.invoiceDate ? ` · 제출 ${inv.invoiceDate}` : ''}
+                    {showKind && <span className="ml-1">· {kindLabel(inv.kind)}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
