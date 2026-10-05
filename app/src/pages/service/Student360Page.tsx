@@ -2812,7 +2812,7 @@ function MajorMentorBlock({ studentId, createdBy, items, pool, mentorById, showA
               )}
             </div>
             {c.fieldNotes && <p className="text-sm whitespace-pre-wrap">{c.fieldNotes}</p>}
-            <MajorSessionLog coachingId={c.id} tier={m?.tier} createdBy={createdBy} canLog={canLogSessions} />
+            <MajorSessionLog coachingId={c.id} tier={m?.tier} coachingDate={c.startDate} createdBy={createdBy} canLog={canLogSessions} />
           </div>
         )
       })}
@@ -2847,7 +2847,7 @@ function MajorMentorBlock({ studentId, createdBy, items, pool, mentorById, showA
 }
 
 // ── 전공별 멘토 세션 로그 (날짜 + 코멘트 = 1회) ──
-function MajorSessionLog({ coachingId, tier, createdBy, canLog }: { coachingId: string; tier?: string; createdBy?: string; canLog: boolean }) {
+function MajorSessionLog({ coachingId, tier, coachingDate, createdBy, canLog }: { coachingId: string; tier?: string; coachingDate?: string; createdBy?: string; canLog: boolean }) {
   const { data: sessions = [] } = useMentorSessions(coachingId)
   const add = useAddMentorSession()
   const del = useDeleteMentorSession()
@@ -2863,7 +2863,14 @@ function MajorSessionLog({ coachingId, tier, createdBy, canLog }: { coachingId: 
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-indigo-700">세션 기록 <span className="text-muted-foreground font-normal">({sessions.length}회 · 합계 {wonKR(sessions.length * amount)})</span></span>
       </div>
-      {sessions.length === 0 && <p className="text-xs text-muted-foreground">기록된 세션이 없습니다.</p>}
+      {sessions.length === 0 && (
+        // 배정만 해 두고 세션을 안 적으면 멘토 인보이스에 아무것도 안 뜬다.
+        // 위 '코칭일' 배지는 배정 참고용이라 청구 근거가 아니다 — 그 혼동을 여기서 끊는다.
+        <p className="text-xs text-amber-700">
+          기록된 세션이 없습니다 — <b>세션을 기록해야 멘토 인보이스에 청구됩니다.</b>
+          {coachingDate && ' 위 코칭일은 배정 참고용이라 그것만으로는 청구되지 않습니다.'}
+        </p>
+      )}
       {sessions.map(s => (
         <div key={s.id} className="flex items-start justify-between gap-2 rounded border border-indigo-50 bg-indigo-50/40 px-2 py-1.5">
           <div className="min-w-0 text-xs">
@@ -2881,7 +2888,16 @@ function MajorSessionLog({ coachingId, tier, createdBy, canLog }: { coachingId: 
       {canLog && (
         <div className="flex flex-col gap-1.5 pt-0.5 sm:flex-row sm:items-end">
           <div className="space-y-0.5">
-            <Label className="text-[10px] text-muted-foreground">진행 날짜</Label>
+            <Label className="text-[10px] text-muted-foreground">
+              진행 날짜
+              {/* 코칭일을 적어 둔 배정이면 한 번에 채운다 — 날짜를 다시 고르느라 안 적고 넘어가지 않게 */}
+              {coachingDate && !date && (
+                <button type="button" onClick={() => setDate(coachingDate.slice(0, 10))}
+                  className="ml-1.5 text-[10px] text-indigo-600 hover:underline">
+                  코칭일({coachingDate.slice(0, 10)})로 채우기
+                </button>
+              )}
+            </Label>
             <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-8 w-40 text-sm" />
           </div>
           <div className="flex-1 space-y-0.5">
