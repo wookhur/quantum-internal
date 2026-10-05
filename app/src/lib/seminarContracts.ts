@@ -21,6 +21,8 @@ import { contractKeys } from './contractReconcile'
 const EXCLUDED_CONTRACT_STATUSES = new Set(['cancelled', 'canceled'])
 
 export interface ContractLite {
+  /** 계약 자체의 id. 한 계약에 리드가 둘 이상 붙어도 한 건으로 세는 기준. */
+  id?: string
   /** 계약관리에서 리드와 직접 연결된 경우 — 이름 매칭보다 정확하므로 최우선. */
   leadId?: string
   studentName?: string
@@ -124,7 +126,52 @@ export function contractForLead<T extends ContractLite>(
   return null
 }
 
-/** 계약한 리드의 id 집합. 한 사람이 여러 계약을 가져도 1명으로 센다. */
+/**
+ * 계약 한 건을 가리키는 키. id 가 있으면 그것, 없으면 학생명+계약일.
+ * 같은 계약을 두 번 세지 않으려고 쓴다.
+ */
+export function contractKeyOf(c: ContractLite): string {
+  if (c.id) return `id:${c.id}`
+  return `n:${nameKey(c.studentName)}|${(c.contractDate || '').slice(0, 10)}`
+}
+
+export interface ContractedPair<T extends ContractLite, L extends LeadForContract = LeadForContract> {
+  lead: L
+  contract: T
+  /** 같은 계약에 걸린 리드 수. 2 이상이면 리드가 중복 등록된 것이다. */
+  leadCount: number
+}
+
+/**
+ * 계약한 건들. '리드 수'가 아니라 '계약 수'로 센다.
+ *
+ * 한 가족이 리드로 두 번 등록되는 일이 흔하다(부모님 이름으로 한 번, 영문명으로 한 번).
+ * 리드로 세면 계약 한 건이 2건으로 부풀어 계약률까지 틀어진다. 그래서 계약을 기준으로
+ * 묶고, 대표로 보여 줄 리드는 학생 이름이 적힌 쪽을 고른다(빈칸인 쪽보다 알아보기 쉽다).
+ */
+export function contractedPairs<T extends ContractLite, L extends LeadForContract>(
+  leads: readonly L[],
+  index: ContractMatchIndex<T>,
+  opts?: { onOrAfter?: string | null },
+): ContractedPair<T, L>[] {
+  const byContract = new Map<string, { contract: T; leads: L[] }>()
+  for (const l of leads) {
+    const c = contractForLead(l, index, opts)
+    if (!c) continue
+    const key = contractKeyOf(c)
+    const e = byContract.get(key)
+    if (e) e.leads.push(l)
+    else byContract.set(key, { contract: c, leads: [l] })
+  }
+  const out: ContractedPair<T, L>[] = []
+  byContract.forEach(({ contract, leads: ls }) => {
+    const best = ls.find(l => (l.studentName || '').trim()) || ls[0]
+    out.push({ lead: best, contract, leadCount: ls.length })
+  })
+  return out
+}
+
+/** 계약한 리드의 id 집합. 계약 건수가 아니라 '리드' 기준이 필요할 때만 쓴다. */
 export function contractedLeadIds<T extends ContractLite>(
   leads: readonly LeadForContract[],
   index: ContractMatchIndex<T>,

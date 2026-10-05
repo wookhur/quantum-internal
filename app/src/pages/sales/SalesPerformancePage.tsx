@@ -12,7 +12,7 @@ import { useSalesEvents, useCreateSalesEvent, useUpdateSalesEvent, useDeleteSale
 import { useLeads } from '@/hooks/useLeads'
 import { useContracts } from '@/hooks/useContracts'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
-import { buildContractMatchIndex, contractedLeadIds, contractForLead } from '@/lib/seminarContracts'
+import { buildContractMatchIndex, contractedPairs } from '@/lib/seminarContracts'
 import { phoneConsultEvents } from '@/lib/phoneConsults'
 import {
   useSeminarsWithRegistrations,
@@ -263,9 +263,10 @@ export function SalesPerformancePage() {
             const md = opts.sessionLabel.match(/(\d{1,2})\s*\/\s*(\d{1,2})/)
             if (md) eventDate = `${yr}-${String(md[1]).padStart(2, '0')}-${String(md[2]).padStart(2, '0')}`
           }
-          // 계약: 이 세미나로 매칭된 리드 중 계약관리에 계약이 있는 사람 수.
+          // 계약: 이 세미나로 매칭된 리드에 걸린 '계약 건수'.
+          // 한 가족이 리드로 두 번 등록되면 같은 계약이 두 번 잡히므로 계약 기준으로 묶는다.
           // 세미나보다 먼저 맺은 계약은 이 세미나의 성과가 아니므로 제외한다.
-          const contracted = contractedLeadIds(opts.matched, contractIndex, { onOrAfter: eventDate }).size
+          const contracted = contractedPairs(opts.matched, contractIndex, { onOrAfter: eventDate }).length
           return {
             id: `seminar-${s.id}${opts.idSuffix}`,
             month,
@@ -408,9 +409,8 @@ export function SalesPerformancePage() {
     // 수동 입력 이벤트의 계약 수는 팀이 직접 적은 값이라 매칭으로 목록을 만들 수 없다.
     if (!detailDialog.row.auto) return []
     const after = detailDialog.row.eventDate
-    return dialogLeads
-      .map(lead => ({ lead, contract: contractForLead(lead, contractIndex, { onOrAfter: after }) }))
-      .filter((x): x is { lead: Lead; contract: NonNullable<typeof x.contract> } => !!x.contract)
+    // 성과표 숫자와 같은 기준(계약 건수)으로 — 중복 리드는 한 줄로 합친다.
+    return contractedPairs(dialogLeads, contractIndex, { onOrAfter: after })
   }, [detailDialog, dialogLeads, contractIndex])
 
   // 수동 이벤트는 팀 입력값을 진실로 보여준다(참석·미팅은 계산 목록과 불일치하므로 팀 수치 표시).
@@ -1077,9 +1077,17 @@ export function SalesPerformancePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dialogContracts.map(({ lead, contract }) => (
+                  {dialogContracts.map(({ lead, contract, leadCount }) => (
                     <TableRow key={`${lead.id}-${contract.id}`}>
-                      <TableCell className="text-sm font-medium">{lead.parentName || '-'}</TableCell>
+                      <TableCell className="text-sm font-medium">
+                        {lead.parentName || '-'}
+                        {leadCount > 1 && (
+                          <span
+                            className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-normal text-amber-700"
+                            title="같은 계약에 리드가 여러 건 등록되어 있습니다. 계약은 1건으로 셉니다."
+                          >리드 {leadCount}건</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-sm">{lead.studentName || '-'}</TableCell>
                       <TableCell className="text-sm">{contract.studentName || '-'}</TableCell>
                       <TableCell className="text-sm font-mono">{contract.contractDate || '-'}</TableCell>
