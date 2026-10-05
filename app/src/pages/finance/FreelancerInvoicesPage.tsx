@@ -11,7 +11,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   FileText, Plus, Trash2, Download, CheckCircle2, XCircle, Pencil,
   Eye, Loader2, ChevronDown, ChevronRight,
@@ -1510,8 +1509,6 @@ export function FreelancerInvoicesPage(
     : isIndividualBoard ? ['freelancer', 'partner']
     : isBusinessBoard ? ['freelancer_business', 'partner_business']
     : business ? `${kind}_business` : kind
-  // 자동 청구(청구 가능 학생/인센티브 발생분)는 개인 파트너·세일즈 인센티브에서만.
-  const isAuto = isIndividualBoard || (isIncentive && !business)
   // 자동 청구 계산에 쓰는 소스 kind (개인 파트너는 프리랜서 청구목록을 그대로 쓴다)
   const sourceKind = isIncentive ? 'sales_incentive' : 'freelancer'
   const [uploadError, setUploadError] = useState<string | undefined>()
@@ -2253,18 +2250,9 @@ export function FreelancerInvoicesPage(
         </div>
       )}
 
-      {isAccounting ? (
-        isAuto ? (
-          <Tabs defaultValue="list" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="list">인보이스 목록</TabsTrigger>
-              <TabsTrigger value="missing">미제출 현황</TabsTrigger>
-            </TabsList>
-            <TabsContent value="list">{listView}</TabsContent>
-            <TabsContent value="missing"><MissingInvoices month={issueMonth} kind={sourceKind} canEdit={canEdit} /></TabsContent>
-          </Tabs>
-        ) : listView
-      ) : freelancerView}
+      {/* 미제출 현황은 재무 대시보드로 옮겼다 — 보드마다 흩어져 있으면
+          이번 달에 누가 아직 안 냈는지 세 군데를 돌아야 했다. */}
+      {isAccounting ? listView : freelancerView}
 
       {/* Dialogs */}
       {formOpen && user && !editItemsReady && (
@@ -2318,8 +2306,10 @@ export function FreelancerInvoicesPage(
 }
 
 // ─── Missing-invoice tracking (accounting) ─────────────────────────────────
+// 재무 대시보드에서 보드별로 나뉘지 않고 한눈에 보도록 밖으로 뺀다.
+// (보드마다 흩어져 있으면 이번 달에 누가 아직 안 냈는지 세 군데를 돌아야 했다)
 
-function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: string; kind?: string; canEdit: boolean }) {
+export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: string; kind?: string; canEdit: boolean }) {
   const isIncentive = kind === 'sales_incentive'
   // 사업자로 낸 사람이 '미제출'로 잡히면 안 된다 — 두 종류를 함께 본다
   const { data: invoices = [] } = useFreelancerInvoices(

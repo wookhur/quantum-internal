@@ -18,7 +18,7 @@ import { todayKST } from '@/lib/date'
 import { Input } from '@/components/ui/input'
 import { Banknote, RefreshCw, Download, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { useIncentiveLinesByPerson, downloadInvoiceExcel, downloadSalesIncentiveExcel, downloadFreelancerFormExcel, downloadPartnerBusinessExcel, downloadOverseasInvoiceExcel, InvoiceFormDialog, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
+import { MissingInvoices, useIncentiveLinesByPerson, downloadInvoiceExcel, downloadSalesIncentiveExcel, downloadFreelancerFormExcel, downloadPartnerBusinessExcel, downloadOverseasInvoiceExcel, InvoiceFormDialog, type IncentiveLine } from '@/pages/finance/FreelancerInvoicesPage'
 import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
 import { useAllClawbacks, useSetClawbackStatus, useDeleteClawback } from '@/hooks/useClawbacks'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -103,6 +103,8 @@ export function FinanceDashboardPage() {
 
   const months = useMemo(() => monthOptions(), [])
   const [month, setMonth] = useState<string>(months[0])
+  // 미제출 현황은 '전체 기간'으로는 셀 수 없다(제출은 달 단위) — 그때는 이번 달로 본다.
+  const missingMonth = month === 'all' ? todayKST().slice(0, 7) : month
 
   const { data: invoices = [], isLoading: invLoading } = useAllInvoices(month === 'all' ? undefined : month)
   const updateStatus = useUpdateInvoiceStatus()
@@ -864,6 +866,32 @@ export function FinanceDashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <PayoutCard title={t('financeDash.freelancerCommission')} color="purple" persons={freelancerCommission.byPerson} icon={<Users className="size-4 text-purple-500" />} t={t} onIssue={allowed ? setIssueFor : undefined} onLinkLine={allowed ? linkLine : undefined} />
             <PayoutCard title={t('financeDash.serviceFee')} color="amber" persons={serviceFees.byPerson} icon={<Receipt className="size-4 text-amber-500" />} t={t} />
+          </div>
+        </>
+      )}
+
+      {/* ④ 인보이스 미제출 현황 — 개인 파트너·세일즈 인센티브 보드에 흩어져 있던 것을
+             여기로 모았다. 이번 달에 누가 아직 안 냈는지 한 화면에서 본다. */}
+      {allowed && (
+        <>
+          <div className="flex items-center justify-between pt-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">
+              인보이스 미제출 현황
+              <span className="ml-2 font-normal text-xs">{missingMonth}</span>
+            </h2>
+            {month === 'all' && (
+              <span className="text-xs text-muted-foreground">전체 기간에는 이번 달 기준으로 보여 줍니다</span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground px-0.5">개인 파트너 (관리비·원서에세이 등)</p>
+              <MissingInvoices month={missingMonth} kind="freelancer" canEdit={allowed} />
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground px-0.5">세일즈 인센티브</p>
+              <MissingInvoices month={missingMonth} kind="sales_incentive" canEdit={allowed} />
+            </div>
           </div>
         </>
       )}
