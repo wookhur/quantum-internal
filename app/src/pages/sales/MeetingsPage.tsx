@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  CalendarCheck, FileCheck, Plus, Upload, Loader2, Pencil,
+  CalendarCheck, FileCheck, Plus, Upload, Loader2, Pencil, Search,
   X, Phone, School, MapPin, Calendar, FileText, ArrowRight, User,
   Paperclip, Trash2, ExternalLink, LinkIcon,
 } from 'lucide-react'
@@ -420,12 +420,20 @@ export function MeetingsPage() {
   const nameFilter = (meetingParams.get('name') || '').trim()
   const meetings = useMemo(() => {
     if (!nameFilter) return allMeetings
-    const needle = nameFilter.toLowerCase()
-    return allMeetings.filter(m =>
-      (m.parentName || '').toLowerCase().includes(needle) ||
-      (m.studentName || '').toLowerCase().includes(needle),
-    )
+    const needle = nameFilter.toLowerCase().replace(/\s+/g, '')
+    // 띄어쓰기는 지우고 비교한다 — '김 민재'로 쳐도 '김민재'가 걸리게.
+    const has = (v?: string) => (v || '').toLowerCase().replace(/\s+/g, '').includes(needle)
+    return allMeetings.filter(m => has(m.studentName) || has(m.parentName) || has(m.currentSchool))
   }, [allMeetings, nameFilter])
+
+  // 검색어는 주소(?name=)에 둔다 — 리드 상세에서 넘어온 필터와 같은 자리를 써서
+  // 두 경로가 어긋나지 않고, 새로고침·뒤로가기에도 검색이 남는다.
+  const setNameFilter = (v: string) => {
+    const next = new URLSearchParams(meetingParams)
+    if (v.trim()) next.set('name', v)
+    else next.delete('name')
+    setMeetingParams(next, { replace: true })
+  }
 
   const updateNoteDelivered = useUpdateNoteDelivered()
 
@@ -454,7 +462,7 @@ export function MeetingsPage() {
       {nameFilter && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm">
           <span className="text-violet-900">
-            <b>{nameFilter}</b> 님의 미팅만 보는 중입니다 · {meetings.length}건
+            <b>{nameFilter}</b> 검색 결과만 보는 중입니다 · {meetings.length}건
           </span>
           <button
             type="button"
@@ -523,6 +531,25 @@ export function MeetingsPage() {
               value={dateTo}
               onChange={e => setDateTo(e.target.value)}
             />
+            <div className="relative ml-auto">
+              <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={nameFilter}
+                onChange={e => setNameFilter(e.target.value)}
+                placeholder="학생·학부모·학교 검색"
+                className="h-8 w-56 pl-7"
+              />
+              {nameFilter && (
+                <button
+                  type="button"
+                  onClick={() => setNameFilter('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  title="검색어 지우기"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
