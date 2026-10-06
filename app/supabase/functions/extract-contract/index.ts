@@ -15,6 +15,8 @@ const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 계약서 데
 - expiryDate: 계약 만료일 또는 서비스 종료일 (YYYY-MM-DD 형식)
 - address: 주소. 계약서 어디에든 기재된 거주지/주소/소재지를 찾아서 추출. 영문 주소도 포함. 도로명, 지번, 해외주소 모두 해당
 - phone: 연락처/전화번호. 국가번호(+82, +852 등) 포함 가능
+- studentEmail: 학생 본인의 이메일 주소. 없으면 null
+- parentEmail: 학부모(계약자)의 이메일 주소. 없으면 null
 - totalAmount: 총 계약 금액 (숫자만, 콤마/₩/$/원 제거)
 - currency: "KRW" 또는 "USD". ₩이나 원화면 "KRW", $면 "USD"
 - paymentAccount: 입금 계좌가 한국이면 "KR", 미국이면 "US"
@@ -36,7 +38,11 @@ const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 계약서 데
 4. 확실하지 않은 필드는 null로 설정하세요.
 5. 만료일이 명시되지 않은 경우 서비스 종료일 또는 계약일로부터 1년 후로 추정하세요.
 6. 납입 일정에서 "계약 시", "계약일" 등은 계약 체결일을, "입학 시" 등은 만료일을 dueDate로 사용하세요.
-7. 주소는 계약서 전체를 꼼꼼히 살펴서 추출하세요. 홍콩, 싱가폴 등 해외 주소도 포함됩니다.`
+7. 주소는 계약서 전체를 꼼꼼히 살펴서 추출하세요. 홍콩, 싱가폴 등 해외 주소도 포함됩니다.
+8. 이메일이 하나만 적혀 있고 누구 것인지 구분이 없으면 parentEmail에 넣고 studentEmail은 null로 두세요. 계약서에 서명하는 쪽은 보통 학부모입니다.
+9. 퀀텀어드미션즈(공급자) 쪽 이메일은 추출하지 마세요. @quantumadmissions.com 같은 회사 도메인이거나 '담당자', '컨설턴트', '을(乙)' 란에 적힌 주소는 고객 정보가 아닙니다. 계약자·학생(갑) 쪽 주소만 추출합니다.
+10. 이메일은 소문자로, 공백 없이 반환하세요. 'abc @ gmail .com'처럼 띄어 적혀 있으면 'abc@gmail.com'으로 붙이세요.
+11. "이메일", "E-mail", "메일주소" 같은 라벨을 값으로 쓰지 마세요. '@'가 들어간 실제 주소만 값입니다. 확실하지 않으면 null로 두세요 — 추측한 주소가 들어가면 학생정보에 잘못된 값이 박히고, 자동 채움은 빈칸만 채우므로 나중에 덮어쓰지 않습니다.`
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -160,6 +166,8 @@ Deno.serve(async (req) => {
         expiryDate: null,
         address: null,
         phone: null,
+        studentEmail: null,
+        parentEmail: null,
         totalAmount: null,
         currency: null,
         paymentAccount: null,
