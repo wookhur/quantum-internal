@@ -26,6 +26,7 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
 import { isOnPause, isPauseEnded } from '@/lib/studentPause'
+import { contractAutofillFields, autofillPayload, type AutofillKey } from '@/lib/contractAutofill'
 import { contractYearOf, heldByContractYear, isCompletedMeetingStatus, isNoShowStatus, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
 import {
   useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching,
@@ -877,6 +878,23 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
     if (!confirm(t('student360.resumeConfirm'))) return
     update.mutate({ id: student.id, paused: false, pauseReason: '', pauseReturnDate: '' })
   }
+  // 계약서에 적힌 내용 중 학생정보가 '비어 있는' 칸만 추려 둔다. 적힌 값은 건드리지 않는다.
+  const fillable = useMemo(
+    () => (linkedContract ? contractAutofillFields(student, linkedContract) : []),
+    [student, linkedContract],
+  )
+  const [fillOpen, setFillOpen] = useState(false)
+  const [picked, setPicked] = useState<Set<AutofillKey>>(new Set())
+  const openFill = () => {
+    setPicked(new Set(fillable.map(f => f.key)))   // 기본은 전부 선택
+    setFillOpen(true)
+  }
+  const applyFill = () => {
+    const payload = autofillPayload(fillable, picked)
+    if (Object.keys(payload).length === 0) { setFillOpen(false); return }
+    update.mutate({ id: student.id, ...payload }, { onSuccess: () => setFillOpen(false) })
+  }
+
   // 복귀 예정일이 되면 휴면에서 자동으로 벗어난다(저장된 플래그는 그대로 두고 판정만 날짜로 한다).
   const today = todayKST()
   const onPause = isOnPause(student, today)
@@ -911,6 +929,11 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
               <Button variant="outline" size="sm" className="text-amber-700 border-amber-200 hover:bg-amber-50"
                 onClick={() => { setPReturn(''); setPReason(''); setPauseOpen(true) }}>
                 💤 {t('student360.setOnLeave')}
+              </Button>
+            )}
+            {fillable.length > 0 && (
+              <Button variant="outline" size="sm" className="text-blue-700 border-blue-200 hover:bg-blue-50" onClick={openFill}>
+                📄 계약서에서 채우기 ({fillable.length})
               </Button>
             )}
             <StudentDialog
@@ -988,6 +1011,43 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         consultantName={student.assignedConsultant ? consultantName(student.assignedConsultant) : undefined}
         onDeleted={onDeleted}
       />
+
+      {/* 계약서 → 학생정보 빈칸 채우기. 무엇이 채워질지 보여 주고 고른 것만 저장한다. */}
+      <Dialog open={fillOpen} onOpenChange={setFillOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>계약서에서 학생정보 채우기</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            계약서에 적힌 내용 중 <b>지금 비어 있는 칸</b>만 채웁니다. 이미 적혀 있는 값은 덮어쓰지 않습니다.
+            {linkedContract?.contractDate && <> · 계약일 {linkedContract.contractDate}</>}
+          </p>
+          <div className="divide-y rounded-md border">
+            {fillable.map(f => (
+              <label key={f.key} className="flex items-start gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/30">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={picked.has(f.key)}
+                  onChange={e => setPicked(prev => {
+                    const next = new Set(prev)
+                    if (e.target.checked) next.add(f.key); else next.delete(f.key)
+                    return next
+                  })}
+                />
+                <span className="min-w-0">
+                  <span className="text-xs text-muted-foreground">{f.label}</span>
+                  <span className="block break-words">{f.text}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFillOpen(false)}>{t('common.cancel')}</Button>
+            <Button onClick={applyFill} disabled={update.isPending || picked.size === 0}>
+              {picked.size}개 채우기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 휴면(On Leave) 처리 다이얼로그 */}
       <Dialog open={pauseOpen} onOpenChange={setPauseOpen}>
