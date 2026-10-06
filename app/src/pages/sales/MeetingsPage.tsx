@@ -418,22 +418,32 @@ export function MeetingsPage() {
   // 리드 상세의 '미팅' 카드에서 넘어온 경우 해당 학부모의 미팅만 보여준다.
   const [meetingParams, setMeetingParams] = useSearchParams()
   const nameFilter = (meetingParams.get('name') || '').trim()
+  // 입력창은 주소(?name=)와 떼어 놓는다.
+  //
+  // 전에는 글자를 칠 때마다 주소를 고치고 그 값을 다시 입력창에 넣었다. 한글은 자모를
+  // 모아 한 글자를 만드는 중인데 그 사이 입력창이 다시 그려지면 조합이 끊겨,
+  // '리아'를 치면 'ㄹㅣㅇㅏ'로 흩어졌다.
+  //
+  // 이제 타이핑은 화면 안의 값으로만 받는다. 주소는 '리드 상세에서 넘어올 때 어떤
+  // 이름으로 시작할지'를 정해 줄 뿐이고, 검색을 지울 때 함께 지운다.
+  const [query, setQuery] = useState(nameFilter)
+  const clearSearch = () => {
+    setQuery('')
+    if (!nameFilter) return
+    setMeetingParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('name')
+      return next
+    }, { replace: true })
+  }
+
   const meetings = useMemo(() => {
-    if (!nameFilter) return allMeetings
-    const needle = nameFilter.toLowerCase().replace(/\s+/g, '')
+    if (!query) return allMeetings
+    const needle = query.toLowerCase().replace(/\s+/g, '')
     // 띄어쓰기는 지우고 비교한다 — '김 민재'로 쳐도 '김민재'가 걸리게.
     const has = (v?: string) => (v || '').toLowerCase().replace(/\s+/g, '').includes(needle)
     return allMeetings.filter(m => has(m.studentName) || has(m.parentName) || has(m.currentSchool))
-  }, [allMeetings, nameFilter])
-
-  // 검색어는 주소(?name=)에 둔다 — 리드 상세에서 넘어온 필터와 같은 자리를 써서
-  // 두 경로가 어긋나지 않고, 새로고침·뒤로가기에도 검색이 남는다.
-  const setNameFilter = (v: string) => {
-    const next = new URLSearchParams(meetingParams)
-    if (v.trim()) next.set('name', v)
-    else next.delete('name')
-    setMeetingParams(next, { replace: true })
-  }
+  }, [allMeetings, query])
 
   const updateNoteDelivered = useUpdateNoteDelivered()
 
@@ -459,19 +469,15 @@ export function MeetingsPage() {
   return (
     <div className="space-y-4 max-w-full overflow-x-hidden">
       {/* 리드 상세에서 넘어온 경우 — 누구의 미팅을 보고 있는지 알리고 해제 수단을 준다 */}
-      {nameFilter && (
+      {query && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm">
           <span className="text-violet-900">
-            <b>{nameFilter}</b> 검색 결과만 보는 중입니다 · {meetings.length}건
+            <b>{query}</b> 검색 결과만 보는 중입니다 · {meetings.length}건
           </span>
           <button
             type="button"
             className="text-xs font-semibold text-violet-700 underline underline-offset-4"
-            onClick={() => {
-              const next = new URLSearchParams(meetingParams)
-              next.delete('name')
-              setMeetingParams(next, { replace: true })
-            }}
+            onClick={clearSearch}
           >
             전체 미팅 보기
           </button>
@@ -534,15 +540,15 @@ export function MeetingsPage() {
             <div className="relative ml-auto">
               <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                value={nameFilter}
-                onChange={e => setNameFilter(e.target.value)}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
                 placeholder="학생·학부모·학교 검색"
                 className="h-8 w-56 pl-7"
               />
-              {nameFilter && (
+              {query && (
                 <button
                   type="button"
-                  onClick={() => setNameFilter('')}
+                  onClick={clearSearch}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   title="검색어 지우기"
                 >
