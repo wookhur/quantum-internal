@@ -35,6 +35,8 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
     expiryDate: null,
     address: null,
     phone: null,
+    studentEmail: null,
+    parentEmail: null,
     totalAmount: null,
     currency: null,
     paymentAccount: null,
@@ -58,7 +60,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
     setForm({
       contractorName: null, studentName: null, schoolName: null,
       gradeAtContract: null, contractDate: null, expiryDate: null,
-      address: null, phone: null, totalAmount: null,
+      address: null, phone: null, studentEmail: null, parentEmail: null, totalAmount: null,
       currency: null, paymentAccount: null, notes: null,
       installments: [],
     })
@@ -153,6 +155,8 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
       expiryDate: form.expiryDate,
       address: form.address || undefined,
       phone: form.phone || undefined,
+      studentEmail: form.studentEmail || undefined,
+      parentEmail: form.parentEmail || undefined,
       totalAmount: form.totalAmount || undefined,
       currency: form.currency || undefined,
       paymentAccount: form.paymentAccount || undefined,
@@ -333,6 +337,24 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
                 <Input
                   value={form.address || ''}
                   onChange={(e) => updateField('address', e.target.value || null)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">학생 이메일</Label>
+                <Input
+                  type="email"
+                  value={form.studentEmail || ''}
+                  onChange={(e) => updateField('studentEmail', e.target.value || null)}
+                  placeholder="student@example.com"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">학부모 이메일</Label>
+                <Input
+                  type="email"
+                  value={form.parentEmail || ''}
+                  onChange={(e) => updateField('parentEmail', e.target.value || null)}
+                  placeholder="parent@example.com"
                 />
               </div>
             </div>

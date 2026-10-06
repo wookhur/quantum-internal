@@ -15,6 +15,9 @@ export interface ExtractedContractData {
   expiryDate: string | null
   address: string | null
   phone: string | null
+  /** 계약서에 적힌 이메일. 엣지 함수가 아직 안 돌려주면 null 로 남고, 사람이 직접 적을 수 있다. */
+  studentEmail: string | null
+  parentEmail: string | null
   totalAmount: number | null
   currency: 'KRW' | 'USD' | null
   paymentAccount: 'KR' | 'US' | null
@@ -31,6 +34,8 @@ const EMPTY_RESULT: ExtractedContractData = {
   expiryDate: null,
   address: null,
   phone: null,
+  studentEmail: null,
+  parentEmail: null,
   totalAmount: null,
   currency: null,
   paymentAccount: null,

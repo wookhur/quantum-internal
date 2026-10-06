@@ -26,7 +26,7 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
 import { isOnPause, isPauseEnded } from '@/lib/studentPause'
-import { contractAutofillFields, autofillPayload, type AutofillKey } from '@/lib/contractAutofill'
+import { contractAutofillFields, contractAutofillSkipped, autofillPayload, type AutofillKey } from '@/lib/contractAutofill'
 import { contractYearOf, heldByContractYear, isCompletedMeetingStatus, isNoShowStatus, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
 import {
   useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching,
@@ -883,6 +883,11 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
     () => (linkedContract ? contractAutofillFields(student, linkedContract) : []),
     [student, linkedContract],
   )
+  // 채울 수 없는 칸과 그 이유도 함께 — '왜 주소 하나뿐이지?' 를 화면에서 바로 알 수 있게.
+  const fillSkipped = useMemo(
+    () => (linkedContract ? contractAutofillSkipped(student, linkedContract) : []),
+    [student, linkedContract],
+  )
   const [fillOpen, setFillOpen] = useState(false)
   const [picked, setPicked] = useState<Set<AutofillKey>>(new Set())
   const openFill = () => {
@@ -1040,6 +1045,23 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
               </label>
             ))}
           </div>
+          {fillSkipped.length > 0 && (
+            <div className="space-y-1 text-[11px] text-muted-foreground">
+              {fillSkipped.some(x => x.reason === 'filled') && (
+                <p>
+                  <b>이미 입력되어 있어 건너뜀:</b>{' '}
+                  {fillSkipped.filter(x => x.reason === 'filled').map(x => x.label).join(', ')}
+                </p>
+              )}
+              {fillSkipped.some(x => x.reason === 'missing') && (
+                <p>
+                  <b>계약서에 값이 없음:</b>{' '}
+                  {fillSkipped.filter(x => x.reason === 'missing').map(x => x.label).join(', ')}
+                  {' '}— 계약관리에서 그 칸을 채우면 여기서도 채울 수 있습니다.
+                </p>
+              )}
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setFillOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={applyFill} disabled={update.isPending || picked.size === 0}>

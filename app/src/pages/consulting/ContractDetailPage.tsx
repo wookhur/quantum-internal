@@ -2376,6 +2376,8 @@ function ContractEditDialog({
     additionalServices: string
     address: string
     phone: string
+    studentEmail: string
+    parentEmail: string
     totalAmount: number
     currency: 'KRW' | 'USD'
     paymentAccount: 'KR' | 'US'
@@ -2396,6 +2398,8 @@ function ContractEditDialog({
     applicationCount: contract.applicationCount ? String(contract.applicationCount) : '',
     additionalServices: contract.additionalServices || '',
     address: contract.address || '',
+    studentEmail: contract.studentEmail || '',
+    parentEmail: contract.parentEmail || '',
     phone: contract.phone || '',
     totalAmount: contract.totalAmount ? String(contract.totalAmount) : '',
     currency: (contract.currency || 'KRW') as 'KRW' | 'USD',
@@ -2425,6 +2429,8 @@ function ContractEditDialog({
       applicationCount: Number(form.applicationCount) || 0,
       additionalServices: form.additionalServices,
       address: form.address,
+      studentEmail: form.studentEmail,
+      parentEmail: form.parentEmail,
       phone: form.phone,
       totalAmount: Number(form.totalAmount) || 0,
       currency: form.currency,
@@ -2487,6 +2493,14 @@ function ContractEditDialog({
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.address')}</Label>
             <Input value={form.address} onChange={e => set('address', e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">학생 이메일</Label>
+            <Input type="email" value={form.studentEmail} onChange={e => set('studentEmail', e.target.value)} placeholder="student@example.com" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">학부모 이메일</Label>
+            <Input type="email" value={form.parentEmail} onChange={e => set('parentEmail', e.target.value)} placeholder="parent@example.com" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.totalContractAmount')}</Label>

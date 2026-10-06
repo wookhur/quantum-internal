@@ -194,6 +194,9 @@ export interface Contract {
   gradeAtContract?: string
   address?: string
   phone?: string
+  /** 계약서에 적힌 이메일 — 360 학생정보 자동 채움에 쓴다 */
+  studentEmail?: string
+  parentEmail?: string
   contractDate: string
   expiryDate: string
   serviceStartDate?: string

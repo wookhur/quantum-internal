@@ -29,6 +29,8 @@ async function ensureServiceStudent(opts: {
   grade?: string
   phone?: string
   address?: string
+  studentEmail?: string
+  parentEmail?: string
   contractType?: string
   startDate?: string
   endDate?: string
@@ -50,6 +52,8 @@ async function ensureServiceStudent(opts: {
     grade: opts.grade || null,
     contact: opts.phone || null,
     address: opts.address || null,
+    email: opts.studentEmail || null,
+    parent_email: opts.parentEmail || null,
     contract_type: opts.contractType || null,
     start_date: opts.startDate || null,
     end_date: opts.endDate || null,
@@ -76,6 +80,8 @@ function mapContract(row: Record<string, unknown>): Contract {
     gradeAtContract: row.grade_at_contract as string,
     address: (row.address as string) || undefined,
     phone: (row.phone as string) || undefined,
+    studentEmail: (row.student_email as string) || undefined,
+    parentEmail: (row.parent_email as string) || undefined,
     contractDate: row.contract_date as string,
     expiryDate: row.expiry_date as string,
     serviceStartDate: (row.service_start_date as string) || undefined,
@@ -136,6 +142,8 @@ export function useCreateContract() {
       leadId?: string
       phone?: string
       address?: string
+      studentEmail?: string
+      parentEmail?: string
       paymentAccount?: 'KR' | 'US'
       salesRep?: string
       serviceRep?: string
@@ -155,6 +163,8 @@ export function useCreateContract() {
       if (contract.leadId) row.lead_id = contract.leadId
       if (contract.phone) row.phone = contract.phone
       if (contract.address) row.address = contract.address
+      if (contract.studentEmail) row.student_email = contract.studentEmail
+      if (contract.parentEmail) row.parent_email = contract.parentEmail
       if (contract.paymentAccount) row.payment_account = contract.paymentAccount
       if (contract.salesRep) row.sales_rep = contract.salesRep
       if (contract.serviceRep) row.service_rep = contract.serviceRep
@@ -170,6 +180,9 @@ export function useCreateContract() {
         school: contract.schoolName,
         grade: contract.gradeAtContract,
         phone: contract.phone,
+        address: contract.address,
+        studentEmail: contract.studentEmail,
+        parentEmail: contract.parentEmail,
         startDate: contract.contractDate,
         endDate: contract.expiryDate,
       })
@@ -201,6 +214,8 @@ export function useCreateContractFull() {
       expiryDate: string
       address?: string
       phone?: string
+      studentEmail?: string
+      parentEmail?: string
       totalAmount?: number
       currency?: 'KRW' | 'USD'
       paymentAccount?: 'KR' | 'US'
@@ -219,6 +234,8 @@ export function useCreateContractFull() {
         status: 'active',
       }
       if (contract.address) row.address = contract.address
+      if (contract.studentEmail) row.student_email = contract.studentEmail
+      if (contract.parentEmail) row.parent_email = contract.parentEmail
       if (contract.phone) row.phone = contract.phone
       if (contract.totalAmount) row.total_amount = contract.totalAmount
       if (contract.currency) row.currency = contract.currency
@@ -281,6 +298,8 @@ export function useUpdateContract() {
       contractType?: string
       contractPdfUrl?: string | null
       address?: string
+      studentEmail?: string
+      parentEmail?: string
       phone?: string
       totalAmount?: number
       currency?: 'KRW' | 'USD'
@@ -306,6 +325,8 @@ export function useUpdateContract() {
       if (rest.contractPdfUrl !== undefined) update.contract_pdf_url = rest.contractPdfUrl
       if (rest.address !== undefined) update.address = rest.address
       if (rest.phone !== undefined) update.phone = rest.phone
+      if (rest.studentEmail !== undefined) update.student_email = rest.studentEmail || null
+      if (rest.parentEmail !== undefined) update.parent_email = rest.parentEmail || null
       if (rest.totalAmount !== undefined) update.total_amount = rest.totalAmount
       if (rest.currency !== undefined) update.currency = rest.currency
       if (rest.paymentAccount !== undefined) update.payment_account = rest.paymentAccount

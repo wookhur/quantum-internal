@@ -16,6 +16,8 @@ export interface ContractSource {
   gradeAtContract?: string
   address?: string
   phone?: string
+  studentEmail?: string
+  parentEmail?: string
   contractDate?: string
   expiryDate?: string
   serviceStartDate?: string
@@ -28,6 +30,8 @@ export interface ContractSource {
 export interface StudentTarget {
   parentName?: string
   contact?: string
+  email?: string
+  parentEmail?: string
   school?: string
   grade?: string
   address?: string
@@ -85,6 +89,8 @@ export function contractAutofillFields(
 
   push('parentName', '학부모 이름', cleanParentName(contract.contractorName))
   push('contact', '연락처', (contract.phone || '').trim())
+  push('email', '학생 이메일', (contract.studentEmail || '').trim())
+  push('parentEmail', '학부모 이메일', (contract.parentEmail || '').trim())
   push('school', '학교', (contract.schoolName || '').trim())
   push('grade', '학년', (contract.gradeAtContract || '').trim())
   push('address', '주소', (contract.address || '').trim())
@@ -97,6 +103,36 @@ export function contractAutofillFields(
     typeof contract.applicationCount === 'number' ? `${contract.applicationCount}개` : undefined)
   push('additionalServices', '추가 서비스', (contract.additionalServices || '').trim())
 
+  return out
+}
+
+/** 후보에 못 든 칸과 그 이유. '왜 하나밖에 안 뜨지?' 를 화면에서 바로 알 수 있게. */
+export interface SkippedField {
+  label: string
+  reason: 'filled' | 'missing'
+}
+
+export function contractAutofillSkipped(
+  student: StudentTarget,
+  contract: ContractSource,
+): SkippedField[] {
+  const all = contractAutofillFields({}, contract)          // 계약에 값이 있는 칸 전부
+  const names = new Map(all.map(f => [f.key, f.label]))
+  const fillable = new Set(contractAutofillFields(student, contract).map(f => f.key))
+  const out: SkippedField[] = []
+  // 계약에는 있는데 학생정보가 이미 차 있어 건너뛴 칸
+  names.forEach((label, key) => {
+    if (!fillable.has(key)) out.push({ label, reason: 'filled' })
+  })
+  // 계약서 자체에 값이 없는 칸
+  const everything = contractAutofillFields({}, {
+    contractorName: 'x', phone: 'x', studentEmail: 'x', parentEmail: 'x', schoolName: 'x',
+    gradeAtContract: 'x', address: 'x', contractDate: '2000-01-01', expiryDate: '2000-01-01',
+    contractType: 'x', applicationCount: 1, additionalServices: 'x',
+  })
+  for (const f of everything) {
+    if (!names.has(f.key)) out.push({ label: f.label, reason: 'missing' })
+  }
   return out
 }
 
