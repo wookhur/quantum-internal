@@ -20,6 +20,8 @@ import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { isNoShowStatus } from '@/lib/meetingProgress'
 import { consultantAtDate } from '@/lib/consultantAtDate'
 import { CARRY_OVER_MONTHS, monthsUpTo, carryState, lineKey } from '@/lib/carryOver'
+import { sessionFeeLines, type SessionLike } from '@/lib/sessionFee'
+import { useConsultantAnnualFees, annualFeeOf, useSetConsultantAnnualFee, useDeleteConsultantAnnualFee } from '@/hooks/useConsultantAnnualFees'
 import { todayKST } from '@/lib/date'
 import { isOnPause } from '@/lib/studentPause'
 import { useMentors, useAllMentorAssignments, useAllMentorSessions, majorTierAmount, majorTierLabel, COACHING_MONTHLY } from '@/hooks/useMentors'
@@ -1275,6 +1277,38 @@ function pairDetail(pair: [string, string]): string {
 /** Per consultant NAME → active students with 관리비 청구 대상 (정확방식/소급).
  *  리포트완료(미취소) 미팅 + 노쇼를 시간순 2개씩 짝지어, 각 짝의 '2번째 미팅이 있는 달'에 관리비 1개월치를 청구.
  *  누적 계산이라 예: 7월 1회 + 8/2 1회 → 8월(2번째 미팅월)에 1개월치가 잡힘(소급). 짝은 달마다 1번만 청구됨. */
+/**
+ * 회당 정산(연 관리비 ÷ 횟수) 컨설턴트를 위한 미팅 목록.
+ * 짝으로 묶지 않고 한 건씩 그대로 센다 — 인보이스에 '10월 1회차'처럼 적기 위해서다.
+ * 누가 받을지는 그 미팅 날짜에 맡고 있던 사람으로 정한다(인수인계 반영).
+ */
+function useConsultantSessions(month: string): Map<string, SessionLike[]> {
+  const consultantName = useConsultantName()
+  const { data: students = [] } = useServiceStudents()
+  const { end } = monthRange(month)
+  const { data: meetings = [] } = useAllServiceMeetings('2000-01-01', end)
+
+  return useMemo(() => {
+    const byId = new Map(students.map(s => [s.id, s]))
+    const out = new Map<string, SessionLike[]>()
+    const today = todayKST()
+    for (const mt of meetings) {
+      // 세는 기준은 기존 관리비와 같다 — 리포트 완료 또는 노쇼, 취소 아님.
+      const counts = isNoShowStatus(mt.status) || mt.reportStatus === 'submitted' || !!mt.reportUrl
+      if (!counts || mt.status === 'cancelled' || !mt.meetingDate) continue
+      const s = byId.get(mt.studentId)
+      if (!s || !isActiveStudent(s.status) || isOnPause(s, today) || !s.assignedConsultant) continue
+      const whoId = consultantAtDate(s, mt.meetingDate) || s.assignedConsultant
+      const key = consultantNameKey(consultantName(whoId))
+      if (!key) continue
+      const arr = out.get(key) || []
+      arr.push({ id: mt.id, date: mt.meetingDate, studentLabel: studentLabel(s.name, s.koreanName) })
+      out.set(key, arr)
+    }
+    return out
+  }, [students, meetings, consultantName])
+}
+
 function useConsultantBillable(month: string, lookbackMonths: number = 1) {
   const consultantName = useConsultantName()
   const { data: students = [] } = useServiceStudents()
@@ -1420,6 +1454,8 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
   const linesByPerson = useIncentiveLinesByPerson()
   // 소급 판정은 발행 화면과 같은 표를 쓴다 — 지급완료로 찍은 건은 여기서도 빠진다.
   const incentiveStatus = useIncentiveStatus()
+  const annualFees = useConsultantAnnualFees()
+  const sessionsByConsultant = useConsultantSessions(month)
   return useMemo(() => {
     // 프리랜서 개인 지급 목록에서 내부 임직원/임원 역할 제외 (인센티브 탭은 제외 안 함)
     const EXCLUDED_ROLES = new Set(['admin', 'c_level', 'account', 'sales_manager', 'service_manager', 'marketing_manager'])
@@ -1452,13 +1488,22 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
     const live = (kind: string, id: string, om: string) =>
       carryState(incentiveStatus.get(lineKey(kind, id, om)), month) !== 'hide'
     const aged = (om: string) => (om < month ? ` (${monthNum(om)}월분)` : '')
-    // 관리비 (단가는 발행 시 입력 → amount 0)
-    byConsultant.forEach(entry => {
+    // 관리비 — 연 관리비가 정해진 사람은 회당, 아니면 종전 '2회 1개월분'
+    byConsultant.forEach((entry, key) => {
+      if (annualFeeOf(annualFees, entry.name)) return      // 회당 방식은 아래에서 따로
+      void key
       for (const s of entry.students) {
         s.pairs.forEach((bp, k) => {
           if (!live('mgmt', `${s.id}#${k + 1}`, bp.month)) return
           add(entry.name, { label: `${s.label} · 관리비${aged(bp.month)}`, amount: 0 })
         })
+      }
+    })
+    // 회당 정산 컨설턴트
+    annualFees.forEach(fee => {
+      for (const l of sessionFeeLines(sessionsByConsultant.get(fee.nameKey) || [], fee, carryMonths)) {
+        if (!live('sess-fee', l.id, l.month)) continue
+        add(fee.displayName, { label: l.label, amount: l.amount })
       }
     })
     // 원서·에세이 (총액÷개월수)
@@ -1516,7 +1561,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       add(mt.koreanName || mt.englishName, { label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})${aged(om)}`, amount: majorTierAmount(mt.tier) })
     }
     return out
-  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus])
+  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus, annualFees, sessionsByConsultant])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
@@ -1629,6 +1674,11 @@ export function FreelancerInvoicesPage(
   const isManager = isAccounting || user?.role === 'admin'
   const [previewName, setPreviewName] = useState<string>('')
   const [myPanelOpen, setMyPanelOpen] = useState(true)
+  // 회당 정산(연 관리비 ÷ 횟수) 설정과 그 미팅 목록
+  const annualFees = useConsultantAnnualFees()
+  const mySessions = useConsultantSessions(issueMonth)
+  const setAnnualFee = useSetConsultantAnnualFee()
+  const deleteAnnualFee = useDeleteConsultantAnnualFee()
   const effectiveName = isManager && previewName ? previewName : (user?.name || '')
   const previewNameOptions = useMemo(() => {
     const names = new Set<string>()
@@ -1643,6 +1693,7 @@ export function FreelancerInvoicesPage(
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b, 'ko'))
   }, [previewProfiles, allMentors])
+  const myFeeSetting = annualFeeOf(annualFees, effectiveName)
   const myName = canonicalConsultantName(effectiveName)
   // 파트너 발행유형(개인/사업자): 자동청구를 어느 게시판에 띄울지 가른다.
   //  개인 파트너 = 발행유형 '개인'(또는 미지정), 사업자 파트너 = '사업자'. → 한 사람은 한 곳에만.
@@ -1683,7 +1734,21 @@ export function FreelancerInvoicesPage(
     const myEssayStudentIds = new Set(
       essayPlans.filter(p => consultantNameKey(p.consultantName || '') === myKey).map(p => p.studentId),
     )
-    const mgmt: DItem[] = (byConsultant.get(myKey)?.students || [])
+    // 연 관리비가 정해진 컨설턴트는 '회당' 방식 — 미팅 한 건이 한 줄, 금액은 연액 ÷ 횟수.
+    const myFee = annualFeeOf(annualFees, effectiveName)
+    const perSession: DItem[] = myFee
+      ? sessionFeeLines(mySessions.get(myKey) || [], myFee, carryMonths)
+          .map((l): DItem | null => {
+            const key = lineKey('sess-fee', l.id, l.month)
+            const state = carryState(incentiveStatus.get(key), issueMonth)
+            if (state === 'hide') return null
+            return { id: key, label: l.label, amount: l.amount, originMonth: l.month, received: state === 'received', sourceDetail: `미팅 ${l.date}` }
+          })
+          .filter((x): x is DItem => x !== null)
+      : []
+
+    // 연 관리비가 없는 컨설턴트는 종전 '미팅 2회 = 1개월분' 방식 그대로.
+    const mgmt: DItem[] = myFee ? [] : (byConsultant.get(myKey)?.students || [])
       .filter(r => r.billable && !myEssayStudentIds.has(r.id))
       // 짝(2회 미팅)마다 라인 1개. 지난 달에 닫힌 짝도 미지급이면 계속 올라온다.
       .flatMap(r => r.pairs.map((bp, k): DItem | null => {
@@ -1791,8 +1856,8 @@ export function FreelancerInvoicesPage(
       mentorLines.push({ id: key, label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})`, amount: majorTierAmount(mt.tier), originMonth: om, received: state === 'received', sourceDetail: sess.comment })
     }
 
-    return [...mgmt, ...essay, ...editorLines, ...mentorLines]
-  }, [typeMatchesBoard, isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions])
+    return [...perSession, ...mgmt, ...essay, ...editorLines, ...mentorLines]
+  }, [typeMatchesBoard, isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions, annualFees, mySessions])
 
   // 발행 대상 = 아직 수령완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
@@ -2109,6 +2174,33 @@ export function FreelancerInvoicesPage(
         {isManager && !!previewName && (
           <p className="text-[12px] text-amber-600 self-center">👁 {previewName} 미리보기 중 — 발행하려면 대상을 ‘나’로 바꾸세요</p>
         )}
+        {/* 연 관리비 — 적어 두면 '회당' 방식(연액 ÷ 횟수 × 그 달 미팅 수)으로 바뀐다.
+            비워 두면 종전 '미팅 2회 = 1개월분'. 재무만 보이고 고칠 수 있다. */}
+        {isIndividualBoard && isAccounting && effectiveName && (
+          <div className="self-end">
+            <Label className="text-xs">
+              {effectiveName} 연 관리비
+              {myFeeSetting && (
+                <span className="ml-1 font-normal text-muted-foreground">
+                  · 1회 {formatKRW(Math.round(myFeeSetting.annualAmount / myFeeSetting.sessions))}
+                </span>
+              )}
+            </Label>
+            <div className="flex h-9 items-center gap-1">
+              <AnnualFeeEditor
+                key={effectiveName}
+                name={effectiveName}
+                current={myFeeSetting}
+                onSave={(annualAmount, sessions) => setAnnualFee.mutate(
+                  { name: effectiveName, annualAmount, sessions },
+                  { onError: e => alert(e instanceof Error ? e.message : '저장에 실패했습니다.') },
+                )}
+                onClear={nameKey => deleteAnnualFee.mutate(nameKey)}
+                busy={setAnnualFee.isPending || deleteAnnualFee.isPending}
+              />
+            </div>
+          </div>
+        )}
         {/* 파트너 발행유형(개인/사업자) — 재무만. 이 사람의 자동청구가 뜨는 게시판이 결정된다. */}
         {(isIndividualBoard || isBusinessBoard) && isAccounting && effectiveName && (
           <div className="self-end">
@@ -2360,6 +2452,42 @@ export function FreelancerInvoicesPage(
         />
       )}
     </div>
+  )
+}
+
+/** 연 관리비 입력칸. 보는 사람이 바뀌면 key 로 다시 만들어 값이 따라온다. */
+function AnnualFeeEditor({ name, current, onSave, onClear, busy }: {
+  name: string
+  current?: { nameKey: string; annualAmount: number; sessions: number }
+  onSave: (annualAmount: number, sessions: number) => void
+  onClear: (nameKey: string) => void
+  busy: boolean
+}) {
+  const [amount, setAmount] = useState(current ? String(current.annualAmount) : '')
+  const [sessions, setSessions] = useState(current ? String(current.sessions) : '30')
+  return (
+    <>
+      <Input type="number" className="h-9 w-32 text-sm" placeholder="예: 4000000"
+        value={amount} onChange={e => setAmount(e.target.value)} />
+      <span className="text-xs text-muted-foreground">÷</span>
+      <Input type="number" className="h-9 w-16 text-sm"
+        value={sessions} onChange={e => setSessions(e.target.value)} />
+      <span className="text-xs text-muted-foreground">회</span>
+      <Button
+        size="sm" variant="outline" className="h-9" disabled={busy}
+        onClick={() => {
+          const amt = Number(amount)
+          if (!amt || amt <= 0) {
+            // 비우고 저장 = 설정 지우기 → 종전 '미팅 2회 = 1개월분' 으로 돌아간다
+            if (current && confirm(`${name}님의 연 관리비 설정을 지울까요?\n지우면 '미팅 2회 = 1개월분' 방식으로 돌아갑니다.`)) {
+              onClear(current.nameKey)
+            }
+            return
+          }
+          onSave(amt, Number(sessions) || 30)
+        }}
+      >저장</Button>
+    </>
   )
 }
 
