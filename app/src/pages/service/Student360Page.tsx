@@ -27,6 +27,7 @@ import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
 import { isOnPause, isPauseEnded } from '@/lib/studentPause'
 import { contractAutofillFields, contractAutofillSkipped, autofillPayload, type AutofillKey } from '@/lib/contractAutofill'
+import { readTranslation, entryHasKorean } from '@/lib/diaryTranslation'
 import { contractYearOf, heldByContractYear, isCompletedMeetingStatus, isNoShowStatus, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
 import {
   useMentors, useStudentCoaching, useUpsertCoaching, useDeleteCoaching,
@@ -43,7 +44,7 @@ import {
 import {
   useServiceStudents, useCreateServiceStudent, useUpdateServiceStudent,
   useServiceMeetings, useCreateServiceMeeting, useUpdateServiceMeeting, useDeleteServiceMeeting,
-  useServiceDiary, useCreateServiceDiary, useUpdateServiceDiary, useDeleteServiceDiary,
+  useServiceDiary, useCreateServiceDiary, useUpdateServiceDiary, useDeleteServiceDiary, useTranslateDiary,
   useHeldMeetingsByStudent,
 } from '@/hooks/useServiceStudents'
 import {
@@ -3411,6 +3412,33 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
+
+  // 영어로 보고 있는 일지들. 번역은 눌렀을 때만 만들고, 만든 뒤에는 저장해 두어
+  // 다음 사람은 기다리지 않는다. 원문이 수정됐으면 다시 누를 때 새로 번역한다.
+  const [showEn, setShowEn] = useState<Set<string>>(new Set())
+  const [translatingId, setTranslatingId] = useState<string | null>(null)
+  const translateDiary = useTranslateDiary()
+
+  const toggleEnglish = async (entry: ServiceDiaryEntry) => {
+    if (showEn.has(entry.id)) {
+      setShowEn(prev => { const next = new Set(prev); next.delete(entry.id); return next })
+      return
+    }
+    const state = readTranslation(entry.translations, entry as unknown as Record<string, unknown>)
+    if (!state.missing && !state.stale) {
+      setShowEn(prev => new Set(prev).add(entry.id))
+      return
+    }
+    setTranslatingId(entry.id)
+    try {
+      await translateDiary.mutateAsync({ entry, studentId })
+      setShowEn(prev => new Set(prev).add(entry.id))
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '번역에 실패했습니다.')
+    } finally {
+      setTranslatingId(null)
+    }
+  }
   const allCollapsed = visibleEntries.length > 0 && visibleEntries.every(d => collapsed.has(d.id))
   const setAll = (collapse: boolean) =>
     setCollapsed(collapse ? new Set(visibleEntries.map(d => d.id)) : new Set())
@@ -3459,14 +3487,34 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
         {visibleEntries.map(rawD => {
           const d = normalizeDiaryEntry(rawD)
           const isCollapsed = collapsed.has(d.id)
+          const isTranslating = translatingId === d.id
+          const isEnglish = showEn.has(d.id)
+          // 영어로 볼 때는 번역본을, 아니면 원문을 읽는다. 원문은 어느 쪽이든 그대로 남는다.
+          const view = (isEnglish
+            ? readTranslation(d.translations, d as unknown as Record<string, unknown>).fields
+            : null) || d
           return (
           <div key={d.id} className="rounded-lg border p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <span>{d.entryDate || '—'}</span>
                 {d.authorId && <span className="text-muted-foreground font-normal">{d.authorId}</span>}
+                {isEnglish && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">English</span>}
               </div>
               <div className="flex items-center gap-2">
+                {entryHasKorean(d as unknown as Record<string, unknown>) && (
+                  <Button
+                    size="sm" variant="ghost"
+                    disabled={isTranslating}
+                    onClick={() => toggleEnglish(d)}
+                    title={isEnglish ? '한국어 원문으로' : '영어로 번역해서 보기'}
+                    className="h-7 px-2 text-xs"
+                  >
+                    {isTranslating
+                      ? <><Loader2 className="mr-1 size-3 animate-spin" />번역 중</>
+                      : isEnglish ? '한국어' : 'EN'}
+                  </Button>
+                )}
                 <Button
                   size="sm" variant="ghost"
                   onClick={() => toggleOne(d.id)}
@@ -3507,36 +3555,47 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
             )}
             <div className="mt-2 space-y-2">
               {/* 6개 섹션 순서대로: Meeting Summary · QnA · Concerns · Assignments · Follow-up Commitments · Next Meeting Agenda */}
-              {d.meetingSummary && (
-                <div><p className="text-xs font-medium text-muted-foreground">Meeting Summary</p><p className="text-sm whitespace-pre-wrap">{d.meetingSummary}</p></div>
+              {view.meetingSummary && (
+                <div><p className="text-xs font-medium text-muted-foreground">Meeting Summary</p><p className="text-sm whitespace-pre-wrap">{view.meetingSummary}</p></div>
               )}
-              {d.questionsConcerns && (
-                <div><p className="text-xs font-medium text-muted-foreground">QnA</p><p className="text-sm whitespace-pre-wrap">{d.questionsConcerns}</p></div>
+              {view.questionsConcerns && (
+                <div><p className="text-xs font-medium text-muted-foreground">QnA</p><p className="text-sm whitespace-pre-wrap">{view.questionsConcerns}</p></div>
               )}
-              {d.criticalIssue && (
-                <div><p className="text-xs font-medium text-muted-foreground">Concerns</p><p className="text-sm whitespace-pre-wrap">{d.criticalIssue}</p></div>
+              {view.criticalIssue && (
+                <div><p className="text-xs font-medium text-muted-foreground">Concerns</p><p className="text-sm whitespace-pre-wrap">{view.criticalIssue}</p></div>
               )}
-              <FollowupChecklist
-                studentId={studentId}
-                diaryId={d.id}
-                category="assignment"
-                label="Assignments"
-                fallbackText={d.assignments}
-                createdBy={createdBy}
-                showToggle={false}
-                canEdit={canEdit}
-              />
-              <FollowupChecklist
-                studentId={studentId}
-                diaryId={d.id}
-                category="followup"
-                label="Follow-up Commitments"
-                fallbackText={d.followUpCommitments}
-                createdBy={createdBy}
-                canEdit={canEdit}
-              />
-              {d.nextMeetingAgenda && (
-                <div><p className="text-xs font-medium text-muted-foreground">Next Meeting Agenda</p><p className="text-sm whitespace-pre-wrap">{d.nextMeetingAgenda}</p></div>
+              {/* 영어로 볼 때는 체크리스트 대신 번역문을 읽는다 — 체크 상태는 한국어 원문 쪽
+                  하나로만 관리해야 두 벌로 갈라지지 않는다. */}
+              {isEnglish ? (<>
+                {view.assignments && (
+                  <div><p className="text-xs font-medium text-muted-foreground">Assignments</p><p className="text-sm whitespace-pre-wrap">{view.assignments}</p></div>
+                )}
+                {view.followUpCommitments && (
+                  <div><p className="text-xs font-medium text-muted-foreground">Follow-up Commitments</p><p className="text-sm whitespace-pre-wrap">{view.followUpCommitments}</p></div>
+                )}
+              </>) : (<>
+                <FollowupChecklist
+                  studentId={studentId}
+                  diaryId={d.id}
+                  category="assignment"
+                  label="Assignments"
+                  fallbackText={d.assignments}
+                  createdBy={createdBy}
+                  showToggle={false}
+                  canEdit={canEdit}
+                />
+                <FollowupChecklist
+                  studentId={studentId}
+                  diaryId={d.id}
+                  category="followup"
+                  label="Follow-up Commitments"
+                  fallbackText={d.followUpCommitments}
+                  createdBy={createdBy}
+                  canEdit={canEdit}
+                />
+              </>)}
+              {view.nextMeetingAgenda && (
+                <div><p className="text-xs font-medium text-muted-foreground">Next Meeting Agenda</p><p className="text-sm whitespace-pre-wrap">{view.nextMeetingAgenda}</p></div>
               )}
             </div>
             </>)}

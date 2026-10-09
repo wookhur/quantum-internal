@@ -1,3 +1,5 @@
+import type { DiaryTranslations } from '@/lib/diaryTranslation'
+
 // ============ USER & AUTH ============
 export type UserRole = 'admin' | 'c_level' | 'account' | 'sales_manager' | 'service_manager' | 'marketing_manager' | 'consultant' | 'freelancer' | 'external'
 export type Department = 'management' | 'sales' | 'marketing' | 'finance' | 'service'
@@ -617,6 +619,8 @@ export interface ServiceDiaryEntry {
   assignments?: string
   criticalDates?: string
   criticalIssue?: string
+  /** 언어별 번역본 (원문은 건드리지 않는다). lib/diaryTranslation 참고. */
+  translations?: DiaryTranslations
   authorId?: string
   createdBy?: string
   createdAt: string

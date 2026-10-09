@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { translatableFields, sourceHash, mergeTranslation, type DiaryFields } from '@/lib/diaryTranslation'
 import { COMPLETED_MEETING_STATUSES, isNoShowStatus } from '@/lib/meetingProgress'
 import type {
   ServiceStudent,
@@ -103,6 +104,7 @@ function mapDiary(row: Record<string, unknown>): ServiceDiaryEntry {
     assignments: (row.assignments as string) || undefined,
     criticalDates: (row.critical_dates as string) || undefined,
     criticalIssue: (row.critical_issue as string) || undefined,
+    translations: (row.translations as ServiceDiaryEntry['translations']) || undefined,
     authorId: (row.author_id as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
@@ -635,6 +637,48 @@ export function useDeleteServiceDiary() {
     mutationFn: async ({ id }: { id: string; studentId: string }) => {
       const { error } = await supabase.from('service_diary').delete().eq('id', id)
       if (error) throw error
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_diary', v.studentId] }),
+  })
+}
+
+/**
+ * 미팅일지 한 건을 영어로 번역해 저장한다.
+ *
+ * 원문 칸은 건드리지 않는다 — 번역은 translations(jsonb) 에만 들어간다.
+ * 한 번 번역해 두면 다음 사람은 기다리지도, 다시 비용을 치르지도 않는다.
+ */
+export function useTranslateDiary() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ entry }: { entry: ServiceDiaryEntry; studentId: string }) => {
+      const fields = translatableFields(entry as unknown as Record<string, unknown>)
+      if (Object.keys(fields).length === 0) throw new Error('번역할 내용이 없습니다.')
+
+      const { data, error } = await supabase.functions.invoke('translate-diary', {
+        body: { fields, target: 'en' },
+      })
+      if (error) throw error
+      if (!data?.ok) throw new Error(data?.error || '번역에 실패했습니다.')
+
+      const translations = mergeTranslation(
+        entry.translations, 'en',
+        data.translation as DiaryFields,
+        sourceHash(fields),
+        data.model as string | undefined,
+      )
+
+      // RLS 로 막히면 0행이 조용히 돌아온다 — select 로 실제로 써졌는지 확인한다.
+      const { data: saved, error: saveErr } = await supabase
+        .from('service_diary')
+        .update({ translations })
+        .eq('id', entry.id)
+        .select('id')
+      if (saveErr) throw saveErr
+      if (!saved || saved.length === 0) {
+        throw new Error('번역은 됐지만 저장 권한이 없어 보관하지 못했습니다. 관리자에게 문의해 주세요.')
+      }
+      return translations
     },
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_diary', v.studentId] }),
   })
