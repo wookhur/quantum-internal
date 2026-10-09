@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { isValidDateInput, isValidMonthInput } from '@/lib/invoiceForm'
 
 export interface InvoiceItem {
   id: string
@@ -218,6 +219,14 @@ export function useCreateInvoice() {
       overseasBank?: OverseasBank
       items: { itemName: string; quantity: number; unitPrice: number; remark?: string }[]
     }) => {
+      // 발행일이 비면 Postgres 가 'invalid input syntax for type date: ""' 로 막는다.
+      // 폼에서도 걸러 주지만, 다른 경로로 들어와도 읽을 수 있는 말로 끝나게 한다.
+      if (!isValidDateInput(input.invoiceDate)) {
+        throw new Error('발행일이 비어 있습니다. 맨 위 발행일 칸의 날짜를 확인해 주세요.')
+      }
+      if (!isValidMonthInput(input.invoiceMonth)) {
+        throw new Error('정산월이 비어 있습니다. 맨 위 정산월 칸을 확인해 주세요.')
+      }
       const totalAmount = input.items.reduce((sum, it) => sum + it.quantity * it.unitPrice, 0)
       // covered_incentive_keys 는 마이그레이션 전이면 컬럼이 없으므로, 값이 있을 때만 넣는다.
       // (없을 땐 아예 참조하지 않아 기존 인보이스 생성이 깨지지 않게 한다.)
@@ -293,7 +302,12 @@ export function useUpdateInvoice() {
       items?: { itemName: string; quantity: number; unitPrice: number; remark?: string }[]
     }) => {
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
-      if (input.invoiceDate) updates.invoice_date = input.invoiceDate
+      if (input.invoiceDate !== undefined) {
+        if (!isValidDateInput(input.invoiceDate)) {
+          throw new Error('발행일이 비어 있습니다. 맨 위 발행일 칸의 날짜를 확인해 주세요.')
+        }
+        updates.invoice_date = input.invoiceDate
+      }
       if (input.clientName !== undefined) updates.client_name = input.clientName || null
       if (input.clientEmail) updates.client_email = input.clientEmail   // 값 있을 때만(마이그레이션 전 안전)
       if (input.accountRegion === 'overseas') {

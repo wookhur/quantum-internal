@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, Fragment } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -22,6 +22,7 @@ import { consultantAtDate } from '@/lib/consultantAtDate'
 import { CARRY_OVER_MONTHS, monthsUpTo, carryState, lineKey } from '@/lib/carryOver'
 import { sessionFeeLines, type SessionLike } from '@/lib/sessionFee'
 import { useConsultantAnnualFees, annualFeeOf, useSetConsultantAnnualFee, useDeleteConsultantAnnualFee } from '@/hooks/useConsultantAnnualFees'
+import { invoiceDateError, isValidDateInput, isValidMonthInput } from '@/lib/invoiceForm'
 import { todayKST } from '@/lib/date'
 import { isOnPause } from '@/lib/studentPause'
 import { useMentors, useAllMentorAssignments, useAllMentorSessions, majorTierAmount, majorTierLabel, COACHING_MONTHLY } from '@/hooks/useMentors'
@@ -219,6 +220,12 @@ export function InvoiceFormDialog({
 
   const totalAmount = useMemo(() => items.reduce((s, it) => s + it.quantity * it.unitPrice, 0), [items])
 
+  // 빈 날짜는 제출 버튼을 눌러야 알 수 있으면 늦다 — 칸 옆에 바로 표시한다.
+  const dateInvalid = !isValidDateInput(invoiceDate)
+  const monthInvalid = !isValidMonthInput(invoiceMonth)
+  // 발행일은 긴 폼 맨 위에 있어, 아래쪽에서 제출을 누르면 화면 밖이다. 그 칸으로 데려간다.
+  const dateFieldRef = useRef<HTMLDivElement>(null)
+
   const handleDownload = async () => {
     if (!invoice) return
     setDownloading(true)
@@ -243,6 +250,14 @@ export function InvoiceFormDialog({
 
   const handleSave = async () => {
     if (!canEdit) return
+    // 발행일/정산월이 비면 Postgres 가 'invalid input syntax for type date: ""' 를 던진다.
+    // 그 말로는 어느 칸인지 알 수 없으므로 보내기 전에 여기서 막는다.
+    const dateErr = invoiceDateError(invoiceDate, invoiceMonth)
+    if (dateErr) {
+      dateFieldRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      alert(dateErr)
+      return
+    }
     const validItems = items.filter(it => it.itemName.trim())
     if (validItems.length === 0) {
       alert('항목이 하나도 없습니다. 이름이 비어 있는 줄은 저장되지 않습니다.')
@@ -288,7 +303,10 @@ export function InvoiceFormDialog({
       onOpenChange(false)
     } catch (e) {
       const msg = (e as { message?: string })?.message || String(e)
-      alert(`제출에 실패했습니다.\n${msg}\n\n(kind 컬럼 오류라면 freelancer_invoices 마이그레이션을 실행해 주세요.)`)
+      const hint = /kind/i.test(msg)
+        ? '\n\n(kind 컬럼 오류라면 freelancer_invoices 마이그레이션을 실행해 주세요.)'
+        : ''
+      alert(`제출에 실패했습니다.\n${msg}${hint}`)
     } finally {
       setSaving(false)
     }
@@ -306,14 +324,27 @@ export function InvoiceFormDialog({
 
         <div className="space-y-4">
           {/* Date & Month */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3" ref={dateFieldRef}>
             <div className="space-y-1.5">
               <Label className="text-xs">{t('fInvoice.date')}</Label>
-              <Input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="h-9" />
+              <Input
+                type="date"
+                value={invoiceDate}
+                onChange={e => setInvoiceDate(e.target.value)}
+                className={`h-9 ${dateInvalid ? 'border-destructive' : ''}`}
+              />
+              {dateInvalid && <p className="text-xs text-destructive">발행일을 입력해 주세요.</p>}
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">{t('fInvoice.month')}</Label>
-              <Input type="month" value={invoiceMonth} onChange={e => setInvoiceMonth(e.target.value)} className="h-9" disabled={!!invoice} />
+              <Input
+                type="month"
+                value={invoiceMonth}
+                onChange={e => setInvoiceMonth(e.target.value)}
+                className={`h-9 ${monthInvalid ? 'border-destructive' : ''}`}
+                disabled={!!invoice}
+              />
+              {monthInvalid && <p className="text-xs text-destructive">정산월을 선택해 주세요.</p>}
             </div>
           </div>
 
