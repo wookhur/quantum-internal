@@ -2,8 +2,12 @@
 // 한국어로 쓰인 미팅일지 항목들을 영어로 옮긴다.
 // 읽는 사람은 해외 멘토·에디터 — 사내 기록이므로 입시 실무 용어는 그대로 둔다.
 //
-// 요청:  { fields: { meetingSummary: "...", ... }, target?: "en" }
-// 응답:  { ok: true, translation: { meetingSummary: "...", ... }, model: "..." }
+// 두 가지로 부른다.
+//  ① 항목별   { fields: { meetingSummary: "...", ... } }
+//     → { ok: true, translation: { meetingSummary: "...", ... } }
+//  ② 문서 통째 { url: "https://docs.google.com/..." }  또는  { text: "..." }
+//     → { ok: true, translatedText: "..." }
+//     올린 미팅리포트(구글 닥스·드라이브 PDF) 원문을 통째로 영어로 옮길 때 쓴다.
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 
@@ -31,6 +35,58 @@ Rules:
 8. If a field's Korean is already in English, return it unchanged.
 9. Translate every key you are given, and return no other keys. A field whose input is empty returns an empty string.`
 
+const DOC_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
+
+You are translating a whole meeting report document, not individual fields.
+
+Output rules for a document:
+- Return only the English translation. No preamble, no "Here is the translation", no code fences, no notes about what you did.
+- Keep the document's structure exactly: headings stay headings, bullets stay bullets, numbered lists keep their numbers, tables keep their rows and columns, blank lines between sections stay.
+- Keep the order of everything. Do not summarize, merge sections, or drop anything — this is a full translation, not a summary.
+- A line that is already in English is reproduced unchanged.`
+
+const MAX_DOC_CHARS = 40000
+
+function extractGoogleDocId(url: string): string | null {
+  const m = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/)
+  return m ? m[1] : null
+}
+
+function extractDriveFileId(url: string): string | null {
+  const m1 = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/)
+  if (m1) return m1[1]
+  const m2 = url.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+  return m2 ? m2[1] : null
+}
+
+async function fetchGoogleDocText(docId: string): Promise<string | null> {
+  // '링크가 있는 모든 사용자' 로 공유된 문서만 읽을 수 있다.
+  try {
+    const res = await fetch(`https://docs.google.com/document/d/${docId}/export?format=txt`, { redirect: 'follow' })
+    if (!res.ok) return null
+    const txt = await res.text()
+    // 로그인 페이지가 돌아왔으면 못 읽은 것이다.
+    if (txt.includes('<html') && txt.toLowerCase().includes('sign in')) return null
+    return txt
+  } catch {
+    return null
+  }
+}
+
+async function fetchDrivePdfBase64(fileId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}`, { redirect: 'follow' })
+    if (!res.ok) return null
+    const buf = new Uint8Array(await res.arrayBuffer())
+    if (buf.length < 4 || buf[0] !== 0x25 || buf[1] !== 0x50) return null // %P — PDF 가 아니다
+    let bin = ''
+    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i])
+    return btoa(bin)
+  } catch {
+    return null
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -43,6 +99,95 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
+/** Claude 응답에서 사람이 읽을 본문만 꺼낸다. 생각 블록이 앞에 올 수 있다. */
+function textOf(data: { content?: { type?: string; text?: string }[] }): string {
+  const block = (data.content || []).find(b => b?.type === 'text')
+  return block?.text || ''
+}
+
+/** 안전장치·길이로 끊긴 응답을 읽기 전에 걸러낸다. 문제없으면 null. */
+function stopReasonError(stopReason: string | undefined): string | null {
+  if (stopReason === 'refusal') {
+    return '번역이 거절되었습니다. 원문에 민감한 내용이 있는지 확인해 주세요.'
+  }
+  if (stopReason === 'max_tokens') {
+    return '리포트가 너무 길어 번역이 중간에 끊겼습니다. 문서를 나눠서 다시 시도해 주세요.'
+  }
+  return null
+}
+
+async function callClaude(apiBody: string): Promise<{ data?: Record<string, unknown>; error?: string }> {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+    },
+    body: apiBody,
+  })
+  if (!response.ok) {
+    const err = await response.text()
+    return { error: `Claude API ${response.status}: ${err.slice(0, 500)}` }
+  }
+  return { data: await response.json() }
+}
+
+/** 올린 리포트(구글 닥스 / 드라이브 PDF / 붙여넣은 글)를 통째로 영어로 옮긴다. */
+async function translateDocument(url?: string, text?: string): Promise<Response> {
+  let docText = text
+  let pdfBase64: string | null = null
+
+  if (!docText && url) {
+    const docId = extractGoogleDocId(url)
+    if (docId) docText = (await fetchGoogleDocText(docId)) || undefined
+    if (!docText) {
+      const driveId = extractDriveFileId(url)
+      if (driveId) pdfBase64 = await fetchDrivePdfBase64(driveId)
+    }
+  }
+
+  if (!docText && !pdfBase64) {
+    return json({
+      ok: false,
+      error: '리포트를 열 수 없습니다. 구글 문서/드라이브 링크가 \'링크가 있는 모든 사용자\'로 공유되어 있는지 확인하거나, 내용을 직접 붙여넣어 주세요.',
+    }, 400)
+  }
+
+  const userContent: unknown[] = []
+  if (pdfBase64) {
+    userContent.push({
+      type: 'document',
+      source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
+    })
+    userContent.push({ type: 'text', text: 'Translate this meeting report into English in full.' })
+  } else {
+    const body = (docText || '').slice(0, MAX_DOC_CHARS)
+    userContent.push({ type: 'text', text: `Translate this meeting report into English in full.\n\n${body}` })
+  }
+
+  const { data, error } = await callClaude(JSON.stringify({
+    model: MODEL,
+    max_tokens: 16000,
+    system: DOC_SYSTEM_PROMPT,
+    output_config: { effort: 'low' },
+    messages: [{ role: 'user', content: userContent }],
+  }))
+  if (error) return json({ ok: false, error }, 500)
+
+  const stopErr = stopReasonError(data!.stop_reason as string | undefined)
+  if (stopErr) return json({ ok: false, error: stopErr }, 500)
+
+  const translatedText = textOf(data as never).trim()
+  if (!translatedText) {
+    return json({ ok: false, error: '번역 결과가 비어 있습니다.' }, 500)
+  }
+
+  // 원문이 길어 잘렸으면 숨기지 않고 알린다.
+  const truncated = !pdfBase64 && (docText || '').length > MAX_DOC_CHARS
+  return json({ ok: true, translatedText, truncated, model: (data!.model as string) || MODEL })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -52,6 +197,13 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}))
+
+    // ── ② 문서 통째 번역 (올린 미팅리포트 원문)
+    if (body?.url || body?.text) {
+      return await translateDocument(body.url as string | undefined, body.text as string | undefined)
+    }
+
+    // ── ① 항목별 번역 (미팅다이어리 10개 칸)
     const incoming = (body?.fields || {}) as Record<string, unknown>
 
     // 보내 준 칸 중 우리가 아는 키, 내용이 있는 것만 번역한다.
@@ -94,34 +246,14 @@ Deno.serve(async (req) => {
       }],
     })
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: apiBody,
-    })
+    const { data, error } = await callClaude(apiBody)
+    if (error) return json({ ok: false, error }, 500)
 
-    if (!response.ok) {
-      const err = await response.text()
-      return json({ ok: false, error: `Claude API ${response.status}: ${err.slice(0, 500)}` }, 500)
-    }
+    // 안전장치·길이로 끊긴 응답은 본문을 읽기 전에 먼저 걸러낸다.
+    const stopErr = stopReasonError(data!.stop_reason as string | undefined)
+    if (stopErr) return json({ ok: false, error: stopErr }, 500)
 
-    const data = await response.json()
-
-    // 안전 장치가 걸려 응답이 멈춘 경우 — content 를 읽기 전에 먼저 본다.
-    if (data.stop_reason === 'refusal') {
-      return json({ ok: false, error: '번역이 거절되었습니다. 원문에 민감한 내용이 있는지 확인해 주세요.' }, 500)
-    }
-    // 잘린 응답은 JSON 이 깨져 아래에서 걸리지만, 이유를 알 수 있게 먼저 말해 준다.
-    if (data.stop_reason === 'max_tokens') {
-      return json({ ok: false, error: '일지가 너무 길어 번역이 중간에 끊겼습니다. 내용을 나눠서 다시 시도해 주세요.' }, 500)
-    }
-
-    const textBlock = (data.content || []).find((b: { type?: string }) => b?.type === 'text')
-    const raw: string = textBlock?.text || ''
+    const raw = textOf(data as never)
     const cleaned = raw
       .replace(/^```json\s*/i, '')
       .replace(/^```\s*/i, '')
@@ -145,7 +277,7 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: '번역 결과가 비어 있습니다.', raw: raw.slice(0, 500) }, 500)
     }
 
-    return json({ ok: true, translation, model: data.model || MODEL })
+    return json({ ok: true, translation, model: (data!.model as string) || MODEL })
   } catch (e) {
     return json({ ok: false, error: String(e) }, 500)
   }

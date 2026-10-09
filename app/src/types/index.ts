@@ -555,6 +555,18 @@ export interface ServiceMeeting {
   reportStatus: ServiceReportStatus
   reportUrl?: string
   reportDate?: string
+  /** 올린 리포트를 통째로 옮긴 번역문. 원문(reportUrl)은 그대로 둔다. */
+  reportTranslation?: {
+    en?: {
+      text: string
+      /** 번역할 때의 리포트 링크 — 링크가 바뀌면 번역이 뒤처진 것이다. */
+      sourceUrl?: string
+      translatedAt?: string
+      model?: string
+      /** 원문이 길어 뒷부분이 잘렸나 */
+      truncated?: boolean
+    }
+  }
   /** 다음 미팅 일정 (리포트 작성 시 입력). 다이어리가 아니라 리포트가 원천. */
   nextMeetingDate?: string
   /** Attendance lifecycle for QC reporting. */

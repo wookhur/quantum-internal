@@ -17,7 +17,7 @@ import {
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
   Lock, Unlock, MessageSquare, Send, Flag,
-  PenTool, BookText, FolderArchive,
+  PenTool, BookText, FolderArchive, Languages, Download,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
@@ -45,6 +45,7 @@ import {
   useServiceStudents, useCreateServiceStudent, useUpdateServiceStudent,
   useServiceMeetings, useCreateServiceMeeting, useUpdateServiceMeeting, useDeleteServiceMeeting,
   useServiceDiary, useCreateServiceDiary, useUpdateServiceDiary, useDeleteServiceDiary, useTranslateDiary,
+  useTranslateMeetingReport,
   useHeldMeetingsByStudent,
 } from '@/hooks/useServiceStudents'
 import {
@@ -2995,6 +2996,132 @@ function MajorSessionLog({ coachingId, tier, coachingDate, createdBy, canLog }: 
 }
 
 // ────────────────────────── Meetings ──────────────────────────
+// ────────────── 미팅리포트 영어 번역 ──────────────
+// 올린 리포트(구글 닥스·드라이브 PDF)를 통째로 영어로 옮겨 보여 주고, PDF 로 내려받게 한다.
+// 번역은 눌렀을 때만 만들고 저장해 둔다 — 다음 사람은 기다리지도 비용을 다시 치르지도 않는다.
+function ReportTranslationButton({ meeting, studentId, studentName }: {
+  meeting: ServiceMeeting
+  studentId: string
+  studentName?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [error, setError] = useState('')
+  const [copied, setCopied] = useState(false)
+  const translate = useTranslateMeetingReport()
+
+  const saved = meeting.reportTranslation?.en
+  // 리포트를 다른 문서로 갈아 끼웠으면 옛 번역은 그 문서의 것이 아니다.
+  const stale = !!saved && !!saved.sourceUrl && saved.sourceUrl !== meeting.reportUrl
+  const [text, setText] = useState(stale ? '' : (saved?.text || ''))
+  const [truncated, setTruncated] = useState(stale ? false : !!saved?.truncated)
+
+  const run = async () => {
+    setError('')
+    try {
+      const result = await translate.mutateAsync({ meeting, studentId })
+      setText(result?.text || '')
+      setTruncated(!!result?.truncated)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '번역에 실패했습니다.')
+    }
+  }
+
+  const openAndTranslate = async () => {
+    setOpen(true)
+    if (!text) await run()
+  }
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      setError('복사에 실패했습니다. 글을 직접 선택해 복사해 주세요.')
+    }
+  }
+
+  const download = async () => {
+    try {
+      const { downloadReportPdf } = await import('@/lib/reportTranslationDoc')
+      await downloadReportPdf(text, {
+        studentName,
+        meetingDate: meeting.meetingDate,
+        sourceUrl: meeting.reportUrl,
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'PDF 만들기에 실패했습니다.')
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={openAndTranslate}
+        className="inline-flex items-center gap-1 text-xs text-primary underline"
+        title="리포트를 영어로 번역해서 보고 내려받기"
+      >
+        <Languages className="size-3" />
+        영어 번역
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-3xl w-[calc(100vw-1.5rem)] max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Languages className="size-5" />
+              Meeting Report (English)
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-xs text-muted-foreground">
+            {[studentName, meeting.meetingDate].filter(Boolean).join(' · ')}
+            {' · 한국어 원문을 옮긴 것입니다.'}
+          </p>
+
+          {translate.isPending && (
+            <div className="flex items-center gap-2 py-10 justify-center text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              리포트를 읽고 번역하는 중입니다. 20초쯤 걸립니다.
+            </div>
+          )}
+
+          {!translate.isPending && error && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
+              <p className="text-destructive">{error}</p>
+              <Button size="sm" variant="outline" className="mt-2" onClick={run}>다시 시도</Button>
+            </div>
+          )}
+
+          {!translate.isPending && !error && text && (<>
+            {truncated && (
+              <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                원문이 길어 뒷부분이 빠졌습니다. 전체가 필요하면 문서를 나눠 주세요.
+              </p>
+            )}
+            <div className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">{text}</p>
+            </div>
+          </>)}
+
+          <DialogFooter className="gap-2">
+            {!!text && !translate.isPending && (<>
+              <Button size="sm" variant="ghost" onClick={run}>다시 번역</Button>
+              <Button size="sm" variant="outline" onClick={copy}>
+                {copied ? '복사됨' : '복사'}
+              </Button>
+              <Button size="sm" onClick={download}>
+                <Download className="size-4 mr-1" />PDF 다운로드
+              </Button>
+            </>)}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 function MeetingsSection({ student, createdBy, authorName, canEdit }: {
   student: ServiceStudent
   createdBy?: string
@@ -3002,6 +3129,7 @@ function MeetingsSection({ student, createdBy, authorName, canEdit }: {
   canEdit: boolean
 }) {
   const studentId = student.id
+  const studentName = student.name
   const t = useT()
   const consultantName = useConsultantName()
   const { data: meetings = [] } = useServiceMeetings(studentId)
@@ -3075,6 +3203,9 @@ function MeetingsSection({ student, createdBy, authorName, canEdit }: {
             <a href={m.reportUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">
               {t('student360.reportLink')}{m.reportDate ? ` · ${m.reportDate}` : ''}
             </a>
+          )}
+          {m.reportUrl && (
+            <ReportTranslationButton meeting={m} studentId={studentId} studentName={studentName} />
           )}
         </div>
       )}

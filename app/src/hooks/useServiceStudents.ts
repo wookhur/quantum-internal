@@ -75,6 +75,7 @@ function mapMeeting(row: Record<string, unknown>): ServiceMeeting {
     reportStatus: row.report_status as ServiceReportStatus,
     reportUrl: (row.report_url as string) || undefined,
     reportDate: (row.report_date as string) || undefined,
+    reportTranslation: (row.report_translation as ServiceMeeting['reportTranslation']) || undefined,
     nextMeetingDate: (row.next_meeting_date as string) || undefined,
     status: (row.status as MeetingStatus) || 'held',
     cancellationReason: (row.cancellation_reason as string) || undefined,
@@ -681,5 +682,51 @@ export function useTranslateDiary() {
       return translations
     },
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_diary', v.studentId] }),
+  })
+}
+
+/**
+ * 올린 미팅리포트(구글 닥스·드라이브 PDF) 원문을 통째로 영어로 옮겨 저장한다.
+ *
+ * 원문 링크는 그대로 둔다 — 번역문만 report_translation 에 담는다.
+ * 리포트 링크가 바뀌면 그 번역은 뒤처진 것으로 보고 다시 번역한다.
+ */
+export function useTranslateMeetingReport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ meeting }: { meeting: ServiceMeeting; studentId: string }) => {
+      if (!meeting.reportUrl) throw new Error('이 미팅에는 리포트 링크가 없습니다.')
+
+      const { data, error } = await supabase.functions.invoke('translate-diary', {
+        body: { url: meeting.reportUrl },
+      })
+      if (error) throw error
+      if (!data?.ok) throw new Error(data?.error || '번역에 실패했습니다.')
+
+      const translatedText = String(data.translatedText || '')
+      const next: NonNullable<ServiceMeeting['reportTranslation']> = {
+        ...(meeting.reportTranslation || {}),
+        en: {
+          text: translatedText,
+          sourceUrl: meeting.reportUrl,
+          translatedAt: new Date().toISOString(),
+          model: data.model as string | undefined,
+          truncated: !!data.truncated,
+        },
+      }
+
+      // RLS 로 막히면 0행이 조용히 돌아온다 — 실제로 써졌는지 확인한다.
+      const { data: saved, error: saveErr } = await supabase
+        .from('service_meetings')
+        .update({ report_translation: next })
+        .eq('id', meeting.id)
+        .select('id')
+      if (saveErr) throw saveErr
+      if (!saved || saved.length === 0) {
+        throw new Error('번역은 됐지만 저장 권한이 없어 보관하지 못했습니다. 관리자에게 문의해 주세요.')
+      }
+      return next.en
+    },
+    onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['service_meetings', v.studentId] }),
   })
 }
