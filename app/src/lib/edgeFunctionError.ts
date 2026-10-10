@@ -7,12 +7,19 @@
  * 실제 Response 는 error.context 에 들어 있으므로 거기서 꺼내 쓴다.
  */
 
-/** 함수가 보낸 본문에서 error 메시지를 꺼낸다. 못 꺼내면 null. */
+/**
+ * 함수가 보낸 본문에서 보여 줄 말을 꺼낸다. 못 꺼내면 null.
+ *
+ * 함수는 code 를 함께 보낸다 — 그것이 있으면 i18n 키로 돌려주어, 보는 사람의
+ * 언어로 문구가 나오게 한다 (해외 멘토에게 한국어 오류를 보여 줄 수는 없다).
+ * code 가 없으면 함수가 적어 보낸 문장을 그대로 쓴다.
+ */
 export function parseEdgeFunctionError(bodyText: string): string | null {
   const s = (bodyText || '').trim()
   if (!s) return null
   try {
-    const body = JSON.parse(s) as { error?: unknown }
+    const body = JSON.parse(s) as { code?: unknown; error?: unknown }
+    if (typeof body.code === 'string' && body.code.trim()) return `translate.err.${body.code.trim()}`
     if (typeof body.error === 'string' && body.error.trim()) return body.error.trim()
   } catch {
     // JSON 이 아니면 (런타임이 뱉은 평문 등) 앞부분만 보여 준다.

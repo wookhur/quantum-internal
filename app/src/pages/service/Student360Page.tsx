@@ -3004,6 +3004,7 @@ function ReportTranslationButton({ meeting, studentId, studentName }: {
   studentId: string
   studentName?: string
 }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
@@ -3022,7 +3023,7 @@ function ReportTranslationButton({ meeting, studentId, studentName }: {
       setText(result?.text || '')
       setTruncated(!!result?.truncated)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '번역에 실패했습니다.')
+      setError(t(e instanceof Error ? e.message : 'translate.failed'))
     }
   }
 
@@ -3037,7 +3038,7 @@ function ReportTranslationButton({ meeting, studentId, studentName }: {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      setError('복사에 실패했습니다. 글을 직접 선택해 복사해 주세요.')
+      setError(t('translate.copyFailed'))
     }
   }
 
@@ -3050,7 +3051,7 @@ function ReportTranslationButton({ meeting, studentId, studentName }: {
         sourceUrl: meeting.reportUrl,
       })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'PDF 만들기에 실패했습니다.')
+      setError(t(e instanceof Error ? e.message : 'translate.pdfFailed'))
     }
   }
 
@@ -3060,10 +3061,10 @@ function ReportTranslationButton({ meeting, studentId, studentName }: {
         type="button"
         onClick={openAndTranslate}
         className="inline-flex items-center gap-1 text-xs text-primary underline"
-        title="리포트를 영어로 번역해서 보고 내려받기"
+        title={t('translate.reportButtonTitle')}
       >
         <Languages className="size-3" />
-        영어 번역
+        {t('translate.reportButton')}
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -3071,33 +3072,33 @@ function ReportTranslationButton({ meeting, studentId, studentName }: {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Languages className="size-5" />
-              Meeting Report (English)
+              {t('translate.reportTitle')}
             </DialogTitle>
           </DialogHeader>
 
           <p className="text-xs text-muted-foreground">
             {[studentName, meeting.meetingDate].filter(Boolean).join(' · ')}
-            {' · 한국어 원문을 옮긴 것입니다.'}
+            {` · ${t('translate.fromKorean')}`}
           </p>
 
           {translate.isPending && (
             <div className="flex items-center gap-2 py-10 justify-center text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              리포트를 읽고 번역하는 중입니다. 20초쯤 걸립니다.
+              {t('translate.working')}
             </div>
           )}
 
           {!translate.isPending && error && (
             <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm">
               <p className="text-destructive">{error}</p>
-              <Button size="sm" variant="outline" className="mt-2" onClick={run}>다시 시도</Button>
+              <Button size="sm" variant="outline" className="mt-2" onClick={run}>{t('translate.retry')}</Button>
             </div>
           )}
 
           {!translate.isPending && !error && text && (<>
             {truncated && (
               <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-                원문이 길어 뒷부분이 빠졌습니다. 전체가 필요하면 문서를 나눠 주세요.
+                {t('translate.truncated')}
               </p>
             )}
             <div className="flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
@@ -3107,12 +3108,12 @@ function ReportTranslationButton({ meeting, studentId, studentName }: {
 
           <DialogFooter className="gap-2">
             {!!text && !translate.isPending && (<>
-              <Button size="sm" variant="ghost" onClick={run}>다시 번역</Button>
+              <Button size="sm" variant="ghost" onClick={run}>{t('translate.again')}</Button>
               <Button size="sm" variant="outline" onClick={copy}>
-                {copied ? '복사됨' : '복사'}
+                {copied ? t('translate.copied') : t('translate.copy')}
               </Button>
               <Button size="sm" onClick={download}>
-                <Download className="size-4 mr-1" />PDF 다운로드
+                <Download className="size-4 mr-1" />{t('translate.downloadPdf')}
               </Button>
             </>)}
           </DialogFooter>
@@ -3583,7 +3584,7 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
       await translateDiary.mutateAsync({ entry, studentId })
       setOverride(prev => ({ ...prev, [entry.id]: true }))
     } catch (e) {
-      alert(e instanceof Error ? e.message : '번역에 실패했습니다.')
+      alert(t(e instanceof Error ? e.message : 'translate.failed'))
     } finally {
       setTranslatingId(null)
     }
@@ -3648,7 +3649,7 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
               <div className="flex items-center gap-2 text-sm font-medium">
                 <span>{d.entryDate || '—'}</span>
                 {d.authorId && <span className="text-muted-foreground font-normal">{d.authorId}</span>}
-                {isEnglish && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">English</span>}
+                {isEnglish && <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal text-muted-foreground">{t('translate.englishBadge')}</span>}
               </div>
               <div className="flex items-center gap-2">
                 {entryHasKorean(d as unknown as Record<string, unknown>) && (
@@ -3656,11 +3657,11 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
                     size="sm" variant="ghost"
                     disabled={isTranslating}
                     onClick={() => toggleEnglish(d)}
-                    title={isEnglish ? '한국어 원문으로' : '영어로 번역해서 보기'}
+                    title={isEnglish ? t('translate.diaryToKorean') : t('translate.diaryToEnglish')}
                     className="h-7 px-2 text-xs"
                   >
                     {isTranslating
-                      ? <><Loader2 className="mr-1 size-3 animate-spin" />번역 중</>
+                      ? <><Loader2 className="mr-1 size-3 animate-spin" />{t('translate.diaryWorking')}</>
                       : isEnglish ? '한국어' : 'EN'}
                   </Button>
                 )}

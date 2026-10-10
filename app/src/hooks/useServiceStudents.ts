@@ -655,14 +655,14 @@ export function useTranslateDiary() {
   return useMutation({
     mutationFn: async ({ entry }: { entry: ServiceDiaryEntry; studentId: string }) => {
       const fields = translatableFields(entry as unknown as Record<string, unknown>)
-      if (Object.keys(fields).length === 0) throw new Error('번역할 내용이 없습니다.')
+      if (Object.keys(fields).length === 0) throw new Error('translate.err.noContent')
 
       const { data, error } = await supabase.functions.invoke('translate-diary', {
         body: { fields, target: 'en' },
       })
       // invoke 는 2xx 가 아니면 본문을 버린다 — 함수가 보낸 진짜 이유를 꺼내 쓴다.
-      if (error) throw new Error(await edgeFunctionErrorMessage(error, '번역에 실패했습니다.'))
-      if (!data?.ok) throw new Error(data?.error || '번역에 실패했습니다.')
+      if (error) throw new Error(await edgeFunctionErrorMessage(error, 'translate.failed'))
+      if (!data?.ok) throw new Error(data?.code ? `translate.err.${data.code}` : (data?.error || 'translate.failed'))
 
       const translations = mergeTranslation(
         entry.translations, 'en',
@@ -679,7 +679,7 @@ export function useTranslateDiary() {
         .select('id')
       if (saveErr) throw saveErr
       if (!saved || saved.length === 0) {
-        throw new Error('번역은 됐지만 저장 권한이 없어 보관하지 못했습니다. 관리자에게 문의해 주세요.')
+        throw new Error('translate.err.saveDenied')
       }
       return translations
     },
@@ -697,14 +697,14 @@ export function useTranslateMeetingReport() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ meeting }: { meeting: ServiceMeeting; studentId: string }) => {
-      if (!meeting.reportUrl) throw new Error('이 미팅에는 리포트 링크가 없습니다.')
+      if (!meeting.reportUrl) throw new Error('translate.err.noReportUrl')
 
       const { data, error } = await supabase.functions.invoke('translate-diary', {
         body: { url: meeting.reportUrl },
       })
       // invoke 는 2xx 가 아니면 본문을 버린다 — 함수가 보낸 진짜 이유를 꺼내 쓴다.
-      if (error) throw new Error(await edgeFunctionErrorMessage(error, '번역에 실패했습니다.'))
-      if (!data?.ok) throw new Error(data?.error || '번역에 실패했습니다.')
+      if (error) throw new Error(await edgeFunctionErrorMessage(error, 'translate.failed'))
+      if (!data?.ok) throw new Error(data?.code ? `translate.err.${data.code}` : (data?.error || 'translate.failed'))
 
       const translatedText = String(data.translatedText || '')
       const next: NonNullable<ServiceMeeting['reportTranslation']> = {
@@ -726,7 +726,7 @@ export function useTranslateMeetingReport() {
         .select('id')
       if (saveErr) throw saveErr
       if (!saved || saved.length === 0) {
-        throw new Error('번역은 됐지만 저장 권한이 없어 보관하지 못했습니다. 관리자에게 문의해 주세요.')
+        throw new Error('translate.err.saveDenied')
       }
       return next.en
     },

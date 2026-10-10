@@ -92,6 +92,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+/**
+ * 오류는 code 로 돌려준다 — 화면은 code 를 보고 보는 사람의 언어로 문구를 고른다.
+ * (error 문구도 함께 실어, 코드를 모르는 쪽에서도 읽을 거리는 있게 한다.)
+ */
+function fail(code: string, error: string, status = 500): Response {
+  return new Response(JSON.stringify({ ok: false, code, error }), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -106,12 +117,12 @@ function textOf(data: { content?: { type?: string; text?: string }[] }): string 
 }
 
 /** 안전장치·길이로 끊긴 응답을 읽기 전에 걸러낸다. 문제없으면 null. */
-function stopReasonError(stopReason: string | undefined): string | null {
+function stopReasonError(stopReason: string | undefined): { code: string; error: string } | null {
   if (stopReason === 'refusal') {
-    return '번역이 거절되었습니다. 원문에 민감한 내용이 있는지 확인해 주세요.'
+    return { code: 'refused', error: 'The translation was declined. Check the original for sensitive content.' }
   }
   if (stopReason === 'max_tokens') {
-    return '리포트가 너무 길어 번역이 중간에 끊겼습니다. 문서를 나눠서 다시 시도해 주세요.'
+    return { code: 'tooLong', error: 'The document was too long and the translation was cut off. Split it and try again.' }
   }
   return null
 }
@@ -148,10 +159,11 @@ async function translateDocument(url?: string, text?: string): Promise<Response>
   }
 
   if (!docText && !pdfBase64) {
-    return json({
-      ok: false,
-      error: '리포트를 열 수 없습니다. 구글 문서/드라이브 링크가 \'링크가 있는 모든 사용자\'로 공유되어 있는지 확인하거나, 내용을 직접 붙여넣어 주세요.',
-    }, 400)
+    return fail(
+      'reportUnreadable',
+      "Could not open the report. Check that the Google Doc / Drive link is shared with 'Anyone with the link', or paste the text directly.",
+      400,
+    )
   }
 
   const userContent: unknown[] = []
@@ -173,14 +185,14 @@ async function translateDocument(url?: string, text?: string): Promise<Response>
     output_config: { effort: 'low' },
     messages: [{ role: 'user', content: userContent }],
   }))
-  if (error) return json({ ok: false, error }, 500)
+  if (error) return fail('apiError', error)
 
   const stopErr = stopReasonError(data!.stop_reason as string | undefined)
-  if (stopErr) return json({ ok: false, error: stopErr }, 500)
+  if (stopErr) return fail(stopErr.code, stopErr.error)
 
   const translatedText = textOf(data as never).trim()
   if (!translatedText) {
-    return json({ ok: false, error: '번역 결과가 비어 있습니다.' }, 500)
+    return fail('emptyResult', 'The translation came back empty.')
   }
 
   // 원문이 길어 잘렸으면 숨기지 않고 알린다.
@@ -193,7 +205,7 @@ Deno.serve(async (req) => {
 
   try {
     if (!ANTHROPIC_API_KEY) {
-      return json({ ok: false, error: 'ANTHROPIC_API_KEY not configured' }, 500)
+      return fail('noApiKey', 'ANTHROPIC_API_KEY not configured')
     }
 
     const body = await req.json().catch(() => ({}))
@@ -214,7 +226,7 @@ Deno.serve(async (req) => {
     }
     const keys = Object.keys(fields)
     if (keys.length === 0) {
-      return json({ ok: false, error: '번역할 내용이 없습니다.' }, 400)
+      return fail('noContent', 'There is nothing to translate.', 400)
     }
 
     // 스키마를 주면 모델이 그 키들만, 문자열로만 돌려준다 — 코드펜스나 설명이 섞일 여지가 없다.
@@ -247,11 +259,11 @@ Deno.serve(async (req) => {
     })
 
     const { data, error } = await callClaude(apiBody)
-    if (error) return json({ ok: false, error }, 500)
+    if (error) return fail('apiError', error)
 
     // 안전장치·길이로 끊긴 응답은 본문을 읽기 전에 먼저 걸러낸다.
     const stopErr = stopReasonError(data!.stop_reason as string | undefined)
-    if (stopErr) return json({ ok: false, error: stopErr }, 500)
+    if (stopErr) return fail(stopErr.code, stopErr.error)
 
     const raw = textOf(data as never)
     const cleaned = raw
@@ -264,7 +276,7 @@ Deno.serve(async (req) => {
     try {
       parsed = JSON.parse(cleaned)
     } catch {
-      return json({ ok: false, error: 'Claude did not return valid JSON', raw: raw.slice(0, 500) }, 500)
+      return fail('badJson', `Claude did not return valid JSON: ${raw.slice(0, 300)}`)
     }
 
     // 요청한 키만, 문자열만 돌려준다.
@@ -274,11 +286,11 @@ Deno.serve(async (req) => {
       if (typeof v === 'string') translation[k] = v
     }
     if (Object.keys(translation).length === 0) {
-      return json({ ok: false, error: '번역 결과가 비어 있습니다.', raw: raw.slice(0, 500) }, 500)
+      return fail('emptyResult', 'The translation came back empty.')
     }
 
     return json({ ok: true, translation, model: (data!.model as string) || MODEL })
   } catch (e) {
-    return json({ ok: false, error: String(e) }, 500)
+    return fail('unexpected', String(e))
   }
 })
