@@ -3,6 +3,10 @@
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
 
+// 계약서는 길다 — 자르면 뒷쪽(별지·특약·개인정보 동의)에 적힌 값이 사라진다.
+const MAX_TEXT_CHARS = 200000   // 200,000자 ≈ 계약서 100쪽 분량
+const MAX_IMAGE_PAGES = 20      // 스캔본일 때 보내는 쪽 수
+
 const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 계약서 데이터 추출 전문가입니다.
 주어진 계약서 텍스트(또는 이미지)에서 아래 필드를 정확히 추출하여 JSON으로 반환하세요.
 
@@ -42,7 +46,9 @@ const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 계약서 데
 8. 이메일이 하나만 적혀 있고 누구 것인지 구분이 없으면 parentEmail에 넣고 studentEmail은 null로 두세요. 계약서에 서명하는 쪽은 보통 학부모입니다.
 9. 퀀텀어드미션즈(공급자) 쪽 이메일은 추출하지 마세요. @quantumadmissions.com 같은 회사 도메인이거나 '담당자', '컨설턴트', '을(乙)' 란에 적힌 주소는 고객 정보가 아닙니다. 계약자·학생(갑) 쪽 주소만 추출합니다.
 10. 이메일은 소문자로, 공백 없이 반환하세요. 'abc @ gmail .com'처럼 띄어 적혀 있으면 'abc@gmail.com'으로 붙이세요.
-11. "이메일", "E-mail", "메일주소" 같은 라벨을 값으로 쓰지 마세요. '@'가 들어간 실제 주소만 값입니다. 확실하지 않으면 null로 두세요 — 추측한 주소가 들어가면 학생정보에 잘못된 값이 박히고, 자동 채움은 빈칸만 채우므로 나중에 덮어쓰지 않습니다.`
+11. "이메일", "E-mail", "메일주소" 같은 라벨을 값으로 쓰지 마세요. '@'가 들어간 실제 주소만 값입니다. 확실하지 않으면 null로 두세요 — 추측한 주소가 들어가면 학생정보에 잘못된 값이 박히고, 자동 채움은 빈칸만 채우므로 나중에 덮어쓰지 않습니다.
+12. **문서 끝까지 보세요.** 계약서는 10쪽을 넘기 일쑤이고, 이메일·연락처·학교·학년은 앞쪽 본문이 아니라 뒤쪽의 '개인정보 수집·이용 동의서', '수강생 정보', '별지', '특약사항', 서명란에 적혀 있는 경우가 많습니다. 앞쪽 몇 쪽만 보고 null로 두지 말고, 마지막 쪽까지 훑은 뒤에 판단하세요.
+13. 텍스트에 '--- 7페이지 ---' 같은 쪽 표시가 있으면 그것은 문서 구조를 알려 주는 표시일 뿐, 추출할 값이 아닙니다.`
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,8 +76,10 @@ Deno.serve(async (req) => {
     let userContent: unknown[]
 
     if (images && Array.isArray(images) && images.length > 0) {
-      // Image-based extraction (scanned PDFs) — limit to 3 pages
-      const limitedImages = images.slice(0, 3)
+      // Image-based extraction (scanned PDFs).
+      // 계약서는 10쪽을 넘기 일쑤고 이메일·학교 같은 값이 뒷쪽에 적혀 있다.
+      // 3쪽만 보던 탓에 그 값들은 모델에 닿지도 못했다.
+      const limitedImages = images.slice(0, MAX_IMAGE_PAGES)
       console.log(`Processing ${limitedImages.length} images (of ${images.length} provided)`)
       userContent = []
 
@@ -91,8 +99,11 @@ Deno.serve(async (req) => {
         text: '위 계약서 이미지에서 정보를 추출해주세요. 한국어 텍스트를 정확히 읽어주세요.',
       })
     } else if (text && typeof text === 'string') {
-      // Text-based extraction
-      const truncated = text.slice(0, 15000)
+      // Text-based extraction.
+      // 15,000자에서 자르던 탓에 11쪽짜리 계약서의 뒷부분이 통째로 빠졌다
+      // (주소는 앞쪽에 있어 그것만 읽혔다). 계약서 한 부는 넉넉히 들어가도록 둔다.
+      const truncated = text.slice(0, MAX_TEXT_CHARS)
+      console.log(`Contract text: ${text.length} chars, sending ${truncated.length}`)
       userContent = [
         {
           type: 'text',
@@ -108,7 +119,7 @@ Deno.serve(async (req) => {
 
     const apiBody = JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -181,7 +192,7 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   }

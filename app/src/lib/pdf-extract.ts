@@ -9,8 +9,15 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 /**
  * Extract all text content from a PDF file.
  * Returns concatenated text from all pages.
+ *
+ * pageMarkers: 쪽 경계를 '--- 3페이지 ---' 로 남긴다. 계약서처럼 긴 문서에서
+ * 뒷쪽(별지·특약)에 적힌 값을 모델이 찾을 때, 어디쯤인지가 같이 있으면 도움이 되고
+ * 무엇이 안 읽혔는지 사람이 확인하기도 쉽다.
  */
-export async function extractTextFromPdf(file: File): Promise<string> {
+export async function extractTextFromPdf(
+  file: File,
+  opts?: { pageMarkers?: boolean },
+): Promise<string> {
   const arrayBuffer = await file.arrayBuffer()
 
   const pdf = await pdfjsLib.getDocument({
@@ -28,7 +35,7 @@ export async function extractTextFromPdf(file: File): Promise<string> {
     const pageText = content.items
       .map((item) => ('str' in item ? item.str : ''))
       .join(' ')
-    pages.push(pageText)
+    pages.push(opts?.pageMarkers ? `--- ${i}페이지 ---\n${pageText}` : pageText)
   }
 
   return pages.join('\n\n')

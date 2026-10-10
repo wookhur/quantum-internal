@@ -89,7 +89,7 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
     try {
       // Step 1: Try text extraction first
       setExtractStatus(t('contractPdf.extractingText'))
-      const text = await extractTextFromPdf(file)
+      const text = await extractTextFromPdf(file, { pageMarkers: true })
 
       let extracted: ExtractedContractData
 
@@ -100,7 +100,10 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
       } else {
         // Scanned/image PDF — render pages to images and use Vision API
         setExtractStatus(t('contractPdf.scannedDetected'))
-        const images = await renderPdfPagesToImages(file, 3, 1.5)
+        // 계약서는 10쪽을 넘기 일쑤고, 이메일·학교 같은 값이 뒷쪽에 적혀 있다.
+        // 3쪽만 보내면 그 값들은 아예 모델에 닿지 않는다. 쪽수를 늘린 만큼
+        // 해상도를 조금 낮춰 전송 크기를 비슷하게 유지한다.
+        const images = await renderPdfPagesToImages(file, 20, 1.25)
 
         setExtractStatus(t('contractPdf.visionAnalyzing'))
         extracted = await extractContractFieldsFromImages(images)
