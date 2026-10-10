@@ -50,6 +50,48 @@ const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 계약서 데
 12. **문서 끝까지 보세요.** 계약서는 10쪽을 넘기 일쑤이고, 이메일·연락처·학교·학년은 앞쪽 본문이 아니라 뒤쪽의 '개인정보 수집·이용 동의서', '수강생 정보', '별지', '특약사항', 서명란에 적혀 있는 경우가 많습니다. 앞쪽 몇 쪽만 보고 null로 두지 말고, 마지막 쪽까지 훑은 뒤에 판단하세요.
 13. 텍스트에 '--- 7페이지 ---' 같은 쪽 표시가 있으면 그것은 문서 구조를 알려 주는 표시일 뿐, 추출할 값이 아닙니다.`
 
+// 모델이 줄글로 설명하고 끝내는 일이 있었다(스캔본 이미지에서 특히).
+// 스키마를 주면 이 모양으로만 답할 수 있어 그 길이 막힌다.
+const OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    contractorName: { type: ['string', 'null'] },
+    studentName: { type: ['string', 'null'] },
+    schoolName: { type: ['string', 'null'] },
+    gradeAtContract: { type: ['string', 'null'] },
+    contractDate: { type: ['string', 'null'] },
+    expiryDate: { type: ['string', 'null'] },
+    address: { type: ['string', 'null'] },
+    phone: { type: ['string', 'null'] },
+    studentEmail: { type: ['string', 'null'] },
+    parentEmail: { type: ['string', 'null'] },
+    totalAmount: { type: ['number', 'null'] },
+    currency: { type: ['string', 'null'] },
+    paymentAccount: { type: ['string', 'null'] },
+    notes: { type: ['string', 'null'] },
+    installments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          label: { type: ['string', 'null'] },
+          amount: { type: ['number', 'null'] },
+          dueDate: { type: ['string', 'null'] },
+        },
+        required: ['label', 'amount', 'dueDate'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: [
+    'contractorName', 'studentName', 'schoolName', 'gradeAtContract',
+    'contractDate', 'expiryDate', 'address', 'phone',
+    'studentEmail', 'parentEmail', 'totalAmount', 'currency',
+    'paymentAccount', 'notes', 'installments',
+  ],
+  additionalProperties: false,
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -117,10 +159,13 @@ Deno.serve(async (req) => {
       )
     }
 
-    const apiBody = JSON.stringify({
+    const buildBody = (withSchema: boolean) => JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
+      ...(withSchema
+        ? { output_config: { format: { type: 'json_schema', schema: OUTPUT_SCHEMA } } }
+        : {}),
       messages: [
         {
           role: 'user',
@@ -129,17 +174,27 @@ Deno.serve(async (req) => {
       ],
     })
 
-    console.log(`Calling Claude API with model claude-sonnet-4-6, payload size: ${apiBody.length}`)
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const callClaude = (body: string) => fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
       },
-      body: apiBody,
+      body,
     })
+
+    let apiBody = buildBody(true)
+    console.log(`Calling Claude API with model claude-sonnet-4-6, payload size: ${apiBody.length}`)
+    let response = await callClaude(apiBody)
+
+    // 이 모델이 스키마를 못 받으면 400 이 온다 — 그때는 스키마 없이 한 번 더.
+    if (response.status === 400) {
+      const first = await response.text()
+      console.warn(`Schema request rejected, retrying without it: ${first.slice(0, 300)}`)
+      apiBody = buildBody(false)
+      response = await callClaude(apiBody)
+    }
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -151,7 +206,8 @@ Deno.serve(async (req) => {
     }
 
     const result = await response.json()
-    const content = result.content?.[0]?.text || '{}'
+    const textBlock = (result.content || []).find((b: { type?: string }) => b?.type === 'text')
+    const content = textBlock?.text || '{}'
     console.log(`Claude response content: ${content.substring(0, 200)}`)
 
     // Parse the JSON from Claude's response

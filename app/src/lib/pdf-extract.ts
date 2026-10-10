@@ -134,19 +134,20 @@ export async function renderPdfPagesWithinBudget(
   opts?: { maxPages?: number; budgetBytes?: number; scale?: number; quality?: number },
 ): Promise<{ images: string[]; bytes: number; scale: number }> {
   const maxPages = opts?.maxPages ?? 15
-  const budget = opts?.budgetBytes ?? 3_500_000   // base64 기준. 서버 한도(4MB) 아래로 둔다.
-  let scale = opts?.scale ?? 1.5
-  const quality = opts?.quality ?? 0.65
+  const budget = opts?.budgetBytes ?? 4_500_000   // base64 기준
+  // 1.5배로는 작은 한글(이메일 도메인 등)이 뭉개져 모델이 '흐리다'며 놓쳤다.
+  let scale = opts?.scale ?? 2.2
+  const quality = opts?.quality ?? 0.7
 
   let images = await renderPdfPagesToImages(file, maxPages, scale, quality)
   let bytes = images.reduce((n, img) => n + img.length, 0)
 
   if (bytes > budget) {
     // 용량은 대략 해상도의 제곱에 비례한다 — 넘친 비율의 제곱근만큼 낮춘다.
-    const next = Math.max(0.9, scale * Math.sqrt(budget / bytes))
+    const next = Math.max(1.2, scale * Math.sqrt(budget / bytes))
     if (next < scale) {
       scale = Number(next.toFixed(2))
-      images = await renderPdfPagesToImages(file, maxPages, scale, Math.min(quality, 0.6))
+      images = await renderPdfPagesToImages(file, maxPages, scale, Math.min(quality, 0.65))
       bytes = images.reduce((n, img) => n + img.length, 0)
     }
   }

@@ -90,7 +90,7 @@ export async function extractContractFieldsFromImages(
   const totalSizeMB = totalSize / (1024 * 1024)
   console.log(`[extract-contract] Sending ${images.length} images, total base64 size: ${totalSizeMB.toFixed(1)}MB`)
 
-  if (totalSizeMB > 4) {
+  if (totalSizeMB > 5) {
     throw new Error(
       `PDF 이미지 크기가 너무 큽니다 (${totalSizeMB.toFixed(1)}MB). 페이지 수가 적은 PDF를 사용하거나, 텍스트 기반 PDF를 사용해주세요.`,
     )
