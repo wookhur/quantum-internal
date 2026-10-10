@@ -21,7 +21,7 @@ import type { Meeting, MeetingMethod } from '@/types'
 import { MEETING_METHODS } from '@/types'
 import { useAuth } from '@/contexts/AuthContext'
 import { currentMonthStrKST } from '@/lib/date'
-import { extractTextFromPdf, renderPdfPagesToImages } from '@/lib/pdf-extract'
+import { extractPdfText, looksLikeScannedPdf, renderPdfPagesWithinBudget } from '@/lib/pdf-extract'
 import { extractMeetingFields, extractMeetingFieldsFromImages } from '@/lib/extract-meeting-ai'
 import { useT } from '@/i18n/LanguageContext'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -284,15 +284,17 @@ export function MeetingsPage() {
     setCreateStep('extracting')
     try {
       setExtractStatus(t('meetings.pdfUpload.extracting'))
-      const text = await extractTextFromPdf(file)
+      const pdfText = await extractPdfText(file)
 
       let extracted
-      if (text.trim().length >= 20) {
+      // 20자만 넘으면 텍스트로 보던 탓에, 스캔본에서 머리말 몇 글자만 긁히고도
+      // 그것만 모델에 보내고 끝났다. 본문이라 할 분량이 나와야 텍스트로 본다.
+      if (!looksLikeScannedPdf(pdfText)) {
         setExtractStatus(t('meetings.extractAnalyzing'))
-        extracted = await extractMeetingFields(text)
+        extracted = await extractMeetingFields(pdfText.text)
       } else {
         setExtractStatus(t('meetings.extractScanned'))
-        const images = await renderPdfPagesToImages(file, 5, 1.5)
+        const { images } = await renderPdfPagesWithinBudget(file, { maxPages: 8 })
         setExtractStatus(t('meetings.extractVision'))
         extracted = await extractMeetingFieldsFromImages(images)
       }

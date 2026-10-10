@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Upload, FileText, Loader2, CheckCircle2, AlertCircle, Plus, Trash2 } from 'lucide-react'
-import { extractTextFromPdf, renderPdfPagesToImages } from '@/lib/pdf-extract'
+import { extractPdfText, looksLikeScannedPdf, renderPdfPagesWithinBudget } from '@/lib/pdf-extract'
 import { extractContractFields, extractContractFieldsFromImages, type ExtractedContractData } from '@/lib/extract-contract-ai'
 import { useCreateContractFull } from '@/hooks/useContracts'
 import { useCreateInstallments } from '@/hooks/useInstallments'
@@ -89,21 +89,24 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
     try {
       // Step 1: Try text extraction first
       setExtractStatus(t('contractPdf.extractingText'))
-      const text = await extractTextFromPdf(file, { pageMarkers: true })
+      const pdfText = await extractPdfText(file, { pageMarkers: true })
 
       let extracted: ExtractedContractData
 
-      if (text.trim().length >= 30) {
+      if (!looksLikeScannedPdf(pdfText)) {
         // Text-based PDF — use text extraction
         setExtractStatus(t('contractPdf.analyzingAi'))
-        extracted = await extractContractFields(text)
+        extracted = await extractContractFields(pdfText.text)
       } else {
-        // Scanned/image PDF — render pages to images and use Vision API
+        // 스캔본 — 쪽을 그림으로 그려 Vision 으로 읽는다.
+        // 계약서는 10쪽을 넘기 일쑤고 이메일·학교 같은 값이 뒷쪽에 적혀 있어,
+        // 앞 몇 쪽만 보내면 그 값들은 모델에 닿지도 않는다.
         setExtractStatus(t('contractPdf.scannedDetected'))
-        // 계약서는 10쪽을 넘기 일쑤고, 이메일·학교 같은 값이 뒷쪽에 적혀 있다.
-        // 3쪽만 보내면 그 값들은 아예 모델에 닿지 않는다. 쪽수를 늘린 만큼
-        // 해상도를 조금 낮춰 전송 크기를 비슷하게 유지한다.
-        const images = await renderPdfPagesToImages(file, 20, 1.25)
+        const { images, bytes, scale } = await renderPdfPagesWithinBudget(file, { maxPages: 15 })
+        console.log(
+          `[contract] scanned PDF: ${pdfText.pageCount} pages, ${pdfText.contentChars} text chars → ` +
+          `${images.length} images at scale ${scale}, ${(bytes / 1024 / 1024).toFixed(1)}MB`,
+        )
 
         setExtractStatus(t('contractPdf.visionAnalyzing'))
         extracted = await extractContractFieldsFromImages(images)

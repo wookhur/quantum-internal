@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
-import { extractTextFromPdf, renderPdfPagesToImages } from '@/lib/pdf-extract'
+import { extractPdfText, looksLikeScannedPdf, renderPdfPagesWithinBudget } from '@/lib/pdf-extract'
 import { extractMeetingFields, extractMeetingFieldsFromImages, type ExtractedMeetingData } from '@/lib/extract-meeting-ai'
 import { useCreateMeeting } from '@/hooks/useMeetings'
 import { useAuth } from '@/contexts/AuthContext'
@@ -75,16 +75,18 @@ export function MeetingPdfUploadDialog({ open, onOpenChange }: Props) {
 
     try {
       setExtractStatus('PDF에서 텍스트 추출 중...')
-      const text = await extractTextFromPdf(file)
+      const pdfText = await extractPdfText(file)
 
       let extracted: ExtractedMeetingData
 
-      if (text.trim().length >= 20) {
+      // 20자만 넘으면 텍스트로 보던 탓에, 스캔본에서 머리말 몇 글자만 긁히고도
+      // 그것만 모델에 보내고 끝났다. 본문이라 할 분량이 나와야 텍스트로 본다.
+      if (!looksLikeScannedPdf(pdfText)) {
         setExtractStatus('AI로 미팅 노트 분석 중...')
-        extracted = await extractMeetingFields(text)
+        extracted = await extractMeetingFields(pdfText.text)
       } else {
         setExtractStatus('스캔된 PDF 감지 — 이미지 변환 중...')
-        const images = await renderPdfPagesToImages(file, 5, 1.5)
+        const { images } = await renderPdfPagesWithinBudget(file, { maxPages: 8 })
         setExtractStatus('AI Vision으로 미팅 노트 분석 중...')
         extracted = await extractMeetingFieldsFromImages(images)
       }
