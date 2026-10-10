@@ -599,13 +599,29 @@ export function useContractsWithInstallments(filters?: { status?: ContractStatus
 export function useReadContractPdf() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ contract }: { contract: Contract }) => {
-      const url = contract.contractPdfUrl
-      if (!url) throw new Error('이 계약에는 올려 둔 계약서 파일이 없습니다.')
+    mutationFn: async ({ contract, file: picked }: { contract: Contract; file?: File }) => {
+      // 파일을 직접 고른 경우와, 계약에 붙어 있는 파일을 읽는 경우 둘 다 받는다.
+      // 계약관리의 'PDF 업로드' 마법사는 파일을 보관하지 않으므로, 붙어 있는 파일이
+      // 없는 계약이 많다. 그럴 때 여기서 고른 파일을 읽고 계약에도 붙여 둔다.
+      let file = picked
+      let url = contract.contractPdfUrl
 
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(`계약서를 가져오지 못했습니다 (${res.status}).`)
-      const file = new File([await res.blob()], 'contract.pdf', { type: 'application/pdf' })
+      if (!file) {
+        if (!url) throw new Error('읽을 계약서 파일이 없습니다. 파일을 골라 주세요.')
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`계약서를 가져오지 못했습니다 (${res.status}).`)
+        file = new File([await res.blob()], 'contract.pdf', { type: 'application/pdf' })
+      } else {
+        // 고른 파일은 계약에 붙여 둔다 — 다음부터는 고르지 않아도 되고,
+        // 계약관리에서도 실물 계약서를 열어 볼 수 있다.
+        const path = `contract/${contract.id}/${Date.now()}.pdf`
+        const { error: upErr } = await supabase.storage
+          .from('contract-pdfs')
+          .upload(path, file, { upsert: true, contentType: 'application/pdf' })
+        if (!upErr) {
+          url = supabase.storage.from('contract-pdfs').getPublicUrl(path).data.publicUrl
+        }
+      }
 
       const pdfText = await extractPdfText(file, { pageMarkers: true })
       const raw = looksLikeScannedPdf(pdfText)
@@ -630,10 +646,14 @@ export function useReadContractPdf() {
         extractedAt: new Date().toISOString(),
       }
 
+      const patch: Record<string, unknown> = { pdf_extract: pdfExtract }
+      // 고른 파일을 올렸으면 계약에도 연결해 둔다.
+      if (picked && url && url !== contract.contractPdfUrl) patch.contract_pdf_url = url
+
       // RLS 로 막히면 0행이 조용히 돌아온다 — 실제로 써졌는지 확인한다.
       const { data: saved, error } = await supabase
         .from('contracts')
-        .update({ pdf_extract: pdfExtract })
+        .update(patch)
         .eq('id', contract.id)
         .select('id')
       if (error) throw error

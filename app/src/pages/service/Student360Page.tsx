@@ -17,7 +17,7 @@ import {
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
   Lock, Unlock, MessageSquare, Send, Flag,
-  PenTool, BookText, FolderArchive, Languages, Download,
+  PenTool, BookText, FolderArchive, Languages, Download, Upload,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
 import { useT, useLanguage } from '@/i18n/LanguageContext'
@@ -904,6 +904,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
   // 계약서를 다른 파일로 바꿨으면 예전에 읽은 값은 그 파일의 것이 아니다.
   const pdfStale = !!pdfRead?.sourceUrl && !!pdfUrl && pdfRead.sourceUrl !== pdfUrl
   const [pdfError, setPdfError] = useState('')
+  const pdfPickRef = useRef<HTMLInputElement>(null)
 
   const [fillOpen, setFillOpen] = useState(false)
   const [picked, setPicked] = useState<Set<AutofillKey>>(new Set())
@@ -953,7 +954,8 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
                 💤 {t('student360.setOnLeave')}
               </Button>
             )}
-            {(fillable.length > 0 || fillDiffs.length > 0) && (
+            {/* 채울 것이 없어도 열 수 있어야 한다 — 계약서를 읽는 길이 이 창 안에 있다 */}
+            {!!linkedContract && (
               <Button variant="outline" size="sm" className="text-blue-700 border-blue-200 hover:bg-blue-50" onClick={openFill}>
                 📄 계약서에서 채우기 ({fillable.length}{fillDiffs.length > 0 ? ` · 다름 ${fillDiffs.length}` : ''})
               </Button>
@@ -1043,45 +1045,63 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
             {linkedContract?.contractDate && <> · 계약일 {linkedContract.contractDate}</>}
           </p>
 
-          {/* 계약관리에 없는 항목(이메일·연락처 등)은 올려 둔 계약서에서 읽어 보탠다 */}
+          {/* 계약관리에 적지 않는 항목(이메일·연락처 등)은 계약서에서 읽어 보탠다 */}
           <div className="rounded-md border bg-muted/20 p-2.5 text-xs space-y-1.5">
-            {!pdfUrl && (
-              <p className="text-muted-foreground">
-                이 계약에 <b>올려 둔 계약서 파일이 없습니다.</b> 계약관리 → 계약 상세의
-                '실물 계약서(PDF)'에 올리면, 계약관리에 적지 않은 이메일·연락처까지 여기서 채울 수 있습니다.
+            {readPdf.isPending ? (
+              <p className="flex items-center gap-1.5 text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" />
+                계약서를 읽는 중입니다. 30초쯤 걸립니다.
               </p>
-            )}
-            {pdfUrl && (!pdfRead || pdfStale) && (
-              <>
-                <p className="text-muted-foreground">
-                  {pdfStale
+            ) : (<>
+              <p className="text-muted-foreground">
+                {pdfRead && !pdfStale
+                  ? <>계약서를 읽어 둔 상태입니다{pdfRead.extractedAt && <> · {pdfRead.extractedAt.slice(0, 10)}</>}
+                      {' '}· 아래 <span className="rounded bg-violet-100 px-1 text-violet-700">계약서</span> 표시가 그 값입니다.</>
+                  : pdfStale
                     ? '계약서 파일이 바뀌었습니다. 다시 읽으면 새 파일에서 찾습니다.'
-                    : '계약관리에 적지 않은 이메일·연락처·영문이름을 계약서에서 찾아 보탤 수 있습니다.'}
-                </p>
-                <Button
-                  size="sm" variant="outline" className="h-8"
-                  disabled={readPdf.isPending}
-                  onClick={async () => {
-                    setPdfError('')
-                    try { await readPdf.mutateAsync({ contract: linkedContract! }) }
-                    catch (e) { setPdfError(e instanceof Error ? e.message : '계약서를 읽지 못했습니다.') }
-                  }}
-                >
-                  {readPdf.isPending
-                    ? <><Loader2 className="size-3.5 mr-1 animate-spin" />계약서 읽는 중... (30초쯤)</>
-                    : <><Sparkles className="size-3.5 mr-1" />계약서에서 더 찾기</>}
-                </Button>
-              </>
-            )}
-            {pdfUrl && pdfRead && !pdfStale && (
-              <p className="text-muted-foreground">
-                계약서를 읽어 둔 상태입니다
-                {pdfRead.extractedAt && <> · {pdfRead.extractedAt.slice(0, 10)}</>}
-                {' '}· 아래 <span className="rounded bg-violet-100 px-1 text-violet-700">계약서</span> 표시가 그 값입니다.
+                    : '계약관리에 적지 않는 이메일·연락처·영문이름을 계약서에서 찾아 보탤 수 있습니다.'}
               </p>
-            )}
+              <div className="flex flex-wrap items-center gap-2">
+                {pdfUrl && (
+                  <Button
+                    size="sm" variant="outline" className="h-8"
+                    onClick={async () => {
+                      setPdfError('')
+                      try { await readPdf.mutateAsync({ contract: linkedContract! }) }
+                      catch (e) { setPdfError(e instanceof Error ? e.message : '계약서를 읽지 못했습니다.') }
+                    }}
+                  >
+                    <Sparkles className="size-3.5 mr-1" />
+                    {pdfRead && !pdfStale ? '붙어 있는 계약서 다시 읽기' : '붙어 있는 계약서에서 찾기'}
+                  </Button>
+                )}
+                <input
+                  ref={pdfPickRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={async e => {
+                    const f = e.target.files?.[0]
+                    e.target.value = ''
+                    if (!f || !linkedContract) return
+                    setPdfError('')
+                    try { await readPdf.mutateAsync({ contract: linkedContract, file: f }) }
+                    catch (err) { setPdfError(err instanceof Error ? err.message : '계약서를 읽지 못했습니다.') }
+                  }}
+                />
+                <Button size="sm" variant="outline" className="h-8" onClick={() => pdfPickRef.current?.click()}>
+                  <Upload className="size-3.5 mr-1" />계약서 PDF 골라서 읽기
+                </Button>
+              </div>
+              {!pdfUrl && (
+                <p className="text-muted-foreground">
+                  이 계약에는 붙어 있는 계약서 파일이 없습니다. 골라서 읽으면 계약에도 함께 붙여 둡니다.
+                </p>
+              )}
+            </>)}
             {pdfError && <p className="text-destructive">{pdfError}</p>}
           </div>
+
           {fillable.length === 0 && (
             <p className="text-sm text-muted-foreground">채울 빈 칸이 없습니다.</p>
           )}
