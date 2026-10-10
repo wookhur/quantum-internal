@@ -79,6 +79,26 @@ export function parentContactLine(c: ContractSource): string {
   return [tel, name].filter(Boolean).join(' ')
 }
 
+/** 계약서에서 뽑아 올 수 있는 값 전부 (학생정보 상태와 무관하게). */
+function candidates(contract: ContractSource): AutofillField[] {
+  const out: AutofillField[] = []
+  const add = (key: AutofillKey, label: string, value: string) => {
+    const v = (value || '').trim()
+    if (v) out.push({ key, label, value: v, text: v })
+  }
+  add('school', '학교', contract.schoolName || '')
+  add('grade', '학년', contract.gradeAtContract || '')
+  add('koreanName', '학생 한글 이름', contract.studentName || '')
+  add('name', '학생 영문 이름', contract.studentNameEn || '')
+  add('email', '학생 이메일', contract.studentEmail || '')
+  add('contact', '학생 연락처', contract.studentPhone || '')
+  // 학부모연락처 칸 하나에 '전화번호 이름' 으로 함께 적는다 (이름만 담는 칸이 따로 없다).
+  add('parentName', '학부모 연락처·이름', parentContactLine(contract))
+  add('parentEmail', '학부모 이메일', contract.parentEmail || '')
+  add('address', '주소', contract.address || '')
+  return out
+}
+
 /**
  * 채울 수 있는 빈칸 목록. 학생정보가 비어 있고 계약에 값이 있는 칸만.
  * 하나도 없으면 빈 배열.
@@ -87,24 +107,40 @@ export function contractAutofillFields(
   student: StudentTarget,
   contract: ContractSource,
 ): AutofillField[] {
-  const out: AutofillField[] = []
-  const push = (key: AutofillKey, label: string, value: string | number | undefined, text?: string) => {
-    if (!blank(student[key])) return        // 이미 적혀 있으면 건드리지 않는다
-    if (blank(value)) return                // 계약에도 없으면 채울 게 없다
-    out.push({ key, label, value: value as string | number, text: text ?? String(value) })
+  return candidates(contract).filter(f => blank(student[f.key]))
+}
+
+/** 지금 적힌 값과 계약서 값이 서로 다른 칸. */
+export interface AutofillDiff extends AutofillField {
+  /** 지금 학생정보에 적혀 있는 값 */
+  current: string
+}
+
+/** 비교할 때는 겉모양 차이를 무시한다 — 공백·하이픈·대소문자. */
+function sameValue(a: string, b: string): boolean {
+  const norm = (v: string) => v.replace(/[\s-]/g, '').toLowerCase()
+  return norm(a) === norm(b)
+}
+
+/**
+ * 이미 적혀 있지만 계약서와 값이 다른 칸.
+ *
+ * 빈 칸만 채우다 보니, 계약서에 더 자세한 값이 있어도(학부모 칸에 이름만 있고
+ * 번호가 빠진 경우 등) 화면에 보이지도 않았다. 보여는 주되 기본은 선택하지 않는다 —
+ * 서비스팀이 나중에 고친 값이 더 정확할 수 있다.
+ */
+export function contractAutofillDiffs(
+  student: StudentTarget,
+  contract: ContractSource,
+): AutofillDiff[] {
+  const out: AutofillDiff[] = []
+  for (const f of candidates(contract)) {
+    const cur = student[f.key]
+    const curText = typeof cur === 'number' ? String(cur) : (cur || '').trim()
+    if (!curText) continue                       // 빈 칸은 '채우기' 쪽에서 다룬다
+    if (sameValue(curText, String(f.value))) continue
+    out.push({ ...f, current: curText })
   }
-
-  push('school', '학교', (contract.schoolName || '').trim())
-  push('grade', '학년', (contract.gradeAtContract || '').trim())
-  push('koreanName', '학생 한글 이름', (contract.studentName || '').trim())
-  push('name', '학생 영문 이름', (contract.studentNameEn || '').trim())
-  push('email', '학생 이메일', (contract.studentEmail || '').trim())
-  push('contact', '학생 연락처', (contract.studentPhone || '').trim())
-  // 학부모연락처 칸 하나에 '전화번호 이름' 으로 함께 적는다 (이름만 담는 칸이 따로 없다).
-  push('parentName', '학부모 연락처·이름', parentContactLine(contract))
-  push('parentEmail', '학부모 이메일', (contract.parentEmail || '').trim())
-  push('address', '주소', (contract.address || '').trim())
-
   return out
 }
 

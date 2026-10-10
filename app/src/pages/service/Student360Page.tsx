@@ -26,7 +26,7 @@ import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
 import { todayKST } from '@/lib/date'
 import { isOnPause, isPauseEnded } from '@/lib/studentPause'
-import { contractAutofillFields, contractAutofillSkipped, autofillPayload, type AutofillKey } from '@/lib/contractAutofill'
+import { contractAutofillFields, contractAutofillSkipped, contractAutofillDiffs, autofillPayload, type AutofillKey } from '@/lib/contractAutofill'
 import { readTranslation, entryHasKorean } from '@/lib/diaryTranslation'
 import { contractYearOf, heldByContractYear, isCompletedMeetingStatus, isNoShowStatus, DEFAULT_ANNUAL_MEETING_TARGET } from '@/lib/meetingProgress'
 import {
@@ -890,14 +890,20 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
     () => (linkedContract ? contractAutofillSkipped(student, linkedContract) : []),
     [student, linkedContract],
   )
+  // 이미 적혀 있지만 계약서와 값이 다른 칸. 빈 칸만 채우다 보니 계약서에 더 자세한
+  // 값이 있어도 보이지 않았다 — 보여는 주되 기본은 선택하지 않는다.
+  const fillDiffs = useMemo(
+    () => (linkedContract ? contractAutofillDiffs(student, linkedContract) : []),
+    [student, linkedContract],
+  )
   const [fillOpen, setFillOpen] = useState(false)
   const [picked, setPicked] = useState<Set<AutofillKey>>(new Set())
   const openFill = () => {
-    setPicked(new Set(fillable.map(f => f.key)))   // 기본은 전부 선택
+    setPicked(new Set(fillable.map(f => f.key)))   // 빈 칸만 기본 선택, 덮어쓰기는 직접 고른다
     setFillOpen(true)
   }
   const applyFill = () => {
-    const payload = autofillPayload(fillable, picked)
+    const payload = autofillPayload([...fillable, ...fillDiffs], picked)
     if (Object.keys(payload).length === 0) { setFillOpen(false); return }
     update.mutate({ id: student.id, ...payload }, { onSuccess: () => setFillOpen(false) })
   }
@@ -938,9 +944,9 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
                 💤 {t('student360.setOnLeave')}
               </Button>
             )}
-            {fillable.length > 0 && (
+            {(fillable.length > 0 || fillDiffs.length > 0) && (
               <Button variant="outline" size="sm" className="text-blue-700 border-blue-200 hover:bg-blue-50" onClick={openFill}>
-                📄 계약서에서 채우기 ({fillable.length})
+                📄 계약서에서 채우기 ({fillable.length}{fillDiffs.length > 0 ? ` · 다름 ${fillDiffs.length}` : ''})
               </Button>
             )}
             <StudentDialog
@@ -1027,7 +1033,10 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
             계약서에 적힌 내용 중 <b>지금 비어 있는 칸</b>만 채웁니다. 이미 적혀 있는 값은 덮어쓰지 않습니다.
             {linkedContract?.contractDate && <> · 계약일 {linkedContract.contractDate}</>}
           </p>
-          <div className="divide-y rounded-md border">
+          {fillable.length === 0 && (
+            <p className="text-sm text-muted-foreground">채울 빈 칸이 없습니다.</p>
+          )}
+          <div className={fillable.length ? 'divide-y rounded-md border' : 'hidden'}>
             {fillable.map(f => (
               <label key={f.key} className="flex items-start gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-muted/30">
                 <input
@@ -1047,9 +1056,38 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
               </label>
             ))}
           </div>
+          {fillDiffs.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                <b>계약서와 값이 다른 칸</b> — 지금 적힌 값을 계약서 값으로 바꿉니다.
+                기본은 선택하지 않았습니다. 바꿀 것만 체크하세요.
+              </p>
+              <div className="divide-y rounded-md border border-amber-200 bg-amber-50/40">
+                {fillDiffs.map(f => (
+                  <label key={f.key} className="flex items-start gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-amber-50">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={picked.has(f.key)}
+                      onChange={e => setPicked(prev => {
+                        const next = new Set(prev)
+                        if (e.target.checked) next.add(f.key); else next.delete(f.key)
+                        return next
+                      })}
+                    />
+                    <span className="min-w-0">
+                      <span className="text-xs text-muted-foreground">{f.label}</span>
+                      <span className="block break-words text-muted-foreground line-through">{f.current}</span>
+                      <span className="block break-words">{f.text}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
           {fillSkipped.length > 0 && (
             <div className="space-y-1 text-[11px] text-muted-foreground">
-              {fillSkipped.some(x => x.reason === 'filled') && (
+              {fillSkipped.some(x => x.reason === 'filled') && fillDiffs.length === 0 && (
                 <p>
                   <b>이미 입력되어 있어 건너뜀:</b>{' '}
                   {fillSkipped.filter(x => x.reason === 'filled').map(x => x.label).join(', ')}
@@ -1067,7 +1105,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
           <DialogFooter>
             <Button variant="outline" onClick={() => setFillOpen(false)}>{t('common.cancel')}</Button>
             <Button onClick={applyFill} disabled={update.isPending || picked.size === 0}>
-              {picked.size}개 채우기
+              {picked.size}개 적용
             </Button>
           </DialogFooter>
         </DialogContent>
