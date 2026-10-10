@@ -83,10 +83,15 @@ const OUTPUT_SCHEMA = {
   additionalProperties: false,
 }
 
-/** 빈 문자열은 '값 없음'이다 — null 로 바꿔 돌려준다. */
+/**
+ * 빈 문자열은 '값 없음'이다 — null 로 바꿔 돌려준다.
+ * 글자도 숫자도 없는 값(`"}`, `-`, `—` 같은 찌꺼기)도 값이 아니다.
+ * 모델이 빈 칸 자리에 이런 걸 흘려 넣어 학교명 칸에 `"}` 가 들어간 적이 있다.
+ */
 function str(v: unknown): string | null {
   const t = typeof v === 'string' ? v.trim() : ''
-  return t ? t : null
+  if (!t) return null
+  return /[\p{L}\p{N}]/u.test(t) ? t : null
 }
 
 /** '₩10,000,000' / '10000000' → 10000000. 숫자를 못 찾으면 null. */
