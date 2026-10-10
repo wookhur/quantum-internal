@@ -293,7 +293,8 @@ const koTranslations = {
   'student360.reportSubmitted': '리포트 제출',
 
   // ── 영어 번역 (해외 멘토·에디터용) — 영어 화면에서도 읽히도록 양쪽 다 채운다
-  'translate.reportButton': '영어 번역',
+  // 라벨은 양쪽 화면에서 같다 — 영어만 읽는 멘토가 언어를 바꾸지 않고도 찾아야 한다.
+  'translate.reportButton': 'English',
   'translate.reportButtonTitle': '리포트를 영어로 번역해서 보고 내려받기',
   'translate.reportTitle': 'Meeting Report (English)',
   'translate.fromKorean': '한국어 원문을 옮긴 것입니다.',
