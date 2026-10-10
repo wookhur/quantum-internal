@@ -10,7 +10,18 @@
  * 무엇이 채워질지 먼저 보여 주고 사람이 고른 것만 저장한다.
  */
 
+/**
+ * 계약서 PDF 에서 읽은 보조 정보. 계약 입력은 사람이 하므로, 여기 값은
+ * 계약 칸이 비어 있을 때만 쓴다 — 손으로 적은 값이 언제나 우선이다.
+ */
+export interface PdfExtractSource {
+  fields?: Record<string, string>
+  extractedAt?: string
+}
+
 export interface ContractSource {
+  /** 계약서 PDF 에서 읽은 값 (계약 칸이 빈 항목을 메운다) */
+  pdfExtract?: PdfExtractSource
   contractorName?: string
   studentName?: string
   studentNameEn?: string
@@ -51,6 +62,8 @@ export interface AutofillField {
   text: string
   /** 실제로 저장할 값 */
   value: string | number
+  /** 이 값이 어디서 왔나 — 사람이 적은 계약 칸인지, 계약서를 읽은 것인지 */
+  source: 'contract' | 'pdf'
 }
 
 const blank = (v: unknown): boolean =>
@@ -91,21 +104,45 @@ export function parentContactLine(c: ContractSource, studentContact?: string): s
 
 /** 계약서에서 뽑아 올 수 있는 값 전부 (학생정보 상태와 무관하게). */
 function candidates(contract: ContractSource, student?: StudentTarget): AutofillField[] {
-  const out: AutofillField[] = []
-  const add = (key: AutofillKey, label: string, value: string) => {
-    const v = (value || '').trim()
-    if (v) out.push({ key, label, value: v, text: v })
+  const pdf = contract.pdfExtract?.fields || {}
+
+  /** 사람이 적은 계약 칸이 먼저, 비어 있으면 계약서에서 읽은 값. */
+  const pick = (manual: string | undefined, pdfKey: string): { v: string; source: 'contract' | 'pdf' } => {
+    const m = (manual || '').trim()
+    if (m) return { v: m, source: 'contract' }
+    const p = (pdf[pdfKey] || '').trim()
+    // 값이 없으면 출처를 따질 것도 없다. 'pdf' 로 두면 빈 값 때문에 줄 전체가
+    // 계약서에서 온 것처럼 표시된다.
+    return { v: p, source: p ? 'pdf' : 'contract' }
   }
-  add('school', '학교', contract.schoolName || '')
-  add('grade', '학년', contract.gradeAtContract || '')
-  add('koreanName', '학생 한글 이름', contract.studentName || '')
-  add('name', '학생 영문 이름', contract.studentNameEn || '')
-  add('email', '학생 이메일', contract.studentEmail || '')
-  add('contact', '학생 연락처', contract.studentPhone || '')
+
+  const out: AutofillField[] = []
+  const add = (key: AutofillKey, label: string, got: { v: string; source: 'contract' | 'pdf' }) => {
+    if (got.v) out.push({ key, label, value: got.v, text: got.v, source: got.source })
+  }
+
+  add('school', '학교', pick(contract.schoolName, 'schoolName'))
+  add('grade', '학년', pick(contract.gradeAtContract, 'gradeAtContract'))
+  add('koreanName', '학생 한글 이름', pick(contract.studentName, 'studentName'))
+  add('name', '학생 영문 이름', pick(contract.studentNameEn, 'studentNameEn'))
+  add('email', '학생 이메일', pick(contract.studentEmail, 'studentEmail'))
+  add('contact', '학생 연락처', pick(contract.studentPhone, 'studentPhone'))
+
   // 학부모연락처 칸 하나에 '전화번호 이름' 으로 함께 적는다 (이름만 담는 칸이 따로 없다).
-  add('parentName', '학부모 연락처·이름', parentContactLine(contract, student?.contact))
-  add('parentEmail', '학부모 이메일', contract.parentEmail || '')
-  add('address', '주소', contract.address || '')
+  const tel = pick(contract.parentPhone, 'parentPhone')
+  const nm = pick(contract.contractorName, 'contractorName')
+  const line = parentContactLine(
+    { parentPhone: tel.v, phone: contract.phone, contractorName: nm.v },
+    student?.contact,
+  )
+  // 한 쪽이라도 계약서에서 온 값이면 '계약서' 로 표시한다 — 사람이 판단할 근거가 된다.
+  if (line) out.push({
+    key: 'parentName', label: '학부모 연락처·이름', value: line, text: line,
+    source: tel.source === 'pdf' || nm.source === 'pdf' ? 'pdf' : 'contract',
+  })
+
+  add('parentEmail', '학부모 이메일', pick(contract.parentEmail, 'parentEmail'))
+  add('address', '주소', pick(contract.address, 'address'))
   return out
 }
 

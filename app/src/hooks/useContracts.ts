@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { extractPdfText, looksLikeScannedPdf, renderPdfPagesWithinBudget } from '@/lib/pdf-extract'
+import { extractContractFields, extractContractFieldsFromImages } from '@/lib/extract-contract-ai'
 import { fetchAllRows, fetchAllRowsByIds } from '@/lib/supabasePaging'
 import type { Contract, ContractStatus, PaymentInstallment } from '@/types'
 import { createNotificationsForUsers, getContractNotificationRecipients } from './useUserNotifications'
@@ -80,6 +82,7 @@ function mapContract(row: Record<string, unknown>): Contract {
     gradeAtContract: row.grade_at_contract as string,
     address: (row.address as string) || undefined,
     phone: (row.phone as string) || undefined,
+    pdfExtract: (row.pdf_extract as Contract['pdfExtract']) || undefined,
     studentNameEn: (row.student_name_en as string) || undefined,
     studentPhone: (row.student_phone as string) || undefined,
     parentPhone: (row.parent_phone as string) || undefined,
@@ -580,6 +583,68 @@ export function useContractsWithInstallments(filters?: { status?: ContractStatus
           paymentProgress: baseAmount > 0 ? Math.min(Math.round((paidAmount / baseAmount) * 100), 100) : 0,
         }
       })
+    },
+  })
+}
+
+/**
+ * 계약서 PDF 를 읽어 보조 정보(이메일·연락처·영문이름 등)를 계약에 붙여 둔다.
+ *
+ * 계약 입력은 사람이 한다 — 금액·날짜·이름은 손으로 적은 값이 언제나 우선이다.
+ * 여기서 읽은 값은 pdf_extract 에만 담고 계약 칸은 건드리지 않는다. 360 자동
+ * 채움이 '계약에 없는 항목'을 메울 때만 쓴다.
+ *
+ * 한 번 읽으면 저장해 두어 다음부터는 비용도 기다림도 없다.
+ */
+export function useReadContractPdf() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ contract }: { contract: Contract }) => {
+      const url = contract.contractPdfUrl
+      if (!url) throw new Error('이 계약에는 올려 둔 계약서 파일이 없습니다.')
+
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`계약서를 가져오지 못했습니다 (${res.status}).`)
+      const file = new File([await res.blob()], 'contract.pdf', { type: 'application/pdf' })
+
+      const pdfText = await extractPdfText(file, { pageMarkers: true })
+      const raw = looksLikeScannedPdf(pdfText)
+        ? await extractContractFieldsFromImages((await renderPdfPagesWithinBudget(file, { maxPages: 15 })).images)
+        : await extractContractFields(pdfText.text)
+
+      // 360 이 필요로 하는 사람 정보만 담는다. 금액·날짜·계약조건은 손으로 적으신다.
+      const keep = [
+        'studentNameEn', 'studentPhone', 'parentPhone',
+        'studentEmail', 'parentEmail', 'address',
+        'schoolName', 'gradeAtContract', 'studentName', 'contractorName',
+      ] as const
+      const fields: Record<string, string> = {}
+      for (const k of keep) {
+        const v = (raw as unknown as Record<string, unknown>)[k]
+        if (typeof v === 'string' && v.trim()) fields[k] = v.trim()
+      }
+
+      const pdfExtract = {
+        fields,
+        sourceUrl: url,
+        extractedAt: new Date().toISOString(),
+      }
+
+      // RLS 로 막히면 0행이 조용히 돌아온다 — 실제로 써졌는지 확인한다.
+      const { data: saved, error } = await supabase
+        .from('contracts')
+        .update({ pdf_extract: pdfExtract })
+        .eq('id', contract.id)
+        .select('id')
+      if (error) throw error
+      if (!saved || saved.length === 0) {
+        throw new Error('계약서는 읽었지만 저장 권한이 없어 보관하지 못했습니다. 관리자에게 문의해 주세요.')
+      }
+      return pdfExtract
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['contracts'] })
+      qc.invalidateQueries({ queryKey: ['contract'] })
     },
   })
 }

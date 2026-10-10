@@ -196,6 +196,16 @@ export interface Contract {
   gradeAtContract?: string
   address?: string
   phone?: string
+  /**
+   * 계약서 PDF 에서 읽은 보조 정보. 사람이 적은 계약 칸과 섞지 않는다 —
+   * 360 자동 채움에서 '계약에 없는 항목'을 메우는 데만 쓴다.
+   */
+  pdfExtract?: {
+    fields?: Record<string, string>
+    sourceUrl?: string
+    extractedAt?: string
+    model?: string
+  }
   /** 학생 영문 이름 (studentName 은 한글 이름) */
   studentNameEn?: string
   /** 학생 본인 연락처 — 계약서에 학생·학부모 번호가 따로 적힌 경우 */

@@ -67,7 +67,7 @@ import {
   useEssayPlans, useCreateEssayPlan, useUpdateEssayPlan, useDeleteEssayPlan,
   essayEndMonth, essayMonthCount, type EssayPlan,
 } from '@/hooks/useEssayPlans'
-import { useContracts } from '@/hooks/useContracts'
+import { useContracts, useReadContractPdf } from '@/hooks/useContracts'
 import {
   useStudentApplications, useUpsertStudentApplication, useDeleteStudentApplication,
   APPLICATION_STATUSES, APPLICATION_TYPES, type StudentApplication,
@@ -896,6 +896,15 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
     () => (linkedContract ? contractAutofillDiffs(student, linkedContract) : []),
     [student, linkedContract],
   )
+  // 계약서 PDF 읽기 — 계약관리에 적는 항목은 360 이 필요로 하는 것보다 적다.
+  // 나머지(이메일·연락처·영문이름)를 계약서에서 읽어 보탠다. 계약 칸은 건드리지 않는다.
+  const readPdf = useReadContractPdf()
+  const pdfUrl = linkedContract?.contractPdfUrl
+  const pdfRead = linkedContract?.pdfExtract
+  // 계약서를 다른 파일로 바꿨으면 예전에 읽은 값은 그 파일의 것이 아니다.
+  const pdfStale = !!pdfRead?.sourceUrl && !!pdfUrl && pdfRead.sourceUrl !== pdfUrl
+  const [pdfError, setPdfError] = useState('')
+
   const [fillOpen, setFillOpen] = useState(false)
   const [picked, setPicked] = useState<Set<AutofillKey>>(new Set())
   const openFill = () => {
@@ -1030,9 +1039,49 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>계약서에서 학생정보 채우기</DialogTitle></DialogHeader>
           <p className="text-xs text-muted-foreground">
-            계약서에 적힌 내용 중 <b>지금 비어 있는 칸</b>만 채웁니다. 이미 적혀 있는 값은 덮어쓰지 않습니다.
+            계약관리에 적힌 내용 중 <b>지금 비어 있는 칸</b>만 채웁니다. 이미 적혀 있는 값은 덮어쓰지 않습니다.
             {linkedContract?.contractDate && <> · 계약일 {linkedContract.contractDate}</>}
           </p>
+
+          {/* 계약관리에 없는 항목(이메일·연락처 등)은 올려 둔 계약서에서 읽어 보탠다 */}
+          <div className="rounded-md border bg-muted/20 p-2.5 text-xs space-y-1.5">
+            {!pdfUrl && (
+              <p className="text-muted-foreground">
+                이 계약에 <b>올려 둔 계약서 파일이 없습니다.</b> 계약관리 → 계약 상세의
+                '실물 계약서(PDF)'에 올리면, 계약관리에 적지 않은 이메일·연락처까지 여기서 채울 수 있습니다.
+              </p>
+            )}
+            {pdfUrl && (!pdfRead || pdfStale) && (
+              <>
+                <p className="text-muted-foreground">
+                  {pdfStale
+                    ? '계약서 파일이 바뀌었습니다. 다시 읽으면 새 파일에서 찾습니다.'
+                    : '계약관리에 적지 않은 이메일·연락처·영문이름을 계약서에서 찾아 보탤 수 있습니다.'}
+                </p>
+                <Button
+                  size="sm" variant="outline" className="h-8"
+                  disabled={readPdf.isPending}
+                  onClick={async () => {
+                    setPdfError('')
+                    try { await readPdf.mutateAsync({ contract: linkedContract! }) }
+                    catch (e) { setPdfError(e instanceof Error ? e.message : '계약서를 읽지 못했습니다.') }
+                  }}
+                >
+                  {readPdf.isPending
+                    ? <><Loader2 className="size-3.5 mr-1 animate-spin" />계약서 읽는 중... (30초쯤)</>
+                    : <><Sparkles className="size-3.5 mr-1" />계약서에서 더 찾기</>}
+                </Button>
+              </>
+            )}
+            {pdfUrl && pdfRead && !pdfStale && (
+              <p className="text-muted-foreground">
+                계약서를 읽어 둔 상태입니다
+                {pdfRead.extractedAt && <> · {pdfRead.extractedAt.slice(0, 10)}</>}
+                {' '}· 아래 <span className="rounded bg-violet-100 px-1 text-violet-700">계약서</span> 표시가 그 값입니다.
+              </p>
+            )}
+            {pdfError && <p className="text-destructive">{pdfError}</p>}
+          </div>
           {fillable.length === 0 && (
             <p className="text-sm text-muted-foreground">채울 빈 칸이 없습니다.</p>
           )}
@@ -1050,7 +1099,12 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
                   })}
                 />
                 <span className="min-w-0">
-                  <span className="text-xs text-muted-foreground">{f.label}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {f.label}
+                    {f.source === 'pdf' && (
+                      <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-700">계약서</span>
+                    )}
+                  </span>
                   <span className="block break-words">{f.text}</span>
                 </span>
               </label>
