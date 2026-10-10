@@ -54,7 +54,8 @@ const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 계약서 데
 13. 텍스트에 '--- 7페이지 ---' 같은 쪽 표시가 있으면 그것은 문서 구조를 알려 주는 표시일 뿐, 추출할 값이 아닙니다.
 14. 이름은 **끝까지** 읽으세요. '박희원'을 '박희'로 줄여 적지 마세요. 마지막 글자가 흐려 확신이 없으면, 끊어 적는 대신 null 로 두는 편이 낫습니다 — 잘린 이름이 학생정보에 박히면 사람이 알아채기 어렵습니다.
 15. 연락처는 숫자와 하이픈만 남기세요('(모) 010-1234-5678' → '010-1234-5678'). 누구 번호인지 표시(모/부/학생)는 떼고, 그 구분은 studentPhone·parentPhone 중 어디에 넣을지로 나타냅니다.
-16. 학생 영문 이름은 계약서에 적혀 있을 때만 넣으세요. 여권식 표기(HONG GILDONG), 영문 통용명(Chloe Kim) 모두 해당합니다. 한글 이름만 있으면 studentNameEn 은 비워 두세요.`
+16. 값이 없으면 **빈 문자열**로 두세요. 'null', 'N/A', '없음', '미상' 같은 글자를 값으로 적지 마세요 — 그 글자가 학생정보에 그대로 박힙니다.
+17. 학생 영문 이름은 계약서에 적혀 있을 때만 넣으세요. 여권식 표기(HONG GILDONG), 영문 통용명(Chloe Kim) 모두 해당합니다. 한글 이름만 있으면 studentNameEn 은 비워 두세요.`
 
 // 모델이 줄글로 설명하고 끝내는 일이 거듭됐다(스캔본 이미지에서 특히).
 // 스키마를 주면 이 모양으로만 답할 수 있어 그 길이 막힌다.
@@ -96,10 +97,27 @@ const OUTPUT_SCHEMA = {
  * 글자도 숫자도 없는 값(`"}`, `-`, `—` 같은 찌꺼기)도 값이 아니다.
  * 모델이 빈 칸 자리에 이런 걸 흘려 넣어 학교명 칸에 `"}` 가 들어간 적이 있다.
  */
+const PLACEHOLDERS = new Set([
+  'null', 'none', 'nil', 'undefined', 'unknown', 'n/a', 'na', 'nan',
+  'blank', 'empty', 'tbd', 'todo',
+  '없음', '미상', '미정', '미기재', '기재없음', '해당없음', '해당사항없음',
+  '공란', '빈칸', '정보없음', '확인불가', '알수없음',
+])
+
 function str(v: unknown): string | null {
-  const t = typeof v === 'string' ? v.trim() : ''
+  let t = typeof v === 'string' ? v.trim() : ''
+  // 모델이 `null` 처럼 따옴표·백틱으로 감싸 보내는 일이 있다 — 껍질을 벗긴다.
+  // 괄호는 벗기지 않는다. '박보람(모)' 처럼 이름의 일부인 경우가 있다.
+  for (let i = 0; i < 3; i++) {
+    const next = t.replace(/^[`'"「『]+/, '').replace(/[`'"」』]+$/, '').trim()
+    if (next === t) break
+    t = next
+  }
   if (!t) return null
-  return /[\p{L}\p{N}]/u.test(t) ? t : null
+  if (!/[\p{L}\p{N}]/u.test(t)) return null
+  // '값이 없다'는 뜻으로 적은 글자는 값이 아니다
+  if (PLACEHOLDERS.has(t.toLowerCase().replace(/\s+/g, ''))) return null
+  return t
 }
 
 /** '₩10,000,000' / '10000000' → 10000000. 숫자를 못 찾으면 null. */

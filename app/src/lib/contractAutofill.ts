@@ -1,3 +1,5 @@
+import { cleanValue } from '@/lib/placeholderValue'
+
 /**
  * 계약서 내용으로 학생정보의 '빈칸'만 채운다.
  *
@@ -108,9 +110,10 @@ function candidates(contract: ContractSource, student?: StudentTarget): Autofill
 
   /** 사람이 적은 계약 칸이 먼저, 비어 있으면 계약서에서 읽은 값. */
   const pick = (manual: string | undefined, pdfKey: string): { v: string; source: 'contract' | 'pdf' } => {
-    const m = (manual || '').trim()
+    const m = cleanValue(manual)
     if (m) return { v: m, source: 'contract' }
-    const p = (pdf[pdfKey] || '').trim()
+    // 모델이 빈 칸에 `null`·'없음' 같은 글자를 흘려 넣는다 — 값으로 치지 않는다.
+    const p = cleanValue(pdf[pdfKey])
     // 값이 없으면 출처를 따질 것도 없다. 'pdf' 로 두면 빈 값 때문에 줄 전체가
     // 계약서에서 온 것처럼 표시된다.
     return { v: p, source: p ? 'pdf' : 'contract' }
