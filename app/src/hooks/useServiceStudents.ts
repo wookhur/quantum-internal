@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { translatableFields, sourceHash, mergeTranslation, type DiaryFields } from '@/lib/diaryTranslation'
+import { edgeFunctionErrorMessage } from '@/lib/edgeFunctionError'
 import { COMPLETED_MEETING_STATUSES, isNoShowStatus } from '@/lib/meetingProgress'
 import type {
   ServiceStudent,
@@ -659,7 +660,8 @@ export function useTranslateDiary() {
       const { data, error } = await supabase.functions.invoke('translate-diary', {
         body: { fields, target: 'en' },
       })
-      if (error) throw error
+      // invoke 는 2xx 가 아니면 본문을 버린다 — 함수가 보낸 진짜 이유를 꺼내 쓴다.
+      if (error) throw new Error(await edgeFunctionErrorMessage(error, '번역에 실패했습니다.'))
       if (!data?.ok) throw new Error(data?.error || '번역에 실패했습니다.')
 
       const translations = mergeTranslation(
@@ -700,7 +702,8 @@ export function useTranslateMeetingReport() {
       const { data, error } = await supabase.functions.invoke('translate-diary', {
         body: { url: meeting.reportUrl },
       })
-      if (error) throw error
+      // invoke 는 2xx 가 아니면 본문을 버린다 — 함수가 보낸 진짜 이유를 꺼내 쓴다.
+      if (error) throw new Error(await edgeFunctionErrorMessage(error, '번역에 실패했습니다.'))
       if (!data?.ok) throw new Error(data?.error || '번역에 실패했습니다.')
 
       const translatedText = String(data.translatedText || '')
