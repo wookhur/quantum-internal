@@ -196,6 +196,12 @@ export interface Contract {
   gradeAtContract?: string
   address?: string
   phone?: string
+  /** 학생 영문 이름 (studentName 은 한글 이름) */
+  studentNameEn?: string
+  /** 학생 본인 연락처 — 계약서에 학생·학부모 번호가 따로 적힌 경우 */
+  studentPhone?: string
+  /** 학부모 연락처. 비어 있으면 phone 을 갈음해 쓴다. */
+  parentPhone?: string
   /** 계약서에 적힌 이메일 — 360 학생정보 자동 채움에 쓴다 */
   studentEmail?: string
   parentEmail?: string

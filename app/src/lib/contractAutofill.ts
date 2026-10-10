@@ -12,34 +12,33 @@
 
 export interface ContractSource {
   contractorName?: string
+  studentName?: string
+  studentNameEn?: string
   schoolName?: string
   gradeAtContract?: string
   address?: string
+  /** 누구 것인지 구분 없이 하나만 적힌 번호 */
   phone?: string
+  studentPhone?: string
+  parentPhone?: string
   studentEmail?: string
   parentEmail?: string
-  contractDate?: string
-  expiryDate?: string
-  serviceStartDate?: string
-  serviceEndDate?: string
-  contractType?: string
-  applicationCount?: number
-  additionalServices?: string
 }
 
 export interface StudentTarget {
+  /** 학부모연락처 칸 — '전화번호 이름' 으로 함께 적는다 */
   parentName?: string
+  /** 학생 연락처 */
   contact?: string
+  /** 학생 한글 이름 */
+  koreanName?: string
+  /** 학생 영문 이름 */
+  name?: string
   email?: string
   parentEmail?: string
   school?: string
   grade?: string
   address?: string
-  startDate?: string
-  endDate?: string
-  contractType?: string
-  applicationCount?: number
-  additionalServices?: string
 }
 
 /** 학생정보에 저장할 때 쓰는 키 */
@@ -69,8 +68,16 @@ export function cleanParentName(raw?: string): string {
   return s
 }
 
-/** 날짜는 YYYY-MM-DD 로 맞춘다(타임스탬프가 섞여 들어와도). */
-const day = (v?: string) => (v || '').slice(0, 10)
+/**
+ * 학부모연락처 칸에 넣을 한 줄 — '전화번호 이름'.
+ * 360 에는 학부모 이름만 담는 칸이 없어 한 칸에 함께 적는다.
+ * 번호가 따로 없으면 하나만 적힌 번호(phone)를 갈음해 쓴다.
+ */
+export function parentContactLine(c: ContractSource): string {
+  const tel = (c.parentPhone || c.phone || '').trim()
+  const name = cleanParentName(c.contractorName)
+  return [tel, name].filter(Boolean).join(' ')
+}
 
 /**
  * 채울 수 있는 빈칸 목록. 학생정보가 비어 있고 계약에 값이 있는 칸만.
@@ -87,21 +94,16 @@ export function contractAutofillFields(
     out.push({ key, label, value: value as string | number, text: text ?? String(value) })
   }
 
-  push('parentName', '학부모 이름', cleanParentName(contract.contractorName))
-  push('contact', '연락처', (contract.phone || '').trim())
-  push('email', '학생 이메일', (contract.studentEmail || '').trim())
-  push('parentEmail', '학부모 이메일', (contract.parentEmail || '').trim())
   push('school', '학교', (contract.schoolName || '').trim())
   push('grade', '학년', (contract.gradeAtContract || '').trim())
+  push('koreanName', '학생 한글 이름', (contract.studentName || '').trim())
+  push('name', '학생 영문 이름', (contract.studentNameEn || '').trim())
+  push('email', '학생 이메일', (contract.studentEmail || '').trim())
+  push('contact', '학생 연락처', (contract.studentPhone || '').trim())
+  // 학부모연락처 칸 하나에 '전화번호 이름' 으로 함께 적는다 (이름만 담는 칸이 따로 없다).
+  push('parentName', '학부모 연락처·이름', parentContactLine(contract))
+  push('parentEmail', '학부모 이메일', (contract.parentEmail || '').trim())
   push('address', '주소', (contract.address || '').trim())
-  // 서비스 기간이 따로 적혀 있으면 그쪽이 맞다. 없으면 계약일·만료일로 갈음한다.
-  push('startDate', '시작일', day(contract.serviceStartDate) || day(contract.contractDate))
-  push('endDate', '종료일', day(contract.serviceEndDate) || day(contract.expiryDate))
-  push('contractType', '계약유형', (contract.contractType || '').trim())
-  push('applicationCount', '원서 지원수',
-    typeof contract.applicationCount === 'number' && contract.applicationCount > 0 ? contract.applicationCount : undefined,
-    typeof contract.applicationCount === 'number' ? `${contract.applicationCount}개` : undefined)
-  push('additionalServices', '추가 서비스', (contract.additionalServices || '').trim())
 
   return out
 }
@@ -126,9 +128,9 @@ export function contractAutofillSkipped(
   })
   // 계약서 자체에 값이 없는 칸
   const everything = contractAutofillFields({}, {
-    contractorName: 'x', phone: 'x', studentEmail: 'x', parentEmail: 'x', schoolName: 'x',
-    gradeAtContract: 'x', address: 'x', contractDate: '2000-01-01', expiryDate: '2000-01-01',
-    contractType: 'x', applicationCount: 1, additionalServices: 'x',
+    contractorName: 'x', studentName: 'x', studentNameEn: 'x', schoolName: 'x',
+    gradeAtContract: 'x', address: 'x', studentPhone: 'x', parentPhone: 'x',
+    studentEmail: 'x', parentEmail: 'x',
   })
   for (const f of everything) {
     if (!names.has(f.key)) out.push({ label: f.label, reason: 'missing' })

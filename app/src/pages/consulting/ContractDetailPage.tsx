@@ -14,12 +14,9 @@ import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
   UserCircle, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText, Star,
-  Upload, Download, Sparkles,
+  Upload, Download,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
-import { extractPdfText, looksLikeScannedPdf, renderPdfPagesWithinBudget } from '@/lib/pdf-extract'
-import { extractContractFields, extractContractFieldsFromImages } from '@/lib/extract-contract-ai'
-import { contractFillPlan, contractFillPayload, type ContractFillPlan, type ContractFillKey, type ExtractedForFill } from '@/lib/contractFillFields'
 import { useUpdateInstallment, useCreateInstallments, useDeleteInstallment } from '@/hooks/useInstallments'
 import { useRevenueSharesByInstallments, useCreateRevenueShares, useUpdateRevenueShare, useDeleteRevenueShare } from '@/hooks/useRevenueShares'
 import { useECActivities } from '@/hooks/useECActivities'
@@ -278,159 +275,9 @@ function ContractInfoCard({ contract, canEdit }: { contract: Contract; canEdit: 
               <Download className="size-4" /> 다운로드
             </Button>
           </div>
-          {canEdit && pdfUrl && (
-            <FillFromPdfButton contract={contract} pdfUrl={pdfUrl} />
-          )}
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-/**
- * 올려 둔 계약서를 읽어 이 계약의 빈 칸을 채운다.
- *
- * '실물 계약서'로 붙인 PDF 는 파일만 저장될 뿐 읽히지 않아, 계약 칸이 비어 있고
- * Student 360 의 '계약서에서 채우기'도 채울 것이 없었다. 여기서 한 번 읽어 두면
- * 계약 → 360 으로 이어진다. 이미 적힌 값은 건드리지 않는다.
- */
-function FillFromPdfButton({ contract, pdfUrl }: { contract: Contract; pdfUrl: string }) {
-  const update = useUpdateContract()
-  const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState('')
-  const [error, setError] = useState('')
-  const [plan, setPlan] = useState<ContractFillPlan | null>(null)
-  const [chosen, setChosen] = useState<Set<ContractFillKey>>(new Set())
-
-  const run = async () => {
-    setOpen(true)
-    setBusy(true)
-    setError('')
-    setPlan(null)
-    try {
-      setStatus('계약서를 가져오는 중...')
-      const res = await fetch(pdfUrl)
-      if (!res.ok) throw new Error(`계약서를 가져오지 못했습니다 (${res.status}).`)
-      const file = new File([await res.blob()], 'contract.pdf', { type: 'application/pdf' })
-
-      setStatus('계약서를 읽는 중...')
-      const pdfText = await extractPdfText(file, { pageMarkers: true })
-
-      let extracted: ExtractedForFill
-      if (!looksLikeScannedPdf(pdfText)) {
-        setStatus('AI로 분석 중...')
-        extracted = await extractContractFields(pdfText.text)
-      } else {
-        setStatus('스캔본입니다 — 이미지로 변환 중...')
-        const { images } = await renderPdfPagesWithinBudget(file, { maxPages: 15 })
-        setStatus('AI Vision으로 분석 중...')
-        extracted = await extractContractFieldsFromImages(images)
-      }
-
-      const next = contractFillPlan(contract, extracted)
-      setPlan(next)
-      setChosen(new Set(next.fill.map(f => f.key)))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '계약서를 읽지 못했습니다.')
-    } finally {
-      setBusy(false)
-      setStatus('')
-    }
-  }
-
-  const apply = async () => {
-    if (!plan) return
-    setBusy(true)
-    setError('')
-    try {
-      await update.mutateAsync({ id: contract.id, ...contractFillPayload(plan.fill, chosen) })
-      setOpen(false)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '저장하지 못했습니다.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const toggle = (key: ContractFillKey) =>
-    setChosen(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key); else next.add(key)
-      return next
-    })
-
-  return (
-    <>
-      <Button variant="outline" size="sm" className="h-9 gap-1 mt-2 w-full" onClick={run}>
-        <Sparkles className="size-4" /> 계약서에서 빈 칸 채우기
-      </Button>
-
-      <Dialog open={open} onOpenChange={o => { if (!busy) setOpen(o) }}>
-        <DialogContent className="max-w-lg w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>계약서에서 빈 칸 채우기</DialogTitle>
-            <DialogDescription>
-              올려 둔 계약서에서 읽은 내용 중 <strong>지금 비어 있는 칸</strong>만 채웁니다.
-              이미 적혀 있는 값은 덮어쓰지 않습니다.
-            </DialogDescription>
-          </DialogHeader>
-
-          {busy && !plan && (
-            <div className="flex items-center gap-2 py-8 justify-center text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />{status || '분석 중...'}
-            </div>
-          )}
-
-          {error && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-
-          {plan && (
-            <div className="space-y-3">
-              {plan.fill.length === 0 && (
-                <p className="text-sm text-muted-foreground">채울 수 있는 빈 칸이 없습니다.</p>
-              )}
-              {plan.fill.map(item => (
-                <label key={item.key} className="flex items-start gap-2 rounded-md border p-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={chosen.has(item.key)}
-                    onChange={() => toggle(item.key)}
-                  />
-                  <span>
-                    <span className="block text-xs text-muted-foreground">{item.label}</span>
-                    <span className="block text-sm">{item.display}</span>
-                  </span>
-                </label>
-              ))}
-              {plan.skippedFilled.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  <strong>이미 입력되어 건너뜀:</strong> {plan.skippedFilled.join(', ')}
-                </p>
-              )}
-              {plan.skippedMissing.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  <strong>계약서에서 못 찾음:</strong> {plan.skippedMissing.join(', ')}
-                </p>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={busy}>취소</Button>
-            {plan && plan.fill.length > 0 && (
-              <Button size="sm" onClick={apply} disabled={busy || chosen.size === 0}>
-                {busy && <Loader2 className="size-4 mr-1 animate-spin" />}{chosen.size}개 채우기
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
   )
 }
 

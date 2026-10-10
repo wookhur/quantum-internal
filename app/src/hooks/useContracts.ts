@@ -80,6 +80,9 @@ function mapContract(row: Record<string, unknown>): Contract {
     gradeAtContract: row.grade_at_contract as string,
     address: (row.address as string) || undefined,
     phone: (row.phone as string) || undefined,
+    studentNameEn: (row.student_name_en as string) || undefined,
+    studentPhone: (row.student_phone as string) || undefined,
+    parentPhone: (row.parent_phone as string) || undefined,
     studentEmail: (row.student_email as string) || undefined,
     parentEmail: (row.parent_email as string) || undefined,
     contractDate: row.contract_date as string,
@@ -144,6 +147,9 @@ export function useCreateContract() {
       address?: string
       studentEmail?: string
       parentEmail?: string
+      studentNameEn?: string
+      studentPhone?: string
+      parentPhone?: string
       paymentAccount?: 'KR' | 'US'
       salesRep?: string
       serviceRep?: string
@@ -165,6 +171,9 @@ export function useCreateContract() {
       if (contract.address) row.address = contract.address
       if (contract.studentEmail) row.student_email = contract.studentEmail
       if (contract.parentEmail) row.parent_email = contract.parentEmail
+      if (contract.studentNameEn) row.student_name_en = contract.studentNameEn
+      if (contract.studentPhone) row.student_phone = contract.studentPhone
+      if (contract.parentPhone) row.parent_phone = contract.parentPhone
       if (contract.paymentAccount) row.payment_account = contract.paymentAccount
       if (contract.salesRep) row.sales_rep = contract.salesRep
       if (contract.serviceRep) row.service_rep = contract.serviceRep
@@ -216,6 +225,9 @@ export function useCreateContractFull() {
       phone?: string
       studentEmail?: string
       parentEmail?: string
+      studentNameEn?: string
+      studentPhone?: string
+      parentPhone?: string
       totalAmount?: number
       currency?: 'KRW' | 'USD'
       paymentAccount?: 'KR' | 'US'
@@ -236,6 +248,9 @@ export function useCreateContractFull() {
       if (contract.address) row.address = contract.address
       if (contract.studentEmail) row.student_email = contract.studentEmail
       if (contract.parentEmail) row.parent_email = contract.parentEmail
+      if (contract.studentNameEn) row.student_name_en = contract.studentNameEn
+      if (contract.studentPhone) row.student_phone = contract.studentPhone
+      if (contract.parentPhone) row.parent_phone = contract.parentPhone
       if (contract.phone) row.phone = contract.phone
       if (contract.totalAmount) row.total_amount = contract.totalAmount
       if (contract.currency) row.currency = contract.currency
@@ -300,6 +315,9 @@ export function useUpdateContract() {
       address?: string
       studentEmail?: string
       parentEmail?: string
+      studentNameEn?: string
+      studentPhone?: string
+      parentPhone?: string
       phone?: string
       totalAmount?: number
       currency?: 'KRW' | 'USD'
@@ -327,6 +345,9 @@ export function useUpdateContract() {
       if (rest.phone !== undefined) update.phone = rest.phone
       if (rest.studentEmail !== undefined) update.student_email = rest.studentEmail || null
       if (rest.parentEmail !== undefined) update.parent_email = rest.parentEmail || null
+      if (rest.studentNameEn !== undefined) update.student_name_en = rest.studentNameEn || null
+      if (rest.studentPhone !== undefined) update.student_phone = rest.studentPhone || null
+      if (rest.parentPhone !== undefined) update.parent_phone = rest.parentPhone || null
       if (rest.totalAmount !== undefined) update.total_amount = rest.totalAmount
       if (rest.currency !== undefined) update.currency = rest.currency
       if (rest.paymentAccount !== undefined) update.payment_account = rest.paymentAccount
