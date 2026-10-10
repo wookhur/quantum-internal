@@ -58,8 +58,11 @@ export function AppLayout() {
 
           <div className="flex-1" />
 
-          {/* Right: language toggle + messages + notification + avatar */}
-          <div className="flex items-center gap-1.5">
+          {/* Right: language toggle + messages + notification + avatar
+              shrink-0: 가운데 검색창이나 넓은 본문에 밀려 화면 밖으로 나가면
+              안 된다 — 언어 전환이 여기에만 있어서, 밀리면 영어 사용자가
+              화면을 영어로 바꿀 방법이 사라진다. */}
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
               onClick={() => setLanguage(language === 'ko' ? 'en' : 'ko')}
               className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
