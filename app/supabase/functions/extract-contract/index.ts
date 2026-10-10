@@ -50,34 +50,25 @@ const SYSTEM_PROMPT = `당신은 한국 교육 컨설팅 회사의 계약서 데
 12. **문서 끝까지 보세요.** 계약서는 10쪽을 넘기 일쑤이고, 이메일·연락처·학교·학년은 앞쪽 본문이 아니라 뒤쪽의 '개인정보 수집·이용 동의서', '수강생 정보', '별지', '특약사항', 서명란에 적혀 있는 경우가 많습니다. 앞쪽 몇 쪽만 보고 null로 두지 말고, 마지막 쪽까지 훑은 뒤에 판단하세요.
 13. 텍스트에 '--- 7페이지 ---' 같은 쪽 표시가 있으면 그것은 문서 구조를 알려 주는 표시일 뿐, 추출할 값이 아닙니다.`
 
-// 모델이 줄글로 설명하고 끝내는 일이 있었다(스캔본 이미지에서 특히).
+// 모델이 줄글로 설명하고 끝내는 일이 거듭됐다(스캔본 이미지에서 특히).
 // 스키마를 주면 이 모양으로만 답할 수 있어 그 길이 막힌다.
+//
+// 모든 칸을 문자열로 두고 "없으면 빈 문자열"로 받는다. ['string','null'] 같은
+// 합집합 타입이나 숫자 타입은 구현에 따라 거부되기도 해서, 가장 단순한 모양으로
+// 받고 숫자 변환은 아래에서 우리가 한다.
+const STR = { type: 'string' }
 const OUTPUT_SCHEMA = {
   type: 'object',
   properties: {
-    contractorName: { type: ['string', 'null'] },
-    studentName: { type: ['string', 'null'] },
-    schoolName: { type: ['string', 'null'] },
-    gradeAtContract: { type: ['string', 'null'] },
-    contractDate: { type: ['string', 'null'] },
-    expiryDate: { type: ['string', 'null'] },
-    address: { type: ['string', 'null'] },
-    phone: { type: ['string', 'null'] },
-    studentEmail: { type: ['string', 'null'] },
-    parentEmail: { type: ['string', 'null'] },
-    totalAmount: { type: ['number', 'null'] },
-    currency: { type: ['string', 'null'] },
-    paymentAccount: { type: ['string', 'null'] },
-    notes: { type: ['string', 'null'] },
+    contractorName: STR, studentName: STR, schoolName: STR, gradeAtContract: STR,
+    contractDate: STR, expiryDate: STR, address: STR, phone: STR,
+    studentEmail: STR, parentEmail: STR,
+    totalAmount: STR, currency: STR, paymentAccount: STR, notes: STR,
     installments: {
       type: 'array',
       items: {
         type: 'object',
-        properties: {
-          label: { type: ['string', 'null'] },
-          amount: { type: ['number', 'null'] },
-          dueDate: { type: ['string', 'null'] },
-        },
+        properties: { label: STR, amount: STR, dueDate: STR },
         required: ['label', 'amount', 'dueDate'],
         additionalProperties: false,
       },
@@ -90,6 +81,47 @@ const OUTPUT_SCHEMA = {
     'paymentAccount', 'notes', 'installments',
   ],
   additionalProperties: false,
+}
+
+/** 빈 문자열은 '값 없음'이다 — null 로 바꿔 돌려준다. */
+function str(v: unknown): string | null {
+  const t = typeof v === 'string' ? v.trim() : ''
+  return t ? t : null
+}
+
+/** '₩10,000,000' / '10000000' → 10000000. 숫자를 못 찾으면 null. */
+function num(v: unknown): number | null {
+  const digits = (typeof v === 'string' ? v : '').replace(/[^0-9.]/g, '')
+  if (!digits) return null
+  const n = Number(digits)
+  return Number.isFinite(n) ? n : null
+}
+
+/** 스키마로 받은 문자열 묶음을 앱이 쓰는 모양으로 되돌린다. */
+function normalize(raw: Record<string, unknown>) {
+  const rows = Array.isArray(raw.installments) ? raw.installments : []
+  return {
+    contractorName: str(raw.contractorName),
+    studentName: str(raw.studentName),
+    schoolName: str(raw.schoolName),
+    gradeAtContract: str(raw.gradeAtContract),
+    contractDate: str(raw.contractDate),
+    expiryDate: str(raw.expiryDate),
+    address: str(raw.address),
+    phone: str(raw.phone),
+    studentEmail: str(raw.studentEmail),
+    parentEmail: str(raw.parentEmail),
+    totalAmount: num(raw.totalAmount),
+    currency: str(raw.currency),
+    paymentAccount: str(raw.paymentAccount),
+    notes: str(raw.notes),
+    installments: rows
+      .map((r) => {
+        const o = (r || {}) as Record<string, unknown>
+        return { label: str(o.label), amount: num(o.amount), dueDate: str(o.dueDate) }
+      })
+      .filter((r) => r.label || r.amount || r.dueDate),
+  }
 }
 
 const corsHeaders = {
@@ -159,19 +191,30 @@ Deno.serve(async (req) => {
       )
     }
 
-    const buildBody = (withSchema: boolean) => JSON.stringify({
+    // 응답을 JSON 으로 받는 길을 세 가지 두고 차례로 내려간다.
+    //  ① output_config 스키마  ② 도구 호출 강제  ③ 맨몸(프롬프트만 믿기)
+    // ①이 이 모델에서 거부된 적이 있어(“Schemas contain…”), 바로 ②로 넘어가
+    // 헛걸음하지 않게 한다. ②는 이 모델에서 오래 쓰여 온 방식이다.
+    type Mode = 'schema' | 'tool' | 'plain'
+
+    const buildBody = (mode: Mode) => JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
-      ...(withSchema
+      ...(mode === 'schema'
         ? { output_config: { format: { type: 'json_schema', schema: OUTPUT_SCHEMA } } }
         : {}),
-      messages: [
-        {
-          role: 'user',
-          content: userContent,
-        },
-      ],
+      ...(mode === 'tool'
+        ? {
+            tools: [{
+              name: 'save_contract',
+              description: '계약서에서 읽어낸 값을 이 도구로 넘기세요. 설명하지 말고 이 도구만 호출하세요.',
+              input_schema: OUTPUT_SCHEMA,
+            }],
+            tool_choice: { type: 'tool', name: 'save_contract' },
+          }
+        : {}),
+      messages: [{ role: 'user', content: userContent }],
     })
 
     const callClaude = (body: string) => fetch('https://api.anthropic.com/v1/messages', {
@@ -184,16 +227,29 @@ Deno.serve(async (req) => {
       body,
     })
 
-    let apiBody = buildBody(true)
-    console.log(`Calling Claude API with model claude-sonnet-4-6, payload size: ${apiBody.length}`)
-    let response = await callClaude(apiBody)
+    const modes: Mode[] = ['schema', 'tool', 'plain']
+    let response: Response | null = null
+    let mode: Mode = 'plain'
 
-    // 이 모델이 스키마를 못 받으면 400 이 온다 — 그때는 스키마 없이 한 번 더.
-    if (response.status === 400) {
-      const first = await response.text()
-      console.warn(`Schema request rejected, retrying without it: ${first.slice(0, 300)}`)
-      apiBody = buildBody(false)
-      response = await callClaude(apiBody)
+    for (const m of modes) {
+      const body = buildBody(m)
+      console.log(`Calling Claude API (mode: ${m}), payload size: ${body.length}`)
+      const res = await callClaude(body)
+      // 400 은 '이 요청 모양을 못 받는다'는 뜻 — 다음 방식으로 내려간다.
+      if (res.status === 400 && m !== 'plain') {
+        console.warn(`Mode '${m}' rejected: ${(await res.text()).slice(0, 800)}`)
+        continue
+      }
+      response = res
+      mode = m
+      break
+    }
+
+    if (!response) {
+      return new Response(
+        JSON.stringify({ error: 'Claude API rejected every request shape' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
     }
 
     if (!response.ok) {
@@ -206,7 +262,20 @@ Deno.serve(async (req) => {
     }
 
     const result = await response.json()
-    const textBlock = (result.content || []).find((b: { type?: string }) => b?.type === 'text')
+    const blocks = (result.content || []) as { type?: string; text?: string; input?: unknown }[]
+
+    // 도구 호출로 받았으면 그 입력이 곧 결과다 — 파싱할 글이 없다.
+    const toolBlock = blocks.find((b) => b?.type === 'tool_use')
+    if (toolBlock?.input) {
+      const extracted = normalize(toolBlock.input as Record<string, unknown>)
+      console.log(`Extracted (mode: ${mode}): ${JSON.stringify(extracted).slice(0, 400)}`)
+      return new Response(
+        JSON.stringify(extracted),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      )
+    }
+
+    const textBlock = blocks.find((b) => b?.type === 'text')
     const content = textBlock?.text || '{}'
     console.log(`Claude response content: ${content.substring(0, 200)}`)
 
@@ -219,7 +288,8 @@ Deno.serve(async (req) => {
 
     let extracted
     try {
-      extracted = JSON.parse(jsonStr)
+      extracted = normalize(JSON.parse(jsonStr) as Record<string, unknown>)
+      console.log(`Extracted (mode: ${mode}): ${JSON.stringify(extracted).slice(0, 400)}`)
     } catch (parseErr) {
       console.error(`JSON parse failed. Raw content: ${content}`)
       // If Claude couldn't parse the contract, return partial result with the raw text as notes
@@ -238,7 +308,8 @@ Deno.serve(async (req) => {
         totalAmount: null,
         currency: null,
         paymentAccount: null,
-        notes: `AI 분석 결과 (수동 입력 필요): ${content.substring(0, 300)}`,
+        installments: [],
+        notes: `AI가 읽은 내용을 칸에 담지 못했습니다. 아래 내용을 보고 직접 입력해 주세요.\n\n${content.substring(0, 1200)}`,
       }
     }
 
