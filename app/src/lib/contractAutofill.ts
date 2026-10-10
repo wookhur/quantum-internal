@@ -68,19 +68,29 @@ export function cleanParentName(raw?: string): string {
   return s
 }
 
+/** 비교할 때는 겉모양 차이를 무시한다 — 공백·하이픈·대소문자. */
+function sameValue(a: string, b: string): boolean {
+  const norm = (v: string) => v.replace(/[\s-]/g, '').toLowerCase()
+  return norm(a) === norm(b)
+}
+
 /**
  * 학부모연락처 칸에 넣을 한 줄 — '전화번호 이름'.
  * 360 에는 학부모 이름만 담는 칸이 없어 한 칸에 함께 적는다.
  * 번호가 따로 없으면 하나만 적힌 번호(phone)를 갈음해 쓴다.
  */
-export function parentContactLine(c: ContractSource): string {
-  const tel = (c.parentPhone || c.phone || '').trim()
+export function parentContactLine(c: ContractSource, studentContact?: string): string {
+  // parentPhone 이 없으면 구분 없이 적힌 phone 을 갈음해 쓴다. 다만 그 번호가 학생
+  // 연락처로 이미 쓰이고 있으면 학부모 번호가 아니다 — 이름 옆에 엉뚱한 번호가
+  // 붙으면 사람이 알아채기 어려우므로 그럴 땐 번호 없이 이름만 둔다.
+  const fallback = sameValue((c.phone || '').trim(), (studentContact || '').trim()) ? '' : (c.phone || '')
+  const tel = ((c.parentPhone || fallback) || '').trim()
   const name = cleanParentName(c.contractorName)
   return [tel, name].filter(Boolean).join(' ')
 }
 
 /** 계약서에서 뽑아 올 수 있는 값 전부 (학생정보 상태와 무관하게). */
-function candidates(contract: ContractSource): AutofillField[] {
+function candidates(contract: ContractSource, student?: StudentTarget): AutofillField[] {
   const out: AutofillField[] = []
   const add = (key: AutofillKey, label: string, value: string) => {
     const v = (value || '').trim()
@@ -93,7 +103,7 @@ function candidates(contract: ContractSource): AutofillField[] {
   add('email', '학생 이메일', contract.studentEmail || '')
   add('contact', '학생 연락처', contract.studentPhone || '')
   // 학부모연락처 칸 하나에 '전화번호 이름' 으로 함께 적는다 (이름만 담는 칸이 따로 없다).
-  add('parentName', '학부모 연락처·이름', parentContactLine(contract))
+  add('parentName', '학부모 연락처·이름', parentContactLine(contract, student?.contact))
   add('parentEmail', '학부모 이메일', contract.parentEmail || '')
   add('address', '주소', contract.address || '')
   return out
@@ -107,19 +117,13 @@ export function contractAutofillFields(
   student: StudentTarget,
   contract: ContractSource,
 ): AutofillField[] {
-  return candidates(contract).filter(f => blank(student[f.key]))
+  return candidates(contract, student).filter(f => blank(student[f.key]))
 }
 
 /** 지금 적힌 값과 계약서 값이 서로 다른 칸. */
 export interface AutofillDiff extends AutofillField {
   /** 지금 학생정보에 적혀 있는 값 */
   current: string
-}
-
-/** 비교할 때는 겉모양 차이를 무시한다 — 공백·하이픈·대소문자. */
-function sameValue(a: string, b: string): boolean {
-  const norm = (v: string) => v.replace(/[\s-]/g, '').toLowerCase()
-  return norm(a) === norm(b)
 }
 
 /**
@@ -134,7 +138,7 @@ export function contractAutofillDiffs(
   contract: ContractSource,
 ): AutofillDiff[] {
   const out: AutofillDiff[] = []
-  for (const f of candidates(contract)) {
+  for (const f of candidates(contract, student)) {
     const cur = student[f.key]
     const curText = typeof cur === 'number' ? String(cur) : (cur || '').trim()
     if (!curText) continue                       // 빈 칸은 '채우기' 쪽에서 다룬다
