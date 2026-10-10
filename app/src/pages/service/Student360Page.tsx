@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,7 @@ import {
   PenTool, BookText, FolderArchive, Languages, Download,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
-import { useT } from '@/i18n/LanguageContext'
+import { useT, useLanguage } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { supabase } from '@/lib/supabase'
@@ -3544,26 +3544,44 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
       return next
     })
 
-  // 영어로 보고 있는 일지들. 번역은 눌렀을 때만 만들고, 만든 뒤에는 저장해 두어
-  // 다음 사람은 기다리지 않는다. 원문이 수정됐으면 다시 누를 때 새로 번역한다.
-  const [showEn, setShowEn] = useState<Set<string>>(new Set())
+  // 번역은 눌렀을 때만 만들고, 만든 뒤에는 저장해 두어 다음 사람은 기다리지 않는다.
+  // 원문이 수정됐으면 다시 누를 때 새로 번역한다.
+  //
+  // 앱 언어가 English 면, 이미 번역해 둔 일지는 누르지 않아도 영어로 보인다
+  // (비용은 이미 치렀고 저장돼 있다). 아직 번역이 없는 일지는 한국어 그대로 두고
+  // EN 버튼을 남긴다 — 화면을 연 것만으로 안 읽을 일지까지 번역되면 안 된다.
+  // override 에 값이 있으면 그 일지에 한해 사람이 고른 쪽을 따른다.
+  const { language } = useLanguage()
+  const [override, setOverride] = useState<Record<string, boolean>>({})
   const [translatingId, setTranslatingId] = useState<string | null>(null)
   const translateDiary = useTranslateDiary()
 
+  /** 손대지 않았을 때 영어로 보일 일지인가 */
+  const autoEnglish = useCallback((entry: ServiceDiaryEntry) => {
+    if (language !== 'en') return false
+    const st = readTranslation(entry.translations, entry as unknown as Record<string, unknown>)
+    return !st.missing && !st.stale
+  }, [language])
+
+  const showsEnglish = useCallback(
+    (entry: ServiceDiaryEntry) => override[entry.id] ?? autoEnglish(entry),
+    [override, autoEnglish],
+  )
+
   const toggleEnglish = async (entry: ServiceDiaryEntry) => {
-    if (showEn.has(entry.id)) {
-      setShowEn(prev => { const next = new Set(prev); next.delete(entry.id); return next })
+    if (showsEnglish(entry)) {
+      setOverride(prev => ({ ...prev, [entry.id]: false }))
       return
     }
     const state = readTranslation(entry.translations, entry as unknown as Record<string, unknown>)
     if (!state.missing && !state.stale) {
-      setShowEn(prev => new Set(prev).add(entry.id))
+      setOverride(prev => ({ ...prev, [entry.id]: true }))
       return
     }
     setTranslatingId(entry.id)
     try {
       await translateDiary.mutateAsync({ entry, studentId })
-      setShowEn(prev => new Set(prev).add(entry.id))
+      setOverride(prev => ({ ...prev, [entry.id]: true }))
     } catch (e) {
       alert(e instanceof Error ? e.message : '번역에 실패했습니다.')
     } finally {
@@ -3619,7 +3637,7 @@ function DiarySection({ studentId, authorName, createdBy, canEdit }: {
           const d = normalizeDiaryEntry(rawD)
           const isCollapsed = collapsed.has(d.id)
           const isTranslating = translatingId === d.id
-          const isEnglish = showEn.has(d.id)
+          const isEnglish = showsEnglish(d)
           // 영어로 볼 때는 번역본을, 아니면 원문을 읽는다. 원문은 어느 쪽이든 그대로 남는다.
           const view = (isEnglish
             ? readTranslation(d.translations, d as unknown as Record<string, unknown>).fields
