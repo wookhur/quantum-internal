@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { useMeetings, useCreateMeeting } from '@/hooks/useMeetings'
 import {
   Select,
   SelectContent,
@@ -470,6 +471,117 @@ const CONTACT_METHODS: Record<ContactMethod, ContactMethodConfig> = {
       { value: 'no_reply', labelKey: 'coldCall.msgNoReply', icon: Clock, color: 'bg-gray-500 hover:bg-gray-600' },
     ],
   },
+}
+
+/**
+ * 콜드콜 안에서 보는 상담 일정.
+ *
+ * 상담을 잡아도 그 일정은 세일즈>미팅에 따로 적어야 했다. 콜드콜만 보면 언제
+ * 상담인지 알 수 없어, 전화 돌리다 말고 다른 화면을 열어야 했다. 여기서 보고
+ * 여기서 잡는다. 저장하는 곳은 같다(미팅) — 두 벌로 갈라지지 않는다.
+ */
+function LeadConsultations({ lead, canEdit }: { lead: Lead; canEdit: boolean }) {
+  const { data: allMeetings = [] } = useMeetings()
+  const createMeeting = useCreateMeeting()
+  const { user } = useAuth()
+  const [adding, setAdding] = useState(false)
+  const [date, setDate] = useState('')
+  const [memo, setMemo] = useState('')
+  const [error, setError] = useState('')
+
+  const mine = useMemo(
+    () => allMeetings
+      .filter(m => m.leadId === lead.id)
+      .sort((a, b) => (a.meetingDate || '').localeCompare(b.meetingDate || '')),
+    [allMeetings, lead.id],
+  )
+
+  const save = () => {
+    if (!date) { setError('상담 날짜를 넣어 주세요.'); return }
+    setError('')
+    createMeeting.mutate(
+      {
+        leadId: lead.id,
+        meetingDate: date,
+        // 몇 차 상담인지는 이미 잡힌 수로 센다 — 사람이 세지 않게.
+        meetingNumber: mine.length + 1,
+        parentName: lead.parentName,
+        studentName: lead.studentName,
+        phone: lead.phone,
+        currentSchool: lead.currentSchool,
+        grade: lead.grade,
+        region: lead.region,
+        sourceChannel: lead.sourceChannel,
+        memo: memo || undefined,
+        createdBy: user?.id,
+      },
+      {
+        onSuccess: () => { setAdding(false); setDate(''); setMemo('') },
+        onError: (e) => setError(e instanceof Error ? e.message : '저장하지 못했습니다.'),
+      },
+    )
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            상담 일정 ({mine.length})
+          </h3>
+          {canEdit && !adding && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setAdding(true)}>
+              <CalendarCheck className="size-3.5" />상담 잡기
+            </Button>
+          )}
+        </div>
+
+        {mine.length === 0 && !adding && (
+          <p className="text-xs text-muted-foreground">잡힌 상담이 없습니다.</p>
+        )}
+
+        {mine.map(m => (
+          <div key={m.id} className="rounded-md border px-3 py-2 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-medium tabular-nums">{m.meetingDate}</span>
+              <span className="text-xs text-muted-foreground">{m.meetingNumber}차 상담</span>
+              {m.meetingMethod && <span className="text-xs text-muted-foreground">· {m.meetingMethod}</span>}
+            </div>
+            {m.memo && <p className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{m.memo}</p>}
+            {m.nextMeetingDate && (
+              <p className="mt-1 text-xs text-blue-700">다음 상담 {m.nextMeetingDate}</p>
+            )}
+          </div>
+        ))}
+
+        {adding && (
+          <div className="rounded-md border p-3 space-y-2">
+            <div className="flex gap-2">
+              <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-8 text-sm" />
+            </div>
+            <Textarea
+              value={memo}
+              onChange={e => setMemo(e.target.value)}
+              placeholder="상담 메모 (선택)"
+              className="min-h-[60px] text-sm"
+            />
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <div className="flex gap-2">
+              <Button size="sm" className="h-7 text-xs" disabled={createMeeting.isPending} onClick={save}>
+                {createMeeting.isPending && <Loader2 className="size-3 mr-1 animate-spin" />}저장
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAdding(false); setError('') }}>
+                취소
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              세일즈 &gt; 미팅에도 같은 기록으로 남습니다.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 /** Icon for activity type in history */
@@ -1920,6 +2032,10 @@ function ColdCallDetail({
           </div>
         </CardContent>
       </Card>
+
+      {/* 상담 일정 — 상담을 잡은 리드의 일정·메모를 콜드콜에서 바로 본다.
+          전에는 세일즈>미팅에 따로 적어야 해서 콜드콜만 봐서는 언제 상담인지 알 수 없었다. */}
+      <LeadConsultations lead={lead} canEdit={canEdit} />
 
       {/* Stage Actions: Advance or Exclude */}
       {canEdit && (
