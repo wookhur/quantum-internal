@@ -736,6 +736,7 @@ export function LeadDetailPage() {
           phone: lead.phone,
           grade: lead.grade,
           currentSchool: lead.currentSchool,
+          pipelineStage: lead.pipelineStage,
         }}
         onBooked={() => {
           setBookingOpen(false)

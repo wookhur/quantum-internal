@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Lead } from '@/types'
+import { canonicalStage } from '@/types'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 function isUuid(v: unknown): boolean {
@@ -95,7 +96,7 @@ function mapLead(row: Record<string, unknown>): Lead {
     sourceChannel: row.source_channel as string,
     memo: (row.memo as string) || '',
     requiredAction: row.required_action as string | undefined,
-    pipelineStage: row.pipeline_stage as Lead['pipelineStage'],
+    pipelineStage: canonicalStage(row.pipeline_stage as Lead['pipelineStage']),
     assignedTo: row.assigned_to as string | undefined,
     contactChannel: row.contact_channel as string | undefined,
     googleMeetLink: row.google_meet_link as string | undefined,

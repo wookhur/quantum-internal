@@ -47,8 +47,6 @@ const STAGE_COLOR_MAP: Record<string, string> = {
   contact_attempted: '#FFCB00',
   consultation_scheduled: '#00C875',
   first_consultation: '#0073EA',
-  second_consultation: '#A25DDC',
-  third_consultation: '#784BD1',
   contract_review: '#FF158A',
   contracted: '#00C875',
   on_hold: '#FDAB3D',

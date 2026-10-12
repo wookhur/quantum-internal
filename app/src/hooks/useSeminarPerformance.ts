@@ -467,8 +467,9 @@ export function leadMatchesSeminarLoose(
 const STAGE_RANK: Record<string, number> = {
   contracted: 100,
   contract_review: 90,
-  third_consultation: 80,
-  second_consultation: 70,
+  // 회차 구분은 폐기했다 — 2차·3차 옛 값도 '상담 완료'와 같은 자리로 본다.
+  third_consultation: 60,
+  second_consultation: 60,
   first_consultation: 60,
   consultation_scheduled: 50,
   contact_attempted: 40,
@@ -509,7 +510,11 @@ export function dedupeLeadsByPerson<T extends Lead>(leads: T[]): T[] {
     }
     const a = STAGE_RANK[lead.pipelineStage] ?? 0
     const b = STAGE_RANK[existing.pipelineStage] ?? 0
-    if (a > b) best.set(key, lead)
+    // 단계가 같으면 최근에 손댄 행을 남긴다. 그러지 않으면 어느 쪽이 남는지가
+    // 입력 순서에 따라 흔들려 집계가 조회할 때마다 달라진다.
+    if (a > b || (a === b && (lead.updatedAt || '') > (existing.updatedAt || ''))) {
+      best.set(key, lead)
+    }
   }
   return Array.from(best.values())
 }

@@ -36,6 +36,8 @@ interface ConsultationBookingDialogProps {
     phone: string
     grade?: string
     currentSchool?: string
+    /** 현재 단계 — 예약이 이미 더 간 리드를 뒤로 되돌리지 않게 하고, 변경 이력에 남긴다. */
+    pipelineStage: PipelineStage
   }
   onBooked: () => void
 }
@@ -74,11 +76,15 @@ const CONSULTATION_METHOD_OPTIONS: { value: ConsultationMethod; labelKey: string
   { value: 'katalk', labelKey: 'consultation.methodKatalk' },
 ]
 
-const PIPELINE_STAGE_MAP: Record<ConsultationNumber, PipelineStage> = {
-  1: 'first_consultation',
-  2: 'second_consultation',
-  3: 'third_consultation',
-}
+/** '상담 예약'보다 이미 앞서 있는 단계 — 예약을 잡아도 여기서 뒤로 내리지 않는다. */
+const AHEAD_OF_SCHEDULED: PipelineStage[] = [
+  'first_consultation',
+  'second_consultation',
+  'third_consultation',
+  'contract_review',
+  'contracted',
+  'service_cancelled',
+]
 
 /** Short method label for Google Calendar event title */
 const METHOD_SHORT_LABEL: Record<ConsultationMethod, string> = {
@@ -312,14 +318,18 @@ export default function ConsultationBookingDialog({
         console.warn('Google Calendar event creation skipped (no token or error)')
       }
 
-      // 2. Update lead pipeline stage
-      const pipelineStage = PIPELINE_STAGE_MAP[consultationNumber]
+      // 2. 단계는 '상담 예약'까지만. 예약은 취소될 수 있으므로 상담을 마쳤다는 뜻의
+      //    '상담 완료'로 올리지 않는다(그건 콜드콜의 [상담 완료] 버튼이 한다).
+      //    이미 상담 완료 이후로 간 리드는 되돌리지 않는다.
+      const alreadyAhead = AHEAD_OF_SCHEDULED.includes(lead.pipelineStage)
       await updateLead.mutateAsync({
         id: lead.id,
         data: {
-          pipelineStage,
+          ...(alreadyAhead ? {} : { pipelineStage: 'consultation_scheduled' as PipelineStage }),
           ...(googleMeetLink ? { googleMeetLink } : {}),
         },
+        // 단계 변경 이력을 남긴다 — 전에는 안 넘겨서 "바뀐 적 없는데 바뀌어 있다"가 됐다.
+        previousStage: lead.pipelineStage,
       })
 
       // 3. Create activity record (store Google event ID for sync)

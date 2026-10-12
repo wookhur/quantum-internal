@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import type { Lead, LeadActivity, PipelineStage, ActivityType, ConsultationMethod, User } from '@/types'
+import { canonicalStage } from '@/types'
 
 // ============ FILTER TYPES ============
 
@@ -71,7 +72,9 @@ function mapLead(row: Record<string, unknown>): Lead {
     discoverySource: (row.discovery_source as string) || undefined,
     memo: (row.memo as string) || '',
     requiredAction: row.required_action as string | undefined,
-    pipelineStage: row.pipeline_stage as PipelineStage,
+    // 폐기한 2차·3차 상담 값은 읽는 순간 '상담 완료'로 접는다. 그러지 않으면
+    // 단계 키로 거르는 목록(콜드콜·파이프라인)에서 옛 값 리드가 통째로 빠진다.
+    pipelineStage: canonicalStage(row.pipeline_stage as PipelineStage),
     leadLevel: (row.lead_level as string) || undefined,
     leadLevelReason: (row.lead_level_reason as string) || undefined,
     assignedTo: row.assigned_to as string | undefined,

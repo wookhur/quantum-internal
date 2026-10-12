@@ -69,7 +69,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import type { Lead, LeadActivity, PipelineStage } from '@/types'
-import { getStageConfig, GRADES } from '@/types'
+import { getStageConfig, canonicalStage, GRADES } from '@/types'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 // ============ Priority scoring ============
@@ -203,15 +203,40 @@ const COLD_CALL_STAGES: PipelineStage[] = [
   'on_hold',
   'consultation_scheduled',
   'first_consultation',
-  'second_consultation',
-  'third_consultation',
   'contract_review',
   'contracted',
 ]
 
 /**
- * 콜드콜 드롭다운 필터 순서. 콜백요청/상담완료는 콜드콜 전용 라벨을 쓰지만
- * 파이프라인 단계 자체는 기존 것을 그대로 재사용한다(on_hold=콜백요청, first_consultation=상담완료).
+ * 단계 진행 순서. 접촉 결과를 기록했다고 해서 이미 더 간 리드를 뒤로 끌어내리면 안 된다.
+ * (전에는 '콜드콜 단계면 바꾼다'로만 보고 있어서, 계약 완료 리드에 1:1 상담유도 성공을
+ *  적으면 상담 예약으로 강등됐다.)
+ */
+const STAGE_ORDER: PipelineStage[] = [
+  'new_lead',
+  'no_response',
+  'contact_attempted',
+  'on_hold',
+  'consultation_scheduled',
+  'first_consultation',
+  'contract_review',
+  'contracted',
+]
+
+/** 순서상 몇 번째인지. 순서에 없는 단계(거절·이탈·보류(연락불가) 등)는 -1. */
+function stageRank(stage: PipelineStage): number {
+  return STAGE_ORDER.indexOf(canonicalStage(stage))
+}
+
+/** 지금 단계보다 앞설 때만 올린다. 뒤로 가는 변경은 하지 않는다. */
+function advanceOnly(current: PipelineStage, target: PipelineStage): PipelineStage | undefined {
+  const from = stageRank(current)
+  if (from < 0) return undefined              // 이탈·거절 등은 접촉 기록으로 되살리지 않는다
+  return stageRank(target) > from ? target : undefined
+}
+
+/**
+ * 콜드콜 드롭다운 필터 순서. 콜백요청만 콜드콜 전용 라벨을 쓴다(on_hold=콜백요청).
  */
 const COLD_CALL_FILTER_STAGES: PipelineStage[] = [
   'new_lead',
@@ -229,14 +254,14 @@ const COLD_CALL_FILTER_STAGES: PipelineStage[] = [
 /** 콜드콜 화면 전용 단계 라벨 오버라이드 (전역 파이프라인 라벨은 건드리지 않음). */
 const COLD_CALL_STAGE_LABEL_KEY: Partial<Record<PipelineStage, string>> = {
   on_hold: 'coldCall.callbackRequested',
-  first_consultation: 'coldCall.firstConsultation',
 }
 
 function coldStageLabel(
   stage: PipelineStage,
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
-  return t(COLD_CALL_STAGE_LABEL_KEY[stage] || 'stage.' + stage)
+  const key = canonicalStage(stage)
+  return t(COLD_CALL_STAGE_LABEL_KEY[key] || 'stage.' + key)
 }
 
 /**
@@ -1421,32 +1446,27 @@ function ColdCallDetail({
             callResult === 'connected' ||
             callResult === 'replied' ||
             callResult === 'read'
+          // advanceOnly 가 "지금보다 앞설 때만" 걸러 준다. 이미 상담·계약까지 간 리드는
+          // 접촉 기록 한 줄 때문에 뒤로 내려가지 않는다.
           if (oneOnOneSuccess) {
             // 1:1 상담유도 성공 → 상담예약 단계로 (상담예약 필터에 잡히고 '1:1 상담' 뱃지 표시).
-            // 이미 상담예약 이후로 진행된 리드는 되돌리지 않음.
-            if (COLD_CALL_STAGES.includes(lead.pipelineStage)) {
-              updateData.pipelineStage = 'consultation_scheduled'
-            }
+            updateData.pipelineStage = advanceOnly(lead.pipelineStage, 'consultation_scheduled')
           } else if (positiveContact) {
-            if (
-              COLD_CALL_STAGES.includes(lead.pipelineStage) &&
-              lead.pipelineStage !== 'contact_attempted'
-            ) {
-              updateData.pipelineStage = 'contact_attempted'
-            }
+            updateData.pipelineStage = advanceOnly(lead.pipelineStage, 'contact_attempted')
           } else if (noResponse) {
-            // 콜백요청(on_hold)은 부재중이어도 유지 (수동/콜백 상태 우선)
+            // 부재중은 '진행'이 아니라 상태 표시다. 신규·컨택 완료에서만 바꾼다
+            // (콜백요청(on_hold)·상담 이후 리드는 그대로 둔다).
             if (lead.pipelineStage === 'new_lead' || lead.pipelineStage === 'contact_attempted') {
               updateData.pipelineStage = 'no_response'
             }
           } else if (callResult === 'callback') {
-            // 콜백요청 결과 → on_hold(콜드콜 드롭다운의 '콜백요청')로 표시. 상담 진행 리드는 되돌리지 않음.
-            if (COLD_CALL_STAGES.includes(lead.pipelineStage)) {
-              updateData.pipelineStage = 'on_hold'
-            }
+            // 콜백요청 결과 → on_hold(콜드콜 드롭다운의 '콜백요청')로 표시.
+            updateData.pipelineStage = advanceOnly(lead.pipelineStage, 'on_hold')
           } else if (lead.pipelineStage === 'new_lead') {
             updateData.pipelineStage = 'contact_attempted'
           }
+          // 올릴 단계가 없으면 칸 자체를 넣지 않는다(빈 업데이트 방지)
+          if (updateData.pipelineStage === undefined) delete updateData.pipelineStage
 
           // Auto-assign current user if lead has no assignee
           if (!lead.assignedTo && user) {
@@ -2053,6 +2073,7 @@ function ColdCallDetail({
               {t('coldCall.stageChange')}
             </h3>
             <div className="flex gap-2">
+              {/* 상담을 잡았을 때. 취소될 수 있으므로 상담 날까지는 여기 머문다. */}
               <Button
                 size="sm"
                 variant="outline"
@@ -2061,6 +2082,21 @@ function ColdCallDetail({
               >
                 <CalendarCheck className="size-3.5" />
                 {t('coldCall.scheduleConsultation')}
+              </Button>
+              {/* 상담을 실제로 진행했을 때. 전에는 확인창이 없어 상담 예약 옆에서
+                  잘못 눌리는 일이 있었다 — 확인을 받고 바꾼다. */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 flex-1 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                onClick={() => {
+                  if (confirm('상담을 진행한 것으로 바꿉니다. 몇 차 상담인지는 상담 일정에서 셉니다.')) {
+                    handleAdvanceStage('first_consultation')
+                  }
+                }}
+              >
+                <Video className="size-3.5" />
+                {t('stage.first_consultation')}
               </Button>
               {/* 계약은 계약관리에서 사람이 만든다. 여기서는 '이 리드는 계약까지 갔다'는
                   사실만 남긴다 — 콜드콜만 보고도 놓친 리드를 가릴 수 있게. */}
