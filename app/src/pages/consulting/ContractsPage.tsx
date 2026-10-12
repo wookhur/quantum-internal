@@ -13,7 +13,7 @@ import {
   Upload, Ban, ChevronRight, ChevronDown, Trash2,
   FileText, PlayCircle, Flag, Download,
 } from 'lucide-react'
-import { useContractsWithInstallments, useCreateContract } from '@/hooks/useContracts'
+import { useContractsWithInstallments, useCreateContract, useUpdateContract } from '@/hooks/useContracts'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { useCreateInstallments } from '@/hooks/useInstallments'
 import { useProfiles } from '@/hooks/useProfiles'
@@ -25,7 +25,7 @@ import { ContractPdfUploadDialog } from '@/components/ContractPdfUploadDialog'
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import type { PaymentInstallment, InstallmentStatus } from '@/types'
-import { useLeads, useUpdateLead } from '@/hooks/useLeads'
+import { useLeads, useUpdateLead, useCreateLead } from '@/hooks/useLeads'
 import { findLeadForContract, MATCH_REASON_LABEL, type LeadMatch } from '@/lib/leadMatchForContract'
 
 function StatusConfig(t: (key: string) => string): Record<InstallmentStatus, { label: string; color: string }> {
@@ -247,9 +247,16 @@ export function ContractsPage() {
   // Preserve lead info for contract creation (survives URL cleanup)
   const leadInfoRef = useRef<{ leadId: string; phone: string } | null>(null)
   // 계약 저장 직후 '이 리드가 맞나요?' 를 묻기 위한 후보
-  const [leadPrompt, setLeadPrompt] = useState<(LeadMatch & { contractId?: string }) | null>(null)
+  // match: 같아 보이는 리드를 찾음 / none: 못 찾음 → 계약 정보로 새로 만들지 묻는다
+  const [leadPrompt, setLeadPrompt] = useState<
+    | ({ kind: 'match'; contractId?: string } & LeadMatch)
+    | { kind: 'none'; contractId?: string }
+    | null
+  >(null)
   const { data: allLeads = [] } = useLeads()
   const updateLead = useUpdateLead()
+  const createLead = useCreateLead()
+  const updateContract = useUpdateContract()
 
   const handleCreateContract = () => {
     if (!canEdit) return
@@ -318,10 +325,11 @@ export function ContractsPage() {
               },
               allLeads.filter(l => l.pipelineStage !== 'contracted'),
             )
-            if (hit) {
-              setLeadPrompt({ ...hit, contractId: data?.id })
-              return   // 물어보고 나서 이동한다
-            }
+            // 찾았으면 "이 사람 맞나요", 못 찾았으면 "계약 정보로 리드를 만들까요".
+            // 리드를 거치지 않고 바로 계약한 고객도 세일즈 목록에는 남아야 한다.
+            setLeadPrompt(hit ? { kind: 'match', ...hit, contractId: data?.id }
+                              : { kind: 'none', contractId: data?.id })
+            return   // 물어보고 나서 이동한다
           }
           if (data?.id) navigate(`/consulting/clients/${data.id}`)
         },
@@ -397,8 +405,78 @@ export function ContractsPage() {
             }}
           >
             <DialogContent className="max-w-md">
-              <DialogHeader><DialogTitle>이 계약의 고객이 이 리드인가요?</DialogTitle></DialogHeader>
-              {leadPrompt && (<>
+              <DialogHeader>
+                <DialogTitle>
+                  {leadPrompt?.kind === 'none'
+                    ? '맞는 리드가 없습니다. 새로 만들까요?'
+                    : '이 계약의 고객이 이 리드인가요?'}
+                </DialogTitle>
+              </DialogHeader>
+
+              {/* 리드를 못 찾은 경우 — 계약 정보 그대로 리드를 만들어 연결한다.
+                  리드를 거치지 않고 바로 계약한 고객도 세일즈 목록에 남겨야
+                  콜드콜·파이프라인에서 빠지지 않는다. */}
+              {leadPrompt?.kind === 'none' && (<>
+                <p className="text-xs text-muted-foreground">
+                  계약서에 적은 내용으로 <b>계약 완료</b> 상태의 리드를 만듭니다.
+                  안 만들어도 계약서에는 아무 영향이 없습니다.
+                </p>
+                <div className="rounded-md border p-3 text-sm space-y-1">
+                  <p className="font-medium">
+                    {form.studentName || '—'}
+                    <span className="text-muted-foreground font-normal"> · 학부모 {form.contractorName || '—'}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {form.phone || '연락처 없음'}
+                    {form.schoolName ? ` · ${form.schoolName}` : ''}
+                    {form.gradeAtContract ? ` · ${form.gradeAtContract}` : ''}
+                  </p>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const id = leadPrompt.contractId
+                      setLeadPrompt(null)
+                      if (id) navigate(`/consulting/clients/${id}`)
+                    }}
+                  >
+                    안 만듭니다
+                  </Button>
+                  <Button
+                    disabled={createLead.isPending || !form.contractorName}
+                    onClick={() => {
+                      const id = leadPrompt.contractId
+                      createLead.mutate(
+                        {
+                          leadDate: form.contractDate || new Date().toISOString().slice(0, 10),
+                          parentName: form.contractorName,
+                          studentName: form.studentName,
+                          phone: form.phone,
+                          currentSchool: form.schoolName,
+                          grade: form.gradeAtContract,
+                          sourceChannel: '계약관리',
+                          pipelineStage: 'contracted',
+                          memo: '계약관리에서 계약을 쓰면서 만든 리드입니다.',
+                        },
+                        {
+                          onSuccess: (lead) => {
+                            if (id) updateContract.mutate({ id, leadId: lead.id })
+                          },
+                          onSettled: () => {
+                            setLeadPrompt(null)
+                            if (id) navigate(`/consulting/clients/${id}`)
+                          },
+                        },
+                      )
+                    }}
+                  >
+                    네, 리드를 만듭니다
+                  </Button>
+                </DialogFooter>
+              </>)}
+
+              {leadPrompt?.kind === 'match' && (<>
                 <p className="text-xs text-muted-foreground">
                   리드 단계를 <b>계약 완료</b>로 바꾸면 세일즈 목록에서 상담 중으로 남지 않습니다.
                   아니면 그냥 두셔도 계약서에는 아무 영향이 없습니다.
@@ -417,11 +495,7 @@ export function ContractsPage() {
                 <DialogFooter>
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      const id = leadPrompt.contractId
-                      setLeadPrompt(null)
-                      if (id) navigate(`/consulting/clients/${id}`)
-                    }}
+                    onClick={() => setLeadPrompt({ kind: 'none', contractId: leadPrompt.contractId })}
                   >
                     아니요, 다른 사람입니다
                   </Button>
@@ -429,6 +503,10 @@ export function ContractsPage() {
                     disabled={updateLead.isPending}
                     onClick={() => {
                       const id = leadPrompt.contractId
+                      // 계약에도 리드를 적어 둔다. 전에는 리드 단계만 바꿔서
+                      // 계약 쪽 lead_id 가 비어 있었고, 나중에 어느 리드의 계약인지
+                      // 되짚을 수가 없었다.
+                      if (id) updateContract.mutate({ id, leadId: leadPrompt.lead.id })
                       updateLead.mutate(
                         {
                           id: leadPrompt.lead.id,

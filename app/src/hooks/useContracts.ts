@@ -329,6 +329,8 @@ export function useUpdateContract() {
       status?: ContractStatus
       salesRep?: string | null
       serviceRep?: string | null
+      /** 계약에서 리드를 새로 만들었을 때 묶어 두기 위한 칸. */
+      leadId?: string
     }) => {
       const { id, ...rest } = payload
       const update: Record<string, unknown> = {}
@@ -358,6 +360,7 @@ export function useUpdateContract() {
       if (rest.status !== undefined) update.status = rest.status
       if (rest.salesRep !== undefined) update.sales_rep = rest.salesRep
       if (rest.serviceRep !== undefined) update.service_rep = rest.serviceRep
+      if (rest.leadId !== undefined) update.lead_id = rest.leadId || null
 
       const { error } = await supabase.from('contracts').update(update).eq('id', id)
       if (error) throw error
