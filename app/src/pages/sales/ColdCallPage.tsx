@@ -220,6 +220,9 @@ const COLD_CALL_FILTER_STAGES: PipelineStage[] = [
   'on_hold',
   'consultation_scheduled',
   'first_consultation',
+  // 계약까지 간 건도 콜드콜에서 그대로 보고 모아볼 수 있게 한다(목록에서 빠지지 않는다).
+  'contract_review',
+  'contracted',
   'paused',   // 보류(연락불가)만 모아보기
 ]
 
@@ -1514,9 +1517,11 @@ function ColdCallDetail({
     )
   }, [canEdit, lead, memoEdit, updateLead])
 
+  // 빈 문자열('선택하세요')이면 레벨을 지운다. undefined 를 보내면 수정 대상에서 빠져
+  // 지워지지 않으므로 그대로 '' 를 넘긴다(leadToRow 에서 null 로 저장된다).
   const setLevel = (v: string | null) => {
     if (!canEdit) return
-    updateLead.mutate({ id: lead.id, data: { leadLevel: (v as LeadLevel) || undefined }, previousStage: lead.pipelineStage })
+    updateLead.mutate({ id: lead.id, data: { leadLevel: v ?? '' }, previousStage: lead.pipelineStage })
   }
   const saveLevelReason = () => {
     if (!canEdit) return
@@ -1689,6 +1694,7 @@ function ColdCallDetail({
                 <SelectValue placeholder="리드 레벨 선택" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="">선택하세요</SelectItem>
                 {LEAD_LEVELS.map(l => (
                   <SelectItem key={l.key} value={l.key}>{l.emoji} {l.labelEn} · {l.labelKo}</SelectItem>
                 ))}
