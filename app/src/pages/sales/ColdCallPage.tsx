@@ -1940,14 +1940,20 @@ function ColdCallDetail({
                 <CalendarCheck className="size-3.5" />
                 {t('coldCall.scheduleConsultation')}
               </Button>
+              {/* 계약은 계약관리에서 사람이 만든다. 여기서는 '이 리드는 계약까지 갔다'는
+                  사실만 남긴다 — 콜드콜만 보고도 놓친 리드를 가릴 수 있게. */}
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 text-xs gap-1.5 flex-1 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                onClick={() => handleAdvanceStage('first_consultation')}
+                className="h-8 text-xs gap-1.5 flex-1 border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800"
+                onClick={() => {
+                  if (confirm('이 리드를 계약 완료로 바꿉니다. 계약서는 계약관리에서 따로 작성하셔야 합니다.')) {
+                    handleAdvanceStage('contracted')
+                  }
+                }}
               >
-                <Video className="size-3.5" />
-                {t('coldCall.firstConsultation')}
+                <CheckCircle2 className="size-3.5" />
+                {t('stage.contracted')}
               </Button>
             </div>
           </div>

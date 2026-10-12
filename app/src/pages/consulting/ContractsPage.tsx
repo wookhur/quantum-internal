@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import {
   Search, Plus, Loader2, DollarSign, CheckCircle2, AlertTriangle, Clock,
   Upload, Ban, ChevronRight, ChevronDown, Trash2,
@@ -25,6 +25,8 @@ import { ContractPdfUploadDialog } from '@/components/ContractPdfUploadDialog'
 import { formatCurrency } from '@/types'
 import { useT } from '@/i18n/LanguageContext'
 import type { PaymentInstallment, InstallmentStatus } from '@/types'
+import { useLeads, useUpdateLead } from '@/hooks/useLeads'
+import { findLeadForContract, MATCH_REASON_LABEL, type LeadMatch } from '@/lib/leadMatchForContract'
 
 function StatusConfig(t: (key: string) => string): Record<InstallmentStatus, { label: string; color: string }> {
   return {
@@ -244,6 +246,10 @@ export function ContractsPage() {
 
   // Preserve lead info for contract creation (survives URL cleanup)
   const leadInfoRef = useRef<{ leadId: string; phone: string } | null>(null)
+  // 계약 저장 직후 '이 리드가 맞나요?' 를 묻기 위한 후보
+  const [leadPrompt, setLeadPrompt] = useState<(LeadMatch & { contractId?: string }) | null>(null)
+  const { data: allLeads = [] } = useLeads()
+  const updateLead = useUpdateLead()
 
   const handleCreateContract = () => {
     if (!canEdit) return
@@ -298,6 +304,25 @@ export function ContractsPage() {
           setForm(INITIAL_CONTRACT_FORM)
           setInstallmentRows(getDefaultInstallments(t).map(r => ({ ...r })))
           setFromLead(false)
+
+          // 계약서는 계약관리에서 쓰고 리드 단계는 세일즈가 따로 옮긴다. 그래서 계약을
+          // 써도 그 리드가 '상담 중'으로 남는 일이 생긴다. 같은 사람으로 보이는 리드를
+          // 찾아 물어본다 — 자동으로 바꾸지 않는다. 잘못 짚으면 엉뚱한 리드가 넘어간다.
+          const alreadyLinked = leadInfoRef.current?.leadId
+          if (!alreadyLinked) {
+            const hit = findLeadForContract(
+              {
+                contractorName: form.contractorName,
+                studentName: form.studentName,
+                phone: form.phone || undefined,
+              },
+              allLeads.filter(l => l.pipelineStage !== 'contracted'),
+            )
+            if (hit) {
+              setLeadPrompt({ ...hit, contractId: data?.id })
+              return   // 물어보고 나서 이동한다
+            }
+          }
           if (data?.id) navigate(`/consulting/clients/${data.id}`)
         },
       },
@@ -360,6 +385,72 @@ export function ContractsPage() {
               </Button>
             </>
           )}
+          {/* 계약 저장 직후: 같은 사람으로 보이는 리드의 단계를 맞출지 묻는다 */}
+          <Dialog
+            open={!!leadPrompt}
+            onOpenChange={o => {
+              if (!o) {
+                const id = leadPrompt?.contractId
+                setLeadPrompt(null)
+                if (id) navigate(`/consulting/clients/${id}`)
+              }
+            }}
+          >
+            <DialogContent className="max-w-md">
+              <DialogHeader><DialogTitle>이 계약의 고객이 이 리드인가요?</DialogTitle></DialogHeader>
+              {leadPrompt && (<>
+                <p className="text-xs text-muted-foreground">
+                  리드 단계를 <b>계약 완료</b>로 바꾸면 세일즈 목록에서 상담 중으로 남지 않습니다.
+                  아니면 그냥 두셔도 계약서에는 아무 영향이 없습니다.
+                </p>
+                <div className="rounded-md border p-3 text-sm space-y-1">
+                  <p className="font-medium">
+                    {leadPrompt.lead.studentName || '—'}
+                    <span className="text-muted-foreground font-normal"> · 학부모 {leadPrompt.lead.parentName || '—'}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {leadPrompt.lead.phone || '연락처 없음'}
+                    {leadPrompt.lead.email ? ` · ${leadPrompt.lead.email}` : ''}
+                  </p>
+                  <p className="text-xs text-violet-700">{MATCH_REASON_LABEL[leadPrompt.reason]}</p>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const id = leadPrompt.contractId
+                      setLeadPrompt(null)
+                      if (id) navigate(`/consulting/clients/${id}`)
+                    }}
+                  >
+                    아니요, 다른 사람입니다
+                  </Button>
+                  <Button
+                    disabled={updateLead.isPending}
+                    onClick={() => {
+                      const id = leadPrompt.contractId
+                      updateLead.mutate(
+                        {
+                          id: leadPrompt.lead.id,
+                          data: { pipelineStage: 'contracted' },
+                          previousStage: leadPrompt.lead.pipelineStage as never,
+                        },
+                        {
+                          onSettled: () => {
+                            setLeadPrompt(null)
+                            if (id) navigate(`/consulting/clients/${id}`)
+                          },
+                        },
+                      )
+                    }}
+                  >
+                    네, 계약 완료로 바꿉니다
+                  </Button>
+                </DialogFooter>
+              </>)}
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent>
               <DialogHeader>
