@@ -27,6 +27,7 @@ import { useT } from '@/i18n/LanguageContext'
 import type { PaymentInstallment, InstallmentStatus } from '@/types'
 import { useLeads, useUpdateLead, useCreateLead } from '@/hooks/useLeads'
 import { findLeadForContract, MATCH_REASON_LABEL, type LeadMatch } from '@/lib/leadMatchForContract'
+import { cleanParentName } from '@/lib/contractAutofill'
 
 function StatusConfig(t: (key: string) => string): Record<InstallmentStatus, { label: string; color: string }> {
   return {
@@ -424,7 +425,7 @@ export function ContractsPage() {
                 <div className="rounded-md border p-3 text-sm space-y-1">
                   <p className="font-medium">
                     {form.studentName || '—'}
-                    <span className="text-muted-foreground font-normal"> · 학부모 {form.contractorName || '—'}</span>
+                    <span className="text-muted-foreground font-normal"> · 학부모 {cleanParentName(form.contractorName) || '—'}</span>
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {form.phone || '연락처 없음'}
@@ -450,7 +451,9 @@ export function ContractsPage() {
                       createLead.mutate(
                         {
                           leadDate: form.contractDate || new Date().toISOString().slice(0, 10),
-                          parentName: form.contractorName,
+                          // '김지현(모)' 의 관계 표시는 떼고 넣는다 — 리드 목록에서
+                          // 이름으로 찾을 때 걸리게.
+                          parentName: cleanParentName(form.contractorName),
                           studentName: form.studentName,
                           phone: form.phone,
                           currentSchool: form.schoolName,
