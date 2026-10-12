@@ -49,6 +49,20 @@ function normalizePhone(raw: string): string {
   return raw.replace(/[\s\-\(\)\.]/g, '').trim()
 }
 
+/**
+ * 중복 판정 전용 전화 키. 숫자만 남기고 국가번호를 국내 형식으로 맞춘다.
+ * 같은 사람이 '010-5278-3204' / '01052783204' / '1052783204' / '+821052783204'
+ * 네 가지로 들어와도 하나로 본다. 너무 짧은 값은 사람을 가릴 수 없으니 버린다.
+ */
+function phoneKey(raw: string | null | undefined): string {
+  let d = (raw || '').replace(/\D/g, '')
+  if (d.startsWith('8210')) d = '0' + d.slice(2)
+  else if (d.startsWith('82') && d.length >= 11) d = '0' + d.slice(2)
+  // 앞 0이 빠진 국내 휴대폰(1012345678)도 같은 키로
+  if (d.length === 10 && d.startsWith('10')) d = '0' + d
+  return d.length >= 9 ? d : ''
+}
+
 function parseCSV(csv: string): string[][] {
   const rows: string[][] = []
   const lines: string[] = []
@@ -167,16 +181,26 @@ Deno.serve(async (req) => {
 
     // 기존 리드의 전화 + 이메일을 모아 중복 판정 (둘 중 하나라도 겹치면 같은 사람 → 스킵).
     // 전화 단독 판정이면 전화가 비었거나 형식이 다른 경우 같은 사람을 새로 삽입해 대량 중복이 생김.
-    const { data: existingLeads } = await supabase
-      .from('leads')
-      .select('phone, email')
+    //
+    // 페이지를 끝까지 돌아야 한다. select 한 번이면 PostgREST 기본 상한(1000행)에서 잘려
+    // 그 뒤의 리드는 중복 판정에 아예 걸리지 않고, 동기화를 돌릴 때마다 다시 들어온다.
+    const PAGE_SIZE = 1000
     const existingPhones = new Set<string>()
     const existingEmails = new Set<string>()
-    for (const l of (existingLeads || []) as { phone: string | null; email: string | null }[]) {
-      const p = normalizePhone(l.phone || '')
-      if (p) existingPhones.add(p)
-      const e = (l.email || '').trim().toLowerCase()
-      if (e) existingEmails.add(e)
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data: page, error: pageErr } = await supabase
+        .from('leads')
+        .select('phone, email')
+        .range(from, from + PAGE_SIZE - 1)
+      if (pageErr) throw pageErr
+      const rows = (page || []) as { phone: string | null; email: string | null }[]
+      for (const l of rows) {
+        const p = phoneKey(l.phone)
+        if (p) existingPhones.add(p)
+        const e = (l.email || '').trim().toLowerCase()
+        if (e) existingEmails.add(e)
+      }
+      if (rows.length < PAGE_SIZE) break
     }
 
     let totalFetched = 0
@@ -192,9 +216,12 @@ Deno.serve(async (req) => {
         // 탭 간(같은 사람이 여러 캠페인 탭에 있는 경우) 중복 삽입을 막는다.
         const newRows = rows.filter(r => {
           const e = (r.email || '').trim().toLowerCase()
-          if (r.phone && existingPhones.has(r.phone)) return false
+          // 저장된 쪽과 같은 규칙으로 정규화해서 비교한다. 전에는 세트에는 정규화한 값을
+          // 넣고 비교는 날것으로 해서, 형식만 다른 같은 번호가 전부 새 리드로 들어왔다.
+          const p = phoneKey(r.phone)
+          if (p && existingPhones.has(p)) return false
           if (e && existingEmails.has(e)) return false
-          if (r.phone) existingPhones.add(r.phone)
+          if (p) existingPhones.add(p)
           if (e) existingEmails.add(e)
           return true
         })
