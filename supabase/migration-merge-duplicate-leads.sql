@@ -15,6 +15,11 @@
 --   → 최근에 손댄 쪽 → id. 나머지는 merge_leads() 로 대표에 흡수된다
 --   (활동·미팅·계약·세미나 참석·파트너 엔트리를 전부 옮기고, 잃는 유입채널은 메모에 남긴다).
 --
+-- 단계는 merge_leads 에 맡기지 않고 병합이 끝난 뒤 다시 세운다.
+-- merge_leads 는 '더 진행된 단계'로 올리는데, 거절·이탈은 덜 진행된 게 아니라
+-- 최종 상태다. 그대로 두면 10월에 거절한 분이 8월의 '컨택 완료'로 되살아난다.
+-- 그래서 계약 완료·서비스 취소가 있으면 그것을, 없으면 가장 최근에 바뀐 단계를 쓴다.
+--
 -- Safe to re-run (두 번째부터는 합칠 묶음이 없어 아무 일도 하지 않는다).
 -- ============================================================
 
@@ -127,7 +132,15 @@ begin
                     (n_activities + n_meetings + n_contracts) desc,
                     updated_at desc,
                     id
-         ) as rn
+         ) as rn,
+         -- 묶음의 최종 단계. 계약 완료·서비스 취소가 있으면 그것, 없으면 최신 변경분.
+         first_value(pipeline_stage) over (
+           partition by person_key
+           order by (case when pipeline_stage::text in ('contracted','service_cancelled')
+                          then 1 else 0 end) desc,
+                    updated_at desc,
+                    id
+         ) as final_stage
   from public.v_lead_person_key
   where person_key in (
     select person_key from public.v_lead_person_key group by person_key having count(*) > 1
@@ -166,6 +179,14 @@ begin
     perform public.merge_leads(v_keep, v_dup.id);
     v_count := v_count + 1;
   end loop;
+
+  -- 단계를 바로잡는다. merge_leads 가 올려 놓은 값을 묶음의 최종 상태로 덮어쓴다.
+  update public.leads l
+  set pipeline_stage = p.final_stage
+  from _dup_plan p
+  where p.rn = 1
+    and l.id = p.id
+    and l.pipeline_stage is distinct from p.final_stage;
 
   raise notice '중복 리드 % 건을 병합했습니다.', v_count;
 end $$;

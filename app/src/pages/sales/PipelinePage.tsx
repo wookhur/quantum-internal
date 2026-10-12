@@ -607,9 +607,12 @@ export function PipelinePage() {
     // Could be used for real-time column highlighting; kept simple for now
   }, [])
 
+  // 보드에서 카드를 누르는 건 대개 "이 건 단계를 바꿔야겠다"는 뜻이다.
+  // 리드 상세에는 단계 버튼이 없으므로 콜드콜 상세로 보낸다
+  // (상담 예약 / 상담 완료 / 계약 완료 버튼과 접촉 기록이 거기 있다).
   const handleCardClick = useCallback(
     (id: string) => {
-      navigate(`/sales/leads/${id}`)
+      navigate(`/sales/cold-call?lead=${id}`)
     },
     [navigate],
   )
