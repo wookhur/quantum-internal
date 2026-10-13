@@ -1,0 +1,109 @@
+# 작업 히스토리
+
+새 항목은 맨 위에 추가합니다.
+
+---
+
+## 2026-10-01 — 내부 포털 DB에 분석용 공간(cat 스키마) 구축
+
+**한 일**
+- 사용자 결정: 학생 사례 파일럿 데이터는 내부 포털 Supabase에 둔다 → ADR 0003 채택, ADR 0001 대체
+- `app/supabase/migration-cat-analysis-schema.sql`: `cat`(분석) + `cat_private`(실명 매핑) 스키마, RLS(조회 admin·c_level, 쓰기 service_role), 포털 동기화 함수 `cat.sync_from_portal()`, 대리 지표 뷰
+- `app/supabase/seed-cat-tags-v0.2.sql` (`scripts/build_tag_seed.py`로 YAML에서 생성)
+- 로컬 PostgreSQL 16에 Supabase 역할을 흉내 내 가짜 데이터로 검증 → 결과는 `docs/supabase-setup.md`
+
+**확인 / 제약**
+- 이 작업 환경에는 Supabase 접속 정보가 없음 → 실제 적용은 사용자가 SQL Editor에서 실행
+- 포털 `service_meetings.summary`는 실명이 섞일 수 있어 복사하지 않음 (LLM 가명 요약으로 대체)
+- 포털에는 학교별 지원 결과가 없음(`accepted_uni` 자유 텍스트만) → outcomes는 추후 입력 경로 필요
+
+**다음 할 일**
+- 사용자: SQL Editor에서 마이그레이션·시드·동기화 실행, `CAT_DB_URL` 환경 변수 등록, 태깅용 LLM 승인
+- 보고서 추출 파이프라인(가명화 → LLM → cat 적재) 구현
+
+---
+
+## 2026-10-01 — 상담 보고서·운영 매뉴얼 검토, 태그 v0.2, 스키마 002
+
+**한 일**
+- 사용자 승인을 받고 상담 요약 보고서 2건(학생 2명)과 컨설턴트 운영 매뉴얼 열람 → `docs/case-source-review-2026-10-01.md`
+- 이 저장소의 내부 포털에 학생 사례 테이블이 이미 있음을 확인 (`service_students`, `service_meetings`, `service_diary`, `service_followups`, `service_reports`, `student_milestones`)
+- ADR 0003(제안): 포털을 원천으로 가명화해 받고, CAT DB는 분석 층만 담당
+- 태그 사전 v0.2 (`student_issue`, `strength_theme`, `activity_status` 신설, 활동 유형 2개 추가), 검토용 표 `tags-v0.2.md`
+- 스키마 `002_consultation_reports.sql`, 추출 프롬프트 초안 `scripts/prompts/extract_consultation_report.md`
+- 합성 테스트 데이터로 SQLite 검증: 이슈 해소 여부 뷰 동작, 사전에 없는 태그 코드는 거부됨
+
+**결정 / 사건**
+- 보고서 2건의 가명 추출본을 `samples/redacted/`에 저장하려다 권한 검토에서 거부됨 → 학생 사례 데이터는 가명이어도 커밋하지 않는 규칙을 CLAUDE.md에 추가. 검토 문서에서도 개별 학생 예시를 제거함
+- 매뉴얼 5.8: 학생 개인정보는 승인된 AI 도구에만 입력 가능 → 태깅용 LLM 승인 필요
+
+**다음 할 일**
+- 사용자 검토: 태그 v0.2, ADR 0003
+- 파일럿 데이터 위치 결정(git 제외 폴더 또는 Supabase `cat` 스키마), 포털 DB 읽기 접근 방법
+- 학생 사례 파일럿: 보고서 30건 안팎 추출 → 조회 테스트
+
+---
+
+## 2026-10-01 — 학생 사례 원천 자료 탐색
+
+**확인한 것**
+- 폴더 `1jEwPOoHtXJCgwsHzTsSDqBheQm2qh_zS`("퀀텀 고객 설명 자료(20241102)"): 폴더 정보는 보이지만 안의 파일 목록은 조회되지 않음(링크 공유만으로는 API 목록 조회 불가 추정)
+- 연결 계정에 공유된 문서 중 학생 사례 후보 발견(열람 전, 제목만 확인)
+  - `Consultation_Report_<학생명>_<날짜>` 구글 문서 약 17건 (2026-07, 학생 6~7명, 같은 학생 여러 회차)
+  - `<학생명>_<날짜>_상담요약보고서.pdf` 4건 (2026-04 ~ 07)
+  - `Consultants Service Operations Manual` (컨설팅 운영 매뉴얼, 평가 구조 참고 후보)
+  - Meet 1:1 세션 폴더 50건 이상 (2026-08 ~ 09)
+
+**다음 할 일**
+- 사용자 승인 후 상담 보고서 1~2건 열람 → B층 스키마를 실제 양식에 맞춤
+
+---
+
+## 2026-10-01 — 사용자 답변 반영
+
+**한 일**
+- 태그 사전 검토용 표 `taxonomy/tags-v0.1.md` 생성 (`scripts/render_taxonomy.py`로 YAML에서 자동 생성)
+- 학생 사례 후보 폴더(`1jEwPOoHtXJCgwsHzTsSDqBheQm2qh_zS`) 접근 시도 → 연결된 구글 계정에 권한 없음(not found)
+
+**결정 / 확인**
+- 연차별 중간 평가 제도는 아직 없음 → 회사 웹사이트에서 구축 중. `evaluations` 테이블은 웹사이트 평가 데이터를 받는 구조로 맞출 예정(형식 확인 필요)
+- 태그 검토는 YAML 대신 표(.md)로 진행. YAML은 계속 정본
+
+**다음 할 일**
+- 폴더 공유 권한 받은 뒤 학생 사례 자료 검토
+- 웹사이트 평가 항목·저장 형식 확인
+
+---
+
+## 2026-10-01 — 1단계: 샘플 검토 및 태그·스키마 초안
+
+**한 일**
+- 샘플 드라이브 폴더(PDF 152개) 목록 수집, 5건 정독 → `docs/sample-review-2026-10-01.md`
+- 태그 사전 초안 `taxonomy/tags-v0.1.yaml` (10개 항목, 75개 코드 + 성과 척도)
+- 스키마 초안 `schema/001_init.sql`, 조회 예시 `queries/examples.sql` — SQLite에서 생성·조회 문법 검증 완료
+
+**발견 / 결정**
+- 샘플은 학부모 대상 가이드북(지식 자료) 중심 → 학생·코멘트·연차 평가 없음
+- ADR 0002(제안): A층 지식 자료 / B층 학생 사례 분리, 원본·태그 사전은 공유
+- 중복 파일 다수(동일 크기·다른 제목) → 적재 시 해시로 중복 제거
+
+**다음 할 일**
+- B층 원천 자료(컨설팅 기록, 합격자 원서, 평가 기록) 위치·형식 확인
+- 1·2·3년차 평가 루브릭 확정
+- 태그 v0.1 검토 후 A층 파일럿(30건) 착수 가능
+
+---
+
+## 2026-10-01 — 프로젝트 초기 설정
+
+**한 일**
+- `cat-db/` 하위 프로젝트 폴더 구조 생성
+- `CLAUDE.md`(규칙, 설계 원칙, 단계별 상태), `README.md`, 이 작업 로그, ADR 템플릿 작성
+- 원본(`data/raw/`)과 실명 대조표(`private/`)를 git에서 제외하도록 `.gitignore` 설정
+
+**결정**
+- 기존 `quantum-internal` 저장소 안에 하위 폴더로 둠(앱과 같은 Supabase를 쓸 가능성 고려)
+- DB 엔진은 미결(ADR 0001 초안: 파일럿 SQLite → 운영 Supabase Postgres 제안)
+
+**다음 할 일**
+- 샘플 CAT 자료 받기 → 1단계: 태그 체계(taxonomy) 초안 + 테이블 구조 설계

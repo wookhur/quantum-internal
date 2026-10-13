@@ -60,9 +60,11 @@ export function PartnerInstructorsPage() {
   const magicLink = useSendInstructorMagicLink()
 
   const handleSendMagicLink = (ins: PartnerInstructor) => {
-    if (!confirm(`'${ins.name || ins.email}' 강사에게 로그인 링크 이메일을 보낼까요?\n강사가 이메일의 링크를 클릭하면 비밀번호 없이 로그인됩니다.`)) return
+    if (!confirm(`'${ins.name || ins.email}' 강사에게 로그인 링크 이메일을 보낼까요?\n강사가 이메일의 링크를 클릭하면 비밀번호 없이 로그인됩니다.\n(아직 가입하지 않은 강사에게는 초대 메일이 발송됩니다.)`)) return
     magicLink.mutate(ins.email, {
-      onSuccess: () => alert(`${ins.email} 로 로그인 링크를 보냈습니다.\n강사가 이메일(스팸함도 확인)의 링크를 클릭하면 로그인됩니다.`),
+      onSuccess: (res) => alert(res?.mode === 'invited'
+        ? `${ins.email} 로 초대 메일을 보냈습니다.\n강사가 이메일(스팸함도 확인)의 링크를 클릭해 비밀번호를 설정하면 로그인됩니다.`
+        : `${ins.email} 로 로그인 링크를 보냈습니다.\n강사가 이메일(스팸함도 확인)의 링크를 클릭하면 로그인됩니다.`),
       onError: (e: unknown) => alert(`전송 실패: ${(e as Error)?.message || ''}`),
     })
   }

@@ -146,17 +146,16 @@ export function useUpsertPartnerInstructor() {
 }
 
 /**
- * 강사에게 로그인(매직) 링크 이메일을 보낸다. 비밀번호를 잊은 강사가 링크만 클릭하면 로그인됨.
- * 클라이언트에서 바로 호출 — 엣지 함수/서버 불필요.
+ * 강사에게 로그인 메일을 보낸다 (관리자용, 서버 엣지함수 send-instructor-login 경유).
+ * 계정이 있으면 로그인 링크(magic_link), 아직 없으면 초대 메일(invited) → 링크에서 비밀번호 설정.
  */
 export function useSendInstructorMagicLink() {
   return useMutation({
-    mutationFn: async (email: string) => {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { shouldCreateUser: false },
-      })
+    mutationFn: async (email: string): Promise<{ success: boolean; mode: 'magic_link' | 'invited' }> => {
+      const { data, error } = await supabase.functions.invoke('send-instructor-login', { body: { email: email.trim() } })
       if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      return data as { success: boolean; mode: 'magic_link' | 'invited' }
     },
   })
 }
