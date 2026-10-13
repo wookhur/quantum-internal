@@ -1504,6 +1504,9 @@ function ColdCallDetail({
     [canEdit, lead, updateLead, onClose],
   )
 
+  /** 지금 그 단계면 버튼을 잠그고 '현재'로 표시한다 — 눌러도 바뀔 게 없다. */
+  const isCurrentStage = (stage: PipelineStage) => canonicalStage(lead.pipelineStage) === stage
+
   // 연락 불가 토글: 번호가 틀려 닿을 수 없는 리드를 콜드콜에서 제외(paused).
   // 다시 누르면 신규 리드로 복귀. 나중에 다시 연락할 건은 여기가 아니라 '보류(on_hold)'다.
   const isPaused = lead.pipelineStage === 'paused'
@@ -2074,32 +2077,45 @@ function ColdCallDetail({
             </h3>
             <div className="flex gap-2 flex-wrap">
               {/* 나중에 다시 연락하기로 한 건. 목록에는 그대로 남는다 —
-                  번호가 틀려 닿을 수 없는 '연락 불가'(아래)와는 다르다. */}
+                  번호가 틀려 닿을 수 없는 '연락 불가'(아래)와는 다르다.
+                  보류 중이면 [보류 해제]로 바뀐다. 다시 전화해 보고 진행 중으로
+                  돌려놔야 할 때가 있어서다 — 거기서 상담 예약·거절로 이어간다. */}
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 text-xs gap-1.5 flex-1 border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-                onClick={() => handleAdvanceStage('on_hold')}
+                className={`h-8 text-xs gap-1.5 flex-1 ${isCurrentStage('on_hold')
+                  ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800'
+                  : 'border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800'}`}
+                onClick={() => handleAdvanceStage(isCurrentStage('on_hold') ? 'contact_attempted' : 'on_hold')}
+                title={isCurrentStage('on_hold')
+                  ? '보류를 풀고 진행 중(컨택 완료)으로 되돌립니다'
+                  : '나중에 다시 연락할 건으로 둡니다. 목록에는 그대로 남습니다'}
               >
-                <Pause className="size-3.5" />
-                {t('stage.on_hold')}
+                {isCurrentStage('on_hold') ? <RotateCcw className="size-3.5" /> : <Pause className="size-3.5" />}
+                {isCurrentStage('on_hold') ? '보류 해제' : t('stage.on_hold')}
               </Button>
               {/* 상담을 잡았을 때. 취소될 수 있으므로 상담 날까지는 여기 머문다. */}
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 text-xs gap-1.5 flex-1 border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+                className={`h-8 text-xs gap-1.5 flex-1 ${isCurrentStage('consultation_scheduled')
+                  ? 'border-green-300 bg-green-50 text-green-800'
+                  : 'border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800'}`}
+                disabled={isCurrentStage('consultation_scheduled')}
                 onClick={() => handleAdvanceStage('consultation_scheduled')}
               >
                 <CalendarCheck className="size-3.5" />
-                {t('coldCall.scheduleConsultation')}
+                {t('coldCall.scheduleConsultation')}{isCurrentStage('consultation_scheduled') ? ' · 현재' : ''}
               </Button>
               {/* 상담을 실제로 진행했을 때. 전에는 확인창이 없어 상담 예약 옆에서
                   잘못 눌리는 일이 있었다 — 확인을 받고 바꾼다. */}
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 text-xs gap-1.5 flex-1 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                className={`h-8 text-xs gap-1.5 flex-1 ${isCurrentStage('first_consultation')
+                  ? 'border-blue-300 bg-blue-50 text-blue-800'
+                  : 'border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800'}`}
+                disabled={isCurrentStage('first_consultation')}
                 onClick={() => {
                   if (confirm('상담을 진행한 것으로 바꿉니다. 몇 차 상담인지는 상담 일정에서 셉니다.')) {
                     handleAdvanceStage('first_consultation')
@@ -2107,14 +2123,17 @@ function ColdCallDetail({
                 }}
               >
                 <Video className="size-3.5" />
-                {t('stage.first_consultation')}
+                {t('stage.first_consultation')}{isCurrentStage('first_consultation') ? ' · 현재' : ''}
               </Button>
               {/* 계약은 계약관리에서 사람이 만든다. 여기서는 '이 리드는 계약까지 갔다'는
                   사실만 남긴다 — 콜드콜만 보고도 놓친 리드를 가릴 수 있게. */}
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 text-xs gap-1.5 flex-1 border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800"
+                className={`h-8 text-xs gap-1.5 flex-1 ${isCurrentStage('contracted')
+                  ? 'border-violet-300 bg-violet-50 text-violet-800'
+                  : 'border-violet-200 text-violet-700 hover:bg-violet-50 hover:text-violet-800'}`}
+                disabled={isCurrentStage('contracted')}
                 onClick={() => {
                   if (confirm('이 리드를 계약 완료로 바꿉니다. 계약서는 계약관리에서 따로 작성하셔야 합니다.')) {
                     handleAdvanceStage('contracted')
@@ -2122,7 +2141,7 @@ function ColdCallDetail({
                 }}
               >
                 <CheckCircle2 className="size-3.5" />
-                {t('stage.contracted')}
+                {t('stage.contracted')}{isCurrentStage('contracted') ? ' · 현재' : ''}
               </Button>
             </div>
           </div>
