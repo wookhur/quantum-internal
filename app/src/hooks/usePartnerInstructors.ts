@@ -146,6 +146,24 @@ export function useUpsertPartnerInstructor() {
 }
 
 /**
+ * 엣지함수가 2xx가 아닌 응답을 주면 supabase-js 는 "Edge Function returned a non-2xx status code"만 던진다.
+ * 응답 본문({ error } 또는 게이트웨이의 { message })을 읽어 실제 사유를 담은 Error 로 바꾼다.
+ */
+async function functionError(error: unknown): Promise<Error> {
+  const res = (error as { context?: Response })?.context
+  if (res && typeof res.json === 'function') {
+    try {
+      const body = await res.clone().json()
+      const msg = body?.error || body?.message || body?.msg
+      if (msg) return new Error(`${msg} (HTTP ${res.status})`)
+    } catch {
+      // 본문이 JSON 이 아니면 원래 오류를 그대로 쓴다
+    }
+  }
+  return error instanceof Error ? error : new Error(String(error))
+}
+
+/**
  * 강사에게 로그인 메일을 보낸다 (관리자용, 서버 엣지함수 send-instructor-login 경유).
  * 계정이 있으면 로그인 링크(magic_link), 아직 없으면 초대 메일(invited) → 링크에서 비밀번호 설정.
  */
@@ -153,7 +171,7 @@ export function useSendInstructorMagicLink() {
   return useMutation({
     mutationFn: async (email: string): Promise<{ success: boolean; mode: 'magic_link' | 'invited' }> => {
       const { data, error } = await supabase.functions.invoke('send-instructor-login', { body: { email: email.trim() } })
-      if (error) throw error
+      if (error) throw await functionError(error)
       if (data?.error) throw new Error(data.error)
       return data as { success: boolean; mode: 'magic_link' | 'invited' }
     },
@@ -165,7 +183,7 @@ export function useResetInstructorPassword() {
   return useMutation({
     mutationFn: async (email: string): Promise<{ success: boolean; password: string }> => {
       const { data, error } = await supabase.functions.invoke('reset-instructor-password', { body: { email } })
-      if (error) throw error
+      if (error) throw await functionError(error)
       if (data?.error) throw new Error(data.error)
       return data as { success: boolean; password: string }
     },
