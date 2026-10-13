@@ -91,9 +91,15 @@ function useLinkedMeetings(leadId: string | undefined, parentName: string | unde
         .order('meeting_date', { ascending: false })
 
       if (error) throw error
-      return (data || []) as (Record<string, unknown> & {
+      const rows = (data || []) as (Record<string, unknown> & {
         profiles: { id: string; name: string } | null
       })[]
+      // 계약과 같은 이유로 — 이미 다른 리드의 미팅이면 학부모 이름이 같다고
+      // 끌어오지 않는다. 동명이인의 상담 기록이 남의 리드에 붙던 원인.
+      return rows.filter(m => {
+        const mid = (m.lead_id as string) || ''
+        return !mid || mid === leadId
+      })
     },
     enabled: !!(leadId || parentName),
   })

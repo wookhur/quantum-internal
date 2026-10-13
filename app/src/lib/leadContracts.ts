@@ -64,6 +64,12 @@ export function pickLeadContracts<T extends LeadContractRow>(
   return rows.filter(r => {
     if (lead.id && r.leadId === lead.id) return true          // ① 직접 연결
 
+    // 이미 다른 리드의 계약이면 이름으로 끌어오지 않는다.
+    // 계약관리에서 리드를 골라 붙였거나 계약에서 리드를 만든 건은 임자가 정해졌다.
+    // 그런데도 이름만 보고 가져오는 바람에, 학부모 이름이 같은 동명이인(김지현)의
+    // 계약이 남의 리드에 '계약 1건'으로 떠 있었다.
+    if (r.leadId) return false
+
     for (const k of contractKeys(r.studentName)) {            // ② 학생명
       if (k.length < MIN_NAME_KEY_LENGTH) continue
       if (ambiguousStudent.has(k)) continue
