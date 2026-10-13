@@ -57,36 +57,36 @@ Deno.serve(async (req) => {
     if (insErr) return json({ error: insErr.message }, 400)
     if (!instructor) return json({ error: '파트너 강사관리에 등록된 이메일이 아닙니다.' }, 404)
 
-    // 3) 로그인 계정(auth user) 존재 여부 — reset-instructor-password 와 같은 방식
-    let exists = false
-    for (let page = 1; page <= 30 && !exists; page++) {
-      const { data: list, error: listErr } = await adminClient.auth.admin.listUsers({ page, perPage: 200 })
-      if (listErr) return json({ error: listErr.message }, 500)
-      const users = list?.users || []
-      exists = users.some((u) => (u.email || '').toLowerCase() === target)
-      if (users.length < 200) break
-    }
-
     const redirectTo = `${req.headers.get('origin') || 'https://internal.quantumadmissions.com'}/login`
 
-    if (exists) {
-      // 4a) 기존 계정: 로그인 링크 (계정은 새로 만들지 않음)
-      const { error } = await anonClient.auth.signInWithOtp({
-        email: target,
-        options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
-      })
-      if (error) return json({ error: error.message }, 400)
-      return json({ success: true, mode: 'magic_link' })
-    }
-
-    // 4b) 계정 없음: 초대 메일 (링크 → 로그인 화면의 비밀번호 설정)
+    // 3) 먼저 초대를 시도한다 (계정이 없으면 생성 + 초대 메일 → 링크에서 비밀번호 설정).
+    //    auth.admin.listUsers 로 존재 여부를 미리 찾지 않는다 — 이 프로젝트에서 500 으로 실패한 적이 있음.
     const { error: inviteErr } = await adminClient.auth.admin.inviteUserByEmail(target, {
       redirectTo,
       data: { full_name: (instructor as { name?: string | null }).name || target.split('@')[0] },
     })
-    if (inviteErr) return json({ error: inviteErr.message }, 400)
-    return json({ success: true, mode: 'invited' })
+    if (!inviteErr) return json({ success: true, mode: 'invited' })
+
+    const alreadyRegistered =
+      (inviteErr as { code?: string }).code === 'email_exists' ||
+      /already (been )?registered|already exists/i.test(inviteErr.message)
+    if (!alreadyRegistered) {
+      console.error('send-instructor-login invite failed:', inviteErr)
+      return json({ error: inviteErr.message }, 400)
+    }
+
+    // 4) 이미 가입된 강사: 로그인(매직) 링크 (계정은 새로 만들지 않음)
+    const { error: otpErr } = await anonClient.auth.signInWithOtp({
+      email: target,
+      options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
+    })
+    if (otpErr) {
+      console.error('send-instructor-login magic link failed:', otpErr)
+      return json({ error: otpErr.message }, 400)
+    }
+    return json({ success: true, mode: 'magic_link' })
   } catch (err) {
+    console.error('send-instructor-login error:', err)
     return json({ error: (err as Error)?.message || 'Internal server error' }, 500)
   }
 })
