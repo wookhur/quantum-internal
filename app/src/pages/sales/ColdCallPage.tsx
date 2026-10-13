@@ -236,7 +236,7 @@ function advanceOnly(current: PipelineStage, target: PipelineStage): PipelineSta
 }
 
 /**
- * 콜드콜 드롭다운 필터 순서. 콜백요청만 콜드콜 전용 라벨을 쓴다(on_hold=콜백요청).
+ * 콜드콜 드롭다운 필터 순서.
  */
 const COLD_CALL_FILTER_STAGES: PipelineStage[] = [
   'new_lead',
@@ -251,17 +251,16 @@ const COLD_CALL_FILTER_STAGES: PipelineStage[] = [
   'paused',   // 연락 불가만 모아보기
 ]
 
-/** 콜드콜 화면 전용 단계 라벨 오버라이드 (전역 파이프라인 라벨은 건드리지 않음). */
-const COLD_CALL_STAGE_LABEL_KEY: Partial<Record<PipelineStage, string>> = {
-  on_hold: 'coldCall.callbackRequested',
-}
-
+/**
+ * 단계 이름은 전 화면에서 같아야 한다. 전에는 콜드콜에서만 on_hold 를 '콜백요청'으로
+ * 불러서, 파이프라인의 '보류'와 같은 단계인 줄 모르고 드롭다운에서 찾지 못했다.
+ * ('콜백요청'은 전화 결과의 이름으로 남는다 — 그 결과를 남기면 단계가 보류가 된다.)
+ */
 function coldStageLabel(
   stage: PipelineStage,
   t: (key: string, params?: Record<string, string | number>) => string,
 ): string {
-  const key = canonicalStage(stage)
-  return t(COLD_CALL_STAGE_LABEL_KEY[key] || 'stage.' + key)
+  return t('stage.' + canonicalStage(stage))
 }
 
 /**
@@ -2073,7 +2072,18 @@ function ColdCallDetail({
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
               {t('coldCall.stageChange')}
             </h3>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {/* 나중에 다시 연락하기로 한 건. 목록에는 그대로 남는다 —
+                  번호가 틀려 닿을 수 없는 '연락 불가'(아래)와는 다르다. */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 flex-1 border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                onClick={() => handleAdvanceStage('on_hold')}
+              >
+                <Pause className="size-3.5" />
+                {t('stage.on_hold')}
+              </Button>
               {/* 상담을 잡았을 때. 취소될 수 있으므로 상담 날까지는 여기 머문다. */}
               <Button
                 size="sm"
