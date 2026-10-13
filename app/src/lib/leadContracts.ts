@@ -18,12 +18,57 @@ export interface LeadContractRow {
   leadId?: string
   studentName?: string
   contractorName?: string
+  /** 계약서에 적힌 연락처들 — 대표/학부모/학생. 하나라도 리드와 맞아야 이름을 믿는다. */
+  phone?: string
+  parentPhone?: string
+  studentPhone?: string
+  /** 계약서에 적힌 이메일들 — 학부모/학생. */
+  parentEmail?: string
+  studentEmail?: string
 }
 
 export interface LeadForLink {
   id?: string
   studentName?: string
   parentName?: string
+  phone?: string
+  email?: string
+}
+
+/**
+ * 연락처 비교용 키. 숫자만 남기고 국가번호를 국내 형식으로 맞춘다.
+ * '010-5278-3204' / '01052783204' / '1052783204' / '+821052783204' 를 하나로 본다.
+ * 9자리 미만은 사람을 가릴 수 없으니 버린다.
+ */
+export function phoneKey(raw?: string): string {
+  let d = (raw || '').replace(/\D/g, '')
+  if (d.startsWith('8210')) d = '0' + d.slice(2)
+  else if (d.startsWith('82') && d.length >= 11) d = '0' + d.slice(2)
+  if (d.length === 10 && d.startsWith('10')) d = '0' + d
+  return d.length >= 9 ? d : ''
+}
+
+const emailKey = (raw?: string) => (raw || '').trim().toLowerCase()
+
+/**
+ * 계약서와 리드가 같은 사람을 가리키는지, 이름 말고 '닿는 수단'으로 확인한다.
+ * 동명이인이 흔해서 이름만으로는 못 가린다 — 김지현(모) 둘의 계약이 서로의
+ * 리드에 붙어 있었다. 연락처나 이메일이 하나라도 같아야 이름을 믿는다.
+ */
+function contactMatches(lead: LeadForLink, r: LeadContractRow): boolean {
+  const lp = phoneKey(lead.phone)
+  if (lp) {
+    for (const p of [r.parentPhone, r.studentPhone, r.phone]) {
+      if (phoneKey(p) === lp) return true
+    }
+  }
+  const le = emailKey(lead.email)
+  if (le) {
+    for (const e of [r.parentEmail, r.studentEmail]) {
+      if (emailKey(e) === le) return true
+    }
+  }
+  return false
 }
 
 /** 리드 쪽 후보 키 — 학생명·부모명을 구분기호로 쪼갠 조각들(너무 짧은 건 제외). */
@@ -36,11 +81,11 @@ function leadKeys(lead: LeadForLink): { student: Set<string>; parent: Set<string
 /**
  * 이 리드의 계약만 고른다.
  *
- * 붙이는 근거는 셋 중 하나:
+ * 붙이는 근거:
  *  1. 계약에 이 리드가 직접 연결돼 있다(가장 정확, 이름 안 봄)
- *  2. 계약서 학생명 조각 하나가 리드 학생명 조각과 통째로 같다 — 단, 그 조각이
- *     다른 학생의 계약에도 걸리면 쓰지 않는다
- *  3. 계약자(부모) 이름 조각이 리드 부모명 조각과 통째로 같다 — 같은 제한
+ *  2·3. 연락처나 이메일이 같고, 그 위에 학생명 또는 계약자명 조각이 통째로 같다.
+ *       이름만으로는 절대 붙이지 않는다 — 동명이인이 흔하다.
+ *       이미 다른 리드에 연결된 계약도 이름으로 끌어오지 않는다.
  */
 export function pickLeadContracts<T extends LeadContractRow>(
   lead: LeadForLink,
@@ -70,13 +115,18 @@ export function pickLeadContracts<T extends LeadContractRow>(
     // 계약이 남의 리드에 '계약 1건'으로 떠 있었다.
     if (r.leadId) return false
 
-    for (const k of contractKeys(r.studentName)) {            // ② 학생명
+    // 이름은 혼자서는 근거가 못 된다. 연락처나 이메일이 맞을 때만 이름을 본다.
+    // 계약서에 연락처도 이메일도 없거나 리드 쪽이 비어 있으면 가릴 방법이 없으므로
+    // 붙이지 않는다 — 계약관리에서 리드를 연결해 주면 ①로 정확히 잡힌다.
+    if (!contactMatches(lead, r)) return false
+
+    for (const k of contractKeys(r.studentName)) {            // ② 학생명 + 연락처/이메일
       if (k.length < MIN_NAME_KEY_LENGTH) continue
       if (ambiguousStudent.has(k)) continue
       if (student.has(k)) return true
     }
 
-    for (const k of contractKeys(r.contractorName)) {         // ③ 계약자(부모)명
+    for (const k of contractKeys(r.contractorName)) {         // ③ 계약자(부모)명 + 연락처/이메일
       if (k.length < MIN_NAME_KEY_LENGTH) continue
       if ((parentOwners.get(k)?.size ?? 0) > 1) continue      // 한 이름에 학생이 여럿이면 못 가린다
       if (parent.has(k)) return true

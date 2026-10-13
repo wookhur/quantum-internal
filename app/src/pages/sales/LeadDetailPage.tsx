@@ -24,13 +24,20 @@ import { LeadLocalTime } from '@/components/LeadLocalTime'
 import ConsultationBookingDialog from '@/components/ConsultationBookingDialog'
 import LeadEditDialog from '@/components/LeadEditDialog'
 import { CreateContractFromLeadDialog } from '@/components/CreateContractFromLeadDialog'
-import { pickLeadContracts } from '@/lib/leadContracts'
+import { pickLeadContracts, phoneKey } from '@/lib/leadContracts'
 
 // ─── Linked data hooks ────────────────────────────────────────────────────
 
-function useLinkedContracts(leadId: string | undefined, studentName: string | undefined, parentName: string | undefined) {
+function useLinkedContracts(
+  leadId: string | undefined,
+  studentName: string | undefined,
+  parentName: string | undefined,
+  // 이름만으로는 동명이인을 못 가린다 — 연락처·이메일이 맞을 때만 이름을 믿는다.
+  leadPhone: string | undefined,
+  leadEmail: string | undefined,
+) {
   return useQuery({
-    queryKey: ['linked-contracts', leadId, studentName, parentName],
+    queryKey: ['linked-contracts', leadId, studentName, parentName, leadPhone, leadEmail],
     queryFn: async () => {
       // 1차로 넓게 가져온 뒤(ilike), 실제로 이 리드의 계약인지는 아래에서 가린다.
       // 계약서 학생명은 '정서영 | Daniel' 처럼 영문 애칭이 함께 적혀서, 포함 검색만으로는
@@ -60,12 +67,17 @@ function useLinkedContracts(leadId: string | undefined, studentName: string | un
 
       // 이름 조각이 '통째로' 같을 때만 인정하고, 여러 학생에게 걸리는 조각은 쓰지 않는다.
       const picked = pickLeadContracts(
-        { id: leadId, studentName, parentName },
+        { id: leadId, studentName, parentName, phone: leadPhone, email: leadEmail },
         rows.map(r => ({
           row: r,
           leadId: (r.lead_id as string) || undefined,
           studentName: (r.student_name as string) || undefined,
           contractorName: (r.contractor_name as string) || undefined,
+          phone: (r.phone as string) || undefined,
+          parentPhone: (r.parent_phone as string) || undefined,
+          studentPhone: (r.student_phone as string) || undefined,
+          parentEmail: (r.parent_email as string) || undefined,
+          studentEmail: (r.student_email as string) || undefined,
         })),
       )
       return picked.map(p => p.row)
@@ -74,9 +86,13 @@ function useLinkedContracts(leadId: string | undefined, studentName: string | un
   })
 }
 
-function useLinkedMeetings(leadId: string | undefined, parentName: string | undefined) {
+function useLinkedMeetings(
+  leadId: string | undefined,
+  parentName: string | undefined,
+  leadPhone: string | undefined,
+) {
   return useQuery({
-    queryKey: ['linked-meetings', leadId, parentName],
+    queryKey: ['linked-meetings', leadId, parentName, leadPhone],
     queryFn: async () => {
       const conditions: string[] = []
       if (leadId) conditions.push(`lead_id.eq.${leadId}`)
@@ -94,11 +110,13 @@ function useLinkedMeetings(leadId: string | undefined, parentName: string | unde
       const rows = (data || []) as (Record<string, unknown> & {
         profiles: { id: string; name: string } | null
       })[]
-      // 계약과 같은 이유로 — 이미 다른 리드의 미팅이면 학부모 이름이 같다고
-      // 끌어오지 않는다. 동명이인의 상담 기록이 남의 리드에 붙던 원인.
+      // 계약과 같은 잣대 — 이름만으로는 동명이인을 못 가린다.
+      // 이 리드에 직접 연결된 미팅이거나, 임자가 없고 연락처까지 같을 때만 붙인다.
+      const lp = phoneKey(leadPhone)
       return rows.filter(m => {
         const mid = (m.lead_id as string) || ''
-        return !mid || mid === leadId
+        if (mid) return mid === leadId
+        return !!lp && phoneKey(m.phone as string | undefined) === lp
       })
     },
     enabled: !!(leadId || parentName),
@@ -143,8 +161,8 @@ export function LeadDetailPage() {
   const { data: lead, isLoading, error } = useLead(id || '')
   const { data: activities } = useLeadActivities(id || '')
   const { data: syncStatus } = useConsultationCalendarSync(activities)
-  const { data: linkedContracts = [] } = useLinkedContracts(id, lead?.studentName, lead?.parentName)
-  const { data: linkedMeetings = [] } = useLinkedMeetings(id, lead?.parentName)
+  const { data: linkedContracts = [] } = useLinkedContracts(id, lead?.studentName, lead?.parentName, lead?.phone, lead?.email)
+  const { data: linkedMeetings = [] } = useLinkedMeetings(id, lead?.parentName, lead?.phone)
   const createActivity = useCreateActivity()
   const updateActivity = useUpdateActivity()
   const deleteActivity = useDeleteActivity()
