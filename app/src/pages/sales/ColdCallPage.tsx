@@ -42,7 +42,7 @@ import {
   Save,
   XCircle,
   Pause,
-  Play,
+  RotateCcw,
   UserCheck,
   CalendarCheck,
   Trash2,
@@ -2176,7 +2176,8 @@ function ColdCallDetail({
                   disabled={updateLead.isPending}
                   title={isPaused ? '전화번호 수정 후 콜드콜 리드로 복귀' : '번호가 틀려 연락 자체가 안 되는 리드를 목록에서 뺍니다. 나중에 다시 연락할 건이면 접촉 결과를 콜백요청으로 남기세요'}
                 >
-                  {isPaused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+                  {/* 보류 버튼이 Pause 를 쓰므로 여기는 다른 기호로 — 전화가 안 닿는다는 뜻. */}
+                  {isPaused ? <RotateCcw className="size-3.5" /> : <PhoneOff className="size-3.5" />}
                   {isPaused ? '연락 불가 해제' : '연락 불가'}
                 </Button>
                 {/* 거절만 파이프라인 '거절'로 제외. 부재중/콜백요청은 콜드콜에 남겨 드롭다운으로 관리. */}
