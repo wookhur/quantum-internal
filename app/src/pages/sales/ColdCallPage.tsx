@@ -195,7 +195,7 @@ function getSchoolTierScore(school: string): number {
 
 /** Stages eligible for cold calling (콜백요청(on_hold)·부재중 포함 — 콜드콜에서 계속 관리) */
 // 콜드콜 기본 목록: 진행·상담·계약 등 모든 활성/성사 단계 포함.
-// (거절·이탈·보류(연락불가)는 이탈/연락불가로 따로 관리 → 기본 목록에서 제외)
+// (거절·이탈·연락 불가는 따로 관리 → 기본 목록에서 제외)
 const COLD_CALL_STAGES: PipelineStage[] = [
   'new_lead',
   'contact_attempted',
@@ -223,7 +223,7 @@ const STAGE_ORDER: PipelineStage[] = [
   'contracted',
 ]
 
-/** 순서상 몇 번째인지. 순서에 없는 단계(거절·이탈·보류(연락불가) 등)는 -1. */
+/** 순서상 몇 번째인지. 순서에 없는 단계(거절·이탈·연락 불가 등)는 -1. */
 function stageRank(stage: PipelineStage): number {
   return STAGE_ORDER.indexOf(canonicalStage(stage))
 }
@@ -248,7 +248,7 @@ const COLD_CALL_FILTER_STAGES: PipelineStage[] = [
   // 계약까지 간 건도 콜드콜에서 그대로 보고 모아볼 수 있게 한다(목록에서 빠지지 않는다).
   'contract_review',
   'contracted',
-  'paused',   // 보류(연락불가)만 모아보기
+  'paused',   // 연락 불가만 모아보기
 ]
 
 /** 콜드콜 화면 전용 단계 라벨 오버라이드 (전역 파이프라인 라벨은 건드리지 않음). */
@@ -1505,7 +1505,8 @@ function ColdCallDetail({
     [canEdit, lead, updateLead, onClose],
   )
 
-  // 보류(Pause) 토글: 연락불가 리드를 콜드콜에서 제외(paused). 다시 누르면 신규 리드로 복귀.
+  // 연락 불가 토글: 번호가 틀려 닿을 수 없는 리드를 콜드콜에서 제외(paused).
+  // 다시 누르면 신규 리드로 복귀. 나중에 다시 연락할 건은 여기가 아니라 '보류(on_hold)'다.
   const isPaused = lead.pipelineStage === 'paused'
   const handlePauseToggle = useCallback(() => {
     if (!canEdit) return
@@ -2155,17 +2156,18 @@ function ColdCallDetail({
               </div>
             ) : (
               <div className="flex gap-2">
-                {/* 보류(Pause): 전화번호 오류 등 연락불가 리드를 콜드콜에서 제외해 따로 관리. 다시 누르면 복귀. */}
+                {/* 연락 불가: 번호가 틀려 닿을 수 없는 리드를 콜드콜에서 빼 둔다. 다시 누르면 복귀.
+                    '나중에 다시 연락'은 이 버튼이 아니다 — 접촉 결과를 '콜백요청'으로 남기면 보류가 된다. */}
                 <Button
                   size="sm"
                   variant="outline"
                   className={`h-8 text-xs gap-1.5 flex-1 ${isPaused ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-amber-200 text-amber-700 hover:bg-amber-50'}`}
                   onClick={handlePauseToggle}
                   disabled={updateLead.isPending}
-                  title={isPaused ? '전화번호 수정 후 콜드콜 리드로 복귀' : '전화번호 오류 등 연락불가 리드를 보류 처리'}
+                  title={isPaused ? '전화번호 수정 후 콜드콜 리드로 복귀' : '번호가 틀려 연락 자체가 안 되는 리드를 목록에서 뺍니다. 나중에 다시 연락할 건이면 접촉 결과를 콜백요청으로 남기세요'}
                 >
                   {isPaused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-                  {isPaused ? '보류 해제' : '보류(Pause)'}
+                  {isPaused ? '연락 불가 해제' : '연락 불가'}
                 </Button>
                 {/* 거절만 파이프라인 '거절'로 제외. 부재중/콜백요청은 콜드콜에 남겨 드롭다운으로 관리. */}
                 <Button

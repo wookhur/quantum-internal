@@ -66,8 +66,11 @@ export const PIPELINE_STAGES: { key: PipelineStage; label: string; color: string
   // 부재중은 '비활성'이 아니라 콜드콜에서 계속 관리하는 활성 상태 (전화 한 번 안 받았다고 이탈 처리하지 않음)
   { key: 'no_response', label: '부재중', color: 'stage-no-response', group: 'active' },
   { key: 'rejected', label: '거절', color: 'stage-rejected', group: 'inactive' },
-  // 보류(연락불가): 전화번호 오류 등으로 연락 불가 → 콜드콜에서 제외해 따로 관리. 수정 후 해제하면 복귀.
-  { key: 'paused', label: '보류(연락불가)', color: 'stage-on-hold', group: 'inactive' },
+  // 연락 불가: 전화번호 오류 등으로 연락 자체가 안 되는 건 → 콜드콜에서 제외해 따로 관리.
+  // 번호를 고쳐 해제하면 복귀한다. '보류(on_hold)'와는 다르다 — 그쪽은 나중에 다시
+  // 연락할 건이라 보드에 남고, 이쪽은 닿을 방법이 없어 빠진다. 이름이 둘 다 '보류'면
+  // 섞이므로 여기는 '연락 불가'로 부른다.
+  { key: 'paused', label: '연락 불가', color: 'stage-on-hold', group: 'inactive' },
   { key: 'lost', label: '이탈', color: 'stage-lost', group: 'inactive' },
 ]
 
