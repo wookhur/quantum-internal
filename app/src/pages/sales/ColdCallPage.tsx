@@ -45,6 +45,7 @@ import {
   RotateCcw,
   UserCheck,
   CalendarCheck,
+  CalendarX,
   Trash2,
   Users2,
   type LucideIcon,
@@ -1373,6 +1374,9 @@ function ColdCallDetail({
   const [showMemoEdit, setShowMemoEdit] = useState(false)
   const [levelReason, setLevelReason] = useState(lead.leadLevelReason || '')
   const [excludeConfirm, setExcludeConfirm] = useState<PipelineStage | null>(null)
+  // 상담 예약을 취소할 때 어디로 보낼지 묻는다 — 취소 사유가 제각각이라
+  // 한 곳으로 몰면 틀린다(다시 잡기로 / 잘못 누름 / 안 하겠다고 함).
+  const [cancelConsult, setCancelConsult] = useState(false)
   const [deleteActivityConfirm, setDeleteActivityConfirm] = useState<string | null>(null)
 
   const methodConfig = CONTACT_METHODS[contactMethod]
@@ -2094,18 +2098,29 @@ function ColdCallDetail({
                 {isCurrentStage('on_hold') ? <RotateCcw className="size-3.5" /> : <Pause className="size-3.5" />}
                 {isCurrentStage('on_hold') ? '보류 해제' : t('stage.on_hold')}
               </Button>
-              {/* 상담을 잡았을 때. 취소될 수 있으므로 상담 날까지는 여기 머문다. */}
+              {/* 상담을 잡았을 때. 취소될 수 있으므로 상담 날까지는 여기 머문다.
+                  예약 중이면 [상담 예약 취소]로 바뀐다 — 취소하면서 추후 다시 잡기로 한
+                  건은 보류로 간다. 상담 일정 기록 자체는 지우지 않는다. */}
               <Button
                 size="sm"
                 variant="outline"
                 className={`h-8 text-xs gap-1.5 flex-1 ${isCurrentStage('consultation_scheduled')
-                  ? 'border-green-300 bg-green-50 text-green-800'
+                  ? 'border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800'
                   : 'border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800'}`}
-                disabled={isCurrentStage('consultation_scheduled')}
-                onClick={() => handleAdvanceStage('consultation_scheduled')}
+                onClick={() => {
+                  if (isCurrentStage('consultation_scheduled')) setCancelConsult(true)
+                  else handleAdvanceStage('consultation_scheduled')
+                }}
+                title={isCurrentStage('consultation_scheduled')
+                  ? '예약을 취소하고 어느 단계로 보낼지 고릅니다'
+                  : '상담을 잡았을 때 누릅니다'}
               >
-                <CalendarCheck className="size-3.5" />
-                {t('coldCall.scheduleConsultation')}{isCurrentStage('consultation_scheduled') ? ' · 현재' : ''}
+                {isCurrentStage('consultation_scheduled')
+                  ? <CalendarX className="size-3.5" />
+                  : <CalendarCheck className="size-3.5" />}
+                {isCurrentStage('consultation_scheduled')
+                  ? '상담 예약 취소'
+                  : t('coldCall.scheduleConsultation')}
               </Button>
               {/* 상담을 실제로 진행했을 때. 전에는 확인창이 없어 상담 예약 옆에서
                   잘못 눌리는 일이 있었다 — 확인을 받고 바꾼다. */}
@@ -2144,6 +2159,41 @@ function ColdCallDetail({
                 {t('stage.contracted')}{isCurrentStage('contracted') ? ' · 현재' : ''}
               </Button>
             </div>
+
+            {/* 상담 예약 취소 — 사유에 따라 가는 곳이 다르다. */}
+            {cancelConsult && (
+              <div className="mt-2 rounded-lg border-2 border-amber-200 bg-amber-50 p-3 space-y-2">
+                <p className="text-sm font-medium text-amber-900">상담 예약을 취소합니다. 어떤 경우인가요?</p>
+                <p className="text-xs text-amber-700">
+                  둘 다 콜드콜 목록에는 그대로 남습니다. 잡아 둔 상담 일정 기록도 지우지 않습니다.
+                </p>
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-7 text-xs border-amber-300 text-amber-800 hover:bg-amber-100"
+                    disabled={updateLead.isPending}
+                    onClick={() => { setCancelConsult(false); handleAdvanceStage('on_hold') }}
+                  >
+                    나중에 다시 잡기로 → 보류
+                  </Button>
+                  {/* 안 하겠다고 한 경우도 거절로 빼지 않는다 — 콜드콜에 남겨 다시 연락한다. */}
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-7 text-xs border-gray-300 text-gray-700 hover:bg-gray-100"
+                    disabled={updateLead.isPending}
+                    onClick={() => { setCancelConsult(false); handleAdvanceStage('contact_attempted') }}
+                  >
+                    잘못 눌렀거나 안 하겠다고 함 → 컨택 완료
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost" className="h-7 text-xs"
+                    onClick={() => setCancelConsult(false)}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="border-t" />
