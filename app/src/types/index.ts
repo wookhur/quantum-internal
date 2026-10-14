@@ -535,6 +535,8 @@ export interface ServiceStudent {
   assignedConsultant?: string
   essayEditor?: string
   partners?: string
+  /** 이 학생이 어느 리드에서 왔는지. 계약 전 콜드콜 상담 기록을 360에서 이어 보기 위한 연결. */
+  leadId?: string
   majors?: string
   /** 전공 계열 (1단계, majorTaxonomy의 track key) */
   majorTrack?: string

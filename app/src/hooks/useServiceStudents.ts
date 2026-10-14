@@ -32,6 +32,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     // 옛 표기(예: 'Somee Park') → 통일 표기('Soomee Park')로 정규화 → 표시·수정 드롭다운·필터 일치
     essayEditor: canonicalConsultantName((row.essay_editor as string) || '') || undefined,
     partners: (row.partners as string) || undefined,
+    leadId: (row.lead_id as string) || undefined,
     majors: (row.majors as string) || undefined,
     majorTrack: (row.major_track as string) || undefined,
     majorDetail: (row.major_detail as string) || undefined,
