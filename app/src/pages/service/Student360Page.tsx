@@ -1755,7 +1755,9 @@ function ConsultLogSection({ studentId, studentName, parentName, leadId, userId,
   const today = todayKST()
   const blank = {
     date: today, content: '', followUp: '',
-    status: 'open' as ConsultStatus, consultantId: userId || '', sharedWith: [] as string[],
+    // 상담자는 로그인한 사람으로 미리 찍어 두지 않는다 — 대신 상담한 사람이 적는
+    // 경우가 있어, 안 고르고 넘어가면 엉뚱한 사람이 상담자로 남는다.
+    status: 'open' as ConsultStatus, consultantId: '', sharedWith: [] as string[],
     transcriptUrl: '', transcriptName: '',
   }
   const [form, setForm] = useState(blank)
