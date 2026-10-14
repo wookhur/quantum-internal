@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
+import { TRANSCRIPT_MAX_CHARS, type ConsultSummary } from '@/lib/transcriptText'
 
 /** 계약 후 상담 기록 — 처리 상태는 둘뿐이다. */
 export type ConsultStatus = 'open' | 'done'
@@ -17,6 +18,9 @@ export interface PostContractConsult {
   content: string
   /** follow-up commitments — 학부모에게 약속한 것 */
   followUp?: string
+  /** 올려 둔 전사본 파일 (요약의 근거). 요약이 이상할 때 원문을 열어 본다. */
+  transcriptUrl?: string
+  transcriptName?: string
   status: ConsultStatus
   /** 상담자 (profiles.id) */
   consultantId?: string
@@ -45,6 +49,8 @@ function mapConsult(r: Record<string, unknown>): PostContractConsult {
     consultDate: r.consult_date as string,
     content: (r.content as string) || '',
     followUp: (r.follow_up as string) || undefined,
+    transcriptUrl: (r.transcript_url as string) || undefined,
+    transcriptName: (r.transcript_name as string) || undefined,
     status: ((r.status as string) || 'open') as ConsultStatus,
     consultantId: (r.consultant_id as string) || undefined,
     sharedWith: (r.shared_with as string[]) || [],
@@ -143,6 +149,8 @@ export function useCreatePostContractConsult() {
       consultDate: string
       content: string
       followUp?: string
+      transcriptUrl?: string
+      transcriptName?: string
       status: ConsultStatus
       consultantId?: string
       sharedWith: string[]
@@ -156,6 +164,8 @@ export function useCreatePostContractConsult() {
           consult_date: input.consultDate,
           content: input.content,
           follow_up: input.followUp || null,
+          transcript_url: input.transcriptUrl || null,
+          transcript_name: input.transcriptName || null,
           status: input.status,
           consultant_id: input.consultantId || null,
           shared_with: input.sharedWith,
@@ -192,6 +202,8 @@ export function useUpdatePostContractConsult() {
       consultDate?: string
       content?: string
       followUp?: string
+      transcriptUrl?: string | null
+      transcriptName?: string | null
       status?: ConsultStatus
       consultantId?: string
       /** 넘기면 전체를 이 목록으로 바꾼다. 새로 추가된 사람에게만 알림이 간다. */
@@ -204,6 +216,8 @@ export function useUpdatePostContractConsult() {
       if (input.consultDate !== undefined) row.consult_date = input.consultDate
       if (input.content !== undefined) row.content = input.content
       if (input.followUp !== undefined) row.follow_up = input.followUp || null
+      if (input.transcriptUrl !== undefined) row.transcript_url = input.transcriptUrl || null
+      if (input.transcriptName !== undefined) row.transcript_name = input.transcriptName || null
       if (input.status !== undefined) row.status = input.status
       if (input.consultantId !== undefined) row.consultant_id = input.consultantId || null
       if (input.sharedWith !== undefined) row.shared_with = input.sharedWith
@@ -239,4 +253,54 @@ export function useDeletePostContractConsult() {
     },
     onSuccess: (_d, v) => qc.invalidateQueries({ queryKey: ['post-contract-consults', v.studentId] }),
   })
+}
+
+/**
+ * 전사본을 Point / Concerns / Solutions / Follow-up 으로 요약한다.
+ *
+ * Claude 는 음성을 못 읽는다. 그래서 여기 들어오는 건 이미 글이 된 전사본이거나
+ * 손으로 적은 메모다. 음성 자동 전사를 붙이려면 전사 서비스의 키를 받아
+ * summarize-consult 앞단에 전사 단계를 더하면 된다 — 화면과 이 자리는 그대로 쓴다.
+ */
+export function useSummarizeConsult() {
+  return useMutation({
+    mutationFn: async (input: {
+      text: string
+      studentName?: string
+      parentName?: string
+    }): Promise<ConsultSummary> => {
+      const { data, error } = await supabase.functions.invoke('summarize-consult', {
+        body: {
+          text: input.text.slice(-TRANSCRIPT_MAX_CHARS),
+          studentName: input.studentName || '',
+          parentName: input.parentName || '',
+        },
+      })
+      if (error) {
+        // 함수를 아직 배포하지 않았을 때가 가장 흔하다 — 무엇을 해야 하는지 알려 준다
+        throw new Error(
+          `요약에 실패했습니다: ${error.message}` +
+          ' (Supabase 대시보드에서 summarize-consult 함수를 배포했는지 확인해 주세요)',
+        )
+      }
+      if (data?.error) throw new Error(data.error)
+      return {
+        point: (data?.point as string) || '',
+        concerns: (data?.concerns as string) || '',
+        solutions: (data?.solutions as string) || '',
+        followUp: (data?.followUp as string) || '',
+      }
+    },
+  })
+}
+
+/** 전사본 파일을 Storage 에 올리고 공개 주소를 돌려준다. */
+export async function uploadTranscript(studentId: string, file: File): Promise<string> {
+  const safe = file.name.replace(/[^\w.\-가-힣]/g, '_')
+  const path = `${studentId}/${Date.now()}-${safe}`
+  const { error } = await supabase.storage
+    .from('consult-transcripts')
+    .upload(path, file, { upsert: true })
+  if (error) throw new Error(`전사본 올리기 실패: ${error.message}`)
+  return supabase.storage.from('consult-transcripts').getPublicUrl(path).data.publicUrl
 }

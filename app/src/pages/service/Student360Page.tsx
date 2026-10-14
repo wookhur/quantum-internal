@@ -84,8 +84,13 @@ import {
 import {
   usePostContractConsults, usePreContractNotes, useCreatePostContractConsult,
   useUpdatePostContractConsult, useDeletePostContractConsult,
+  useSummarizeConsult, uploadTranscript,
   CONSULT_STATUS_LABEL, type ConsultStatus, type PostContractConsult,
 } from '@/hooks/usePostContractConsults'
+import {
+  readTranscript, isTranscriptFile, summaryToContent,
+  TRANSCRIPT_ACCEPT, type ConsultSummary,
+} from '@/lib/transcriptText'
 import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
   ServiceReportCategory,
@@ -779,6 +784,7 @@ export function Student360Page() {
                 리드 연결은 service_students.lead_id 가 먼저, 없으면 연결된 계약의 lead_id 로 되돌아간다. */}
             <ConsultLogSection
               studentId={selected.id} studentName={studentPickerLabel(selected)}
+              parentName={selected.parentName}
               leadId={selected.leadId || linkedContract?.leadId}
               userId={user?.id} userName={user?.name}
               isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit}
@@ -1726,9 +1732,10 @@ const CONTACT_TYPE_LABEL: Record<string, string> = {
   note: '메모', meeting: '미팅', consultation: '상담',
 }
 
-function ConsultLogSection({ studentId, studentName, leadId, userId, userName, isAdmin, canEdit }: {
+function ConsultLogSection({ studentId, studentName, parentName, leadId, userId, userName, isAdmin, canEdit }: {
   studentId: string
   studentName: string
+  parentName?: string
   leadId?: string
   userId?: string
   userName?: string
@@ -1749,6 +1756,7 @@ function ConsultLogSection({ studentId, studentName, leadId, userId, userName, i
   const blank = {
     date: today, content: '', followUp: '',
     status: 'open' as ConsultStatus, consultantId: userId || '', sharedWith: [] as string[],
+    transcriptUrl: '', transcriptName: '',
   }
   const [form, setForm] = useState(blank)
 
@@ -1771,6 +1779,8 @@ function ConsultLogSection({ studentId, studentName, leadId, userId, userName, i
         consultDate: form.date,
         content: form.content.trim(),
         followUp: form.followUp.trim() || undefined,
+        transcriptUrl: form.transcriptUrl || undefined,
+        transcriptName: form.transcriptName || undefined,
         status: form.status,
         consultantId: form.consultantId || undefined,
         sharedWith: form.sharedWith,
@@ -1883,11 +1893,25 @@ function ConsultLogSection({ studentId, studentName, leadId, userId, userName, i
                   </Select>
                 </div>
               </div>
+              <TranscriptSummarize
+                studentId={studentId} studentName={studentName} parentName={parentName}
+                existingText={form.content}
+                transcriptName={form.transcriptName}
+                transcriptUrl={form.transcriptUrl}
+                onSummary={(sum, file) => setForm(f => ({
+                  ...f,
+                  content: summaryToContent(sum) || f.content,
+                  followUp: sum.followUp || f.followUp,
+                  transcriptUrl: file?.url ?? f.transcriptUrl,
+                  transcriptName: file?.name ?? f.transcriptName,
+                }))}
+                onClearFile={() => setForm(f => ({ ...f, transcriptUrl: '', transcriptName: '' }))}
+              />
               <div>
                 <Label className="text-xs text-muted-foreground">상담 내용</Label>
                 <Textarea
-                  value={form.content} rows={4} className="text-sm mt-1"
-                  placeholder="학부모님과 나눈 상담 내용을 적어 주세요..."
+                  value={form.content} rows={8} className="text-sm mt-1"
+                  placeholder="학부모님과 나눈 상담 내용을 적어 주세요. 전사본을 올리면 Point / Concerns / Solutions 로 요약해 여기 채워 둡니다."
                   onChange={(e) => setForm(f => ({ ...f, content: e.target.value }))}
                 />
               </div>
@@ -1933,6 +1957,131 @@ function ConsultLogSection({ studentId, studentName, leadId, userId, userName, i
         </CardContent>
       )}
     </Card>
+  )
+}
+
+/**
+ * 전사본 올려 자동 요약.
+ *
+ * 전화 상담은 길고 구어체여서 전사본 그대로는 아무도 다시 읽지 않는다.
+ * Point / Concerns / Solutions / Follow-up 으로 줄여 상담 내용 칸에 채운다.
+ * 채운 뒤에도 그냥 글이라 화면에서 바로 고칠 수 있다 — 요약을 믿고 쓰는 게 아니라
+ * 사람이 손볼 초안으로 쓴다.
+ *
+ * 올린 파일은 Storage 에 남겨 근거로 둔다. 요약이 이상하면 원문을 열어 본다.
+ *
+ * 음성 파일은 아직 못 받는다 — Claude 는 음성을 못 읽는다. 전사 서비스 키를 붙이면
+ * summarize-consult 앞단에 전사 단계만 더하면 되고, 이 화면은 그대로 쓴다.
+ */
+function TranscriptSummarize({
+  studentId, studentName, parentName, existingText, transcriptName, transcriptUrl,
+  onSummary, onClearFile,
+}: {
+  studentId: string
+  studentName: string
+  parentName?: string
+  existingText: string
+  transcriptName?: string
+  transcriptUrl?: string
+  onSummary: (s: ConsultSummary, file?: { url: string; name: string }) => void
+  onClearFile: () => void
+}) {
+  const summarize = useSummarizeConsult()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState<'' | 'reading' | 'summarizing'>('')
+  const [error, setError] = useState('')
+  const [note, setNote] = useState('')
+
+  const run = async (file: File) => {
+    setError(''); setNote('')
+    if (!isTranscriptFile(file.name)) {
+      setError('전사본은 txt · vtt · srt · pdf · md · csv 만 올릴 수 있습니다. 음성 파일은 아직 받지 못합니다.')
+      return
+    }
+    try {
+      setBusy('reading')
+      const text = await readTranscript(file)
+      if (text.trim().length < 40) {
+        setError('파일에서 읽어낼 글이 거의 없습니다. 스캔된 PDF 라면 텍스트로 저장해 올려 주세요.')
+        return
+      }
+      setBusy('summarizing')
+      // 파일 올리기와 요약을 함께 — 요약이 실패해도 원문은 남는다
+      const [url, sum] = await Promise.all([
+        uploadTranscript(studentId, file),
+        summarize.mutateAsync({ text, studentName, parentName }),
+      ])
+      onSummary(sum, { url, name: file.name })
+      if (!sum.point && !sum.concerns && !sum.solutions && !sum.followUp) {
+        setNote('요약할 상담 내용을 찾지 못했습니다. 파일은 올려 두었으니 내용은 직접 적어 주세요.')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '전사본 처리에 실패했습니다.')
+    } finally {
+      setBusy('')
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  const summarizeTyped = async () => {
+    setError(''); setNote('')
+    if (existingText.trim().length < 40) {
+      setError('요약할 내용이 너무 짧습니다. 40자 이상 적어 주세요.')
+      return
+    }
+    try {
+      setBusy('summarizing')
+      onSummary(await summarize.mutateAsync({ text: existingText, studentName, parentName }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '요약에 실패했습니다.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-dashed bg-background p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={fileRef} type="file" accept={TRANSCRIPT_ACCEPT} className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) run(f) }}
+        />
+        <Button
+          size="sm" variant="outline" className="gap-1.5" disabled={!!busy}
+          onClick={() => fileRef.current?.click()}
+        >
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+          {busy === 'reading' ? '파일 읽는 중…' : busy === 'summarizing' ? '요약 중…' : '전사본 올려 자동 요약'}
+        </Button>
+        <Button
+          size="sm" variant="ghost" className="gap-1.5" disabled={!!busy || existingText.trim().length < 40}
+          title="위에 적은 상담 내용을 Point / Concerns / Solutions / Follow-up 으로 정리합니다"
+          onClick={summarizeTyped}
+        >
+          <Sparkles className="size-3.5" /> 적은 내용 요약
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        txt · vtt · srt · pdf · md · csv — 줌·구글미트·팀즈·클로바노트의 자동 전사(.vtt / .srt)를
+        그대로 올리시면 화자와 시각이 함께 들어가 요약이 더 정확합니다.
+        <br />
+        Point / Concerns / Solutions 는 상담 내용 칸에, Follow-up 은 아래 칸에 채워집니다.
+        채운 뒤 직접 고치실 수 있습니다.
+      </p>
+      {transcriptName && (
+        <div className="flex items-center gap-2 text-xs">
+          <FileText className="size-3.5 text-muted-foreground shrink-0" />
+          {transcriptUrl ? (
+            <a href={transcriptUrl} target="_blank" rel="noreferrer" className="underline truncate">{transcriptName}</a>
+          ) : <span className="truncate">{transcriptName}</span>}
+          <Button size="sm" variant="ghost" className="size-5 shrink-0" title="첨부 떼기" onClick={onClearFile}>
+            <Trash2 className="size-3 text-red-400" />
+          </Button>
+        </div>
+      )}
+      {error && <p className="text-[11px] text-red-600 leading-relaxed">{error}</p>}
+      {note && <p className="text-[11px] text-amber-700 leading-relaxed">{note}</p>}
+    </div>
   )
 }
 
@@ -2068,6 +2217,15 @@ function ConsultLogItem({ consult, staff, staffName, canModify, canEdit, onUpdat
             <div className="mt-2 rounded border-l-2 border-sky-300 bg-sky-50/60 px-2 py-1.5">
               <div className="text-[11px] font-medium text-sky-800">Follow-up</div>
               <p className="text-sm whitespace-pre-wrap break-words">{consult.followUp}</p>
+            </div>
+          )}
+          {consult.transcriptUrl && (
+            <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <FileText className="size-3 shrink-0" />
+              <a href={consult.transcriptUrl} target="_blank" rel="noreferrer" className="underline truncate">
+                {consult.transcriptName || '전사본'}
+              </a>
+              <span className="shrink-0">— 요약의 근거</span>
             </div>
           )}
           {consult.sharedWith.length > 0 && (
