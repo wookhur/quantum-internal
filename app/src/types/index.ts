@@ -527,7 +527,11 @@ export interface ServiceStudent {
   email?: string
   parentEmail?: string
   nationality?: string
+  /** 학부모 성함. 예전에는 칸이 없어 '번호 이름' 을 함께 적었다 — 지금은 이름만 둔다. */
   parentName?: string
+  /** 학부모 연락처 */
+  parentPhone?: string
+  /** 학생 연락처 */
   contact?: string
   region?: string
   grade?: string

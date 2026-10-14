@@ -24,6 +24,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     parentEmail: (row.parent_email as string) || undefined,
     nationality: (row.nationality as string) || undefined,
     parentName: (row.parent_name as string) || undefined,
+    parentPhone: (row.parent_phone as string) || undefined,
     contact: (row.contact as string) || undefined,
     region: (row.region as string) || undefined,
     grade: (row.grade as string) || undefined,
@@ -152,6 +153,7 @@ export function useCreateServiceStudent() {
       parentEmail?: string
       nationality?: string
       parentName?: string
+      parentPhone?: string
       contact?: string
       region?: string
       grade?: string
@@ -185,6 +187,7 @@ export function useCreateServiceStudent() {
         parent_email: s.parentEmail,
         nationality: s.nationality,
         parent_name: s.parentName,
+        parent_phone: s.parentPhone,
         contact: s.contact,
         region: s.region,
         grade: s.grade,
@@ -231,6 +234,7 @@ export function useUpdateServiceStudent() {
       parentEmail?: string
       nationality?: string
       parentName?: string
+      parentPhone?: string
       contact?: string
       region?: string
       grade?: string
@@ -272,6 +276,7 @@ export function useUpdateServiceStudent() {
       if (rest.parentEmail !== undefined) update.parent_email = rest.parentEmail
       if (rest.nationality !== undefined) update.nationality = rest.nationality
       if (rest.parentName !== undefined) update.parent_name = rest.parentName
+      if (rest.parentPhone !== undefined) update.parent_phone = rest.parentPhone
       if (rest.contact !== undefined) update.contact = rest.contact
       if (rest.region !== undefined) update.region = rest.region
       if (rest.grade !== undefined) update.grade = rest.grade

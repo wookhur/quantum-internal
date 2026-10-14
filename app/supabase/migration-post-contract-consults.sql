@@ -132,3 +132,90 @@ create policy post_contract_consults_delete on public.post_contract_consults
   using (created_by = auth.uid() or public.is_admin_level());
 
 notify pgrst, 'reload schema';
+
+
+-- ============================================================
+-- 추가 (2026-10-14): 백필 규칙을 느슨하게 다시
+-- ------------------------------------------------------------
+-- 위 1번의 백필은 "계약 학생명 = 학생 이름" 완전 일치만 봤다. 계약서 학생명이
+-- '김은서 | Amy Kim' 처럼 한 칸에 한글·영문이 섞여 들어오므로 52명 중 14명만 붙었다.
+-- 앱이 쓰는 매칭(부분 포함까지 본다)과 같은 규칙으로 다시 돌린다.
+-- 학부모 이름은 (모)/(부) 표기와 번호·기호를 걷어내고 비교하고, 이름이 서로 다르면
+-- 연락처가 맞아야 붙인다(동명이인 방지).
+-- ============================================================
+with s as (
+  select id, name, korean_name, contact, parent_email, email,
+         lower(regexp_replace(coalesce(name, ''), '\s', '', 'g'))        as nm,
+         lower(regexp_replace(coalesce(korean_name, ''), '\s', '', 'g')) as kn,
+         regexp_replace(
+           regexp_replace(lower(coalesce(parent_name, '')), '\(\s*[모부]\s*\)', '', 'g'),
+           '[^가-힣a-z]', '', 'g') as pn,
+         regexp_replace(coalesce(contact, ''), '\D', '', 'g') as sph
+  from public.service_students
+  where lead_id is null
+),
+c as (
+  select id, lead_id, status, contract_date,
+         lower(regexp_replace(coalesce(student_name, ''), '\s', '', 'g')) as sn,
+         regexp_replace(
+           regexp_replace(lower(coalesce(contractor_name, '')), '\(\s*[모부]\s*\)', '', 'g'),
+           '[^가-힣a-z]', '', 'g') as pn,
+         coalesce(nullif(regexp_replace(coalesce(parent_phone, ''), '\D', '', 'g'), ''),
+                  nullif(regexp_replace(coalesce(phone, ''),        '\D', '', 'g'), '')) as cph
+  from public.contracts
+  where lead_id is not null
+),
+pair as (
+  select s.id as student_id, c.id as contract_id, c.lead_id, c.status, c.contract_date,
+         case
+           when c.sn in (s.nm, s.kn, s.nm || s.kn, s.kn || s.nm) then 0
+           when length(s.kn) >= 2 and position(s.kn in c.sn) > 0 then 1
+           else 2
+         end as rule_rank,
+         (s.pn <> '' and c.pn <> '' and s.pn <> c.pn) as pn_conflict,
+         (length(s.sph) >= 8 and length(coalesce(c.cph, '')) >= 8
+          and right(s.sph, 8) = right(c.cph, 8))      as ph_ok
+  from s
+  join c
+    on c.sn <> ''
+   and (
+         c.sn in (s.nm, s.kn, s.nm || s.kn, s.kn || s.nm)
+      or (length(s.kn) >= 2 and position(s.kn in c.sn) > 0)
+      or (length(s.nm) >= 3 and position(s.nm in c.sn) > 0)
+   )
+),
+ranked as (
+  select p.*,
+         row_number() over (
+           partition by student_id
+           order by rule_rank,
+                    case when status = 'cancelled' then 1 else 0 end,
+                    contract_date desc nulls last,
+                    contract_id
+         ) as rn
+  from pair p
+  where not p.pn_conflict or p.ph_ok
+)
+update public.service_students t
+set lead_id = r.lead_id
+from ranked r
+where t.id = r.student_id and r.rn = 1 and t.lead_id is null;
+
+-- 이태우 — 학부모가 'Kyounghee Moon'(학생정보) / '문경희'(계약서)로 같은 분인데
+-- 한글·영문 표기가 달라 기계로는 판단이 안 됐다. 이메일(moonkyonghee75@)로 확인됨.
+update public.service_students s
+set lead_id = c.lead_id
+from public.contracts c
+where s.lead_id is null
+  and c.lead_id is not null
+  and s.korean_name = '이태우'
+  and c.student_name like '이태우%'
+  and c.contractor_name = '문경희';
+
+-- 강윤영·홍예빈은 장학생이라 계약서가 없다 — 리드 연결 없이 두는 것이 정상이다.
+
+-- 학생 이름 양끝 공백 정리
+update public.service_students
+set name        = btrim(name),
+    korean_name = btrim(korean_name)
+where name <> btrim(name) or korean_name <> btrim(korean_name);

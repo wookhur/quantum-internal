@@ -28,6 +28,8 @@ import type { PaymentInstallment, InstallmentStatus } from '@/types'
 import { useLeads, useUpdateLead, useCreateLead } from '@/hooks/useLeads'
 import { findLeadForContract, MATCH_REASON_LABEL, type LeadMatch } from '@/lib/leadMatchForContract'
 import { cleanParentName } from '@/lib/contractAutofill'
+import { ContractPersonFields } from '@/components/ContractPersonFields'
+import { legacyContractPhone } from '@/lib/contractPerson'
 
 function StatusConfig(t: (key: string) => string): Record<InstallmentStatus, { label: string; color: string }> {
   return {
@@ -98,10 +100,16 @@ type InstallmentRow = { label: string; amount: string; dueDate: string }
 const INITIAL_CONTRACT_FORM = {
   contractorName: '',
   studentName: '',
+  studentNameEn: '',
+  studentPhone: '',
+  studentEmail: '',
+  parentPhone: '',
+  parentEmail: '',
   schoolName: '',
   gradeAtContract: '',
   contractDate: '',
   expiryDate: '',
+  /** 누구 것인지 구분 없던 옛 연락처 칸. 폼에서는 안 묻고 학부모→학생 순으로 채운다. */
   phone: '',
   address: '',
   totalAmount: '',
@@ -111,6 +119,17 @@ const INITIAL_CONTRACT_FORM = {
   salesRepName: '',
   serviceRep: '',
   notes: '',
+}
+
+/** 계약 저장 직후 '리드를 만들까요' 를 물을 때 쓸, 그 시점의 계약 내용 사본. */
+type LeadPromptSnapshot = {
+  studentName: string
+  contractorName: string
+  phone?: string
+  email?: string
+  schoolName: string
+  gradeAtContract: string
+  contractDate: string
 }
 
 function getDefaultInstallments(t: (key: string) => string): InstallmentRow[] {
@@ -235,6 +254,9 @@ export function ContractsPage() {
         schoolName: searchParams.get('schoolName') || '',
         gradeAtContract: searchParams.get('grade') || '',
         contractDate: new Date().toISOString().slice(0, 10),
+        // 리드의 연락처·이메일은 학부모 것이다 — 학부모 칸으로 넣는다.
+        parentPhone: searchParams.get('phone') || '',
+        parentEmail: searchParams.get('email') || '',
         phone: searchParams.get('phone') || '',
         salesRep: user?.id || '',
       })
@@ -249,9 +271,11 @@ export function ContractsPage() {
   const leadInfoRef = useRef<{ leadId: string; phone: string } | null>(null)
   // 계약 저장 직후 '이 리드가 맞나요?' 를 묻기 위한 후보
   // match: 같아 보이는 리드를 찾음 / none: 못 찾음 → 계약 정보로 새로 만들지 묻는다
+  // 저장 직후 폼은 비워진다. 그래서 물어보는 데 쓸 값은 그때 찍어 둔 사본(snap)으로 든다 —
+  // 전에는 비워진 폼을 읽어 이름 없는 리드가 만들어질 수 있었다.
   const [leadPrompt, setLeadPrompt] = useState<
-    | ({ kind: 'match'; contractId?: string } & LeadMatch)
-    | { kind: 'none'; contractId?: string }
+    | ({ kind: 'match'; contractId?: string; snap: LeadPromptSnapshot } & LeadMatch)
+    | { kind: 'none'; contractId?: string; snap: LeadPromptSnapshot }
     | null
   >(null)
   const { data: allLeads = [] } = useLeads()
@@ -266,13 +290,19 @@ export function ContractsPage() {
       {
         contractorName: form.contractorName,
         studentName: form.studentName,
+        studentNameEn: form.studentNameEn || undefined,
+        studentPhone: form.studentPhone || undefined,
+        studentEmail: form.studentEmail || undefined,
+        parentPhone: form.parentPhone || undefined,
+        parentEmail: form.parentEmail || undefined,
         schoolName: form.schoolName,
         gradeAtContract: form.gradeAtContract,
         contractDate: form.contractDate,
         expiryDate: form.expiryDate,
         totalAmount: Number(form.totalAmount) || undefined,
         currency: form.currency,
-        phone: form.phone || leadInfoRef.current?.phone || undefined,
+        // 구분 없던 옛 칸 — 옛 조회·엑셀·리드 매칭이 아직 이걸 본다
+        phone: legacyContractPhone(form, leadInfoRef.current?.phone),
         address: form.address || undefined,
         paymentAccount: form.paymentAccount,
         salesRep: form.salesRep || form.salesRepName.trim() || undefined,
@@ -318,18 +348,29 @@ export function ContractsPage() {
           // 찾아 물어본다 — 자동으로 바꾸지 않는다. 잘못 짚으면 엉뚱한 리드가 넘어간다.
           const alreadyLinked = leadInfoRef.current?.leadId
           if (!alreadyLinked) {
+            const snap: LeadPromptSnapshot = {
+              studentName: form.studentName,
+              contractorName: form.contractorName,
+              phone: legacyContractPhone(form, leadInfoRef.current?.phone),
+              email: form.parentEmail || form.studentEmail || undefined,
+              schoolName: form.schoolName,
+              gradeAtContract: form.gradeAtContract,
+              contractDate: form.contractDate,
+            }
             const hit = findLeadForContract(
               {
-                contractorName: form.contractorName,
-                studentName: form.studentName,
-                phone: form.phone || undefined,
+                contractorName: snap.contractorName,
+                studentName: snap.studentName,
+                phone: snap.phone,
+                studentEmail: form.studentEmail || undefined,
+                parentEmail: form.parentEmail || undefined,
               },
               allLeads.filter(l => l.pipelineStage !== 'contracted'),
             )
             // 찾았으면 "이 사람 맞나요", 못 찾았으면 "계약 정보로 리드를 만들까요".
             // 리드를 거치지 않고 바로 계약한 고객도 세일즈 목록에는 남아야 한다.
-            setLeadPrompt(hit ? { kind: 'match', ...hit, contractId: data?.id }
-                              : { kind: 'none', contractId: data?.id })
+            setLeadPrompt(hit ? { kind: 'match', ...hit, contractId: data?.id, snap }
+                              : { kind: 'none', contractId: data?.id, snap })
             return   // 물어보고 나서 이동한다
           }
           if (data?.id) navigate(`/consulting/clients/${data.id}`)
@@ -444,13 +485,14 @@ export function ContractsPage() {
                 </p>
                 <div className="rounded-md border p-3 text-sm space-y-1">
                   <p className="font-medium">
-                    {form.studentName || '—'}
-                    <span className="text-muted-foreground font-normal"> · 학부모 {cleanParentName(form.contractorName) || '—'}</span>
+                    {leadPrompt.snap.studentName || '—'}
+                    <span className="text-muted-foreground font-normal"> · 학부모 {cleanParentName(leadPrompt.snap.contractorName) || '—'}</span>
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {form.phone || '연락처 없음'}
-                    {form.schoolName ? ` · ${form.schoolName}` : ''}
-                    {form.gradeAtContract ? ` · ${form.gradeAtContract}` : ''}
+                    {leadPrompt.snap.phone || '연락처 없음'}
+                    {leadPrompt.snap.email ? ` · ${leadPrompt.snap.email}` : ''}
+                    {leadPrompt.snap.schoolName ? ` · ${leadPrompt.snap.schoolName}` : ''}
+                    {leadPrompt.snap.gradeAtContract ? ` · ${leadPrompt.snap.gradeAtContract}` : ''}
                   </p>
                 </div>
                 <DialogFooter>
@@ -465,19 +507,21 @@ export function ContractsPage() {
                     안 만듭니다
                   </Button>
                   <Button
-                    disabled={createLead.isPending || !form.contractorName}
+                    disabled={createLead.isPending || !leadPrompt.snap.contractorName}
                     onClick={() => {
                       const id = leadPrompt.contractId
+                      const snap = leadPrompt.snap
                       createLead.mutate(
                         {
-                          leadDate: form.contractDate || new Date().toISOString().slice(0, 10),
+                          leadDate: snap.contractDate || new Date().toISOString().slice(0, 10),
                           // '김지현(모)' 의 관계 표시는 떼고 넣는다 — 리드 목록에서
                           // 이름으로 찾을 때 걸리게.
-                          parentName: cleanParentName(form.contractorName),
-                          studentName: form.studentName,
-                          phone: form.phone,
-                          currentSchool: form.schoolName,
-                          grade: form.gradeAtContract,
+                          parentName: cleanParentName(snap.contractorName),
+                          studentName: snap.studentName,
+                          phone: snap.phone,
+                          email: snap.email,
+                          currentSchool: snap.schoolName,
+                          grade: snap.gradeAtContract,
                           sourceChannel: '계약관리',
                           pipelineStage: 'contracted',
                           memo: '계약관리에서 계약을 쓰면서 만든 리드입니다.',
@@ -518,7 +562,7 @@ export function ContractsPage() {
                 <DialogFooter>
                   <Button
                     variant="outline"
-                    onClick={() => setLeadPrompt({ kind: 'none', contractId: leadPrompt.contractId })}
+                    onClick={() => setLeadPrompt({ kind: 'none', contractId: leadPrompt.contractId, snap: leadPrompt.snap })}
                   >
                     아니요, 다른 사람입니다
                   </Button>
@@ -563,24 +607,10 @@ export function ContractsPage() {
                     📋 {t('contracts.fromLeadMessage')}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{t('contracts.parentName')}</Label>
-                    <Input
-                      placeholder={t('contracts.parentName')}
-                      value={form.contractorName}
-                      onChange={e => setForm(f => ({ ...f, contractorName: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t('contracts.studentName')}</Label>
-                    <Input
-                      placeholder={t('contracts.studentName')}
-                      value={form.studentName}
-                      onChange={e => setForm(f => ({ ...f, studentName: e.target.value }))}
-                    />
-                  </div>
-                </div>
+                <ContractPersonFields
+                  value={form}
+                  onChange={patch => setForm(f => ({ ...f, ...patch }))}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{t('contracts.schoolName')}</Label>
@@ -617,24 +647,14 @@ export function ContractsPage() {
                     />
                   </div>
                 </div>
-                {/* Phone & Address */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{t('common.phone')}</Label>
-                    <Input
-                      placeholder={t('common.phone')}
-                      value={form.phone}
-                      onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t('contracts.address')}</Label>
-                    <Input
-                      placeholder={t('contracts.address')}
-                      value={form.address}
-                      onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                    />
-                  </div>
+                {/* Address — 연락처는 위 사람 정보에서 학생·학부모로 나눠 받는다 */}
+                <div className="space-y-2">
+                  <Label>{t('contracts.address')}</Label>
+                  <Input
+                    placeholder={t('contracts.address')}
+                    value={form.address}
+                    onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+                  />
                 </div>
 
                 {/* Total Amount, Currency, Payment Account */}

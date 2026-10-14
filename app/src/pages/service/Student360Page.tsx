@@ -993,6 +993,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         <Field icon={<Mail className="size-4" />} label={t('student360.parentEmail')} value={student.parentEmail} />
         <Field icon={<Phone className="size-4" />} label={t('student360.contact')} value={student.contact} />
         <Field icon={<UserIcon className="size-4" />} label={t('student360.parentName')} value={student.parentName} />
+        <Field icon={<Phone className="size-4" />} label={t('student360.parentPhone')} value={student.parentPhone} />
         <Field label={t('student360.nationality')} value={student.nationality} />
         <Field label={t('student360.region')} value={regionFieldText(student)} />
         <Field label={t('student360.grade')} value={student.grade} />
@@ -2995,6 +2996,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
     parentEmail: student?.parentEmail || '',
     nationality: student?.nationality || '',
     parentName: student?.parentName || '',
+    parentPhone: student?.parentPhone || '',
     contact: student?.contact || '',
     region: student?.region || '',
     grade: student?.grade || '',
@@ -3039,6 +3041,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
       parentEmail: form.parentEmail || undefined,
       nationality: form.nationality || undefined,
       parentName: form.parentName || undefined,
+      parentPhone: form.parentPhone || undefined,
       contact: form.contact || undefined,
       region: form.region || undefined,
       grade: form.grade || undefined,
@@ -3090,6 +3093,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
           <LabeledInput label={t('student360.parentEmail')} value={form.parentEmail} onChange={v => set('parentEmail', v)} />
           <LabeledInput label={t('student360.contact')} value={form.contact} onChange={v => set('contact', v)} />
           <LabeledInput label={t('student360.parentName')} value={form.parentName} onChange={v => set('parentName', v)} />
+          <LabeledInput label={t('student360.parentPhone')} value={form.parentPhone} onChange={v => set('parentPhone', v)} />
           <LabeledInput label={t('student360.nationality')} value={form.nationality} onChange={v => set('nationality', v)} />
           <LabeledInput label={t('student360.region')} value={form.region} onChange={v => set('region', v)} />
           <LabeledInput label={t('student360.grade')} value={form.grade} onChange={v => set('grade', v)} />

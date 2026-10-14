@@ -31,6 +31,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCreateClawbacks, useAllClawbacks, useSetClawbackStatus, useDeleteClawback, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
+import { ContractPersonFields } from '@/components/ContractPersonFields'
+import { legacyContractPhone } from '@/lib/contractPerson'
 
 function todayLocalISO() {
   const d = new Date()
@@ -2376,7 +2378,10 @@ function ContractEditDialog({
     additionalServices: string
     address: string
     phone: string
+    studentNameEn: string
+    studentPhone: string
     studentEmail: string
+    parentPhone: string
     parentEmail: string
     totalAmount: number
     currency: 'KRW' | 'USD'
@@ -2398,7 +2403,11 @@ function ContractEditDialog({
     applicationCount: contract.applicationCount ? String(contract.applicationCount) : '',
     additionalServices: contract.additionalServices || '',
     address: contract.address || '',
+    studentNameEn: contract.studentNameEn || '',
+    studentPhone: contract.studentPhone || '',
     studentEmail: contract.studentEmail || '',
+    // 학부모 번호 칸이 비어 있으면 구분 없던 옛 phone 을 보여 준다(고치면서 제 칸으로 간다)
+    parentPhone: contract.parentPhone || contract.phone || '',
     parentEmail: contract.parentEmail || '',
     phone: contract.phone || '',
     totalAmount: contract.totalAmount ? String(contract.totalAmount) : '',
@@ -2429,9 +2438,13 @@ function ContractEditDialog({
       applicationCount: Number(form.applicationCount) || 0,
       additionalServices: form.additionalServices,
       address: form.address,
+      studentNameEn: form.studentNameEn,
+      studentPhone: form.studentPhone,
       studentEmail: form.studentEmail,
+      parentPhone: form.parentPhone,
       parentEmail: form.parentEmail,
-      phone: form.phone,
+      // 구분 없던 옛 칸 — 옛 조회·엑셀이 아직 이걸 본다
+      phone: legacyContractPhone(form, form.phone) || '',
       totalAmount: Number(form.totalAmount) || 0,
       currency: form.currency,
       paymentAccount: form.paymentAccount,
@@ -2445,15 +2458,11 @@ function ContractEditDialog({
         <DialogHeader>
           <DialogTitle>{t('contracts.editContract')}</DialogTitle>
         </DialogHeader>
+        <ContractPersonFields
+          value={form}
+          onChange={patch => setForm(f => ({ ...f, ...patch }))}
+        />
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs">{t('contracts.col.contractor')}</Label>
-            <Input value={form.contractorName} onChange={e => set('contractorName', e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">{t('contracts.col.student')}</Label>
-            <Input value={form.studentName} onChange={e => set('studentName', e.target.value)} />
-          </div>
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.school')}</Label>
             <Input value={form.schoolName} onChange={e => set('schoolName', e.target.value)} />
@@ -2486,21 +2495,9 @@ function ContractEditDialog({
             <Label className="text-xs">{t('contracts.additionalServices')}</Label>
             <Input value={form.additionalServices} onChange={e => set('additionalServices', e.target.value)} placeholder={t('contractDetail.additionalServicesPlaceholder')} />
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs">{t('contracts.contact')}</Label>
-            <Input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="010-0000-0000" />
-          </div>
-          <div className="space-y-1">
+          <div className="space-y-1 col-span-2">
             <Label className="text-xs">{t('contracts.address')}</Label>
             <Input value={form.address} onChange={e => set('address', e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">학생 이메일</Label>
-            <Input type="email" value={form.studentEmail} onChange={e => set('studentEmail', e.target.value)} placeholder="student@example.com" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">학부모 이메일</Label>
-            <Input type="email" value={form.parentEmail} onChange={e => set('parentEmail', e.target.value)} placeholder="parent@example.com" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.totalContractAmount')}</Label>
