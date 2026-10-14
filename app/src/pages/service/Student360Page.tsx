@@ -16,7 +16,7 @@ import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
-  Lock, Unlock, MessageSquare, Send, Flag, Headphones, Users,
+  Lock, Unlock, MessageSquare, Send, Flag, PhoneCall, Compass, Users,
   PenTool, BookText, FolderArchive, Languages, Download, Upload,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
@@ -1796,7 +1796,7 @@ function ConsultLogSection({ studentId, studentName, parentName, leadId, userId,
       <CardHeader className="py-3 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <Headphones className="size-4 text-sky-600" />
+            <PhoneCall className="size-4 text-sky-600" />
             계약 후 상담 기록
             <span className="text-muted-foreground font-normal text-sm">({consults.length})</span>
             {openCount > 0 && (
@@ -1875,7 +1875,9 @@ function ConsultLogSection({ studentId, studentName, parentName, leadId, userId,
                     value={form.consultantId || '__none__'}
                     onValueChange={v => setForm(f => ({ ...f, consultantId: v === '__none__' ? '' : (v ?? '') }))}
                   >
-                    <SelectTrigger className="h-8 w-40 text-sm"><SelectValue placeholder="선택" /></SelectTrigger>
+                    <SelectTrigger className="h-8 w-40 text-sm">
+                      <span className="truncate">{staffName(form.consultantId) || '선택'}</span>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">선택</SelectItem>
                       {staff.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -1885,7 +1887,9 @@ function ConsultLogSection({ studentId, studentName, parentName, leadId, userId,
                 <div className="flex items-center gap-1.5">
                   <Label className="text-xs text-muted-foreground">처리상태</Label>
                   <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: (v as ConsultStatus) ?? 'open' }))}>
-                    <SelectTrigger className="h-8 w-28 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-8 w-28 text-sm">
+                      <span className="truncate">{CONSULT_STATUS_LABEL[form.status]}</span>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="open">{CONSULT_STATUS_LABEL.open}</SelectItem>
                       <SelectItem value="done">{CONSULT_STATUS_LABEL.done}</SelectItem>
@@ -2179,7 +2183,9 @@ function ConsultLogItem({ consult, staff, staffName, canModify, canEdit, onUpdat
         <div className="flex flex-wrap items-center gap-2">
           <Input type="date" value={draft.date} className="h-8 w-36 text-sm" onChange={e => setDraft(d => ({ ...d, date: e.target.value }))} />
           <Select value={draft.consultantId || '__none__'} onValueChange={v => setDraft(d => ({ ...d, consultantId: v === '__none__' ? '' : (v ?? '') }))}>
-            <SelectTrigger className="h-8 w-40 text-sm"><SelectValue placeholder="상담자" /></SelectTrigger>
+            <SelectTrigger className="h-8 w-40 text-sm">
+              <span className="truncate">{staffName(draft.consultantId) || '상담자 선택'}</span>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">상담자 선택</SelectItem>
               {staff.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
@@ -3447,7 +3453,7 @@ function CoachingSection({ studentId, createdBy, canEdit, restrictMentorId }: {
       <CardHeader className="bg-emerald-50/40 rounded-t-xl py-3 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base">
-            <BookOpen className="size-5 text-emerald-600" />
+            <Compass className="size-5 text-emerald-600" />
             Mentor Support <span className="text-muted-foreground font-normal">({count})</span>
           </CardTitle>
           <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
