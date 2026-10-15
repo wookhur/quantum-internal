@@ -930,6 +930,12 @@ export function ContractsPage() {
                     : 0
                   const hasOverdue = contract.installments?.some(i => i.status === 'overdue') || false
                   const hasInstallments = (contract.installments?.length || 0) > 0
+                  // 납입 일정 합계가 총 계약금액과 어긋나는 계약 — 목록에서 바로 보이게.
+                  // 빠진 회차는 월별 수금·미수금 어디에도 안 잡혀 '없는 돈'이 된다.
+                  const baseInsts = (contract.installments || []).filter(i => i.category !== 'extra')
+                  const scheduleGap = !isCancelled && contract.status !== 'terminated' && contract.totalAmount > 0
+                    ? contract.totalAmount - baseInsts.reduce((sum, i) => sum + i.amount, 0)
+                    : 0
                   // 환불: 신청중(처리 대기)이 있으면 우선, 없고 완료만 있으면 완료
                   const refundState: 'requested' | 'completed' | null =
                     contract.installments?.some(i => i.refundStatus === 'requested') ? 'requested'
@@ -971,7 +977,25 @@ export function ContractsPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm">{contract.studentName}</TableCell>
+                        <TableCell className="text-sm">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {contract.studentName}
+                            {scheduleGap !== 0 && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] h-4 gap-0.5 bg-red-50 text-red-700 border-red-200"
+                                title={
+                                  baseInsts.length === 0
+                                    ? '납입 일정이 없습니다 — 이 계약 금액은 월별 수금·미수금에 잡히지 않습니다'
+                                    : `납입 일정 합계가 총 계약금액과 ${formatCurrency(Math.abs(scheduleGap), contract.currency)} 다릅니다`
+                                }
+                              >
+                                <AlertTriangle className="size-2.5" />
+                                {baseInsts.length === 0 ? '일정 없음' : '일정 불일치'}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {contract.contractDate || '-'}
                         </TableCell>

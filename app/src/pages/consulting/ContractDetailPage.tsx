@@ -1106,6 +1106,12 @@ export function ContractDetailPage() {
   const baseInstallments = installments.filter(i => i.category !== 'extra')
   const extraInstallments = installments.filter(i => i.category === 'extra')
   const basePaid = baseInstallments.reduce((s, i) => s + i.paidAmount, 0)
+  // 납입 일정의 합이 총 계약금액과 어긋나면 받을 돈 자체가 틀린 것이다.
+  // 빠진 회차는 월별 수금·미수금 어디에도 안 잡혀 '없는 돈'이 되고,
+  // 남는 회차는 학부모께 잘못된 금액으로 안내가 나간다. 눈에 띄게 알린다.
+  const baseTotal = baseInstallments.reduce((s, i) => s + i.amount, 0)
+  const scheduleWatched = !isCancelled && contract.status !== 'terminated' && contract.totalAmount > 0
+  const scheduleGap = scheduleWatched ? contract.totalAmount - baseTotal : 0
   const extraTotal = extraInstallments.reduce((s, i) => s + i.amount, 0)
   const extraPaid = extraInstallments.reduce((s, i) => s + i.paidAmount, 0)
 
@@ -1216,6 +1222,37 @@ export function ContractDetailPage() {
               </div>
             </div>
           </div>
+          {/* 납입 일정 합계가 총 계약금액과 다를 때 — 숨기지 않고 바로 알린다 */}
+          {baseInstallments.length > 0 && scheduleGap !== 0 && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+              <AlertTriangle className="size-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <b>납입 일정 합계가 총 계약금액과 다릅니다.</b>{' '}
+                총 계약금액 {formatCurrency(contract.totalAmount, contract.currency)} ·
+                납입 일정 합계 {formatCurrency(baseTotal, contract.currency)} ·
+                차액 <b>{formatCurrency(Math.abs(scheduleGap), contract.currency)}</b>
+                {scheduleGap > 0 ? ' 모자람' : ' 초과'}
+                <div className="text-xs text-red-700/80 mt-1">
+                  {scheduleGap > 0
+                    ? '빠진 회차는 월별 수금·미수금에 잡히지 않습니다. 계약서를 보고 회차를 채워 주세요.'
+                    : '남는 금액만큼 미수금이 실제보다 많게 잡힙니다. 계약서를 보고 금액을 맞춰 주세요.'}
+                </div>
+              </div>
+            </div>
+          )}
+          {scheduleWatched && baseInstallments.length === 0 && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+              <AlertTriangle className="size-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <b>납입 일정이 하나도 없습니다.</b>
+                <div className="text-xs text-red-700/80 mt-1">
+                  이 계약의 {formatCurrency(contract.totalAmount, contract.currency)} 은 월별 수금·미수금
+                  어디에도 잡히지 않습니다. 계약서의 Payment Schedule 을 보고 넣어 주세요.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 환불 기록 (계약 취소 시) */}
           {contract.refundAmount != null && contract.refundAmount > 0 && (
             <div className="mt-4 pt-4 border-t border-dashed border-amber-200 flex items-center gap-2 flex-wrap">
