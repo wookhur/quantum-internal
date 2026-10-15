@@ -178,6 +178,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/finance/dashboard', labelKey: 'nav.financeDashboard', module: 'finance', hidden: true },
   { path: '/consulting/clients', labelKey: 'nav.contractManagement', module: 'finance' },
   { path: '/consulting/collections', labelKey: 'nav.monthlyCollection', module: 'finance' },
+  { path: '/finance/receivables', labelKey: 'nav.receivables', module: 'finance' },
   { path: '/finance/invoices', labelKey: 'nav.invoices', module: 'finance' },
   { path: '/finance/receipts', labelKey: 'nav.receipts', module: 'finance' },
   { path: '/finance/wire-invoice', labelKey: 'nav.wireInvoice', module: 'finance' },
