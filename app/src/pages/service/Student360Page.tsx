@@ -1514,9 +1514,7 @@ function ECActivityDialog({ studentId, activity, trigger, createdBy, canEdit }: 
             <Select value={form.partner || null} onValueChange={v => set('partner', v)}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
-                {/* 가나다순으로 정렬하지 않는다 — 함께 쓰는 파트너가 떨어진다.
-                    보이는 순서는 lib/ecPartners 의 줄 순서가 그대로다. */}
-                {EC_PARTNERS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                {[...EC_PARTNERS].sort((a, b) => a.localeCompare(b, 'ko')).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
