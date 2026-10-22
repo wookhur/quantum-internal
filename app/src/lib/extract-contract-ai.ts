@@ -14,7 +14,12 @@ export interface ExtractedContractData {
   contractDate: string | null
   expiryDate: string | null
   address: string | null
+  /** 누구 것인지 구분 없던 옛 연락처 칸. 아래 학생·학부모 번호가 비었을 때만 쓴다. */
   phone: string | null
+  /** 학생 영문명. 엣지 함수가 아직 안 돌려주면 null 로 남고, 사람이 직접 적는다. */
+  studentNameEn: string | null
+  studentPhone: string | null
+  parentPhone: string | null
   /** 계약서에 적힌 이메일. 엣지 함수가 아직 안 돌려주면 null 로 남고, 사람이 직접 적을 수 있다. */
   studentEmail: string | null
   parentEmail: string | null
@@ -34,6 +39,9 @@ const EMPTY_RESULT: ExtractedContractData = {
   expiryDate: null,
   address: null,
   phone: null,
+  studentNameEn: null,
+  studentPhone: null,
+  parentPhone: null,
   studentEmail: null,
   parentEmail: null,
   totalAmount: null,

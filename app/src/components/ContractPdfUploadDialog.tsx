@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Upload, FileText, Loader2, CheckCircle2, AlertCircle, Plus, Trash2 } from 'lucide-react'
 import { extractPdfText, looksLikeScannedPdf, renderPdfPagesWithinBudget } from '@/lib/pdf-extract'
 import { extractContractFields, extractContractFieldsFromImages, type ExtractedContractData } from '@/lib/extract-contract-ai'
+import { ContractPersonFields } from '@/components/ContractPersonFields'
+import { legacyContractPhone, type ContractPersonValues } from '@/lib/contractPerson'
 import { useCreateContractFull } from '@/hooks/useContracts'
 import { useCreateInstallments } from '@/hooks/useInstallments'
 import { formatCurrency } from '@/types'
@@ -35,6 +37,9 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
     expiryDate: null,
     address: null,
     phone: null,
+    studentNameEn: null,
+    studentPhone: null,
+    parentPhone: null,
     studentEmail: null,
     parentEmail: null,
     totalAmount: null,
@@ -60,7 +65,9 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
     setForm({
       contractorName: null, studentName: null, schoolName: null,
       gradeAtContract: null, contractDate: null, expiryDate: null,
-      address: null, phone: null, studentEmail: null, parentEmail: null, totalAmount: null,
+      address: null, phone: null,
+      studentNameEn: null, studentPhone: null, parentPhone: null,
+      studentEmail: null, parentEmail: null, totalAmount: null,
       currency: null, paymentAccount: null, notes: null,
       installments: [],
     })
@@ -160,9 +167,16 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
       contractDate: form.contractDate,
       expiryDate: form.expiryDate,
       address: form.address || undefined,
-      phone: form.phone || undefined,
+      studentNameEn: form.studentNameEn || undefined,
+      studentPhone: form.studentPhone || undefined,
       studentEmail: form.studentEmail || undefined,
+      parentPhone: form.parentPhone || undefined,
       parentEmail: form.parentEmail || undefined,
+      // 구분 없던 옛 칸 — 옛 조회·엑셀이 아직 이걸 본다
+      phone: legacyContractPhone(
+        { parentPhone: form.parentPhone || '', studentPhone: form.studentPhone || '' },
+        form.phone || undefined,
+      ),
       totalAmount: form.totalAmount || undefined,
       currency: form.currency || undefined,
       paymentAccount: form.paymentAccount || undefined,
@@ -259,29 +273,25 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
               <span>{t('contractPdf.reviewNote').replace('{fileName}', fileName)}</span>
             </div>
 
-            {/* Required fields */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">
-                  {t('contractPdf.contractorName')} <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.contractorName || ''}
-                  onChange={(e) => updateField('contractorName', e.target.value || null)}
-                  className={!form.contractorName ? 'border-destructive' : ''}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">
-                  {t('contractPdf.studentName')} <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  value={form.studentName || ''}
-                  onChange={(e) => updateField('studentName', e.target.value || null)}
-                  className={!form.studentName ? 'border-destructive' : ''}
-                />
-              </div>
-            </div>
+            {/* 사람 정보 — 학생·학부모를 각자의 칸으로 */}
+            <ContractPersonFields
+              value={{
+                studentName: form.studentName || '',
+                studentNameEn: form.studentNameEn || '',
+                studentPhone: form.studentPhone || '',
+                studentEmail: form.studentEmail || '',
+                contractorName: form.contractorName || '',
+                parentPhone: form.parentPhone || '',
+                parentEmail: form.parentEmail || '',
+              }}
+              onChange={(patch) => setForm((prev) => {
+                const next = { ...prev }
+                for (const [k, v] of Object.entries(patch)) {
+                  next[k as keyof ContractPersonValues] = (v as string) || null
+                }
+                return next
+              })}
+            />
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -330,37 +340,11 @@ export function ContractPdfUploadDialog({ open, onOpenChange }: Props) {
 
             {/* Optional fields */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">{t('contractPdf.phone')}</Label>
-                <Input
-                  value={form.phone || ''}
-                  onChange={(e) => updateField('phone', e.target.value || null)}
-                  placeholder="010-0000-0000"
-                />
-              </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 col-span-2">
                 <Label className="text-xs">{t('contractPdf.address')}</Label>
                 <Input
                   value={form.address || ''}
                   onChange={(e) => updateField('address', e.target.value || null)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">학생 이메일</Label>
-                <Input
-                  type="email"
-                  value={form.studentEmail || ''}
-                  onChange={(e) => updateField('studentEmail', e.target.value || null)}
-                  placeholder="student@example.com"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">학부모 이메일</Label>
-                <Input
-                  type="email"
-                  value={form.parentEmail || ''}
-                  onChange={(e) => updateField('parentEmail', e.target.value || null)}
-                  placeholder="parent@example.com"
                 />
               </div>
             </div>

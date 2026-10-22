@@ -31,6 +31,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCreateClawbacks, useAllClawbacks, useSetClawbackStatus, useDeleteClawback, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
+import { ContractPersonFields } from '@/components/ContractPersonFields'
+import { legacyContractPhone } from '@/lib/contractPerson'
 
 function todayLocalISO() {
   const d = new Date()
@@ -1104,6 +1106,12 @@ export function ContractDetailPage() {
   const baseInstallments = installments.filter(i => i.category !== 'extra')
   const extraInstallments = installments.filter(i => i.category === 'extra')
   const basePaid = baseInstallments.reduce((s, i) => s + i.paidAmount, 0)
+  // 납입 일정의 합이 총 계약금액과 어긋나면 받을 돈 자체가 틀린 것이다.
+  // 빠진 회차는 월별 수금·미수금 어디에도 안 잡혀 '없는 돈'이 되고,
+  // 남는 회차는 학부모께 잘못된 금액으로 안내가 나간다. 눈에 띄게 알린다.
+  const baseTotal = baseInstallments.reduce((s, i) => s + i.amount, 0)
+  const scheduleWatched = !isCancelled && contract.status !== 'terminated' && contract.totalAmount > 0
+  const scheduleGap = scheduleWatched ? contract.totalAmount - baseTotal : 0
   const extraTotal = extraInstallments.reduce((s, i) => s + i.amount, 0)
   const extraPaid = extraInstallments.reduce((s, i) => s + i.paidAmount, 0)
 
@@ -1214,6 +1222,37 @@ export function ContractDetailPage() {
               </div>
             </div>
           </div>
+          {/* 납입 일정 합계가 총 계약금액과 다를 때 — 숨기지 않고 바로 알린다 */}
+          {baseInstallments.length > 0 && scheduleGap !== 0 && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+              <AlertTriangle className="size-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <b>납입 일정 합계가 총 계약금액과 다릅니다.</b>{' '}
+                총 계약금액 {formatCurrency(contract.totalAmount, contract.currency)} ·
+                납입 일정 합계 {formatCurrency(baseTotal, contract.currency)} ·
+                차액 <b>{formatCurrency(Math.abs(scheduleGap), contract.currency)}</b>
+                {scheduleGap > 0 ? ' 모자람' : ' 초과'}
+                <div className="text-xs text-red-700/80 mt-1">
+                  {scheduleGap > 0
+                    ? '빠진 회차는 월별 수금·미수금에 잡히지 않습니다. 계약서를 보고 회차를 채워 주세요.'
+                    : '남는 금액만큼 미수금이 실제보다 많게 잡힙니다. 계약서를 보고 금액을 맞춰 주세요.'}
+                </div>
+              </div>
+            </div>
+          )}
+          {scheduleWatched && baseInstallments.length === 0 && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+              <AlertTriangle className="size-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <b>납입 일정이 하나도 없습니다.</b>
+                <div className="text-xs text-red-700/80 mt-1">
+                  이 계약의 {formatCurrency(contract.totalAmount, contract.currency)} 은 월별 수금·미수금
+                  어디에도 잡히지 않습니다. 계약서의 Payment Schedule 을 보고 넣어 주세요.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 환불 기록 (계약 취소 시) */}
           {contract.refundAmount != null && contract.refundAmount > 0 && (
             <div className="mt-4 pt-4 border-t border-dashed border-amber-200 flex items-center gap-2 flex-wrap">
@@ -2376,7 +2415,10 @@ function ContractEditDialog({
     additionalServices: string
     address: string
     phone: string
+    studentNameEn: string
+    studentPhone: string
     studentEmail: string
+    parentPhone: string
     parentEmail: string
     totalAmount: number
     currency: 'KRW' | 'USD'
@@ -2398,7 +2440,11 @@ function ContractEditDialog({
     applicationCount: contract.applicationCount ? String(contract.applicationCount) : '',
     additionalServices: contract.additionalServices || '',
     address: contract.address || '',
+    studentNameEn: contract.studentNameEn || '',
+    studentPhone: contract.studentPhone || '',
     studentEmail: contract.studentEmail || '',
+    // 학부모 번호 칸이 비어 있으면 구분 없던 옛 phone 을 보여 준다(고치면서 제 칸으로 간다)
+    parentPhone: contract.parentPhone || contract.phone || '',
     parentEmail: contract.parentEmail || '',
     phone: contract.phone || '',
     totalAmount: contract.totalAmount ? String(contract.totalAmount) : '',
@@ -2429,9 +2475,13 @@ function ContractEditDialog({
       applicationCount: Number(form.applicationCount) || 0,
       additionalServices: form.additionalServices,
       address: form.address,
+      studentNameEn: form.studentNameEn,
+      studentPhone: form.studentPhone,
       studentEmail: form.studentEmail,
+      parentPhone: form.parentPhone,
       parentEmail: form.parentEmail,
-      phone: form.phone,
+      // 구분 없던 옛 칸 — 옛 조회·엑셀이 아직 이걸 본다
+      phone: legacyContractPhone(form, form.phone) || '',
       totalAmount: Number(form.totalAmount) || 0,
       currency: form.currency,
       paymentAccount: form.paymentAccount,
@@ -2445,15 +2495,11 @@ function ContractEditDialog({
         <DialogHeader>
           <DialogTitle>{t('contracts.editContract')}</DialogTitle>
         </DialogHeader>
+        <ContractPersonFields
+          value={form}
+          onChange={patch => setForm(f => ({ ...f, ...patch }))}
+        />
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label className="text-xs">{t('contracts.col.contractor')}</Label>
-            <Input value={form.contractorName} onChange={e => set('contractorName', e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">{t('contracts.col.student')}</Label>
-            <Input value={form.studentName} onChange={e => set('studentName', e.target.value)} />
-          </div>
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.school')}</Label>
             <Input value={form.schoolName} onChange={e => set('schoolName', e.target.value)} />
@@ -2486,21 +2532,9 @@ function ContractEditDialog({
             <Label className="text-xs">{t('contracts.additionalServices')}</Label>
             <Input value={form.additionalServices} onChange={e => set('additionalServices', e.target.value)} placeholder={t('contractDetail.additionalServicesPlaceholder')} />
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs">{t('contracts.contact')}</Label>
-            <Input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="010-0000-0000" />
-          </div>
-          <div className="space-y-1">
+          <div className="space-y-1 col-span-2">
             <Label className="text-xs">{t('contracts.address')}</Label>
             <Input value={form.address} onChange={e => set('address', e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">학생 이메일</Label>
-            <Input type="email" value={form.studentEmail} onChange={e => set('studentEmail', e.target.value)} placeholder="student@example.com" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">학부모 이메일</Label>
-            <Input type="email" value={form.parentEmail} onChange={e => set('parentEmail', e.target.value)} placeholder="parent@example.com" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">{t('contracts.totalContractAmount')}</Label>

@@ -18,6 +18,7 @@ import { GamePage } from '@/pages/common/GamePage'
 import { ContractsPage } from '@/pages/consulting/ContractsPage'
 import { ContractDetailPage } from '@/pages/consulting/ContractDetailPage'
 import { MonthlyCollectionPage } from '@/pages/consulting/MonthlyCollectionPage'
+import { ReceivablesPage } from '@/pages/finance/ReceivablesPage'
 import { InvoicesPage } from '@/pages/finance/InvoicesPage'
 import { ReceiptsPage } from '@/pages/finance/ReceiptsPage'
 import { WireInvoicePage } from '@/pages/finance/WireInvoicePage'
@@ -124,6 +125,7 @@ export default function App() {
                 <Route path="/consulting/clients" element={<ContractsPage />} />
                 <Route path="/consulting/clients/:id" element={<ContractDetailPage />} />
                 <Route path="/consulting/collections" element={<MonthlyCollectionPage />} />
+                <Route path="/finance/receivables" element={<ReceivablesPage />} />
                 <Route path="/finance/dashboard" element={<FinanceDashboardPage />} />
                 <Route path="/finance/invoices" element={<InvoicesPage />} />
                 <Route path="/finance/receipts" element={<ReceiptsPage />} />

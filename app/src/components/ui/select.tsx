@@ -4,7 +4,54 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+/**
+ * 고른 값의 '이름'을 찾아 주는 장치.
+ *
+ * @base-ui 의 Select.Value 는 고른 값을 **그대로** 그린다. 그래서 값이 id 인
+ * 드롭다운은 화면에 uuid 가 보였고('d26cad07-580e-4…'), 값이 영문 키인 드롭다운은
+ * '미처리' 대신 'open' 이 보였다. 쓰는 곳마다 라벨을 직접 그려 막아 왔지만
+ * 그렇게 막아야 할 곳이 100군데 가까이 된다.
+ *
+ * 그래서 Select 가 제 children 에서 SelectItem 의 (값 → 보여 줄 내용)을 미리
+ * 모아 두고, SelectValue 가 그걸 꺼내 쓴다. 쓰는 쪽 코드는 하나도 바꾸지 않는다.
+ */
+const SelectLabels = React.createContext<Map<string, React.ReactNode> | null>(null)
+
+/** children 을 훑어 SelectItem 의 값과 보여 줄 내용을 모은다. */
+function collectItemLabels(node: React.ReactNode, out: Map<string, React.ReactNode>) {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return
+    const props = child.props as { value?: unknown; children?: React.ReactNode }
+    if (child.type === SelectItem) {
+      if (props.value !== undefined && props.value !== null) {
+        out.set(String(props.value), props.children)
+      }
+      return   // 항목 안쪽까지 들어갈 일은 없다
+    }
+    // 조각(Fragment)·배열·조건부로 감싸인 항목도 찾아낸다.
+    // 다른 컴포넌트가 항목을 만들어 내면 여기서는 안 보인다 — 그럴 땐 예전대로 동작한다.
+    if (props.children && typeof props.children !== "function") {
+      collectItemLabels(props.children, out)
+    }
+  })
+}
+
+function Select<Value, Multiple extends boolean | undefined = false>({
+  children,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  const labels = React.useMemo(() => {
+    const m = new Map<string, React.ReactNode>()
+    collectItemLabels(children, m)
+    return m
+  }, [children])
+
+  return (
+    <SelectLabels.Provider value={labels}>
+      <SelectPrimitive.Root {...props}>{children}</SelectPrimitive.Root>
+    </SelectLabels.Provider>
+  )
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
@@ -16,13 +63,45 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+/** 목록에 없는 값이 uuid 면 자리글을 보여 준다 — 사람에게 아무 뜻이 없는 글자다. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function SelectValue({
+  className,
+  children,
+  placeholder,
+  ...props
+}: SelectPrimitive.Value.Props) {
+  const labels = React.useContext(SelectLabels)
+  const cls = cn("flex flex-1 text-left", className)
+
+  // 쓰는 쪽이 직접 그리겠다고 하면 그대로 둔다
+  if (children !== undefined) {
+    return (
+      <SelectPrimitive.Value data-slot="select-value" className={cls} placeholder={placeholder} {...props}>
+        {children}
+      </SelectPrimitive.Value>
+    )
+  }
+
+  const labelFor = (v: unknown): React.ReactNode => {
+    const key = String(v)
+    const hit = labels?.get(key)
+    if (hit !== undefined) return hit
+    return UUID.test(key) ? null : key
+  }
+
   return (
-    <SelectPrimitive.Value
-      data-slot="select-value"
-      className={cn("flex flex-1 text-left", className)}
-      {...props}
-    />
+    <SelectPrimitive.Value data-slot="select-value" className={cls} {...props}>
+      {(value: unknown) => {
+        if (Array.isArray(value)) {
+          const parts = value.map(labelFor).filter((x) => x !== null && x !== "")
+          return parts.length ? parts.map((p, i) => <React.Fragment key={i}>{i > 0 ? ", " : ""}{p}</React.Fragment>) : placeholder
+        }
+        if (value === null || value === undefined || value === "") return placeholder
+        return labelFor(value) ?? placeholder
+      }}
+    </SelectPrimitive.Value>
   )
 }
 

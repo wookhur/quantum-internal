@@ -16,7 +16,7 @@ import {
   Search, Plus, Pencil, Trash2, GraduationCap, Phone, Mail, User as UserIcon,
   CalendarDays, FileText, NotebookPen, Link2, Copy, Check, ExternalLink, Power,
   Sparkles, Loader2, ChevronDown, ChevronUp, Hourglass, AlertTriangle, Star, BookOpen,
-  Lock, Unlock, MessageSquare, Send, Flag,
+  Lock, Unlock, MessageSquare, Send, Flag, PhoneCall, Compass, Users,
   PenTool, BookText, FolderArchive, Languages, Download, Upload,
 } from 'lucide-react'
 import { useSearchParams, useLocation } from 'react-router-dom'
@@ -81,6 +81,16 @@ import {
   useIssueReports, useCreateIssueReport, useUpdateIssueReport, useDeleteIssueReport,
   useCreateIssueComment, useDeleteIssueComment, type IssueReport,
 } from '@/hooks/useIssueReports'
+import {
+  usePostContractConsults, usePreContractNotes, useCreatePostContractConsult,
+  useUpdatePostContractConsult, useDeletePostContractConsult,
+  useSummarizeConsult, uploadTranscript,
+  CONSULT_STATUS_LABEL, type ConsultStatus, type PostContractConsult,
+} from '@/hooks/usePostContractConsults'
+import {
+  readTranscript, isTranscriptFile, summaryToContent,
+  TRANSCRIPT_ACCEPT, type ConsultSummary,
+} from '@/lib/transcriptText'
 import type {
   ServiceStudent, ServiceMeeting, ServiceReportStatus, ServiceDiaryEntry,
   ServiceReportCategory,
@@ -770,6 +780,15 @@ export function Student360Page() {
           ) : (
           <div className="space-y-4">
             <ProfileSection student={selected} linkedContract={linkedContract} onDeleted={() => setSelectedId(null)} createdBy={user?.id} canEdit={canEdit} />
+            {/* 계약 전 콜드콜 기록을 이어 보고 계약 후 상담을 적는 자리.
+                리드 연결은 service_students.lead_id 가 먼저, 없으면 연결된 계약의 lead_id 로 되돌아간다. */}
+            <ConsultLogSection
+              studentId={selected.id} studentName={studentPickerLabel(selected)}
+              parentName={selected.parentName}
+              leadId={selected.leadId || linkedContract?.leadId}
+              userId={user?.id} userName={user?.name}
+              isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit}
+            />
             <EssayServiceSection studentId={selected.id} applicationCount={linkedContract?.applicationCount ?? selected.applicationCount} defaultConsultant={consultantName(selected.assignedConsultant)} createdBy={user?.id} canEdit={canEdit} locked={!!selected.essayLocked} />
             <ECServicesSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
             <AcademicSupportSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
@@ -980,6 +999,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         <Field icon={<Mail className="size-4" />} label={t('student360.parentEmail')} value={student.parentEmail} />
         <Field icon={<Phone className="size-4" />} label={t('student360.contact')} value={student.contact} />
         <Field icon={<UserIcon className="size-4" />} label={t('student360.parentName')} value={student.parentName} />
+        <Field icon={<Phone className="size-4" />} label={t('student360.parentPhone')} value={student.parentPhone} />
         <Field label={t('student360.nationality')} value={student.nationality} />
         <Field label={t('student360.region')} value={regionFieldText(student)} />
         <Field label={t('student360.grade')} value={student.grade} />
@@ -1699,6 +1719,552 @@ function AppRow({ studentId, app, index, canEdit }: { studentId: string; app?: S
           <Trash2 className="size-3.5" />
         </button>
       )}
+    </div>
+  )
+}
+
+// ────────────────────────── 계약 후 상담 기록 ──────────────────────────
+// 계약 전 통화 내용(학부모 성향·스타일·특이사항)은 콜드콜의 연락 기록에 쌓인다.
+// 계약이 되면 담당이 서비스팀으로 넘어가는데, 그 내용을 다시 물어봐야 했다.
+// 여기서 계약 전 기록을 읽기 전용으로 그대로 이어 보고, 계약 후 상담을 같은 자리에 이어 적는다.
+const CONTACT_TYPE_LABEL: Record<string, string> = {
+  call: '전화', sms: '문자', katalk: '카톡', email: '이메일',
+  note: '메모', meeting: '미팅', consultation: '상담',
+}
+
+function ConsultLogSection({ studentId, studentName, parentName, leadId, userId, userName, isAdmin, canEdit }: {
+  studentId: string
+  studentName: string
+  parentName?: string
+  leadId?: string
+  userId?: string
+  userName?: string
+  isAdmin: boolean
+  canEdit: boolean
+}) {
+  const { data: consults = [] } = usePostContractConsults(studentId)
+  const { data: preNotes = [] } = usePreContractNotes(leadId)
+  const { data: profiles = [] } = useProfiles()
+  const create = useCreatePostContractConsult()
+  const update = useUpdatePostContractConsult()
+  const remove = useDeletePostContractConsult()
+
+  const [expanded, setExpanded] = useState(false)
+  const [showPre, setShowPre] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const today = todayKST()
+  const blank = {
+    date: today, content: '', followUp: '',
+    // 상담자는 로그인한 사람으로 미리 찍어 두지 않는다 — 대신 상담한 사람이 적는
+    // 경우가 있어, 안 고르고 넘어가면 엉뚱한 사람이 상담자로 남는다.
+    status: 'open' as ConsultStatus, consultantId: '', sharedWith: [] as string[],
+    transcriptUrl: '', transcriptName: '',
+  }
+  const [form, setForm] = useState(blank)
+
+  // 공유 대상자·상담자 후보 = 재직 중인 직원 전원
+  const staff = useMemo(
+    () => profiles.filter(p => !p.resigned).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')),
+    [profiles],
+  )
+  const staffName = (id?: string) => staff.find(p => p.id === id)?.name
+    || profiles.find(p => p.id === id)?.name
+    || ''
+
+  const openCount = consults.filter(c => c.status === 'open').length
+
+  const submit = () => {
+    if (!form.content.trim()) return
+    create.mutate(
+      {
+        studentId, studentName,
+        consultDate: form.date,
+        content: form.content.trim(),
+        followUp: form.followUp.trim() || undefined,
+        transcriptUrl: form.transcriptUrl || undefined,
+        transcriptName: form.transcriptName || undefined,
+        status: form.status,
+        consultantId: form.consultantId || undefined,
+        sharedWith: form.sharedWith,
+        createdBy: userId,
+        authorName: userName,
+      },
+      { onSuccess: () => { setForm({ ...blank }); setShowForm(false) } },
+    )
+  }
+
+  return (
+    <Card className="border-sky-200">
+      <CardHeader className="py-3 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <PhoneCall className="size-4 text-sky-600" />
+            계약 후 상담 기록
+            <span className="text-muted-foreground font-normal text-sm">({consults.length})</span>
+            {openCount > 0 && (
+              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
+                미처리 {openCount}
+              </Badge>
+            )}
+            {preNotes.length > 0 && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                계약 전 {preNotes.length}
+              </Badge>
+            )}
+          </CardTitle>
+          <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>
+            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </Button>
+        </div>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="space-y-3 pt-0">
+          {/* ── 계약 전 콜드콜 기록 — 읽기 전용. 콜드콜 원본을 그대로 읽어 온다 ── */}
+          {leadId && preNotes.length > 0 && (
+            <div className="rounded-md border bg-muted/30">
+              <button
+                onClick={() => setShowPre(v => !v)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-left"
+              >
+                <Phone className="size-3.5 text-muted-foreground" />
+                계약 전 상담 기록 (콜드콜)
+                <span className="text-muted-foreground font-normal">{preNotes.length}건</span>
+                <Badge variant="outline" className="text-[10px] ml-1">읽기 전용</Badge>
+                {showPre ? <ChevronUp className="size-3.5 ml-auto" /> : <ChevronDown className="size-3.5 ml-auto" />}
+              </button>
+              {showPre && (
+                <div className="px-3 pb-3 space-y-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    콜드콜의 원본 기록입니다. 여기서는 고치지 않습니다 — 고치려면 세일즈 &gt; 콜드콜에서 수정하세요.
+                  </p>
+                  {preNotes.map(n => (
+                    <div key={n.id} className="rounded border bg-background p-2">
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-0.5">
+                        <span>{n.createdAt.slice(0, 10)}</span>
+                        <Badge variant="outline" className="text-[10px] h-4 px-1">
+                          {CONTACT_TYPE_LABEL[n.activityType] || n.activityType}
+                        </Badge>
+                        {n.title && <span className="truncate">{n.title}</span>}
+                        {n.authorName && <span className="ml-auto shrink-0">{n.authorName}</span>}
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap break-words">{n.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {!leadId && (
+            <p className="text-[11px] text-muted-foreground">
+              이 학생과 연결된 리드가 없어 계약 전 콜드콜 기록을 가져오지 못했습니다.
+            </p>
+          )}
+
+          {/* ── 계약 후 상담 입력 ── */}
+          {canEdit && (showForm ? (
+            <div className="rounded-md border p-3 space-y-2.5 bg-muted/30">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs text-muted-foreground">상담일</Label>
+                  <Input
+                    type="date" value={form.date} className="h-8 w-36 text-sm"
+                    onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))}
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs text-muted-foreground">상담자</Label>
+                  <Select
+                    value={form.consultantId || '__none__'}
+                    onValueChange={v => setForm(f => ({ ...f, consultantId: v === '__none__' ? '' : (v ?? '') }))}
+                  >
+                    <SelectTrigger className="h-8 w-40 text-sm">
+                      <span className="truncate">{staffName(form.consultantId) || '선택'}</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">선택</SelectItem>
+                      {staff.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs text-muted-foreground">처리상태</Label>
+                  <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: (v as ConsultStatus) ?? 'open' }))}>
+                    <SelectTrigger className="h-8 w-28 text-sm">
+                      <span className="truncate">{CONSULT_STATUS_LABEL[form.status]}</span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">{CONSULT_STATUS_LABEL.open}</SelectItem>
+                      <SelectItem value="done">{CONSULT_STATUS_LABEL.done}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <TranscriptSummarize
+                studentId={studentId} studentName={studentName} parentName={parentName}
+                existingText={form.content}
+                transcriptName={form.transcriptName}
+                transcriptUrl={form.transcriptUrl}
+                onSummary={(sum, file) => setForm(f => ({
+                  ...f,
+                  content: summaryToContent(sum) || f.content,
+                  followUp: sum.followUp || f.followUp,
+                  transcriptUrl: file?.url ?? f.transcriptUrl,
+                  transcriptName: file?.name ?? f.transcriptName,
+                }))}
+                onClearFile={() => setForm(f => ({ ...f, transcriptUrl: '', transcriptName: '' }))}
+              />
+              <div>
+                <Label className="text-xs text-muted-foreground">상담 내용</Label>
+                <Textarea
+                  value={form.content} rows={8} className="text-sm mt-1"
+                  placeholder="학부모님과 나눈 상담 내용을 적어 주세요. 전사본을 올리면 Point / Concerns / Solutions 로 요약해 여기 채워 둡니다."
+                  onChange={(e) => setForm(f => ({ ...f, content: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Follow-up commitments (약속한 것)</Label>
+                <Textarea
+                  value={form.followUp} rows={2} className="text-sm mt-1"
+                  placeholder="예: 다음 주까지 원서 목록 정리해 보내기"
+                  onChange={(e) => setForm(f => ({ ...f, followUp: e.target.value }))}
+                />
+              </div>
+              <SharePicker
+                staff={staff} selected={form.sharedWith}
+                onChange={(ids) => setForm(f => ({ ...f, sharedWith: ids }))}
+              />
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => { setForm({ ...blank }); setShowForm(false) }}>취소</Button>
+                <Button size="sm" onClick={submit} disabled={!form.content.trim() || create.isPending}>등록</Button>
+              </div>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowForm(true)}>
+              <Plus className="size-3.5" /> 상담 기록 추가
+            </Button>
+          ))}
+
+          {consults.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">계약 후 상담 기록이 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {consults.map(c => (
+                <ConsultLogItem
+                  key={c.id} consult={c}
+                  staff={staff} staffName={staffName}
+                  canModify={isAdmin || c.createdBy === userId}
+                  canEdit={canEdit}
+                  onUpdate={(patch) => update.mutate({ id: c.id, studentId, studentName, authorName: userName, previousSharedWith: c.sharedWith, ...patch })}
+                  onDelete={() => { if (confirm('이 상담 기록을 삭제할까요?')) remove.mutate({ id: c.id, studentId }) }}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  )
+}
+
+/**
+ * 전사본 올려 자동 요약.
+ *
+ * 전화 상담은 길고 구어체여서 전사본 그대로는 아무도 다시 읽지 않는다.
+ * Point / Concerns / Solutions / Follow-up 으로 줄여 상담 내용 칸에 채운다.
+ * 채운 뒤에도 그냥 글이라 화면에서 바로 고칠 수 있다 — 요약을 믿고 쓰는 게 아니라
+ * 사람이 손볼 초안으로 쓴다.
+ *
+ * 올린 파일은 Storage 에 남겨 근거로 둔다. 요약이 이상하면 원문을 열어 본다.
+ *
+ * 음성 파일은 아직 못 받는다 — Claude 는 음성을 못 읽는다. 전사 서비스 키를 붙이면
+ * summarize-consult 앞단에 전사 단계만 더하면 되고, 이 화면은 그대로 쓴다.
+ */
+function TranscriptSummarize({
+  studentId, studentName, parentName, existingText, transcriptName, transcriptUrl,
+  onSummary, onClearFile,
+}: {
+  studentId: string
+  studentName: string
+  parentName?: string
+  existingText: string
+  transcriptName?: string
+  transcriptUrl?: string
+  onSummary: (s: ConsultSummary, file?: { url: string; name: string }) => void
+  onClearFile: () => void
+}) {
+  const summarize = useSummarizeConsult()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState<'' | 'reading' | 'summarizing'>('')
+  const [error, setError] = useState('')
+  const [note, setNote] = useState('')
+
+  const run = async (file: File) => {
+    setError(''); setNote('')
+    if (!isTranscriptFile(file.name)) {
+      setError('전사본은 txt · vtt · srt · pdf · md · csv 만 올릴 수 있습니다. 음성 파일은 아직 받지 못합니다.')
+      return
+    }
+    try {
+      setBusy('reading')
+      const text = await readTranscript(file)
+      if (text.trim().length < 40) {
+        setError('파일에서 읽어낼 글이 거의 없습니다. 스캔된 PDF 라면 텍스트로 저장해 올려 주세요.')
+        return
+      }
+      setBusy('summarizing')
+      // 파일 올리기와 요약을 함께 — 요약이 실패해도 원문은 남는다
+      const [url, sum] = await Promise.all([
+        uploadTranscript(studentId, file),
+        summarize.mutateAsync({ text, studentName, parentName }),
+      ])
+      onSummary(sum, { url, name: file.name })
+      if (!sum.point && !sum.concerns && !sum.solutions && !sum.followUp) {
+        setNote('요약할 상담 내용을 찾지 못했습니다. 파일은 올려 두었으니 내용은 직접 적어 주세요.')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '전사본 처리에 실패했습니다.')
+    } finally {
+      setBusy('')
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  const summarizeTyped = async () => {
+    setError(''); setNote('')
+    if (existingText.trim().length < 40) {
+      setError('요약할 내용이 너무 짧습니다. 40자 이상 적어 주세요.')
+      return
+    }
+    try {
+      setBusy('summarizing')
+      onSummary(await summarize.mutateAsync({ text: existingText, studentName, parentName }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '요약에 실패했습니다.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-dashed bg-background p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          ref={fileRef} type="file" accept={TRANSCRIPT_ACCEPT} className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) run(f) }}
+        />
+        <Button
+          size="sm" variant="outline" className="gap-1.5" disabled={!!busy}
+          onClick={() => fileRef.current?.click()}
+        >
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+          {busy === 'reading' ? '파일 읽는 중…' : busy === 'summarizing' ? '요약 중…' : '전사본 올려 자동 요약'}
+        </Button>
+        <Button
+          size="sm" variant="ghost" className="gap-1.5" disabled={!!busy || existingText.trim().length < 40}
+          title="위에 적은 상담 내용을 Point / Concerns / Solutions / Follow-up 으로 정리합니다"
+          onClick={summarizeTyped}
+        >
+          <Sparkles className="size-3.5" /> 적은 내용 요약
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground leading-relaxed">
+        txt · vtt · srt · pdf · md · csv — 줌·구글미트·팀즈·클로바노트의 자동 전사(.vtt / .srt)를
+        그대로 올리시면 화자와 시각이 함께 들어가 요약이 더 정확합니다.
+        <br />
+        Point / Concerns / Solutions 는 상담 내용 칸에, Follow-up 은 아래 칸에 채워집니다.
+        채운 뒤 직접 고치실 수 있습니다.
+      </p>
+      {transcriptName && (
+        <div className="flex items-center gap-2 text-xs">
+          <FileText className="size-3.5 text-muted-foreground shrink-0" />
+          {transcriptUrl ? (
+            <a href={transcriptUrl} target="_blank" rel="noreferrer" className="underline truncate">{transcriptName}</a>
+          ) : <span className="truncate">{transcriptName}</span>}
+          <Button size="sm" variant="ghost" className="size-5 shrink-0" title="첨부 떼기" onClick={onClearFile}>
+            <Trash2 className="size-3 text-red-400" />
+          </Button>
+        </div>
+      )}
+      {error && <p className="text-[11px] text-red-600 leading-relaxed">{error}</p>}
+      {note && <p className="text-[11px] text-amber-700 leading-relaxed">{note}</p>}
+    </div>
+  )
+}
+
+/** 공유 대상자 다중 선택 — 고르면 그 직원 알림함으로 내용이 간다. */
+function SharePicker({ staff, selected, onChange }: {
+  staff: { id: string; name: string }[]
+  selected: string[]
+  onChange: (ids: string[]) => void
+}) {
+  const [q, setQ] = useState('')
+  const shown = useMemo(() => {
+    const k = q.trim().toLowerCase()
+    return k ? staff.filter(p => (p.name || '').toLowerCase().includes(k)) : staff
+  }, [staff, q])
+  const toggle = (id: string) =>
+    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id])
+
+  return (
+    <div>
+      <Label className="text-xs text-muted-foreground flex items-center gap-1">
+        <Users className="size-3.5" /> 공유 대상자
+        <span className="text-[11px] font-normal">— 고른 직원 알림함으로 이 내용이 갑니다</span>
+      </Label>
+      <Popover>
+        <PopoverTrigger className="mt-1 flex h-8 w-full items-center gap-2 rounded-md border bg-background px-3 text-sm hover:bg-muted/50">
+          {selected.length === 0
+            ? <span className="text-muted-foreground">공유하지 않음</span>
+            : <span className="truncate">{selected.map(id => staff.find(p => p.id === id)?.name || '—').join(', ')}</span>}
+          <ChevronDown className="size-3.5 ml-auto shrink-0" />
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 p-2">
+          <Input value={q} onChange={e => setQ(e.target.value)} placeholder="이름 검색..." className="h-8 text-sm mb-2" />
+          <div className="max-h-60 overflow-y-auto space-y-0.5">
+            {shown.length === 0 && <p className="text-xs text-muted-foreground px-1 py-2">해당하는 직원이 없습니다.</p>}
+            {shown.map(p => (
+              <button
+                key={p.id} onClick={() => toggle(p.id)}
+                className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-sm text-left hover:bg-muted"
+              >
+                <span className={`inline-flex size-4 items-center justify-center rounded border shrink-0 ${selected.includes(p.id) ? 'bg-primary border-primary text-primary-foreground' : 'bg-background'}`}>
+                  {selected.includes(p.id) && <Check className="size-3" />}
+                </span>
+                <span className="truncate">{p.name}</span>
+              </button>
+            ))}
+          </div>
+          {selected.length > 0 && (
+            <Button variant="ghost" size="sm" className="w-full mt-1 h-7 text-xs" onClick={() => onChange([])}>
+              전체 해제
+            </Button>
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
+function ConsultLogItem({ consult, staff, staffName, canModify, canEdit, onUpdate, onDelete }: {
+  consult: PostContractConsult
+  staff: { id: string; name: string }[]
+  staffName: (id?: string) => string
+  canModify: boolean
+  canEdit: boolean
+  onUpdate: (patch: {
+    consultDate?: string; content?: string; followUp?: string
+    status?: ConsultStatus; consultantId?: string; sharedWith?: string[]
+  }) => void
+  onDelete: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState({
+    date: consult.consultDate,
+    content: consult.content,
+    followUp: consult.followUp || '',
+    consultantId: consult.consultantId || '',
+    sharedWith: consult.sharedWith,
+  })
+  const done = consult.status === 'done'
+
+  const save = () => {
+    if (!draft.content.trim()) return
+    onUpdate({
+      consultDate: draft.date,
+      content: draft.content.trim(),
+      followUp: draft.followUp.trim(),
+      consultantId: draft.consultantId,
+      sharedWith: draft.sharedWith,
+    })
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="rounded-md border p-3 space-y-2.5 bg-muted/30">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input type="date" value={draft.date} className="h-8 w-36 text-sm" onChange={e => setDraft(d => ({ ...d, date: e.target.value }))} />
+          <Select value={draft.consultantId || '__none__'} onValueChange={v => setDraft(d => ({ ...d, consultantId: v === '__none__' ? '' : (v ?? '') }))}>
+            <SelectTrigger className="h-8 w-40 text-sm">
+              <span className="truncate">{staffName(draft.consultantId) || '상담자 선택'}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">상담자 선택</SelectItem>
+              {staff.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Textarea value={draft.content} rows={4} className="text-sm" onChange={e => setDraft(d => ({ ...d, content: e.target.value }))} />
+        <Textarea value={draft.followUp} rows={2} className="text-sm" placeholder="Follow-up commitments" onChange={e => setDraft(d => ({ ...d, followUp: e.target.value }))} />
+        <SharePicker staff={staff} selected={draft.sharedWith} onChange={ids => setDraft(d => ({ ...d, sharedWith: ids }))} />
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>취소</Button>
+          <Button size="sm" onClick={save} disabled={!draft.content.trim()}>저장</Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-md border p-3 space-y-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground mb-1">
+            <span className="font-medium text-foreground">{consult.consultDate}</span>
+            {consult.consultantId && <span>· 상담자 {staffName(consult.consultantId)}</span>}
+            {consult.authorName && <span>· 작성 {consult.authorName}</span>}
+            <Badge
+              variant="outline"
+              className={`text-[10px] ${done ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+            >
+              {CONSULT_STATUS_LABEL[consult.status]}
+            </Badge>
+          </div>
+          <p className="text-sm whitespace-pre-wrap break-words">{consult.content}</p>
+          {consult.followUp && (
+            <div className="mt-2 rounded border-l-2 border-sky-300 bg-sky-50/60 px-2 py-1.5">
+              <div className="text-[11px] font-medium text-sky-800">Follow-up</div>
+              <p className="text-sm whitespace-pre-wrap break-words">{consult.followUp}</p>
+            </div>
+          )}
+          {consult.transcriptUrl && (
+            <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <FileText className="size-3 shrink-0" />
+              <a href={consult.transcriptUrl} target="_blank" rel="noreferrer" className="underline truncate">
+                {consult.transcriptName || '전사본'}
+              </a>
+              <span className="shrink-0">— 요약의 근거</span>
+            </div>
+          )}
+          {consult.sharedWith.length > 0 && (
+            <div className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Users className="size-3" />
+              공유 {consult.sharedWith.map(id => staffName(id) || '—').join(', ')}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          {canEdit && (
+            <Button
+              size="sm" variant="ghost" className="h-6 px-2 text-[11px]"
+              title={done ? '미처리로 되돌리기' : '처리완료로 표시'}
+              onClick={() => onUpdate({ status: done ? 'open' : 'done' })}
+            >
+              {done ? '되돌리기' : '처리완료'}
+            </Button>
+          )}
+          {canModify && (
+            <>
+              <Button size="sm" variant="ghost" className="size-6" onClick={() => { setDraft({ date: consult.consultDate, content: consult.content, followUp: consult.followUp || '', consultantId: consult.consultantId || '', sharedWith: consult.sharedWith }); setEditing(true) }}>
+                <Pencil className="size-3.5 text-muted-foreground" />
+              </Button>
+              <Button size="sm" variant="ghost" className="size-6" onClick={onDelete}>
+                <Trash2 className="size-3.5 text-red-400" />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -2596,6 +3162,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
     parentEmail: student?.parentEmail || '',
     nationality: student?.nationality || '',
     parentName: student?.parentName || '',
+    parentPhone: student?.parentPhone || '',
     contact: student?.contact || '',
     region: student?.region || '',
     grade: student?.grade || '',
@@ -2640,6 +3207,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
       parentEmail: form.parentEmail || undefined,
       nationality: form.nationality || undefined,
       parentName: form.parentName || undefined,
+      parentPhone: form.parentPhone || undefined,
       contact: form.contact || undefined,
       region: form.region || undefined,
       grade: form.grade || undefined,
@@ -2691,6 +3259,7 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
           <LabeledInput label={t('student360.parentEmail')} value={form.parentEmail} onChange={v => set('parentEmail', v)} />
           <LabeledInput label={t('student360.contact')} value={form.contact} onChange={v => set('contact', v)} />
           <LabeledInput label={t('student360.parentName')} value={form.parentName} onChange={v => set('parentName', v)} />
+          <LabeledInput label={t('student360.parentPhone')} value={form.parentPhone} onChange={v => set('parentPhone', v)} />
           <LabeledInput label={t('student360.nationality')} value={form.nationality} onChange={v => set('nationality', v)} />
           <LabeledInput label={t('student360.region')} value={form.region} onChange={v => set('region', v)} />
           <LabeledInput label={t('student360.grade')} value={form.grade} onChange={v => set('grade', v)} />
@@ -2886,7 +3455,7 @@ function CoachingSection({ studentId, createdBy, canEdit, restrictMentorId }: {
       <CardHeader className="bg-emerald-50/40 rounded-t-xl py-3 cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-base">
-            <BookOpen className="size-5 text-emerald-600" />
+            <Compass className="size-5 text-emerald-600" />
             Mentor Support <span className="text-muted-foreground font-normal">({count})</span>
           </CardTitle>
           <Button size="sm" variant="ghost" className="size-7" onClick={(e) => { e.stopPropagation(); setExpanded(v => !v) }}>

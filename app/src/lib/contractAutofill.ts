@@ -39,8 +39,10 @@ export interface ContractSource {
 }
 
 export interface StudentTarget {
-  /** 학부모연락처 칸 — '전화번호 이름' 으로 함께 적는다 */
+  /** 학부모 성함 — 이름만. 번호는 parentPhone 으로 따로 간다. */
   parentName?: string
+  /** 학부모 연락처 */
+  parentPhone?: string
   /** 학생 연락처 */
   contact?: string
   /** 학생 한글 이름 */
@@ -90,18 +92,42 @@ function sameValue(a: string, b: string): boolean {
 }
 
 /**
- * 학부모연락처 칸에 넣을 한 줄 — '전화번호 이름'.
- * 360 에는 학부모 이름만 담는 칸이 없어 한 칸에 함께 적는다.
- * 번호가 따로 없으면 하나만 적힌 번호(phone)를 갈음해 쓴다.
+ * 이름 칸에 번호가 섞여 들어온 것을 떼어 낸다.
+ *   '010-7165-4123 박신춘'  → { name: '박신춘',  phone: '010-7165-4123' }
+ *   '박주형 | +65-9487-1228' → { name: '박주형',  phone: '+65-9487-1228' }
+ *   '(부)010-3455-9458'      → { name: '(부)',    phone: '010-3455-9458' }
+ *   '김은서 | Amy'           → { name: '김은서 | Amy', phone: '' }   (번호가 없으면 그대로)
+ *
+ * 숫자가 8개 이상 이어진 덩어리만 번호로 본다 — 학년('G12')이나 연도를
+ * 번호로 잘못 떼어 내지 않도록.
  */
-export function parentContactLine(c: ContractSource, studentContact?: string): string {
-  // parentPhone 이 없으면 구분 없이 적힌 phone 을 갈음해 쓴다. 다만 그 번호가 학생
-  // 연락처로 이미 쓰이고 있으면 학부모 번호가 아니다 — 이름 옆에 엉뚱한 번호가
-  // 붙으면 사람이 알아채기 어려우므로 그럴 땐 번호 없이 이름만 둔다.
+export function splitNameAndPhone(raw?: string): { name: string; phone: string } {
+  const s = (raw || '').trim()
+  if (!s) return { name: '', phone: '' }
+  const m = s.match(/\+?\d[\d\s().-]{6,}\d/)
+  if (!m || m.index === undefined) return { name: s, phone: '' }
+  if (m[0].replace(/\D/g, '').length < 8) return { name: s, phone: '' }
+  let name = (s.slice(0, m.index) + s.slice(m.index + m[0].length))
+    // 번호가 빠진 자리에 남는 구분 기호만 떼고, 이름 가운데는 건드리지 않는다
+    .replace(/^[\s|,/·]+|[\s|,/·]+$/g, '')
+  // 번호를 떼고 괄호만 남은 경우: '(손현진)' → '손현진'
+  const wrapped = name.match(/^[(（]\s*(.+?)\s*[)）]$/)
+  if (wrapped) name = wrapped[1]
+  return { name, phone: m[0].trim() }
+}
+
+/**
+ * 학부모 연락처로 쓸 번호.
+ * parentPhone 이 없으면 구분 없이 적힌 phone 을 갈음해 쓴다. 다만 그 번호가 학생
+ * 연락처로 이미 쓰이고 있으면 학부모 번호가 아니다 — 그럴 땐 비워 둔다.
+ *
+ * 예전에는 360 에 학부모 이름만 담는 칸이 없어 '번호 이름' 을 한 칸에 함께 적었다.
+ * 그 탓에 학부모 성함 자리에 번호만 남은 학생이 열일곱 명 생겼고, 계약↔학생 연결도
+ * 이름으로 맞출 수 없었다. 이제 이름과 번호는 각자의 칸으로 간다.
+ */
+export function parentPhoneValue(c: ContractSource, studentContact?: string): string {
   const fallback = sameValue((c.phone || '').trim(), (studentContact || '').trim()) ? '' : (c.phone || '')
-  const tel = ((c.parentPhone || fallback) || '').trim()
-  const name = cleanParentName(c.contractorName)
-  return [tel, name].filter(Boolean).join(' ')
+  return ((c.parentPhone || fallback) || '').trim()
 }
 
 /** 계약서에서 뽑아 올 수 있는 값 전부 (학생정보 상태와 무관하게). */
@@ -131,17 +157,13 @@ function candidates(contract: ContractSource, student?: StudentTarget): Autofill
   add('email', '학생 이메일', pick(contract.studentEmail, 'studentEmail'))
   add('contact', '학생 연락처', pick(contract.studentPhone, 'studentPhone'))
 
-  // 학부모연락처 칸 하나에 '전화번호 이름' 으로 함께 적는다 (이름만 담는 칸이 따로 없다).
-  const tel = pick(contract.parentPhone, 'parentPhone')
+  // 학부모 성함과 연락처는 각자의 칸으로. 성함에서 '(모)' 같은 관계 표시는 뗀다.
   const nm = pick(contract.contractorName, 'contractorName')
-  const line = parentContactLine(
-    { parentPhone: tel.v, phone: contract.phone, contractorName: nm.v },
-    student?.contact,
-  )
-  // 한 쪽이라도 계약서에서 온 값이면 '계약서' 로 표시한다 — 사람이 판단할 근거가 된다.
-  if (line) out.push({
-    key: 'parentName', label: '학부모 연락처·이름', value: line, text: line,
-    source: tel.source === 'pdf' || nm.source === 'pdf' ? 'pdf' : 'contract',
+  add('parentName', '학부모 성함', { v: cleanParentName(nm.v), source: nm.source })
+  const tel = pick(contract.parentPhone, 'parentPhone')
+  add('parentPhone', '학부모 연락처', {
+    v: parentPhoneValue({ parentPhone: tel.v, phone: contract.phone }, student?.contact),
+    source: tel.source,
   })
 
   add('parentEmail', '학부모 이메일', pick(contract.parentEmail, 'parentEmail'))

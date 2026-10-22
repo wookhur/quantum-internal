@@ -13,6 +13,9 @@ import { useProfiles } from '@/hooks/useProfiles'
 import { useAuth } from '@/contexts/AuthContext'
 import { useT } from '@/i18n/LanguageContext'
 import { formatCurrency } from '@/types'
+import { ContractPersonFields } from '@/components/ContractPersonFields'
+import { legacyContractPhone, EMPTY_CONTRACT_PERSON } from '@/lib/contractPerson'
+import { cleanParentName } from '@/lib/contractAutofill'
 
 interface LeadInfo {
   id: string
@@ -48,11 +51,9 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
   const createInstallments = useCreateInstallments()
 
   const [form, setForm] = useState({
-    contractorName: '',
-    studentName: '',
+    ...EMPTY_CONTRACT_PERSON,
     schoolName: '',
     gradeAtContract: '',
-    phone: '',
     address: '',
     contractDate: '',
     expiryDate: '',
@@ -72,11 +73,14 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
   useEffect(() => {
     if (open && lead) {
       setForm({
-        contractorName: lead.parentName || '',
+        ...EMPTY_CONTRACT_PERSON,
+        // 리드의 연락처·이메일은 학부모 것이다 — 학부모 칸으로 넣는다.
+        contractorName: cleanParentName(lead.parentName),
         studentName: lead.studentName || '',
+        parentPhone: lead.phone || '',
+        parentEmail: lead.email || '',
         schoolName: lead.currentSchool || '',
         gradeAtContract: lead.grade || '',
-        phone: lead.phone || '',
         address: '',
         contractDate: new Date().toISOString().slice(0, 10),
         expiryDate: '',
@@ -106,7 +110,13 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
       contractDate: form.contractDate,
       expiryDate: form.expiryDate,
       address: form.address || undefined,
-      phone: form.phone || undefined,
+      studentNameEn: form.studentNameEn || undefined,
+      studentPhone: form.studentPhone || undefined,
+      studentEmail: form.studentEmail || undefined,
+      parentPhone: form.parentPhone || undefined,
+      parentEmail: form.parentEmail || undefined,
+      // 구분 없던 옛 칸 — 옛 조회·엑셀이 아직 이걸 본다
+      phone: legacyContractPhone(form),
       totalAmount: form.totalAmount ? Number(form.totalAmount) : undefined,
       currency: form.currency || undefined,
       paymentAccount: form.paymentAccount || undefined,
@@ -149,21 +159,11 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          {/* Contractor & Student */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">
-                {t('contracts.parentName')} <span className="text-destructive">*</span>
-              </Label>
-              <Input value={form.contractorName} onChange={e => set('contractorName', e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">
-                {t('contracts.studentName')} <span className="text-destructive">*</span>
-              </Label>
-              <Input value={form.studentName} onChange={e => set('studentName', e.target.value)} />
-            </div>
-          </div>
+          {/* 사람 정보 — 학생·학부모를 각자의 칸으로 */}
+          <ContractPersonFields
+            value={form}
+            onChange={patch => setForm(f => ({ ...f, ...patch }))}
+          />
 
           {/* School & Grade */}
           <div className="grid grid-cols-2 gap-4">
@@ -195,16 +195,10 @@ export function CreateContractFromLeadDialog({ open, onOpenChange, lead }: Props
             </div>
           </div>
 
-          {/* Phone & Address */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t('common.phone')}</Label>
-              <Input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="010-0000-0000" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">{t('contracts.address')}</Label>
-              <Input value={form.address} onChange={e => set('address', e.target.value)} />
-            </div>
+          {/* 주소 — 연락처는 위 사람 정보에서 학생·학부모로 나눠 받는다 */}
+          <div className="space-y-1.5">
+            <Label className="text-xs">{t('contracts.address')}</Label>
+            <Input value={form.address} onChange={e => set('address', e.target.value)} />
           </div>
 
           {/* Amount, Currency, Payment Account */}
