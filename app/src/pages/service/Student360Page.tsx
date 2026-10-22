@@ -4478,6 +4478,10 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
 
   const submit = () => {
     if (!canEdit) return
+    // 다이어리는 미팅 뒤에 쓰는 기록이라 미래 날짜는 연도 오타일 가능성이 높다(예: 2026 → 2028).
+    // 미래 날짜는 목록 맨 위에 고정돼 최신순 정렬이 깨져 보이므로 저장 전에 확인한다.
+    if (form.entryDate && form.entryDate > todayKST() &&
+        !confirm(`일자가 미래 날짜(${form.entryDate})입니다. 연도를 확인해 주세요.\n그대로 저장할까요?`)) return
     // 어느 칸에 AI 요약 JSON 을 통째로 붙여넣었으면 저장 전에 각 필드로 분해
     const payload = normalizeDiaryEntry({
       entryDate: form.entryDate || undefined,
@@ -4529,7 +4533,7 @@ function DiaryDialog({ studentId, entry, trigger, authorName, createdBy, canEdit
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">{t('student360.entryDate')}</Label>
-              <Input type="date" value={form.entryDate} onChange={e => setField('entryDate', e.target.value)} />
+              <Input type="date" max={todayKST()} value={form.entryDate} onChange={e => setField('entryDate', e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -4774,6 +4778,9 @@ function AutoDiaryButton({ studentId, meeting, createdBy, authorName, canEdit }:
 
   const run = async () => {
     if (!canEdit) return
+    // 다이어리 일자는 미팅 일자를 따른다. 미팅 일자가 미래면 연도 오타일 수 있어 먼저 확인한다.
+    if (meeting.meetingDate && meeting.meetingDate > todayKST() &&
+        !confirm(`미팅 일자가 미래 날짜(${meeting.meetingDate})입니다. 다이어리도 이 날짜로 저장됩니다.\n미팅 일자를 먼저 고치려면 '취소'를 누르세요.`)) return
     setLoading(true)
     setError(null)
     try {
