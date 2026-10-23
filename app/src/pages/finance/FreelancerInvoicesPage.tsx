@@ -33,7 +33,7 @@ import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
-import { useIncentiveStatus, useSetIncentiveReceived } from '@/hooks/useIncentiveStatus'
+import { useIncentiveStatus, useSetIncentiveReceived, type IncentiveStatus } from '@/hooks/useIncentiveStatus'
 import { usePartnerInvoiceTypes, useSetPartnerInvoiceType, invoiceTypeOf, accountRegionOf } from '@/hooks/usePartnerInvoiceTypes'
 import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
@@ -1287,8 +1287,10 @@ function studentLabel(name?: string, koreanName?: string): string {
 // ─── Shared: accounting access + billable students ─────────────────────────
 
 
-/** 짝 한 쌍과 그 짝이 '닫힌 달'(= 2번째 미팅이 있는 달). 소급 표시의 원래 달이 된다. */
-export interface BillablePair { pair: [string, string]; month: string }
+/** 짝 한 쌍과 그 짝이 '닫힌 달'(= 2번째 미팅이 있는 달). 소급 표시의 원래 달이 된다.
+ *  idx 는 '그 달 안에서 몇 번째 짝'인지. 조회 창(3개월)이 밀려도 변하지 않아야
+ *  지급완료 표시가 들러붙는다 — 창 안의 순서로 매기면 달마다 번호가 당겨진다. */
+export interface BillablePair { pair: [string, string]; month: string; idx: number }
 export interface BillableStudent { id: string; label: string; done: number; billable: boolean; billableMonths: number; pairs: BillablePair[] }
 
 /** 미팅일자 배열을 시간순 2개씩 짝지어, 2번째 미팅이 해당 달(YYYY-MM)인 짝들의 [1번째, 2번째] 일자 반환. */
@@ -1303,6 +1305,37 @@ function pairsClosingInMonth(dates: string[], month: string): [string, string][]
 /** 짝 미팅일자를 비고/툴팁용 문자열로: "미팅 2건: 2026-07-15, 2026-08-02" */
 function pairDetail(pair: [string, string]): string {
   return `미팅 2건: ${pair[0]}, ${pair[1]}`
+}
+
+/**
+ * 옛 관리비 키에 남아 있는 '지급완료' 표시를 학생·달별로 모아 둔다.
+ *
+ * 종전 키는 번호를 3개월 조회 창 안의 순서로 매겼다. 창이 밀리면 같은 짝의 번호가
+ * 당겨져서(8월 짝이 9월엔 #2, 10월엔 #1) 찍어 둔 표시가 어긋났고, 이미 지급한
+ * 8·9월분이 10월에 다시 떠올랐다. 이제 번호는 '그 달 안에서 몇 번째'다.
+ *
+ * 다만 예전에 찍은 표시는 옛 번호 그대로 남아 있다. 새 번호로 못 찾을 때만
+ * 같은 학생·같은 달에 찍힌 표시를 앞에서부터 가져다 메운다. 한 달에 짝이 하나인
+ * 보통의 경우 정확하다. 한 달에 짝이 둘인데 하나만 지급된 상태라면 앞의 짝이
+ * 지급된 것으로 읽히는데, 미팅이 한 달에 4회 있고 반만 지급된 경우라 드물다.
+ */
+function legacyMgmtReceivedMap(status: Map<string, IncentiveStatus>): Map<string, IncentiveStatus[]> {
+  const out = new Map<string, IncentiveStatus[]>()
+  const re = /^mgmt:(.+)#(\d+):(\d{4}-\d{2})$/
+  const rows: { sid: string; month: string; n: number; st: IncentiveStatus }[] = []
+  status.forEach((st, key) => {
+    if (!st.received) return
+    const m = re.exec(key)
+    if (m) rows.push({ sid: m[1], month: m[3], n: Number(m[2]), st })
+  })
+  rows.sort((a, b) => a.n - b.n)
+  for (const r of rows) {
+    const k = `${r.sid}|${r.month}`
+    const arr = out.get(k) || []
+    arr.push(r.st)
+    out.set(k, arr)
+  }
+  return out
 }
 
 /** 'YYYY-MM' → '8월'. 발행월과 해가 다르면 '2025년 12월' 로 — 소급이 해를 넘길 때 헷갈린다. */
@@ -1341,7 +1374,7 @@ function useConsultantSessions(month: string): Map<string, SessionLike[]> {
       const key = consultantNameKey(consultantName(whoId))
       if (!key) continue
       const arr = out.get(key) || []
-      arr.push({ id: mt.id, date: mt.meetingDate, studentLabel: studentLabel(s.name, s.koreanName) })
+      arr.push({ id: mt.id, date: mt.meetingDate, studentLabel: studentLabel(s.name, s.koreanName), studentId: s.id })
       out.set(key, arr)
     }
     return out
@@ -1376,7 +1409,7 @@ function useConsultantBillable(month: string, lookbackMonths: number = 1) {
     datesByStudent.forEach((dates, sid) => {
       const all: BillablePair[] = []
       for (const m of windowMonths) {
-        for (const pair of pairsClosingInMonth(dates, m)) all.push({ pair, month: m })
+        pairsClosingInMonth(dates, m).forEach((pair, i) => all.push({ pair, month: m, idx: i + 1 }))
       }
       if (all.length) pairsByStudent.set(sid, all)
     })
@@ -1526,14 +1559,21 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
     // 지난 달 미지급분도 함께 센다 — 발행 화면(청구 목록)과 같은 기준이어야 놓치지 않는다.
     const live = (kind: string, id: string, om: string) =>
       carryState(incentiveStatus.get(lineKey(kind, id, om)), month) !== 'hide'
+    // 관리비만 옛 키 보완이 필요하다 — 아래 mgmtLive 참고
+    const legacyMgmt = legacyMgmtReceivedMap(incentiveStatus)
+    const mgmtLive = (sid: string, om: string, idx: number) => {
+      const st = incentiveStatus.get(lineKey('mgmt', `${sid}#${idx}`, om))
+        || (legacyMgmt.get(`${sid}|${om}`) || [])[idx - 1]
+      return carryState(st, month) !== 'hide'
+    }
     const aged = (om: string) => (om < month ? ` (${monthNum(om)}월분)` : '')
     // 관리비 — 연 관리비가 정해진 사람은 회당, 아니면 종전 '2회 1개월분'
     byConsultant.forEach((entry, key) => {
       if (annualFeeOf(annualFees, entry.name)) return      // 회당 방식은 아래에서 따로
       void key
       for (const s of entry.students) {
-        s.pairs.forEach((bp, k) => {
-          if (!live('mgmt', `${s.id}#${k + 1}`, bp.month)) return
+        s.pairs.forEach(bp => {
+          if (!mgmtLive(s.id, bp.month, bp.idx)) return
           add(entry.name, { label: `${s.label} · 관리비${aged(bp.month)}`, amount: 0 })
         })
       }
@@ -1542,7 +1582,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
     annualFees.forEach(fee => {
       for (const l of sessionFeeLines(sessionsByConsultant.get(fee.nameKey) || [], fee, carryMonths)) {
         if (!live('sess-fee', l.id, l.month)) continue
-        add(fee.displayName, { label: l.label, amount: l.amount })
+        add(fee.displayName, { label: `${l.label}${aged(l.month)}`, amount: l.amount })
       }
     })
     // 원서·에세이 (총액÷개월수)
@@ -1770,6 +1810,12 @@ export function FreelancerInvoicesPage(
     const myKey = consultantNameKey(effectiveName)
     // 소급 범위 — 지난 몇 달 치를 함께 올린다. 지급완료로 찍힌 건은 각 라인에서 걸러낸다.
     const carryMonths = monthsUpTo(issueMonth, CARRY_OVER_MONTHS)
+    // 새 번호로 못 찾으면 옛 번호로 찍어 둔 표시를 가져다 쓴다(legacyMgmtReceivedMap 설명 참고)
+    const legacyMgmt = legacyMgmtReceivedMap(incentiveStatus)
+    const mgmtState = (key: string, sid: string, month: string, idx: number) => {
+      const st = incentiveStatus.get(key) || (legacyMgmt.get(`${sid}|${month}`) || [])[idx - 1]
+      return carryState(st, issueMonth)
+    }
     // 관리비: 2회 미팅 완료 학생 (단가는 발행 시 수기입력 → amount 0)
     //   ⚠️ '내가 원서·에세이를 담당하는' 학생만 관리비에서 제외 → 에세이 라인으로 대체(같은 사람 중복 방지).
     //   관리만 하고 에세이는 다른 사람이 하는 학생은 관리비를 그대로 유지(각자 다른 업무 대가라 중복 아님).
@@ -1784,7 +1830,9 @@ export function FreelancerInvoicesPage(
             const key = lineKey('sess-fee', l.id, l.month)
             const state = carryState(incentiveStatus.get(key), issueMonth)
             if (state === 'hide') return null
-            return { id: key, label: l.label, amount: l.amount, originMonth: l.month, received: state === 'received', sourceDetail: `미팅 ${l.date}`, who: l.studentLabel }
+            // 소급돼 올라온 줄에는 어느 달 치인지 붙인다 — 관리비 줄과 같은 표기
+            const when = l.month !== issueMonth ? ` (${monthLabelKo(l.month, issueMonth)}분)` : ''
+            return { id: key, label: `${l.label}${when}`, amount: l.amount, originMonth: l.month, received: state === 'received', sourceDetail: `미팅 ${l.date}`, who: l.studentLabel }
           })
           .filter((x): x is DItem => x !== null)
       : []
@@ -1800,19 +1848,15 @@ export function FreelancerInvoicesPage(
         // 한 달에 미팅이 4회면 같은 달에 짝이 둘 닫힌다 — 그때만 달 안에서 번호를 붙인다.
         const perMonth = new Map<string, number>()
         for (const bp of r.pairs) perMonth.set(bp.month, (perMonth.get(bp.month) || 0) + 1)
-        const seen = new Map<string, number>()
-        return r.pairs.map((bp, k): DItem | null => {
+        return r.pairs.map((bp): DItem | null => {
           const n = perMonth.get(bp.month) || 1
-          // 숨긴 줄도 세어 둔다 — 안 그러면 남은 줄의 번호가 달마다 달라진다
-          const j = (seen.get(bp.month) || 0) + 1
-          seen.set(bp.month, j)
-          const key = lineKey('mgmt', `${r.id}#${k + 1}`, bp.month)
-          const state = carryState(incentiveStatus.get(key), issueMonth)
+          const key = lineKey('mgmt', `${r.id}#${bp.idx}`, bp.month)
+          const state = mgmtState(key, r.id, bp.month, bp.idx)
           if (state === 'hide') return null
           // 이번 달 치 한 줄뿐이면 달을 적지 않는다(발행월이 곧 그 달이다).
           // 소급돼 올라온 줄에는 반드시 적는다 — 왜 또 떴는지가 거기 있다.
           const show = r.pairs.length > 1 || bp.month !== issueMonth
-          const when = `${monthLabelKo(bp.month, issueMonth)}분${n > 1 ? ` ${j}/${n}` : ''}`
+          const when = `${monthLabelKo(bp.month, issueMonth)}분${n > 1 ? ` ${bp.idx}/${n}` : ''}`
           return {
             id: key,
             label: show ? `${r.label} (${when})` : r.label,

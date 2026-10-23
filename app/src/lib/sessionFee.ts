@@ -6,7 +6,10 @@
  *
  * 새 방식은 컨설턴트마다 연 관리비를 정해 두고, 연 기준 횟수(보통 30회)로 나눈
  * 1회분 단가 × 그 달에 진행한 미팅 수로 금액이 저절로 나온다.
- * 인보이스에는 '10월 1회차', '10월 2회차' 처럼 그 달 안에서 순서대로 적는다.
+ *
+ * 회차는 '학생마다' 센다 — 현시우를 세 번 만났으면 현시우 1회차·2회차·3회차다.
+ * 한 달 안에서 컨설턴트가 만난 모든 미팅을 통으로 세면(종전 방식) 학생마다 몇 번
+ * 봤는지가 드러나지 않아, 인보이스만 보고는 수업이 제대로 나갔는지 알 수 없었다.
  *
  * 연 관리비가 정해지지 않은 컨설턴트는 종전 방식 그대로다(이 파일을 거치지 않는다).
  */
@@ -31,30 +34,32 @@ export interface SessionLike {
   date: string
   /** 학생 표시 이름 */
   studentLabel: string
+  /** 학생 id — 회차를 학생마다 세는 기준. 없으면 표시 이름으로 묶는다. */
+  studentId?: string
 }
 
 export interface SessionFeeLine {
   id: string
-  /** '10월 2회차 · 박태현 (Taehyun Park)' */
+  /** '박태현 (Taehyun Park) 2회차' */
   label: string
   amount: number
   /** 'YYYY-MM' — 소급 표시의 원래 달 */
   month: string
-  /** 그 달 안에서 몇 번째인지 */
+  /** 그 달 안에서 이 학생과 몇 번째인지 */
   index: number
   date: string
-  /** 라벨에서 떼어낸 학생 표기 — 줄 수가 아니라 학생 수를 셀 때 쓴다 */
+  /** 줄 수가 아니라 학생 수를 셀 때 쓴다 */
   studentLabel: string
 }
 
 const monthOf = (d: string) => (d || '').slice(0, 7)
-const monthNum = (m: string) => Number(m.slice(5, 7))
 
 /**
- * 한 컨설턴트의 미팅들을 달별로 묶어 회차 줄로 만든다.
+ * 한 컨설턴트의 미팅들을 학생별·달별로 묶어 회차 줄로 만든다.
  *
- * 회차는 '그 달 1일부터 말일까지' 안에서 날짜순으로 1부터 센다. 달이 바뀌면 다시 1부터.
- * 같은 날 두 건이면 id 순으로 정해 렌더마다 순서가 바뀌지 않게 한다.
+ * 회차는 '그 달 1일부터 말일까지' 안에서, 학생마다 날짜순으로 1부터 센다.
+ * 달이 바뀌면 다시 1부터. 같은 날 두 건이면 id 순으로 정해 렌더마다 순서가
+ * 바뀌지 않게 한다.
  */
 export function sessionFeeLines(
   sessions: readonly SessionLike[],
@@ -68,17 +73,18 @@ export function sessionFeeLines(
     .filter(s => !!s.date)
     .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : a.id.localeCompare(b.id)))
 
-  const seen = new Map<string, number>()      // 달 → 지금까지 센 횟수
+  const seen = new Map<string, number>()      // 달|학생 → 지금까지 센 횟수
   const out: SessionFeeLine[] = []
   for (const s of sorted) {
     const m = monthOf(s.date)
     if (!m) continue
-    const index = (seen.get(m) || 0) + 1
-    seen.set(m, index)                        // 범위 밖 달도 세어야 회차 번호가 밀리지 않는다
+    const who = s.studentId || s.studentLabel
+    const index = (seen.get(`${m}|${who}`) || 0) + 1
+    seen.set(`${m}|${who}`, index)            // 범위 밖 달도 세어야 회차 번호가 밀리지 않는다
     if (want && !want.has(m)) continue
     out.push({
       id: s.id,
-      label: `${monthNum(m)}월 ${index}회차 · ${s.studentLabel}`,
+      label: `${s.studentLabel} ${index}회차`,
       studentLabel: s.studentLabel,
       amount: unit,
       month: m,
