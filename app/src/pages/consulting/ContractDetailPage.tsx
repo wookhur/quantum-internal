@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   ArrowLeft, Loader2, Phone, MapPin, School, Calendar,
   DollarSign, CheckCircle2, AlertTriangle, Clock, Ban,
-  UserCircle, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText, Star,
+  UserCircle, ExternalLink, Pencil, Trash2, Plus, Users, X, FileText, Star, StickyNote,
   Upload, Download,
 } from 'lucide-react'
 import { useContract, useCancelContract, useUpdateContract, useDeleteContract } from '@/hooks/useContracts'
@@ -31,6 +31,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCreateClawbacks, useAllClawbacks, useSetClawbackStatus, useDeleteClawback, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
 import { supabase } from '@/lib/supabase'
 import type { Contract, PaymentInstallment, ContractStatus } from '@/types'
+import {
+  useContractPaymentNotes, useCreateContractPaymentNote,
+  useUpdateContractPaymentNote, useDeleteContractPaymentNote,
+} from '@/hooks/useContractPaymentNotes'
 import { ContractPersonFields } from '@/components/ContractPersonFields'
 import { legacyContractPhone } from '@/lib/contractPerson'
 
@@ -1351,6 +1355,9 @@ export function ContractDetailPage() {
             ))}
           </div>
         )}
+
+        {/* 수금 메모 — 일정이 바뀐 사정을 남긴다. 안 남기면 숫자가 왜 이런지 아무도 모른다. */}
+        <PaymentNotes contractId={contract.id} canEdit={canEdit} />
       </div>
 
       {/* Extra Charges */}
@@ -2386,6 +2393,125 @@ export function ContractDetailPage() {
         }}
         isPending={updateContract.isPending}
       />
+    </div>
+  )
+}
+
+// ─── 수금 메모 ─────────────────────────────────────────────────────────────
+// 납입 일정이 바뀌는 일은 흔하다 — 날짜를 미루고, 현금으로 일부만 받고, 환율 때문에
+// 쪼개 보낸다. 그 사정을 적어 둘 데가 없어 계약서 여백에 손으로 적히거나 아무 데도
+// 안 남았다. 덮어쓰는 한 칸이 아니라 쌓이는 기록으로 둔다 — 수금에서 알고 싶은 건
+// "언제 무엇이 바뀌었나"이기 때문이다.
+function PaymentNotes({ contractId, canEdit }: { contractId: string; canEdit: boolean }) {
+  const { user } = useAuth()
+  const { data: notes = [] } = useContractPaymentNotes(contractId)
+  const create = useCreateContractPaymentNote()
+  const update = useUpdateContractPaymentNote()
+  const remove = useDeleteContractPaymentNote()
+  const [draft, setDraft] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'c_level'
+
+  const submit = () => {
+    const content = draft.trim()
+    if (!content) return
+    create.mutate(
+      { contractId, content, createdBy: user?.id, authorName: user?.name },
+      { onSuccess: () => setDraft('') },
+    )
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border bg-muted/20 p-3 space-y-3">
+      <div className="flex items-center gap-1.5">
+        <StickyNote className="size-4 text-amber-600" />
+        <h3 className="text-sm font-semibold">수금 메모</h3>
+        {notes.length > 0 && (
+          <span className="text-xs text-muted-foreground">({notes.length})</span>
+        )}
+        <span className="text-[11px] text-muted-foreground ml-1">
+          입금 일정 변경·분할 입금·현금 수령 등 숫자만으로는 알 수 없는 사정을 적어 두세요
+        </span>
+      </div>
+
+      {canEdit && (
+        <div className="space-y-2">
+          <Textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={2}
+            className="text-sm bg-background"
+            placeholder="예: 2차 납기를 5/23 → 5/30 으로 연기 (학부모 요청). 잔금 500만원은 현금으로 받기로 함."
+          />
+          <div className="flex justify-end">
+            <Button size="sm" onClick={submit} disabled={!draft.trim() || create.isPending}>
+              메모 추가
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {notes.length === 0 ? (
+        <p className="text-xs text-muted-foreground text-center py-2">아직 적어 둔 메모가 없습니다.</p>
+      ) : (
+        <div className="space-y-2">
+          {notes.map((n) => {
+            const canModify = isAdmin || n.createdBy === user?.id
+            const edited = n.updatedAt !== n.createdAt
+            return (
+              <div key={n.id} className="rounded-lg border bg-background p-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-1">
+                      <span>{new Date(n.createdAt).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                      {n.authorName && <span>· {n.authorName}</span>}
+                      {edited && <span>· 수정됨</span>}
+                    </div>
+                    {editingId === n.id ? (
+                      <div className="space-y-2">
+                        <Textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} className="text-sm" />
+                        <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>취소</Button>
+                          <Button
+                            size="sm"
+                            disabled={!editText.trim()}
+                            onClick={() => {
+                              update.mutate({ id: n.id, contractId, content: editText.trim() })
+                              setEditingId(null)
+                            }}
+                          >
+                            저장
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap break-words">{n.content}</p>
+                    )}
+                  </div>
+                  {canModify && editingId !== n.id && (
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <Button
+                        size="sm" variant="ghost" className="size-6"
+                        onClick={() => { setEditingId(n.id); setEditText(n.content) }}
+                      >
+                        <Pencil className="size-3.5 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        size="sm" variant="ghost" className="size-6"
+                        onClick={() => { if (confirm('이 메모를 삭제할까요?')) remove.mutate({ id: n.id, contractId }) }}
+                      >
+                        <Trash2 className="size-3.5 text-red-400" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
