@@ -16,6 +16,7 @@ import {
   usePartnerInvoiceTypes, useSetPartnerInvoiceType,
   type PartnerInvoiceType, type PartnerAccountRegion,
 } from '@/hooks/usePartnerInvoiceTypes'
+import { useSettledThroughMonth, useSetSettledThroughMonth } from '@/hooks/useSettledThroughMonth'
 import { canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
 
 const formatKRW = (n: number) =>
@@ -49,6 +50,78 @@ export default function InvoiceSettingsPage() {
     )
   }
   return <SettingsBody />
+}
+
+/**
+ * 정산 완료 기준월 — '이 달까지는 전원 지급을 끝냈다'는 한 줄 선언.
+ *
+ * 자동청구 줄은 지급이 끝날 때까지 다음 달에도 계속 올라온다. 보통은 인보이스가
+ * 그 줄들을 들고 있어서 지급완료를 찍으면 저절로 내려가는데, 그 연결이 없던 시절에
+ * 발행된 건은 이어 붙일 데가 없다. 관리비 줄은 사람별 패널에만 있어 한 사람씩
+ * 눌러 끄는 수밖에 없고, 서른 명이면 서른 번이다.
+ *
+ * 여기서 한 번 정하면 그 이전 달은 전원 분이 한꺼번에 내려간다.
+ */
+function SettledThroughCard() {
+  const current = useSettledThroughMonth()
+  const save = useSetSettledThroughMonth()
+  const [month, setMonth] = useState('')
+  const [err, setErr] = useState('')
+  const value = month || current || ''
+
+  const apply = (next: string) => {
+    setErr('')
+    const warn = next
+      ? `${next} 까지를 '전원 지급 완료'로 처리할까요?\n`
+        + `그 달 이전의 관리비·회차·원서에세이·멘토 줄이 모든 사람의 청구 목록에서 내려갑니다.\n`
+        + `아직 지급하지 않은 건이 있다면 함께 가려지니, 지급이 끝난 달까지만 적어 주세요.`
+      : `기준월을 지울까요?\n지우면 최근 3개월치 미지급 건이 다시 모두 올라옵니다.`
+    if (!confirm(warn)) return
+    save.mutate(next, { onError: e => setErr(e instanceof Error ? e.message : '저장하지 못했습니다.') })
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-2">
+        <h2 className="text-sm font-semibold">정산 완료 기준월</h2>
+        <p className="text-[12px] text-muted-foreground">
+          <b>이 달까지는 전원 지급을 끝냈다</b>고 한 번 정해 두는 칸입니다. 그 이전 달의 관리비·회차·원서에세이·멘토 줄은
+          모든 사람의 청구 목록에서 내려갑니다 — 사람마다 줄마다 따로 누를 필요가 없습니다.
+        </p>
+        <p className="text-[12px] text-muted-foreground">
+          앞으로 발행하는 인보이스는 <b>어느 줄을 정산하는지 함께 저장</b>되므로, 지급완료(지급일)를 찍으면 그 줄은 저절로
+          내려갑니다. 이 칸은 그 연결이 없던 지난 건을 정리하는 용도이자, 연결이 끊겼을 때의 안전장치입니다.
+        </p>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <Input
+            type="month" value={value} className="h-8 w-40 text-sm"
+            onChange={e => setMonth(e.target.value)}
+          />
+          <Button size="sm" variant="outline" className="h-8"
+            disabled={save.isPending || !month || month === current}
+            onClick={() => apply(month)}
+          >
+            {save.isPending ? <Loader2 className="size-3.5 animate-spin" /> : '적용'}
+          </Button>
+          {current && (
+            <>
+              <span className="rounded bg-emerald-100 px-2 py-1 text-[11px] font-medium text-emerald-800">
+                지금 기준 · {current} 까지 정산 완료
+              </span>
+              <Button size="sm" variant="ghost" className="h-8 text-[11px] text-muted-foreground"
+                disabled={save.isPending}
+                onClick={() => { setMonth(''); apply('') }}
+              >
+                기준월 지우기
+              </Button>
+            </>
+          )}
+          {!current && <span className="text-[11px] text-muted-foreground">아직 정해지지 않았습니다</span>}
+        </div>
+        {err && <p className="text-[11px] text-red-600">{err}</p>}
+      </CardContent>
+    </Card>
+  )
 }
 
 interface Row {
@@ -121,6 +194,8 @@ function SettingsBody() {
         <h1 className="text-lg font-semibold">인보이스설정</h1>
         <span className="text-xs text-muted-foreground">대표 · 부대표 · 재무이사만</span>
       </div>
+
+      <SettledThroughCard />
 
       <Card>
         <CardContent className="p-4 space-y-3">

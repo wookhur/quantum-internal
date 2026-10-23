@@ -33,7 +33,8 @@ import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
-import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived, type IncentiveStatus } from '@/hooks/useIncentiveStatus'
+import { useIncentiveStatus, useSetIncentiveReceived, type IncentiveStatus } from '@/hooks/useIncentiveStatus'
+import { useSettledThroughMonth, isSettled } from '@/hooks/useSettledThroughMonth'
 import { usePartnerInvoiceTypes, invoiceTypeOf, accountRegionOf } from '@/hooks/usePartnerInvoiceTypes'
 import { useProfiles, canAccessAccount, canManageInvoiceSettings } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
@@ -1529,6 +1530,8 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
   const incentiveStatus = useIncentiveStatus()
   // 지급완료(paid_date) 인보이스가 정산한 줄 키 — 이 줄들은 저절로 내려간다
   const paidCoveredKeys = usePaidCoveredIncentiveKeys()
+  // '이 달까지는 전원 지급 끝' 선언 — 그 이전 달 치는 올리지 않는다
+  const settledThrough = useSettledThroughMonth()
   const annualFees = useConsultantAnnualFees()
   const sessionsByConsultant = useConsultantSessions(month)
   return useMemo(() => {
@@ -1563,12 +1566,14 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
     // 지급완료된 인보이스가 덮는 줄은 여기서도 빠져야 한다. 두 화면의 기준이 어긋나면
     // 한쪽에서는 끝난 건이 다른 쪽에는 남는다.
     const live = (kind: string, id: string, om: string) => {
+      if (isSettled(om, settledThrough)) return false
       const key = lineKey(kind, id, om)
       return !paidCoveredKeys.has(key) && carryState(incentiveStatus.get(key), month) !== 'hide'
     }
     // 관리비만 옛 키 보완이 필요하다 — legacyMgmtReceivedMap 설명 참고
     const legacyMgmt = legacyMgmtReceivedMap(incentiveStatus)
     const mgmtLive = (sid: string, om: string, idx: number) => {
+      if (isSettled(om, settledThrough)) return false
       const key = lineKey('mgmt', `${sid}#${idx}`, om)
       if (paidCoveredKeys.has(key)) return false
       const st = incentiveStatus.get(key) || (legacyMgmt.get(`${sid}|${om}`) || [])[idx - 1]
@@ -1648,7 +1653,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       add(mt.koreanName || mt.englishName, { label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})${aged(om)}`, amount: majorTierAmount(mt.tier) })
     }
     return out
-  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus, paidCoveredKeys, annualFees, sessionsByConsultant])
+  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus, paidCoveredKeys, settledThrough, annualFees, sessionsByConsultant])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
@@ -1794,6 +1799,8 @@ export function FreelancerInvoicesPage(
   const incentiveStatus = useIncentiveStatus()
   // 지급완료(paid_date) 인보이스가 정산한 줄 키 — 이 줄들은 저절로 내려간다
   const paidCoveredKeys = usePaidCoveredIncentiveKeys()
+  // '이 달까지는 전원 지급 끝' 선언 — 그 이전 달 치는 올리지 않는다
+  const settledThrough = useSettledThroughMonth()
   const setIncentiveReceived = useSetIncentiveReceived()
 
   // who = 이 줄이 누구에 대한 것인지. 한 학생이 여러 달 치로 여러 줄이 되므로,
@@ -1829,12 +1836,14 @@ export function FreelancerInvoicesPage(
      * incentive_status 의 수기 표시는 그대로 남겨 둔다 — 인보이스 없이 현금으로
      * 지급한 건을 손으로 끄는 길이 필요하다.
      */
-    const lineState = (key: string) =>
-      paidCoveredKeys.has(key) ? 'hide' : carryState(incentiveStatus.get(key), issueMonth)
+    const lineState = (key: string, originMonth: string) =>
+      isSettled(originMonth, settledThrough) || paidCoveredKeys.has(key)
+        ? 'hide'
+        : carryState(incentiveStatus.get(key), issueMonth)
     // 새 번호로 못 찾으면 옛 번호로 찍어 둔 표시를 가져다 쓴다(legacyMgmtReceivedMap 설명 참고)
     const legacyMgmt = legacyMgmtReceivedMap(incentiveStatus)
     const mgmtState = (key: string, sid: string, month: string, idx: number) => {
-      if (paidCoveredKeys.has(key)) return 'hide'
+      if (isSettled(month, settledThrough) || paidCoveredKeys.has(key)) return 'hide'
       const st = incentiveStatus.get(key) || (legacyMgmt.get(`${sid}|${month}`) || [])[idx - 1]
       return carryState(st, issueMonth)
     }
@@ -1850,7 +1859,7 @@ export function FreelancerInvoicesPage(
       ? sessionFeeLines(mySessions.get(myKey) || [], myFee, carryMonths)
           .map((l): DItem | null => {
             const key = lineKey('sess-fee', l.id, l.month)
-            const state = lineState(key)
+            const state = lineState(key, l.month)
             if (state === 'hide') return null
             // 소급돼 올라온 줄에는 어느 달 치인지 붙인다 — 관리비 줄과 같은 표기
             const when = l.month !== issueMonth ? ` (${monthLabelKo(l.month, issueMonth)}분)` : ''
@@ -1899,7 +1908,7 @@ export function FreelancerInvoicesPage(
         const line = essayLineForMonth(p, om)
         if (!line) return null
         const key = lineKey('essay', p.id, om)
-        const state = lineState(key)
+        const state = lineState(key, om)
         if (state === 'hide') return null
         const s = studentsByIdEssay.get(p.studentId)
         const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ')
@@ -1929,7 +1938,7 @@ export function FreelancerInvoicesPage(
         const pairs = pairsClosingInMonth(dates, om)
         pairs.forEach((pair, k) => {
           const key = lineKey('editor', `${sid}#${k + 1}`, om)
-          const state = lineState(key)
+          const state = lineState(key, om)
           if (state === 'hide') return
           editorLines.push({
             id: key,
@@ -1965,7 +1974,7 @@ export function FreelancerInvoicesPage(
       for (const om of carryMonths) {
         if (startMonth && startMonth > om) continue
         const key = lineKey('coach', a.id, om)
-        const state = lineState(key)
+        const state = lineState(key, om)
         if (state === 'hide') continue
         mentorLines.push({ id: key, label: `${who} · 학습코칭 (월정액)`, who, amount: COACHING_MONTHLY, originMonth: om, received: state === 'received' })
       }
@@ -1981,7 +1990,7 @@ export function FreelancerInvoicesPage(
       const om = (sess.sessionDate || '').slice(0, 7)
       if (!carryMonths.includes(om)) continue
       const key = lineKey('sess', sess.id, om)
-      const state = lineState(key)
+      const state = lineState(key, om)
       if (state === 'hide') continue
       const s = studentsById2.get(sess.studentId || asg?.studentId || '')
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
@@ -1989,7 +1998,7 @@ export function FreelancerInvoicesPage(
     }
 
     return [...perSession, ...mgmt, ...essay, ...editorLines, ...mentorLines]
-  }, [typeMatchesBoard, isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, paidCoveredKeys, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions, annualFees, mySessions])
+  }, [typeMatchesBoard, isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, paidCoveredKeys, settledThrough, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions, annualFees, mySessions])
 
   // 발행 대상 = 아직 지급완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
@@ -2029,31 +2038,13 @@ export function FreelancerInvoicesPage(
     setIncentiveReceived.mutate({ key: id, received: !currentlyReceived, month: issueMonth })
   }
 
-  /**
-   * 밀린 지난 달 치를 한 번에 끈다.
-   *
-   * 앞으로는 인보이스에 줄 키가 함께 저장되므로 지급완료를 찍으면 저절로 내려간다.
-   * 그런데 그 연결 없이 발행된 지난 건들은 이어 붙일 곳이 없어, 줄마다 눌러
-   * 끄는 수밖에 없었다. 쌓인 달이 여럿이면 수십 번을 눌러야 한다.
-   */
+  // 밀린 지난 달 치. 한꺼번에 정리하는 일은 인보이스설정의 '정산 완료 기준월'이
+  // 맡는다 — 여기서 일괄 처리를 두면 사람마다 한 번씩 눌러야 해서(서른 명이면
+  // 서른 번) 줄마다 누르는 것과 크게 다르지 않다.
   const agedItems = useMemo(
     () => displayItems.filter(d => !d.received && !!d.originMonth && d.originMonth < issueMonth),
     [displayItems, issueMonth],
   )
-  const bulkSetReceived = useBulkSetIncentiveReceived()
-  const markAgedPaid = () => {
-    if (!canToggleReceived || agedItems.length === 0) return
-    const months = [...new Set(agedItems.map(d => d.originMonth))].sort().join(' · ')
-    if (!confirm(
-      `이월된 ${agedItems.length}건(${months})을 모두 지급완료로 표시할까요?\n`
-      + `${effectiveName}님의 지난 달 치입니다. 되돌리려면 줄을 하나씩 다시 누르면 됩니다.`,
-    )) return
-    bulkSetReceived.mutate(
-      // 원래 달로 찍는다 — 발행월로 찍으면 어느 달 치를 지급했는지가 사라진다
-      agedItems.map(d => ({ key: d.id, received: true, month: d.originMonth || issueMonth })),
-      { onError: e => alert(e instanceof Error ? e.message : '표시하지 못했습니다.') },
-    )
-  }
 
   // "인보이스 발행" — open the form pre-filled with this month's source lines.
   const openIssueInvoice = () => {
@@ -2396,11 +2387,10 @@ export function FreelancerInvoicesPage(
                   className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${agedOnly ? 'bg-amber-500 border-amber-500 text-white' : 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'}`}>
                   이월 미지급 {agedItems.length}건{agedOnly ? ' ✕' : ''}
                 </button>
-                {canToggleReceived && (
-                  <button type="button" onClick={markAgedPaid} disabled={bulkSetReceived.isPending}
-                    className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">
-                    {bulkSetReceived.isPending ? '표시 중…' : `이월분 ${agedItems.length}건 모두 지급완료`}
-                  </button>
+                {canManageInvoiceSettings(user) && (
+                  <Link to="/invoices/settings" className="text-[11px] font-medium text-blue-600 hover:underline">
+                    지난 달 치를 한꺼번에 정리 →
+                  </Link>
                 )}
               </>
             )}
@@ -2444,7 +2434,8 @@ export function FreelancerInvoicesPage(
             그 인보이스에 담긴 줄은 다음 달부터 올라오지 않습니다. 줄마다 따로 누르지 않아도 됩니다.
             {' '}줄을 직접 누르는 것은 <b>인보이스 없이 현금으로 지급한 건</b>을 끌 때만 쓰세요
             (대표·부대표·재무이사{canToggleReceived ? '' : ' — 현재 계정은 조회만 가능'}).
-            {' '}미지급 건은 최근 {CARRY_OVER_MONTHS}개월까지 (원래 달) 태그를 달고 함께 올라옵니다.
+            {' '}미지급 건은 최근 {CARRY_OVER_MONTHS}개월까지 (원래 달) 태그를 달고 함께 올라옵니다
+            {settledThrough ? <> — 단 <b>{settledThrough}</b> 이전은 정산 완료로 보아 올리지 않습니다</> : null}.
             {isIncentive
               ? ' "인보이스 발행"은 미지급 건을 이름·금액에 채웁니다.'
               : ' "인보이스 발행"을 누르면 위 항목이 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.'}
