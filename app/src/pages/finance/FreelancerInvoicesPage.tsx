@@ -1305,6 +1305,14 @@ function pairDetail(pair: [string, string]): string {
   return `미팅 2건: ${pair[0]}, ${pair[1]}`
 }
 
+/** 'YYYY-MM' → '8월'. 발행월과 해가 다르면 '2025년 12월' 로 — 소급이 해를 넘길 때 헷갈린다. */
+function monthLabelKo(month: string, issueMonth: string): string {
+  const [y, m] = (month || '').split('-')
+  if (!y || !m) return month || ''
+  const mo = `${Number(m)}월`
+  return y === (issueMonth || '').slice(0, 4) ? mo : `${y}년 ${mo}`
+}
+
 /** Per consultant NAME → active students with 관리비 청구 대상 (정확방식/소급).
  *  리포트완료(미취소) 미팅 + 노쇼를 시간순 2개씩 짝지어, 각 짝의 '2번째 미팅이 있는 달'에 관리비 1개월치를 청구.
  *  누적 계산이라 예: 7월 1회 + 8/2 1회 → 8월(2번째 미팅월)에 1개월치가 잡힘(소급). 짝은 달마다 1번만 청구됨. */
@@ -1740,7 +1748,10 @@ export function FreelancerInvoicesPage(
   const incentiveStatus = useIncentiveStatus()
   const setIncentiveReceived = useSetIncentiveReceived()
 
-  type DItem = { id: string; label: string; amount: number; originMonth?: string; received: boolean; sourceDetail?: string }
+  // who = 이 줄이 누구에 대한 것인지. 한 학생이 여러 달 치로 여러 줄이 되므로,
+  // 줄 수와 학생 수는 다르다. 라벨에서 되짚으면 '김은서 (Amy Kim)' 의 괄호와
+  // 뒤에 붙는 '(8월분)' 을 가를 수 없어, 만들 때 함께 들고 다닌다.
+  type DItem = { id: string; label: string; amount: number; originMonth?: string; received: boolean; sourceDetail?: string; who?: string }
   const displayItems = useMemo<DItem[]>(() => {
     // 이 파트너의 발행유형이 게시판과 안 맞으면(개인 파트너인데 사업자로 지정 등) 자동청구 숨김
     if (!typeMatchesBoard) return []
@@ -1773,7 +1784,7 @@ export function FreelancerInvoicesPage(
             const key = lineKey('sess-fee', l.id, l.month)
             const state = carryState(incentiveStatus.get(key), issueMonth)
             if (state === 'hide') return null
-            return { id: key, label: l.label, amount: l.amount, originMonth: l.month, received: state === 'received', sourceDetail: `미팅 ${l.date}` }
+            return { id: key, label: l.label, amount: l.amount, originMonth: l.month, received: state === 'received', sourceDetail: `미팅 ${l.date}`, who: l.studentLabel }
           })
           .filter((x): x is DItem => x !== null)
       : []
@@ -1782,19 +1793,37 @@ export function FreelancerInvoicesPage(
     const mgmt: DItem[] = myFee ? [] : (byConsultant.get(myKey)?.students || [])
       .filter(r => r.billable && !myEssayStudentIds.has(r.id))
       // 짝(2회 미팅)마다 라인 1개. 지난 달에 닫힌 짝도 미지급이면 계속 올라온다.
-      .flatMap(r => r.pairs.map((bp, k): DItem | null => {
-        const key = lineKey('mgmt', `${r.id}#${k + 1}`, bp.month)
-        const state = carryState(incentiveStatus.get(key), issueMonth)
-        if (state === 'hide') return null
-        return {
-          id: key,
-          label: r.pairs.length > 1 ? `${r.label} (${k + 1}/${r.pairs.length}개월분)` : r.label,
-          amount: 0,
-          originMonth: bp.month,
-          received: state === 'received',
-          sourceDetail: pairDetail(bp.pair),
-        }
-      }))
+      .flatMap(r => {
+        // 어느 달 치인지를 적는다. 종전 '1/3개월분' 은 3분의 1 개월분으로 읽혀,
+        // 한 달치가 쪼개진 것으로 오해를 샀다. 줄이 여럿인 건 미지급분이 소급돼
+        // 쌓인 것일 뿐, 줄마다 온전한 1개월분이다.
+        // 한 달에 미팅이 4회면 같은 달에 짝이 둘 닫힌다 — 그때만 달 안에서 번호를 붙인다.
+        const perMonth = new Map<string, number>()
+        for (const bp of r.pairs) perMonth.set(bp.month, (perMonth.get(bp.month) || 0) + 1)
+        const seen = new Map<string, number>()
+        return r.pairs.map((bp, k): DItem | null => {
+          const n = perMonth.get(bp.month) || 1
+          // 숨긴 줄도 세어 둔다 — 안 그러면 남은 줄의 번호가 달마다 달라진다
+          const j = (seen.get(bp.month) || 0) + 1
+          seen.set(bp.month, j)
+          const key = lineKey('mgmt', `${r.id}#${k + 1}`, bp.month)
+          const state = carryState(incentiveStatus.get(key), issueMonth)
+          if (state === 'hide') return null
+          // 이번 달 치 한 줄뿐이면 달을 적지 않는다(발행월이 곧 그 달이다).
+          // 소급돼 올라온 줄에는 반드시 적는다 — 왜 또 떴는지가 거기 있다.
+          const show = r.pairs.length > 1 || bp.month !== issueMonth
+          const when = `${monthLabelKo(bp.month, issueMonth)}분${n > 1 ? ` ${j}/${n}` : ''}`
+          return {
+            id: key,
+            label: show ? `${r.label} (${when})` : r.label,
+            who: r.label,
+            amount: 0,
+            originMonth: bp.month,
+            received: state === 'received',
+            sourceDetail: pairDetail(bp.pair),
+          }
+        })
+      })
       .filter((x): x is DItem => x !== null)
     // 원서·에세이: 담당 컨설턴트=본인 & 시작월~12월 범위면 그 달치 자동 계산(총액÷개월수)
     const studentsByIdEssay = new Map(allStudentsForEditor.map(s => [s.id, s]))
@@ -1810,7 +1839,7 @@ export function FreelancerInvoicesPage(
         const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ')
           || (s ? studentLabel(s.name, s.koreanName) : '')
           || '학생'
-        return { id: key, label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, amount: line.amount, originMonth: om, received: state === 'received' }
+        return { id: key, label: `${who} · 원서에세이 (${line.index}/${line.count}월차)`, who, amount: line.amount, originMonth: om, received: state === 'received' }
       }))
       .filter((x): x is DItem => x !== null)
 
@@ -1838,7 +1867,13 @@ export function FreelancerInvoicesPage(
           if (state === 'hide') return
           editorLines.push({
             id: key,
-            label: `${who} · 에세이에디터${pairs.length > 1 ? ` (${k + 1}/${pairs.length}개월분)` : ''}`,
+            // 관리비와 같은 표기 — 어느 달 치인지 먼저, 한 달에 둘이면 뒤에 번호
+            label: `${who} · 에세이에디터${
+              pairs.length > 1 || om !== issueMonth
+                ? ` (${monthLabelKo(om, issueMonth)}분${pairs.length > 1 ? ` ${k + 1}/${pairs.length}` : ''})`
+                : ''
+            }`,
+            who,
             amount: 0,
             originMonth: om,
             received: state === 'received',
@@ -1866,7 +1901,7 @@ export function FreelancerInvoicesPage(
         const key = lineKey('coach', a.id, om)
         const state = carryState(incentiveStatus.get(key), issueMonth)
         if (state === 'hide') continue
-        mentorLines.push({ id: key, label: `${who} · 학습코칭 (월정액)`, amount: COACHING_MONTHLY, originMonth: om, received: state === 'received' })
+        mentorLines.push({ id: key, label: `${who} · 학습코칭 (월정액)`, who, amount: COACHING_MONTHLY, originMonth: om, received: state === 'received' })
       }
     }
     // 전공별: 발행월에 진행된 세션마다 등급 단가 1건(회당)
@@ -1884,7 +1919,7 @@ export function FreelancerInvoicesPage(
       if (state === 'hide') continue
       const s = studentsById2.get(sess.studentId || asg?.studentId || '')
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
-      mentorLines.push({ id: key, label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})`, amount: majorTierAmount(mt.tier), originMonth: om, received: state === 'received', sourceDetail: sess.comment })
+      mentorLines.push({ id: key, label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})`, who, amount: majorTierAmount(mt.tier), originMonth: om, received: state === 'received', sourceDetail: sess.comment })
     }
 
     return [...perSession, ...mgmt, ...essay, ...editorLines, ...mentorLines]
@@ -1897,6 +1932,12 @@ export function FreelancerInvoicesPage(
     originMonth: d.originMonth,
     sourceDetail: d.sourceDetail,   // 미팅 2건 일자 등 → 비고에 기록
   })), [displayItems, issueMonth])
+
+  /** 줄이 아니라 사람을 센다 — 소급으로 한 학생이 여러 줄이 되기 때문. */
+  const studentCount = useMemo(
+    () => new Set(displayItems.map(d => d.who).filter(Boolean)).size,
+    [displayItems],
+  )
 
   // 이월(원래 달 < 현재 달) 미수령만 보기 필터
   const [agedOnly, setAgedOnly] = useState(false)
@@ -2286,7 +2327,17 @@ export function FreelancerInvoicesPage(
         <CardContent className="p-4 space-y-2">
           <div className="text-sm flex items-center gap-2 flex-wrap">
             <span>
-              <b>{issueMonth}</b> {isIncentive ? '정산 대상 인센티브' : '청구 가능 학생'} <span className="font-bold text-emerald-600">{displayItems.length}</span>{isIncentive ? '건' : '명'}
+              <b>{issueMonth}</b> {isIncentive ? '정산 대상 인센티브' : '청구 가능'}{' '}
+              {isIncentive ? (
+                <><span className="font-bold text-emerald-600">{displayItems.length}</span>건</>
+              ) : (
+                // 줄 수와 학생 수는 다르다. 한 학생이 여러 달 치로 여러 줄이 되기 때문에,
+                // 줄 수를 '명'으로 세면 학생이 실제보다 몇 배로 부풀려 보인다.
+                <>
+                  학생 <span className="font-bold text-emerald-600">{studentCount}</span>명
+                  {' · '}<span className="font-bold text-emerald-600">{displayItems.length}</span>건
+                </>
+              )}
             </span>
             {isIncentive && (() => {
               const agedCount = displayItems.filter(d => !d.received && !!d.originMonth && d.originMonth < issueMonth).length

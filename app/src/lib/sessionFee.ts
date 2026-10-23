@@ -43,6 +43,8 @@ export interface SessionFeeLine {
   /** 그 달 안에서 몇 번째인지 */
   index: number
   date: string
+  /** 라벨에서 떼어낸 학생 표기 — 줄 수가 아니라 학생 수를 셀 때 쓴다 */
+  studentLabel: string
 }
 
 const monthOf = (d: string) => (d || '').slice(0, 7)
@@ -77,6 +79,7 @@ export function sessionFeeLines(
     out.push({
       id: s.id,
       label: `${monthNum(m)}월 ${index}회차 · ${s.studentLabel}`,
+      studentLabel: s.studentLabel,
       amount: unit,
       month: m,
       index,
