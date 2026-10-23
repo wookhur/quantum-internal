@@ -789,9 +789,11 @@ function ManualFeeForm({ fee, onDone }: { fee?: ServiceProgramFee; onDone: () =>
     () => [...students].filter(s => s.name || s.koreanName).sort(compareStudentsKo),
     [students],
   )
+  // 부서로 거르지 않는다 — 어느 팀이든 담당자가 될 수 있다.
+  // 퇴사자도 남긴다: 옛 건을 수정할 때 이름이 목록에 없으면 담당자가 지워져 버린다.
   const staff = useMemo(
-    () => profiles.filter(p => !p.resigned && (p.department === 'sales' || p.department === 'service'))
-      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')),
+    () => [...profiles].filter(p => !p.isExternal && p.name)
+      .sort((a, b) => Number(a.resigned) - Number(b.resigned) || a.name.localeCompare(b.name, 'ko')),
     [profiles],
   )
 
@@ -881,7 +883,9 @@ function ManualFeeForm({ fee, onDone }: { fee?: ServiceProgramFee; onDone: () =>
               <span className="truncate">{form.contributor || '선택'}</span>
             </SelectTrigger>
             <SelectContent className="max-h-72">
-              {staff.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+              {staff.map(p => (
+                <SelectItem key={p.id} value={p.name}>{p.name}{p.resigned ? ' (퇴사)' : ''}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
