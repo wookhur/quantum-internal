@@ -2327,15 +2327,17 @@ export function FreelancerInvoicesPage(
                 </>
               )}
             </span>
-            {isIncentive && (() => {
+            {/* 지급완료 집계와 이월 필터는 두 게시판 모두에 둔다 — 관리비 쪽에도
+                소급이 걸려 있으므로 어느 달이 밀렸는지 같은 방식으로 봐야 한다. */}
+            {(() => {
               const agedCount = displayItems.filter(d => !d.received && !!d.originMonth && d.originMonth < issueMonth).length
               return (
                 <>
-                  <span className="text-muted-foreground">· 수령완료 {displayItems.filter(d => d.received).length} / 미수령 {displayItems.filter(d => !d.received).length}</span>
+                  <span className="text-muted-foreground">· 지급완료 {displayItems.filter(d => d.received).length} / 미지급 {displayItems.filter(d => !d.received).length}</span>
                   {agedCount > 0 && (
                     <button type="button" onClick={() => setAgedOnly(v => !v)}
                       className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${agedOnly ? 'bg-amber-500 border-amber-500 text-white' : 'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100'}`}>
-                      이월 미수령 {agedCount}건{agedOnly ? ' ✕' : ''}
+                      이월 미지급 {agedCount}건{agedOnly ? ' ✕' : ''}
                     </button>
                   )}
                 </>
@@ -2344,15 +2346,10 @@ export function FreelancerInvoicesPage(
             {!isIncentive && <span className="text-muted-foreground"> · 관리비: 미팅리포트 2회 완료 학생(원서·에세이 신청 학생 제외) · 원서·에세이: 시작월~12월 매월 자동(금액 자동)</span>}
           </div>
           {renderedItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{agedOnly ? '이월된 미수령 인센티브가 없습니다.' : (isIncentive ? '이 달에 정산할(수금 완료) 세일즈 인센티브가 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)')}</p>
+            <p className="text-sm text-muted-foreground">{agedOnly ? '이월된 미지급 건이 없습니다.' : (isIncentive ? '이 달에 정산할(수금 완료) 세일즈 인센티브가 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)')}</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {renderedItems.map((r) => {
-                if (!isIncentive) return (
-                  <Badge key={r.id} variant="outline" title={r.sourceDetail || undefined} className={r.amount > 0 ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : ''}>
-                    {r.label}{r.amount > 0 ? ` · ${formatKRW(r.amount)}` : ''}
-                  </Badge>
-                )
                 const carried = !!r.originMonth && r.originMonth < issueMonth
                 const delay = carried ? monthsBetween(r.originMonth, issueMonth) : 0
                 return (
@@ -2361,7 +2358,7 @@ export function FreelancerInvoicesPage(
                     type="button"
                     onClick={() => toggleReceived(r.id, r.received)}
                     disabled={!canToggleReceived}
-                    title={`${r.sourceDetail || ''}\n${!canToggleReceived ? '수령 여부는 회계 계정만 변경할 수 있습니다' : (r.received ? '수령완료 — 클릭하면 미수령으로 되돌립니다' : '클릭하면 이 달 수령완료로 표시됩니다')}`}
+                    title={`${r.sourceDetail || ''}\n${!canToggleReceived ? '지급 여부는 대표·부대표·재무이사만 변경할 수 있습니다' : (r.received ? '지급완료 — 클릭하면 미지급으로 되돌립니다' : '클릭하면 이 달 지급완료로 표시됩니다')}`}
                     className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${canToggleReceived ? 'cursor-pointer' : 'cursor-default'} ${
                       r.received
                         ? 'bg-emerald-500 border-emerald-500 text-white'
@@ -2371,17 +2368,23 @@ export function FreelancerInvoicesPage(
                     }`}
                   >
                     {r.received && <CheckCircle2 className="size-3" />}
-                    <span>{r.label} · {formatKRW(r.amount)}</span>
+                    {/* 관리비 줄은 금액이 0이다 — 단가를 발행할 때 손으로 적기 때문에 ₩0 을 붙이면 안 된다 */}
+                    <span>{r.label}{r.amount > 0 ? ` · ${formatKRW(r.amount)}` : ''}</span>
                     {carried && <span className={`text-[10px] font-medium ${r.received ? 'text-emerald-100' : 'text-amber-600'}`}>({monthNum(r.originMonth)}월분{delay > 0 ? ` · ${delay}개월 이월` : ''})</span>}
                   </button>
                 )
               })}
             </div>
           )}
+          {/* 두 게시판의 설명을 같게 둔다 — 종전에는 관리비 쪽에 이월·지급완료 이야기가
+              아예 없었고, 줄을 끌 버튼도 없어서 지급을 끝낸 달이 영영 올라왔다. */}
           <p className="text-[11px] text-muted-foreground">
+            지급완료(초록) 표시는 <b>대표·부대표·재무이사</b>만 바꿀 수 있습니다{canToggleReceived ? '' : ' — 현재 계정은 조회만 가능'}.
+            {' '}지급이 끝난 줄은 <b>눌러서 꺼 주세요</b> — 끄지 않으면 다음 달에도 (원래 달) 태그를 달고 계속 올라옵니다
+            (최근 {CARRY_OVER_MONTHS}개월).
             {isIncentive
-              ? `수령완료(초록) 표시는 회계 계정만 변경할 수 있습니다${canToggleReceived ? '' : ' — 현재 계정은 조회만 가능'}. 미수령 건은 다음 달로 자동 이월되어 (원래 달) 태그로 계속 표시되고, "인보이스 발행"은 미수령 건을 이름·금액에 채웁니다.`
-              : '"인보이스 발행"을 누르면 위 학생이 이름에 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.'}
+              ? ' "인보이스 발행"은 미지급 건을 이름·금액에 채웁니다.'
+              : ' "인보이스 발행"을 누르면 위 항목이 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.'}
           </p>
           {isIncentive && displayItems.length > 0 && (
             <details className="mt-1 rounded-md border bg-muted/20 p-2">
