@@ -1342,8 +1342,23 @@ function legacyMgmtReceivedMap(status: Map<string, IncentiveStatus>): Map<string
   return out
 }
 
+/**
+ * 학생 이름을 묶음 머리로 뽑아 올렸을 때, 칩에 남길 부분.
+ *
+ * 라벨 자체는 건드리지 않는다 — 인보이스 항목명으로 그대로 쓰이므로 '오아진 2회차'
+ * 가 '2회차' 가 되면 인보이스만 보고는 누구 것인지 알 수 없다. 화면에서만 줄인다.
+ *
+ * 관리비 줄은 라벨이 곧 학생 이름이라 떼면 아무것도 안 남는다 → '관리비' 로 적는다.
+ */
+function lineShortLabel(r: { label: string; who?: string }): string {
+  if (!r.who || !r.label.startsWith(r.who)) return r.label
+  const rest = r.label.slice(r.who.length).replace(/^[\s·]+/, '').trim()
+  // 아무것도 안 남거나 괄호만 남으면(짝 번호 등) 무엇에 대한 건지 사라진다
+  return !rest || rest.startsWith('(') ? `관리비 ${rest}`.trim() : rest
+}
+
 /** 'YYYY-MM' → '8월'. 발행월과 해가 다르면 '2025년 12월' 로 — 소급이 해를 넘길 때 헷갈린다. */
-function monthLabelKo(month: string, issueMonth: string): string {
+function monthLabelKo(month: string | undefined, issueMonth: string): string {
   const [y, m] = (month || '').split('-')
   if (!y || !m) return month || ''
   const mo = `${Number(m)}월`
@@ -1879,9 +1894,9 @@ export function FreelancerInvoicesPage(
             const key = lineKey('sess-fee', l.id, l.month)
             const state = lineState(key, l.month)
             if (state === 'hide') return null
-            // 소급돼 올라온 줄에는 어느 달 치인지 붙인다 — 관리비 줄과 같은 표기
-            const when = l.month !== issueMonth ? ` (${monthLabelKo(l.month, issueMonth)}분)` : ''
-            return { id: key, label: `${l.label}${when}`, amount: l.amount, originMonth: l.month, received: state === 'received', sourceDetail: `미팅 ${l.date}`, who: l.studentLabel }
+            // 어느 달 치인지는 칩과 인보이스 항목명이 각각 붙인다 — 라벨에도 넣으면
+            // '2회차 (8월분) (8월분 · 2개월 이월)' 처럼 두 번 찍힌다
+            return { id: key, label: l.label, amount: l.amount, originMonth: l.month, received: state === 'received', sourceDetail: `미팅 ${l.date}`, who: l.studentLabel }
           })
           .filter((x): x is DItem => x !== null)
       : []
@@ -1902,13 +1917,12 @@ export function FreelancerInvoicesPage(
           const key = lineKey('mgmt', `${r.id}#${bp.idx}`, bp.month)
           const state = mgmtState(key, r.id, bp.month, bp.idx)
           if (state === 'hide') return null
-          // 이번 달 치 한 줄뿐이면 달을 적지 않는다(발행월이 곧 그 달이다).
-          // 소급돼 올라온 줄에는 반드시 적는다 — 왜 또 떴는지가 거기 있다.
-          const show = r.pairs.length > 1 || bp.month !== issueMonth
-          const when = `${monthLabelKo(bp.month, issueMonth)}분${n > 1 ? ` ${bp.idx}/${n}` : ''}`
+          // 어느 달 치인지는 칩과 인보이스 항목명이 각각 붙이므로 라벨에 넣지 않는다.
+          // 한 달에 미팅이 4회면 같은 달에 짝이 둘 닫히는데, 그 둘은 달만으로는
+          // 구분되지 않으므로 그때만 번호를 적는다.
           return {
             id: key,
-            label: show ? `${r.label} (${when})` : r.label,
+            label: n > 1 ? `${r.label} (${bp.idx}/${n})` : r.label,
             who: r.label,
             amount: 0,
             originMonth: bp.month,
@@ -1960,12 +1974,9 @@ export function FreelancerInvoicesPage(
           if (state === 'hide') return
           editorLines.push({
             id: key,
-            // 관리비와 같은 표기 — 어느 달 치인지 먼저, 한 달에 둘이면 뒤에 번호
-            label: `${who} · 에세이에디터${
-              pairs.length > 1 || om !== issueMonth
-                ? ` (${monthLabelKo(om, issueMonth)}분${pairs.length > 1 ? ` ${k + 1}/${pairs.length}` : ''})`
-                : ''
-            }`,
+            // 관리비와 같은 표기 — 달은 칩과 인보이스 항목명이 붙이므로 라벨에 넣지
+            // 않고, 같은 달에 짝이 둘일 때만 번호를 적는다
+            label: `${who} · 에세이에디터${pairs.length > 1 ? ` (${k + 1}/${pairs.length})` : ''}`,
             who,
             amount: 0,
             originMonth: om,
@@ -2039,6 +2050,30 @@ export function FreelancerInvoicesPage(
     () => agedOnly ? displayItems.filter(d => !d.received && !!d.originMonth && d.originMonth < issueMonth) : displayItems,
     [agedOnly, displayItems, issueMonth],
   )
+
+  /**
+   * 같은 학생 줄을 한 줄에 모은다.
+   *
+   * 종전에는 '오아진 1회차' 와 '오아진 2회차' 가 목록 양 끝에 떨어져 있어, 그 달에
+   * 몇 번 봤는지 알려면 눈으로 세어야 했다. 이름을 앞에 한 번만 적고 회차를 옆에
+   * 늘어놓으면 1·2·3회차가 한눈에 들어온다.
+   *
+   * who 가 없는 줄(세일즈 인센티브)은 묶지 않고 종전처럼 그대로 늘어놓는다.
+   */
+  const groupedItems = useMemo(() => {
+    const named = new Map<string, DItem[]>()
+    const plain: DItem[] = []
+    for (const r of renderedItems) {
+      if (!r.who) { plain.push(r); continue }
+      const arr = named.get(r.who) || []
+      arr.push(r)
+      named.set(r.who, arr)
+    }
+    const groups: [string | null, DItem[]][] = [...named.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], 'ko'))
+    if (plain.length) groups.push([null, plain])
+    return groups
+  }, [renderedItems])
 
   /**
    * 수령완료 표시 권한 — 재무담당(account)과 관리자(대표·부대표).
@@ -2417,32 +2452,47 @@ export function FreelancerInvoicesPage(
           {renderedItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">{agedOnly ? '이월된 미지급 건이 없습니다.' : (isIncentive ? '이 달에 정산할(수금 완료) 세일즈 인센티브가 없습니다.' : '이 달에 조건을 충족한 학생이 없습니다. (미팅리포트 2회 업로드 필요)')}</p>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {renderedItems.map((r) => {
-                const carried = !!r.originMonth && r.originMonth < issueMonth
-                const delay = carried ? monthsBetween(r.originMonth, issueMonth) : 0
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => toggleReceived(r.id, r.received)}
-                    disabled={!canToggleReceived}
-                    title={`${r.sourceDetail || ''}\n${!canToggleReceived ? '지급 여부는 대표·부대표·재무이사만 변경할 수 있습니다' : (r.received ? '지급완료 — 클릭하면 미지급으로 되돌립니다' : '클릭하면 이 달 지급완료로 표시됩니다')}`}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${canToggleReceived ? 'cursor-pointer' : 'cursor-default'} ${
-                      r.received
-                        ? 'bg-emerald-500 border-emerald-500 text-white'
-                        : carried
-                          ? 'bg-amber-50 border-amber-300 text-amber-800 hover:border-emerald-400'
-                          : 'bg-white border-gray-300 text-gray-700 hover:border-emerald-400 hover:bg-emerald-50'
-                    }`}
-                  >
-                    {r.received && <CheckCircle2 className="size-3" />}
-                    {/* 관리비 줄은 금액이 0이다 — 단가를 발행할 때 손으로 적기 때문에 ₩0 을 붙이면 안 된다 */}
-                    <span>{r.label}{r.amount > 0 ? ` · ${formatKRW(r.amount)}` : ''}</span>
-                    {carried && <span className={`text-[10px] font-medium ${r.received ? 'text-emerald-100' : 'text-amber-600'}`}>({monthNum(r.originMonth)}월분{delay > 0 ? ` · ${delay}개월 이월` : ''})</span>}
-                  </button>
-                )
-              })}
+            <div className="space-y-1.5">
+              {groupedItems.map(([who, items]) => (
+                <div key={who ?? '_'} className="flex flex-wrap items-center gap-1.5">
+                  {who && (
+                    <>
+                      <span className="text-xs font-medium">{who}</span>
+                      {items.length > 1 && (
+                        <span className="rounded bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+                          {items.length}회
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {items.map((r) => {
+                    const carried = !!r.originMonth && r.originMonth < issueMonth
+                    const delay = carried ? monthsBetween(r.originMonth, issueMonth) : 0
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => toggleReceived(r.id, r.received)}
+                        disabled={!canToggleReceived}
+                        title={`${r.label}\n${r.sourceDetail || ''}\n${!canToggleReceived ? '지급 여부는 대표·부대표·재무이사만 변경할 수 있습니다' : (r.received ? '지급완료 — 클릭하면 미지급으로 되돌립니다' : '클릭하면 이 달 지급완료로 표시됩니다')}`}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${canToggleReceived ? 'cursor-pointer' : 'cursor-default'} ${
+                          r.received
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : carried
+                              ? 'bg-amber-50 border-amber-300 text-amber-800 hover:border-emerald-400'
+                              : 'bg-white border-gray-300 text-gray-700 hover:border-emerald-400 hover:bg-emerald-50'
+                        }`}
+                      >
+                        {r.received && <CheckCircle2 className="size-3" />}
+                        {/* 관리비 줄은 금액이 0이다 — 단가를 발행할 때 손으로 적기 때문에 ₩0 을 붙이면 안 된다 */}
+                        <span>{who ? lineShortLabel(r) : r.label}{r.amount > 0 ? ` · ${formatKRW(r.amount)}` : ''}</span>
+                        {/* 소급이 해를 넘기면 '12월분' 만으로는 어느 해인지 모른다 */}
+                        {carried && <span className={`text-[10px] font-medium ${r.received ? 'text-emerald-100' : 'text-amber-600'}`}>({monthLabelKo(r.originMonth, issueMonth)}분{delay > 0 ? ` · ${delay}개월 이월` : ''})</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
             </div>
           )}
           {/* 두 게시판의 설명을 같게 둔다 — 종전에는 관리비 쪽에 이월·지급완료 이야기가
