@@ -4,7 +4,12 @@ import { consultantNameKey } from '@/lib/consultants'
 
 export type PartnerInvoiceType = 'individual' | 'business'
 export type PartnerAccountRegion = 'domestic' | 'overseas'
-export interface PartnerSetting { invoiceType: PartnerInvoiceType; accountRegion: PartnerAccountRegion }
+export interface PartnerSetting {
+  invoiceType: PartnerInvoiceType
+  accountRegion: PartnerAccountRegion
+  /** 인보이스설정 목록에서 빼 둔 사람. 퇴사자·테스트 계정처럼 발행 대상이 아닌 경우. */
+  hidden: boolean
+}
 export type PartnerSettingMap = Map<string, PartnerSetting>
 
 /**
@@ -18,20 +23,25 @@ export function usePartnerInvoiceTypes() {
     queryKey: ['partner-invoice-types'],
     queryFn: async () => {
       const map: PartnerSettingMap = new Map()
-      // account_region 마이그레이션 전이면 그 칸 없이 재조회
+      // 칸이 늘 때마다 마이그레이션 전 화면이 통째로 비지 않도록, 넓은 것부터 좁혀 가며 조회한다
       let rows: Record<string, unknown>[] | null = null
-      const full = await supabase.from('partner_invoice_types').select('name_key, invoice_type, account_region')
-      if (full.error) {
-        const base = await supabase.from('partner_invoice_types').select('name_key, invoice_type')
-        if (base.error) { console.warn('partner_invoice_types not found:', base.error.message); return map }
-        rows = base.data as Record<string, unknown>[]
-      } else {
-        rows = full.data as Record<string, unknown>[]
+      for (const cols of [
+        'name_key, invoice_type, account_region, hidden',
+        'name_key, invoice_type, account_region',
+        'name_key, invoice_type',
+      ]) {
+        const res = await supabase.from('partner_invoice_types').select(cols)
+        if (!res.error) { rows = res.data as unknown as Record<string, unknown>[]; break }
+        if (cols === 'name_key, invoice_type') {
+          console.warn('partner_invoice_types not found:', res.error.message)
+          return map
+        }
       }
       for (const r of rows || []) {
         map.set(r.name_key as string, {
           invoiceType: (r.invoice_type as PartnerInvoiceType) || 'individual',
           accountRegion: (r.account_region as PartnerAccountRegion) || 'domestic',
+          hidden: r.hidden === true,
         })
       }
       return map
@@ -54,12 +64,13 @@ export function accountRegionOf(map: PartnerSettingMap | undefined, name?: strin
 export function useSetPartnerInvoiceType() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ name, invoiceType, accountRegion }: { name: string; invoiceType?: PartnerInvoiceType; accountRegion?: PartnerAccountRegion }) => {
+    mutationFn: async ({ name, invoiceType, accountRegion, hidden }: { name: string; invoiceType?: PartnerInvoiceType; accountRegion?: PartnerAccountRegion; hidden?: boolean }) => {
       const key = consultantNameKey(name)
       if (!key) throw new Error('이름이 비어 있습니다.')
       const row: Record<string, unknown> = { name_key: key, display_name: name, updated_at: new Date().toISOString() }
       if (invoiceType !== undefined) row.invoice_type = invoiceType
       if (accountRegion !== undefined) row.account_region = accountRegion
+      if (hidden !== undefined) row.hidden = hidden
       const { error } = await supabase.from('partner_invoice_types').upsert(row, { onConflict: 'name_key' })
       if (error) throw error
     },

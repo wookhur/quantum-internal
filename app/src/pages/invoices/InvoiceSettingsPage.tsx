@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Loader2, Search, Settings, Lock } from 'lucide-react'
+import { Loader2, Search, Settings, Lock, Trash2, Undo2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfiles, canManageInvoiceSettings } from '@/hooks/useProfiles'
 import { useMentors } from '@/hooks/useMentors'
@@ -59,6 +59,7 @@ interface Row {
   sessions?: number
   invoiceType: PartnerInvoiceType
   accountRegion: PartnerAccountRegion
+  hidden: boolean
 }
 
 function SettingsBody() {
@@ -68,6 +69,7 @@ function SettingsBody() {
   const { data: partnerTypes } = usePartnerInvoiceTypes()
   const [q, setQ] = useState('')
   const [onlySet, setOnlySet] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
 
   const rows = useMemo<Row[]>(() => {
     // 이름(정규화)으로 모은다 — 연 관리비·발행유형 모두 이름을 키로 저장하기 때문이다
@@ -86,6 +88,7 @@ function SettingsBody() {
         sessions: fee?.sessions,
         invoiceType: pt?.invoiceType || 'individual',
         accountRegion: pt?.accountRegion || 'domestic',
+        hidden: pt?.hidden === true,
       })
     }
     for (const p of profiles) if (!p.isExternal || p.role === 'freelancer') put(p.name, !!p.resigned)
@@ -100,12 +103,16 @@ function SettingsBody() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return rows.filter(r => {
+      // 뺀 사람은 '뺀 사람 보기' 를 켰을 때만 — 켜면 그 사람들만 보여 되돌리기 쉽다
+      if (r.hidden !== showHidden) return false
       if (onlySet && !r.annualAmount) return false
       return !needle || r.name.toLowerCase().includes(needle)
     })
-  }, [rows, q, onlySet])
+  }, [rows, q, onlySet, showHidden])
 
-  const setCount = rows.filter(r => !!r.annualAmount).length
+  const visible = rows.filter(r => !r.hidden)
+  const setCount = visible.filter(r => !!r.annualAmount).length
+  const hiddenCount = rows.length - visible.length
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -128,6 +135,10 @@ function SettingsBody() {
               발행유형은 그 사람의 <b>자동 청구가 어느 게시판에 뜨는지</b>를 정합니다(개인 / 사업자).
               계좌구분은 발행 양식을 가릅니다 — 국내계좌는 견적서, 해외계좌는 해외 인보이스.
             </p>
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              발행 대상이 아닌 사람은 오른쪽 휴지통으로 <b>이 목록에서만</b> 뺍니다 — 인사관리의 계정은 그대로이고,
+              <b>뺀 사람 보기</b>에서 언제든 되돌릴 수 있습니다.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -149,7 +160,22 @@ function SettingsBody() {
             >
               연 관리비 설정됨 {setCount}명{onlySet ? ' ✕' : ''}
             </button>
-            <span className="text-[11px] text-muted-foreground">전체 {rows.length}명</span>
+            {(hiddenCount > 0 || showHidden) && (
+              <button
+                type="button"
+                onClick={() => setShowHidden(v => !v)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+                  showHidden
+                    ? 'border-slate-600 bg-slate-600 text-white'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                뺀 사람 {hiddenCount}명{showHidden ? ' ✕' : ' 보기'}
+              </button>
+            )}
+            <span className="text-[11px] text-muted-foreground">
+              {showHidden ? `뺀 사람 ${hiddenCount}명` : `목록 ${visible.length}명`}
+            </span>
           </div>
 
           <div className="overflow-x-auto">
@@ -161,13 +187,14 @@ function SettingsBody() {
                   <TableHead className="w-32">1회분</TableHead>
                   <TableHead className="w-40">발행유형</TableHead>
                   <TableHead className="w-40">계좌구분</TableHead>
+                  <TableHead className="w-24" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                      해당하는 사람이 없습니다.
+                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                      {showHidden ? '뺀 사람이 없습니다.' : '해당하는 사람이 없습니다.'}
                     </TableCell>
                   </TableRow>
                 ) : filtered.map(r => <SettingRow key={r.nameKey} row={r} />)}
@@ -195,6 +222,26 @@ function SettingRow({ row }: { row: Row }) {
   const dirty = amount !== (row.annualAmount ? String(row.annualAmount) : '')
     || sessions !== String(row.sessions || 30)
   const busy = setFee.isPending || clearFee.isPending
+
+  /**
+   * 목록에서 뺀다. 인사관리의 계정은 건드리지 않는다 — 여기서 지우는 건 '인보이스
+   * 발행 대상' 표시뿐이다.
+   *
+   * 연 관리비가 걸려 있으면 함께 지운다. 목록에서 안 보이는 사람에게 회당 방식이
+   * 계속 적용되면, 아무도 못 보는 자리에서 금액이 정해지는 꼴이 된다.
+   */
+  const hide = () => {
+    setErr('')
+    const warn = row.annualAmount
+      ? `${row.name}님을 인보이스설정 목록에서 뺄까요?\n연 관리비 설정도 함께 지워져 '미팅 2회 = 1개월분' 방식으로 돌아갑니다.\n(인사관리의 계정은 그대로입니다.)`
+      : `${row.name}님을 인보이스설정 목록에서 뺄까요?\n(인사관리의 계정은 그대로입니다. 나중에 되돌릴 수 있습니다.)`
+    if (!confirm(warn)) return
+    const fail = (e: unknown) => setErr(e instanceof Error ? e.message : '빼지 못했습니다.')
+    setType.mutate({ name: row.name, hidden: true }, {
+      onError: fail,
+      onSuccess: () => { if (row.annualAmount) clearFee.mutate(row.nameKey, { onError: fail }) },
+    })
+  }
 
   const save = () => {
     setErr('')
@@ -271,6 +318,27 @@ function SettingRow({ row }: { row: Row }) {
             >{rg === 'overseas' ? '해외계좌' : '국내계좌'}</button>
           ))}
         </div>
+      </TableCell>
+      <TableCell className="text-right">
+        {row.hidden ? (
+          <Button
+            size="sm" variant="ghost" className="h-7 gap-1 text-[11px]"
+            disabled={setType.isPending}
+            onClick={() => setType.mutate({ name: row.name, hidden: false })}
+          >
+            <Undo2 className="size-3.5" /> 되돌리기
+          </Button>
+        ) : (
+          <button
+            type="button"
+            disabled={setType.isPending || busy}
+            onClick={hide}
+            className="text-gray-300 hover:text-red-500"
+            title="이 목록에서 빼기"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        )}
       </TableCell>
     </TableRow>
   )

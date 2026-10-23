@@ -1770,7 +1770,6 @@ export function FreelancerInvoicesPage(
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b, 'ko'))
   }, [previewProfiles, allMentors])
-  const myFeeSetting = annualFeeOf(annualFees, effectiveName)
   const myName = canonicalConsultantName(effectiveName)
   // 파트너 발행유형(개인/사업자): 자동청구를 어느 게시판에 띄울지 가른다.
   //  개인 파트너 = 발행유형 '개인'(또는 미지정), 사업자 파트너 = '사업자'. → 한 사람은 한 곳에만.
@@ -1987,8 +1986,17 @@ export function FreelancerInvoicesPage(
     [agedOnly, displayItems, issueMonth],
   )
 
-  // 수령/미수령 변경은 회계(accounting) 계정만 — 본인 임의 조작 방지
-  const canToggleReceived = isAccounting
+  /**
+   * 수령완료 표시 권한 — 재무담당(account)과 관리자(대표·부대표).
+   *
+   * 종전에는 account 뿐이었다. 그래서 admin 인 대표·부대표는 목록은 보면서도
+   * 지급을 끝낸 줄을 끌 방법이 없었고, 지급이 끝난 8·9월분이 소급으로 계속
+   * 올라왔다. 인보이스설정과 같은 권한 묶음으로 맞춘다.
+   *
+   * 컨설턴트 본인은 여전히 제 줄을 끌 수 없다 — 받지도 않고 받은 것으로 찍으면
+   * 그대로 지급에서 빠진다.
+   */
+  const canToggleReceived = canManageInvoiceSettings(user)
   const toggleReceived = (id: string, currentlyReceived: boolean) => {
     if (!canToggleReceived) return
     setIncentiveReceived.mutate({ key: id, received: !currentlyReceived, month: issueMonth })
@@ -2287,32 +2295,13 @@ export function FreelancerInvoicesPage(
         {isManager && !!previewName && (
           <p className="text-[12px] text-amber-600 self-center">👁 {previewName} 미리보기 중 — 발행하려면 대상을 ‘나’로 바꾸세요</p>
         )}
-        {/* 연 관리비·발행유형·계좌구분은 인보이스설정 한 곳에서 정한다.
-            종전에는 이 자리에서 미리보기 대상을 한 사람씩 바꿔 가며 고쳐야 했고,
-            사업자 파트너인 사람의 연 관리비를 개인 게시판에서 고치는 꼴이었다.
-            여기서는 지금 값만 읽어 보여 준다. */}
-        {(isIndividualBoard || isBusinessBoard) && isAccounting && effectiveName && (
-          <div className="self-end">
-            <Label className="text-xs">{effectiveName} 설정</Label>
-            <div className="flex h-9 items-center gap-1.5 text-xs">
-              <span className={`rounded px-2 py-1 font-medium ${partnerType === 'business' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                {partnerType === 'business' ? '사업자' : '개인'}
-              </span>
-              <span className="rounded bg-slate-100 px-2 py-1 font-medium text-slate-700">
-                {partnerAccountRegion === 'overseas' ? '해외계좌' : '국내계좌'}
-              </span>
-              <span className="text-muted-foreground">
-                {myFeeSetting
-                  ? `연 관리비 1회 ${formatKRW(Math.round(myFeeSetting.annualAmount / myFeeSetting.sessions))}`
-                  : '연 관리비 미설정 (미팅 2회 = 1개월분)'}
-              </span>
-              {canManageInvoiceSettings(user) && (
-                <Link to="/invoices/settings" className="font-medium text-blue-600 hover:underline">
-                  인보이스설정에서 변경
-                </Link>
-              )}
-            </div>
-          </div>
+        {/* 연 관리비·발행유형·계좌구분은 인보이스설정 한 곳에서 본다.
+            이 자리에 두면 미리보기 대상을 한 사람씩 바꿔 가며 봐야 하고,
+            사업자 파트너인 사람의 연 관리비를 개인 게시판에서 다루는 꼴이 된다. */}
+        {(isIndividualBoard || isBusinessBoard) && canManageInvoiceSettings(user) && (
+          <Link to="/invoices/settings" className="self-end pb-2 text-xs font-medium text-blue-600 hover:underline">
+            인보이스설정
+          </Link>
         )}
       </div>
       {/* 발행유형이 이 게시판과 안 맞으면 안내 (반대 게시판에서 발행) */}
@@ -2470,7 +2459,8 @@ export function FreelancerInvoicesPage(
             <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
               displayItems.length > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
             }`}>
-              {displayItems.length}{isIncentive ? '건' : '명'}
+              {/* 줄 수를 '명'으로 세면 학생이 실제보다 몇 배로 부풀려 보인다 */}
+              {displayItems.length}건
             </span>
             {/* 어느 이름으로 찾고 있는지 보여 준다 — 0명일 때 원인이 이름 매칭인지 바로 알 수 있다 */}
             <span className="font-normal text-muted-foreground">
