@@ -17,9 +17,15 @@ import {
 } from '@/components/ui/popover'
 import {
   Loader2, Search, CheckCircle2, Clock, HandCoins, Lock, Link as LinkIcon, X,
+  Plus, Trash2, PencilLine,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useAllServiceProgramFees, type ServiceProgramFee } from '@/hooks/useServiceProgramFees'
+import {
+  useAllServiceProgramFees, useCreateManualServiceFee, useDeleteManualServiceFee,
+  type ServiceProgramFee,
+} from '@/hooks/useServiceProgramFees'
+import { useServiceStudents } from '@/hooks/useServiceStudents'
+import { compareStudentsKo, studentPickerLabel } from '@/lib/studentDisplay'
 import { useUpdateECActivity } from '@/hooks/useECActivities'
 import { useUpdateAcademicSupport } from '@/hooks/useAcademicSupport'
 import { useDefaultRates, usePartnerRateMap, normalizePartner, rateForTeam, type ContributorTeam } from '@/hooks/usePartnerCommissionRates'
@@ -98,6 +104,9 @@ export function ExternalFeesPage() {
 
   // set a contributor's team inline from the list (auto = clear override → null)
   const setTeam = (f: ServiceProgramFee, slot: 0 | 1, choice: 'auto' | ContributorTeam | 'none') => {
+    // 수기 입금 건은 EC·학습지원 테이블에 없다. 팀이 아니라 건별 요율로 계산하므로
+    // 팀을 바꿀 일도 없다 — 엉뚱한 테이블에 쓰지 않도록 여기서 멈춘다.
+    if (f.source === 'manual') return
     const val = choice === 'auto' ? null : choice
     const base = { id: f.id, studentId: f.studentId }
     const payload = slot === 0 ? { ...base, contributor1Team: val } : { ...base, contributor2Team: val }
@@ -106,6 +115,9 @@ export function ExternalFeesPage() {
 
   // set '몇월 교육비' inline from the list
   const setServiceMonth = (f: ServiceProgramFee, month: string) => {
+    // 수기 건의 월은 정산월에서 만들어 쓰는 값이라 여기서 따로 바꾸지 않는다
+    // (바꾸면 인센티브가 잡히는 달과 어긋난다). 수기 행의 [수정]에서 바꾼다.
+    if (f.source === 'manual') return
     ;(f.source === 'ec' ? updateEC : updateAC).mutate({ id: f.id, studentId: f.studentId, serviceMonth: month || undefined })
   }
 
@@ -202,6 +214,10 @@ export function ExternalFeesPage() {
         />
       </div>
 
+      {/* 수기 입금 — 정기 수업이 아니라 달마다 불규칙하게 정산되는 건.
+          360 에 걸 프로그램이 없어 어디에도 안 남던 돈을 여기서 직접 적는다. */}
+      {isAdmin && <ManualFeeEntry />}
+
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -237,19 +253,28 @@ export function ExternalFeesPage() {
                           <div>
                             <div className="font-medium text-sm flex items-center gap-1.5">
                               {f.label}
-                              <select
-                                value={f.serviceMonth || ''}
-                                onClick={e => e.stopPropagation()}
-                                onChange={e => { e.stopPropagation(); setServiceMonth(f, e.target.value) }}
-                                title="몇월 교육비"
-                                className={`h-5 rounded border px-1 text-[10px] ${f.serviceMonth ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-muted/40 text-muted-foreground border-border'}`}
-                              >
-                                <option value="">월 미지정</option>
-                                {SERVICE_MONTH_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
-                              </select>
+                              {/* 수기 건의 월은 정산월에서 나온 값이라 여기서 못 바꾼다 —
+                                  바꾸면 인센티브가 잡히는 달과 어긋난다. 칩으로만 보여 준다. */}
+                              {f.source === 'manual' ? (
+                                <span className="h-5 rounded border border-purple-200 bg-purple-50 px-1 text-[10px] leading-5 text-purple-700">
+                                  {f.serviceMonth || '월 미지정'}
+                                </span>
+                              ) : (
+                                <select
+                                  value={f.serviceMonth || ''}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => { e.stopPropagation(); setServiceMonth(f, e.target.value) }}
+                                  title="몇월 교육비"
+                                  className={`h-5 rounded border px-1 text-[10px] ${f.serviceMonth ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-muted/40 text-muted-foreground border-border'}`}
+                                >
+                                  <option value="">월 미지정</option>
+                                  {SERVICE_MONTH_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                              )}
+                              {f.source === 'manual' && isAdmin && <ManualFeeDelete feeId={f.id} />}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {f.source === 'ec' ? 'EC' : 'Academic'}
+                              {f.source === 'manual' ? '수기' : f.source === 'ec' ? 'EC' : 'Academic'}
                             </div>
                           </div>
                         </div>
@@ -350,6 +375,8 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
   const saving = updateEC.isPending || updateAC.isPending
   const mut = fee.source === 'ec' ? updateEC : updateAC
   const [open, setOpen] = useState(false)
+  // 수기 입금 건은 환불 처리 대상이 아니다 (EC·학습지원 테이블에 행이 없다)
+  const isManual = fee.source === 'manual'
   const [amt, setAmt] = useState(fee.refundAmount ? String(fee.refundAmount) : (fee.billedAmount ? String(fee.billedAmount) : ''))
   const [dt, setDt] = useState(todayKST())
   const [cb1, setCb1] = useState('')
@@ -374,6 +401,9 @@ function RefundCell({ fee }: { fee: ServiceProgramFee }) {
     )
   }
   const rs = fee.refundStatus
+
+  // 수기 입금 건은 EC·학습지원 테이블에 행이 없어 환불 처리를 걸 데가 없다
+  if (isManual) return <span className="text-muted-foreground">—</span>
 
   if (rs === 'completed') {
     return (
@@ -531,6 +561,7 @@ function ProgramFeeDialog({
       contributor1Team: team1 === 'auto' ? null : team1,
       contributor2Team: team2 === 'auto' ? null : team2,
     }
+    if (fee.source === 'manual') { onClose(); return }
     const mut = fee.source === 'ec' ? updateEC : updateAC
     mut.mutate(payload, { onSuccess: onClose })
   }
@@ -544,7 +575,7 @@ function ProgramFeeDialog({
             {fee.label}
           </DialogTitle>
           <DialogDescription>
-            {fee.studentName}{fee.studentKoreanName && fee.studentKoreanName !== fee.studentName ? ` · ${fee.studentKoreanName}` : ''} · {fee.source === 'ec' ? 'Extra Curricular' : 'Academic Support'}{fee.serviceMonth ? ` · ${fee.serviceMonth} 교육비` : ''}
+            {fee.studentName}{fee.studentKoreanName && fee.studentKoreanName !== fee.studentName ? ` · ${fee.studentKoreanName}` : ''} · {fee.source === 'manual' ? '수기 입금' : fee.source === 'ec' ? 'Extra Curricular' : 'Academic Support'}{fee.serviceMonth ? ` · ${fee.serviceMonth} 교육비` : ''}
           </DialogDescription>
         </DialogHeader>
 
@@ -724,5 +755,191 @@ function ProgramFeeDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ─────────────────── 수기 입금 입력 ───────────────────
+/**
+ * 정기 수업이 아니라 달마다 불규칙하게 수업하고 그때그때 정산금이 들어오는 건을 적는다.
+ * Student 360 에 걸 프로그램이 없어 어디에도 기록되지 않던 돈이다.
+ *
+ * 적는 순간 수금 완료로 보고, 고른 정산월이 곧 인센티브가 잡히는 달이 된다.
+ * 인센티브 = 입금액 × 요율. 요율은 파트너사 수수료표가 아니라 건별로 직접 고른다
+ * (불규칙 정산이라 기준율이 맞지 않고, 걸린 파트너사도 없다).
+ */
+function ManualFeeEntry() {
+  const { user } = useAuth()
+  const create = useCreateManualServiceFee()
+  const { data: students = [] } = useServiceStudents()
+  const { data: profiles = [] } = useProfiles()
+
+  const thisMonth = todayKST().slice(0, 7)
+  const blank = { studentId: '', month: thisMonth, title: '', amount: '', rate: '3', contributor: '' }
+  const [form, setForm] = useState(blank)
+  const [open, setOpen] = useState(false)
+  const [error, setError] = useState('')
+
+  const studentOptions = useMemo(
+    () => [...students].filter(s => s.name || s.koreanName).sort(compareStudentsKo),
+    [students],
+  )
+  const staff = useMemo(
+    () => profiles.filter(p => !p.resigned && (p.department === 'sales' || p.department === 'service'))
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko')),
+    [profiles],
+  )
+
+  const amount = Number(form.amount) || 0
+  const rate = Number(form.rate) || 0
+  const incentive = Math.round((amount * rate) / 100)
+  const studentName = (id: string) => {
+    const s = studentOptions.find(x => x.id === id)
+    return s ? studentPickerLabel(s) : ''
+  }
+
+  const submit = () => {
+    setError('')
+    if (!form.studentId) return setError('학생을 골라 주세요.')
+    if (!/^\d{4}-\d{2}$/.test(form.month)) return setError('정산월을 골라 주세요.')
+    if (amount <= 0) return setError('입금액을 적어 주세요.')
+    if (!form.contributor) return setError('담당자를 골라 주세요. 담당자가 없으면 인센티브가 잡히지 않습니다.')
+    create.mutate(
+      {
+        studentId: form.studentId,
+        settlementMonth: form.month,
+        title: form.title,
+        billedAmount: amount,
+        incentiveRate: rate,
+        contributor1: form.contributor,
+        createdBy: user?.id,
+        authorName: user?.name,
+      },
+      {
+        onSuccess: () => { setForm({ ...blank }); setOpen(false) },
+        onError: (e) => setError(e instanceof Error ? e.message : '저장하지 못했습니다.'),
+      },
+    )
+  }
+
+  if (!open) {
+    return (
+      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen(true)}>
+        <Plus className="size-3.5" /> 수기 입금 추가
+      </Button>
+    )
+  }
+
+  return (
+    <Card className="border-dashed">
+      <CardContent className="p-3 space-y-3">
+        <div className="flex items-center gap-1.5">
+          <PencilLine className="size-4 text-purple-600" />
+          <h3 className="text-sm font-semibold">수기 입금 추가</h3>
+          <span className="text-[11px] text-muted-foreground ml-1">
+            불규칙 수업 정산처럼 Student 360 프로그램에 걸 수 없는 입금을 직접 적습니다
+          </span>
+          <Button size="sm" variant="ghost" className="size-7 ml-auto" onClick={() => { setOpen(false); setError('') }}>
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+          <div className="space-y-1 col-span-2">
+            <label className="text-[11px] text-muted-foreground">학생</label>
+            <Select value={form.studentId} onValueChange={v => setForm(f => ({ ...f, studentId: v ?? '' }))}>
+              <SelectTrigger className="h-8 w-full text-sm">
+                <span className="truncate">{studentName(form.studentId) || '선택'}</span>
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {studentOptions.map(s => (
+                  <SelectItem key={s.id} value={s.id}>{studentPickerLabel(s)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] text-muted-foreground">정산월</label>
+            <Input
+              type="month" value={form.month} className="h-8 text-sm"
+              onChange={e => setForm(f => ({ ...f, month: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] text-muted-foreground">입금액</label>
+            <Input
+              type="number" value={form.amount} placeholder="0" className="h-8 text-sm"
+              onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] text-muted-foreground">인센티브 율</label>
+            <Select value={form.rate} onValueChange={v => setForm(f => ({ ...f, rate: v ?? '3' }))}>
+              <SelectTrigger className="h-8 w-full text-sm">
+                <span>{form.rate}%</span>
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 10 }, (_, i) => String(i + 1)).map(r => (
+                  <SelectItem key={r} value={r}>{r}%</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[11px] text-muted-foreground">Sales Contributor</label>
+            <Select value={form.contributor} onValueChange={v => setForm(f => ({ ...f, contributor: v ?? '' }))}>
+              <SelectTrigger className="h-8 w-full text-sm">
+                <span className="truncate">{form.contributor || '선택'}</span>
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {staff.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-end">
+          <div className="space-y-1">
+            <label className="text-[11px] text-muted-foreground">내용 (선택)</label>
+            <Input
+              value={form.title} className="h-8 text-sm"
+              placeholder="예: 10월 비정기 수업 4회 정산"
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-[11px] text-muted-foreground">인센티브 (입금액 × {rate}%)</div>
+              <div className="text-base font-bold tabular-nums text-blue-600">{formatCurrency(incentive)}</div>
+            </div>
+            <Button size="sm" onClick={submit} disabled={create.isPending}>
+              {create.isPending ? <Loader2 className="size-3.5 animate-spin" /> : '추가'}
+            </Button>
+          </div>
+        </div>
+
+        {error && <p className="text-[11px] text-red-600">{error}</p>}
+        <p className="text-[11px] text-muted-foreground">
+          적는 순간 <b>수금 완료</b>로 들어가고, 고른 <b>정산월</b>이 그대로 인센티브가 잡히는 달이 됩니다
+          (재무 대시보드 인센티브 원장 · 담당자 개인 인센티브 인보이스).
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** 수기 입금 행을 지운다 — EC·학습지원 행과 달리 여기서만 지울 수 있다. */
+function ManualFeeDelete({ feeId }: { feeId: string }) {
+  const del = useDeleteManualServiceFee()
+  return (
+    <button
+      onClick={e => {
+        e.stopPropagation()
+        if (confirm('이 수기 입금 내역을 삭제할까요? 인센티브에서도 빠집니다.')) del.mutate(feeId)
+      }}
+      className="text-gray-300 hover:text-red-500"
+      title="수기 입금 삭제"
+    >
+      <Trash2 className="size-3.5" />
+    </button>
   )
 }

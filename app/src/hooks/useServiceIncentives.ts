@@ -48,8 +48,13 @@ export function useServiceIncentiveLines(): ServiceIncentiveLine[] {
       slots.forEach((s, idx) => {
         if (!s.name?.trim()) return
         if (s.override === 'none') return  // '없음' = 인센티브 제외
-        const team = (s.override as ContributorTeam | null | undefined) ?? autoTeam(s.name)
-        const rate = rateForTeam(team, er.salesRate, er.serviceRate)
+        // 수기 입금 건은 건별로 고른 요율을 쓴다 — 불규칙 정산이라 파트너사
+        // 기준율이 맞지 않고, 애초에 걸린 파트너사도 없다.
+        let rate: number | undefined = f.incentiveRate
+        if (rate == null) {
+          const team = (s.override as ContributorTeam | null | undefined) ?? autoTeam(s.name)
+          rate = rateForTeam(team, er.salesRate, er.serviceRate)
+        }
         if (!rate) return
         const amount = Math.round((billed * rate) / 100)
         if (amount <= 0) return
