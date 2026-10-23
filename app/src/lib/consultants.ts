@@ -48,6 +48,10 @@ const CONSULTANT_NAME_ALIASES: Record<string, string> = {
   // 자동으로는 한 사람으로 모이지 않아, 지급이 끝난 달을 못 알아봤다.
   'jisoo kwak': '곽지수',
   'kwak jisoo': '곽지수',
+  // EC 활동에는 'Liz' 로 적히는데 시스템이 아는 이름은 '유리즈' 다(레거시 슬러그 'liz').
+  // 합치지 않으면 인센티브가 두 이름에 나뉘어 한쪽이 인보이스에서 빠진다
+  // — 'Aidan Lee'↔'이준형' 과 같은 건이다.
+  'liz': '유리즈',
 }
 
 /** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현).

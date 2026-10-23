@@ -144,8 +144,19 @@ function regionFieldText(student: { region?: string; address?: string; school?: 
 }
 import { DeleteStudentDialog } from '@/components/DeleteStudentDialog'
 
+/**
+ * EC 활동의 석세스 담당자 선택지. 목록에 없는 이름은 '직접입력' 으로 적는다.
+ *
+ * 한 번도 쓰이지 않은 여섯(Aidan Lee · Eva · Isabela · Jisoo · Maryam · Wook)은
+ * 뺐다 — 목록만 길어져 고르기 어려웠다.
+ *
+ * 'Liz'(=유리즈)는 4건 쓰였지만 넣지 않는다 — 퇴직 처리된 분이라 새로 고를 선택지가
+ * 아니다(RETIRED_CONSULTANT_KEYS). 옛 기록은 별칭으로 '유리즈' 에 모이므로
+ * 인센티브는 제대로 잡히고, 화면에도 '직접입력' 으로 그대로 보인다.
+ */
 const EC_SALES_PRESETS = [
-  'Aidan Lee', 'Cindy', 'Eva', 'Isabela', 'Jisoo', 'Maryam', 'Sam', 'Wook', '김지현', '남연서',
+  'Cindy', 'Sam',        // English (alphabetical)
+  '김지현', '남연서',      // Korean (가나다)
 ] as const
 
 const ACADEMY_PRESETS = [
