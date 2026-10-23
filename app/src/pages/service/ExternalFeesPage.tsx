@@ -844,7 +844,13 @@ function ManualFeeForm({ fee, onDone }: { fee?: ServiceProgramFee; onDone: () =>
             </SelectTrigger>
             <SelectContent className="max-h-72">
               {studentOptions.map(s => (
-                <SelectItem key={s.id} value={s.id}>{studentPickerLabel(s)}</SelectItem>
+                // 동명이인이 많아 이름만으로는 고르기 어렵다 — 담당 컨설턴트를 함께 보여 준다
+                <SelectItem key={s.id} value={s.id}>
+                  {studentPickerLabel(s)}
+                  {s.assignedConsultant && (
+                    <span className="text-muted-foreground"> — {s.assignedConsultant}</span>
+                  )}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
