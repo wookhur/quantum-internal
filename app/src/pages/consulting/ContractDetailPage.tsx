@@ -1309,6 +1309,10 @@ export function ContractDetailPage() {
       {/* 계약 정보: 계약유형 · 원서지원수 · 계약서 PDF (Student360에 자동 연동) */}
       <ContractInfoCard contract={contract} canEdit={canEdit} />
 
+      {/* 수금 메모 — 일정이 바뀐 사정을 남긴다. 안 남기면 숫자가 왜 이런지 아무도 모른다.
+          납입 일정보다 위에 둔다: 일정의 숫자를 읽기 전에 그 사정을 먼저 보게 된다. */}
+      <PaymentNotes contractId={contract.id} canEdit={canEdit} />
+
       {/* Base Installment Timeline */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -1355,9 +1359,6 @@ export function ContractDetailPage() {
             ))}
           </div>
         )}
-
-        {/* 수금 메모 — 일정이 바뀐 사정을 남긴다. 안 남기면 숫자가 왜 이런지 아무도 모른다. */}
-        <PaymentNotes contractId={contract.id} canEdit={canEdit} />
       </div>
 
       {/* Extra Charges */}
@@ -2424,7 +2425,7 @@ function PaymentNotes({ contractId, canEdit }: { contractId: string; canEdit: bo
   }
 
   return (
-    <div className="mt-4 rounded-xl border bg-muted/20 p-3 space-y-3">
+    <div className="rounded-xl border bg-muted/20 p-3 space-y-3">
       <div className="flex items-center gap-1.5">
         <StickyNote className="size-4 text-amber-600" />
         <h3 className="text-sm font-semibold">수금 메모</h3>
