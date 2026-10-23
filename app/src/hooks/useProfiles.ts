@@ -190,6 +190,7 @@ export const NAV_ROUTE_DEFS: NavRouteDef[] = [
   { path: '/invoices/freelancer-individual', labelKey: 'nav.invoiceIndividualPartner', module: 'invoice' },
   { path: '/invoices/partner-business', labelKey: 'nav.invoiceBusinessPartner', module: 'invoice' },
   { path: '/invoices/sales-incentive', labelKey: 'nav.invoiceSalesIncentive', module: 'invoice' },
+  { path: '/invoices/settings', labelKey: 'nav.invoiceSettings', module: 'invoice' },
   // ── Planning ──
   { path: '/planning/overview', labelKey: 'nav.overview', module: 'planning' },
   { path: '/planning/projection', labelKey: 'nav.revenueProjection', module: 'planning' },
@@ -241,6 +242,22 @@ export const SERVICE_FINANCE_ROUTES: string[] = ['/service/external-fees']
 export function canManageServiceFinance(user: { role?: string; email?: string } | null | undefined): boolean {
   if (!user) return false
   return user.role === 'admin' || user.role === 'account'
+}
+
+/** 인보이스설정 — 연 관리비처럼 '얼마를 받을지'를 정하는 값이 모여 있다. */
+export const INVOICE_SETTINGS_ROUTES: string[] = ['/invoices/settings']
+
+/**
+ * 인보이스설정 권한 — 관리자(대표·부대표)와 재무담당(재무이사)만.
+ *
+ * 컨설턴트가 제 연 관리비를 스스로 정할 수 있으면 안 된다. 그래서 역할 기본값이나
+ * 접근권한 관리에서 인보이스 게시판을 열어 준 사람에게도 이 메뉴는 따로 막는다.
+ */
+export function canManageInvoiceSettings(
+  user: { role?: string; email?: string; isAccount?: boolean } | null | undefined,
+): boolean {
+  if (!user) return false
+  return user.role === 'admin' || canAccessAccount(user)
 }
 
 /** 전체 게시판 접근 등급(admin·account). account(재무담당)는 재무만이 아니라 전사 게시판을 봄. */
@@ -405,6 +422,11 @@ export function getEffectiveRoutes(
   if (!canAccessAccount(user)) {
     result = result.filter(r => !ACCOUNT_ONLY_ROUTES.includes(r))
   }
+  // 인보이스설정은 대표·부대표·재무이사만 — 명시 부여로도 열리지 않는다.
+  // 컨설턴트가 제 연 관리비를 고칠 수 있게 되면 안 되기 때문이다.
+  if (!canManageInvoiceSettings(user)) {
+    result = result.filter(r => !INVOICE_SETTINGS_ROUTES.includes(r))
+  }
   // 내부직원 전용(Archive 등): 외부/프리랜서/외부표시 계정은 기본 제외(명시 부여 시 허용)
   const isExternalUser = user.role === 'external' || user.role === 'freelancer' || user.isExternal === true
   if (isExternalUser && !hasExplicitRoutes) {
@@ -439,7 +461,8 @@ export function getEffectiveEditRoutes(
   if (isFullAccessRole(user)) {
     // 재정대시보드는 account 없으면 편집도 불가(열람과 동일 기준)
     const all = NAV_ROUTE_DEFS.map(r => r.path)
-    return canAccessAccount(user) ? all : all.filter(r => !ACCOUNT_ONLY_ROUTES.includes(r))
+    const ok = canAccessAccount(user) ? all : all.filter(r => !ACCOUNT_ONLY_ROUTES.includes(r))
+    return canManageInvoiceSettings(user) ? ok : ok.filter(r => !INVOICE_SETTINGS_ROUTES.includes(r))
   }
   const viewable = getEffectiveRoutes(user, featureAccessRecords)
   const custom = featureAccessRecords.find(r => r.userId === user.id)

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, Link } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { Card, CardContent } from '@/components/ui/card'
@@ -21,7 +21,7 @@ import { isNoShowStatus } from '@/lib/meetingProgress'
 import { consultantAtDate } from '@/lib/consultantAtDate'
 import { CARRY_OVER_MONTHS, monthsUpTo, carryState, lineKey } from '@/lib/carryOver'
 import { sessionFeeLines, type SessionLike } from '@/lib/sessionFee'
-import { useConsultantAnnualFees, annualFeeOf, useSetConsultantAnnualFee, useDeleteConsultantAnnualFee } from '@/hooks/useConsultantAnnualFees'
+import { useConsultantAnnualFees, annualFeeOf } from '@/hooks/useConsultantAnnualFees'
 import { invoiceDateError, isValidDateInput, isValidMonthInput } from '@/lib/invoiceForm'
 import { todayKST } from '@/lib/date'
 import { isOnPause } from '@/lib/studentPause'
@@ -34,8 +34,8 @@ import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
 import { useIncentiveStatus, useSetIncentiveReceived, type IncentiveStatus } from '@/hooks/useIncentiveStatus'
-import { usePartnerInvoiceTypes, useSetPartnerInvoiceType, invoiceTypeOf, accountRegionOf } from '@/hooks/usePartnerInvoiceTypes'
-import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
+import { usePartnerInvoiceTypes, invoiceTypeOf, accountRegionOf } from '@/hooks/usePartnerInvoiceTypes'
+import { useProfiles, canAccessAccount, canManageInvoiceSettings } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
 import {
   useFreelancerInvoices,
@@ -1756,8 +1756,6 @@ export function FreelancerInvoicesPage(
   // 회당 정산(연 관리비 ÷ 횟수) 설정과 그 미팅 목록
   const annualFees = useConsultantAnnualFees()
   const mySessions = useConsultantSessions(issueMonth)
-  const setAnnualFee = useSetConsultantAnnualFee()
-  const deleteAnnualFee = useDeleteConsultantAnnualFee()
   const effectiveName = isManager && previewName ? previewName : (user?.name || '')
   const previewNameOptions = useMemo(() => {
     const names = new Set<string>()
@@ -1777,7 +1775,6 @@ export function FreelancerInvoicesPage(
   // 파트너 발행유형(개인/사업자): 자동청구를 어느 게시판에 띄울지 가른다.
   //  개인 파트너 = 발행유형 '개인'(또는 미지정), 사업자 파트너 = '사업자'. → 한 사람은 한 곳에만.
   const { data: invoiceTypeMap } = usePartnerInvoiceTypes()
-  const setPartnerType = useSetPartnerInvoiceType()
   const partnerType = invoiceTypeOf(invoiceTypeMap, effectiveName)
   const partnerAccountRegion = accountRegionOf(invoiceTypeMap, effectiveName)
   const typeMatchesBoard = isIncentive ? true
@@ -2290,72 +2287,30 @@ export function FreelancerInvoicesPage(
         {isManager && !!previewName && (
           <p className="text-[12px] text-amber-600 self-center">👁 {previewName} 미리보기 중 — 발행하려면 대상을 ‘나’로 바꾸세요</p>
         )}
-        {/* 연 관리비 — 적어 두면 '회당' 방식(연액 ÷ 횟수 × 그 달 미팅 수)으로 바뀐다.
-            비워 두면 종전 '미팅 2회 = 1개월분'. 재무만 보이고 고칠 수 있다. */}
-        {isIndividualBoard && isAccounting && effectiveName && (
+        {/* 연 관리비·발행유형·계좌구분은 인보이스설정 한 곳에서 정한다.
+            종전에는 이 자리에서 미리보기 대상을 한 사람씩 바꿔 가며 고쳐야 했고,
+            사업자 파트너인 사람의 연 관리비를 개인 게시판에서 고치는 꼴이었다.
+            여기서는 지금 값만 읽어 보여 준다. */}
+        {(isIndividualBoard || isBusinessBoard) && isAccounting && effectiveName && (
           <div className="self-end">
-            <Label className="text-xs">
-              {effectiveName} 연 관리비
-              {myFeeSetting && (
-                <span className="ml-1 font-normal text-muted-foreground">
-                  · 1회 {formatKRW(Math.round(myFeeSetting.annualAmount / myFeeSetting.sessions))}
-                </span>
+            <Label className="text-xs">{effectiveName} 설정</Label>
+            <div className="flex h-9 items-center gap-1.5 text-xs">
+              <span className={`rounded px-2 py-1 font-medium ${partnerType === 'business' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                {partnerType === 'business' ? '사업자' : '개인'}
+              </span>
+              <span className="rounded bg-slate-100 px-2 py-1 font-medium text-slate-700">
+                {partnerAccountRegion === 'overseas' ? '해외계좌' : '국내계좌'}
+              </span>
+              <span className="text-muted-foreground">
+                {myFeeSetting
+                  ? `연 관리비 1회 ${formatKRW(Math.round(myFeeSetting.annualAmount / myFeeSetting.sessions))}`
+                  : '연 관리비 미설정 (미팅 2회 = 1개월분)'}
+              </span>
+              {canManageInvoiceSettings(user) && (
+                <Link to="/invoices/settings" className="font-medium text-blue-600 hover:underline">
+                  인보이스설정에서 변경
+                </Link>
               )}
-            </Label>
-            <div className="flex h-9 items-center gap-1">
-              <AnnualFeeEditor
-                key={effectiveName}
-                name={effectiveName}
-                current={myFeeSetting}
-                onSave={(annualAmount, sessions) => setAnnualFee.mutate(
-                  { name: effectiveName, annualAmount, sessions },
-                  { onError: e => alert(e instanceof Error ? e.message : '저장에 실패했습니다.') },
-                )}
-                onClear={nameKey => deleteAnnualFee.mutate(nameKey)}
-                busy={setAnnualFee.isPending || deleteAnnualFee.isPending}
-              />
-            </div>
-          </div>
-        )}
-        {/* 파트너 발행유형(개인/사업자) — 재무만. 이 사람의 자동청구가 뜨는 게시판이 결정된다. */}
-        {(isIndividualBoard || isBusinessBoard) && isAccounting && effectiveName && (
-          <div className="self-end">
-            <Label className="text-xs">{effectiveName} 발행유형</Label>
-            <div className="flex h-9 items-center gap-1 rounded-md border bg-muted/30 p-0.5">
-              {(['individual', 'business'] as const).map(tp => (
-                <button
-                  key={tp}
-                  type="button"
-                  disabled={setPartnerType.isPending}
-                  onClick={() => setPartnerType.mutate({ name: effectiveName, invoiceType: tp })}
-                  className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                    partnerType === tp ? (tp === 'business' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white') : 'text-muted-foreground hover:bg-white'
-                  }`}
-                >
-                  {tp === 'business' ? '사업자' : '개인'}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {/* 계좌 구분(국내/해외) — 발행유형 옆. 해외면 해외 인보이스 양식으로 발행 */}
-        {(isIndividualBoard || isBusinessBoard) && isAccounting && effectiveName && (
-          <div className="self-end">
-            <Label className="text-xs">계좌 구분</Label>
-            <div className="flex h-9 items-center gap-1 rounded-md border bg-muted/30 p-0.5">
-              {(['domestic', 'overseas'] as const).map(rg => (
-                <button
-                  key={rg}
-                  type="button"
-                  disabled={setPartnerType.isPending}
-                  onClick={() => setPartnerType.mutate({ name: effectiveName, accountRegion: rg })}
-                  className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-                    partnerAccountRegion === rg ? (rg === 'overseas' ? 'bg-sky-500 text-white' : 'bg-slate-500 text-white') : 'text-muted-foreground hover:bg-white'
-                  }`}
-                >
-                  {rg === 'overseas' ? '해외계좌' : '국내계좌'}
-                </button>
-              ))}
             </div>
           </div>
         )}
@@ -2578,42 +2533,6 @@ export function FreelancerInvoicesPage(
         />
       )}
     </div>
-  )
-}
-
-/** 연 관리비 입력칸. 보는 사람이 바뀌면 key 로 다시 만들어 값이 따라온다. */
-function AnnualFeeEditor({ name, current, onSave, onClear, busy }: {
-  name: string
-  current?: { nameKey: string; annualAmount: number; sessions: number }
-  onSave: (annualAmount: number, sessions: number) => void
-  onClear: (nameKey: string) => void
-  busy: boolean
-}) {
-  const [amount, setAmount] = useState(current ? String(current.annualAmount) : '')
-  const [sessions, setSessions] = useState(current ? String(current.sessions) : '30')
-  return (
-    <>
-      <Input type="number" className="h-9 w-32 text-sm" placeholder="예: 4000000"
-        value={amount} onChange={e => setAmount(e.target.value)} />
-      <span className="text-xs text-muted-foreground">÷</span>
-      <Input type="number" className="h-9 w-16 text-sm"
-        value={sessions} onChange={e => setSessions(e.target.value)} />
-      <span className="text-xs text-muted-foreground">회</span>
-      <Button
-        size="sm" variant="outline" className="h-9" disabled={busy}
-        onClick={() => {
-          const amt = Number(amount)
-          if (!amt || amt <= 0) {
-            // 비우고 저장 = 설정 지우기 → 종전 '미팅 2회 = 1개월분' 으로 돌아간다
-            if (current && confirm(`${name}님의 연 관리비 설정을 지울까요?\n지우면 '미팅 2회 = 1개월분' 방식으로 돌아갑니다.`)) {
-              onClear(current.nameKey)
-            }
-            return
-          }
-          onSave(amt, Number(sessions) || 30)
-        }}
-      >저장</Button>
-    </>
   )
 }
 

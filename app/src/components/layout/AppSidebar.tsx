@@ -143,6 +143,7 @@ export const NAV_SECTIONS: { titleKey: TranslationKeys; module: FeatureModule; i
       { labelKey: 'nav.invoiceIndividualPartner', to: '/invoices/freelancer-individual', icon: FileText },
       { labelKey: 'nav.invoiceBusinessPartner', to: '/invoices/partner-business', icon: FileText },
       { labelKey: 'nav.invoiceSalesIncentive', to: '/invoices/sales-incentive', icon: Percent },
+      { labelKey: 'nav.invoiceSettings', to: '/invoices/settings', icon: Settings },
     ],
   },
   {

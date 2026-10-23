@@ -61,6 +61,7 @@ import { PartnerCompaniesPage } from '@/pages/partner/PartnerCompaniesPage'
 import { ProgramsPage } from '@/pages/partner/ProgramsPage'
 import { SalesPriceGuidePage } from '@/pages/partner/SalesPriceGuidePage'
 import { FreelancerInvoicesPage } from '@/pages/finance/FreelancerInvoicesPage'
+import InvoiceSettingsPage from '@/pages/invoices/InvoiceSettingsPage'
 import { CoupangOrdersPage } from '@/pages/common/CoupangOrdersPage'
 import { ExpenseRequestsPage } from '@/pages/common/ExpenseRequestsPage'
 import { ArchivePage } from '@/pages/common/ArchivePage'
@@ -141,6 +142,7 @@ export default function App() {
                 <Route path="/invoices/freelancer-individual" element={<FreelancerInvoicesPage category="individual" />} />
                 <Route path="/invoices/partner-business" element={<FreelancerInvoicesPage category="business" />} />
                 <Route path="/invoices/sales-incentive" element={<FreelancerInvoicesPage category="sales_incentive" />} />
+                <Route path="/invoices/settings" element={<InvoiceSettingsPage />} />
                 {/* 통합으로 은퇴한 경로 → 새 게시판으로 리다이렉트 */}
                 <Route path="/invoices/freelancer-business" element={<Navigate to="/invoices/partner-business" replace />} />
                 <Route path="/invoices/partner-individual" element={<Navigate to="/invoices/freelancer-individual" replace />} />
