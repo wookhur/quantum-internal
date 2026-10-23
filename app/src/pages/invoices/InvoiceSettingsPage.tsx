@@ -85,12 +85,13 @@ function SettledThroughCard() {
       <CardContent className="p-4 space-y-2">
         <h2 className="text-sm font-semibold">정산 완료 기준월</h2>
         <p className="text-[12px] text-muted-foreground">
-          <b>이 달까지는 전원 지급을 끝냈다</b>고 한 번 정해 두는 칸입니다. 그 이전 달의 관리비·회차·원서에세이·멘토 줄은
-          모든 사람의 청구 목록에서 내려갑니다 — 사람마다 줄마다 따로 누를 필요가 없습니다.
+          <b>보통은 비워 두셔도 됩니다.</b> 청구 목록은 지급 원장을 보고 저절로 정리됩니다 — 그 사람의 그 정산월
+          인보이스가 지급완료(지급일 기록)이면 그 달 줄은 올라오지 않습니다.
         </p>
         <p className="text-[12px] text-muted-foreground">
-          앞으로 발행하는 인보이스는 <b>어느 줄을 정산하는지 함께 저장</b>되므로, 지급완료(지급일)를 찍으면 그 줄은 저절로
-          내려갑니다. 이 칸은 그 연결이 없던 지난 건을 정리하는 용도이자, 연결이 끊겼을 때의 안전장치입니다.
+          이 칸은 <b>인보이스가 아예 없는데 지급은 끝난 달</b>을 덮을 때만 씁니다. 적어 두면 그 이전 달의
+          관리비·회차·원서에세이·멘토 줄이 모든 사람의 목록에서 내려갑니다. 아직 지급하지 않은 건도 함께 가려지니
+          꼭 필요할 때만 쓰세요.
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <Input

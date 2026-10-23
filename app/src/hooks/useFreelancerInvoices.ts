@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { isValidDateInput, isValidMonthInput } from '@/lib/invoiceForm'
+import { canonicalConsultantName } from '@/lib/consultants'
 
 export interface InvoiceItem {
   id: string
@@ -459,6 +460,88 @@ export function usePaidCoveredIncentiveKeys() {
     staleTime: 30_000,
   })
   return data || new Set<string>()
+}
+
+/**
+ * 지급완료된 인보이스가 '누구의 · 어느 게시판 · 어느 정산월' 을 덮는지.
+ *
+ * 자동청구 줄이 언제 끝난 것인지는 이미 지급 원장이 알고 있다 — 'John Kim ·
+ * 프리랜서(개인) · 2026-08 · 지급 2026-09-04' 가 적혀 있으면 John Kim 의 8월
+ * 개인 파트너 줄은 그걸로 끝이다. 사람이 다시 선언할 일이 아니다.
+ *
+ * 종전에는 인보이스에 적힌 줄 키(covered_incentive_keys)로만 판정했는데, 게시판의
+ * '인보이스 발행'이 그 키를 넘기지 않던 시절 건은 비어 있다. 그래서 지급이 끝난
+ * 8·9월분이 10월에 다시 올라왔다. 키가 있으면 키로(정확), 없으면 이렇게
+ * 사람·게시판·정산월로 판정한다.
+ *
+ * 게시판을 함께 보는 이유: 한 사람이 같은 달에 세일즈 인센티브와 관리비를 따로
+ * 받을 수 있다. 사람·달만 보면 인센티브를 지급한 것으로 관리비까지 꺼진다.
+ *
+ * 한계: 한 달 치의 일부만 담은 인보이스라도 그 달 전체가 끝난 것으로 본다.
+ * 발행이 미지급 목록 전체로 채워지므로 보통은 맞지만, 쪼개 지급했다면 남은 줄을
+ * 손으로 되살려야 한다(줄을 눌러 미지급으로 되돌린다).
+ */
+export type InvoiceBoardGroup = 'incentive' | 'individual' | 'business'
+
+export function invoiceBoardGroup(kind?: string): InvoiceBoardGroup {
+  const k = (kind || '').toLowerCase()
+  if (k === 'sales_incentive') return 'incentive'
+  if (k.includes('business')) return 'business'
+  return 'individual'      // freelancer · partner
+}
+
+/**
+ * 직함·소속을 떼어 이름을 맞춘다 — '오현정대표' ↔ '오현정',
+ * '남연서 (케이와이엔)' ↔ '남연서' 를 같은 사람으로 본다.
+ *
+ * 지급 원장은 '남연서' 로 적히는데 게시판은 '남연서 (케이와이엔)' 로 부르는 식으로
+ * 두 쪽 표기가 다르다. 떼어내지 않으면 지급이 끝난 줄을 못 알아본다.
+ * 상호가 통째로 괄호인 '(주)조이에듀케이션' 은 떼면 이름이 사라지므로 그대로 둔다.
+ */
+const NAME_TITLES = /(대표님|대표|이사님|이사|부대표|부장|과장|차장|팀장|실장|원장|선생님|선생|사장님|사장|님|씨)$/
+export function invoicePersonKey(s?: string): string {
+  // 먼저 별칭 표를 거친다 — 'Julie Kim' → '김지현' 처럼 한 사람이 두 표기로
+  // 저장된 건을 모은다(lib/consultants 의 CONSULTANT_NAME_ALIASES)
+  let v = canonicalConsultantName((s || '').trim()).trim()
+  // 뒤에 붙은 괄호(소속·회사)를 떼되, 떼고 나서 아무것도 안 남으면 두고 쓴다
+  const stripped = v.replace(/[(（][^)）]*[)）]\s*$/, '').trim()
+  if (stripped) v = stripped
+  v = v.replace(/\s+/g, '').toLowerCase()
+  let prev = ''
+  while (v && v !== prev) { prev = v; v = v.replace(NAME_TITLES, '') }
+  return v
+}
+
+/** Map<이름키, Set<`${게시판}:${정산월}`>> — 지급완료(paid_date) 인보이스만. */
+export function usePaidInvoiceCoverage() {
+  const { data } = useQuery({
+    queryKey: ['paid-invoice-coverage'],
+    queryFn: async () => {
+      const map = new Map<string, Set<string>>()
+      const { data, error } = await supabase
+        .from('freelancer_invoices')
+        .select('kind, invoice_month, client_name, paid_date, profiles!freelancer_invoices_freelancer_id_fkey(name)')
+        .not('paid_date', 'is', null)
+      if (error) { console.warn('지급완료 인보이스 조회 실패:', error.message); return map }
+      for (const r of (data || []) as Record<string, unknown>[]) {
+        const month = (r.invoice_month as string) || ''
+        if (!/^\d{4}-\d{2}$/.test(month)) continue
+        const slot = `${invoiceBoardGroup(r.kind as string)}:${month}`
+        const prof = r.profiles as Record<string, unknown> | null
+        // 대리발행이면 client_name 이 수령인이다. 본인 발행이면 프로필 이름.
+        for (const nm of [r.client_name as string, prof?.name as string]) {
+          const key = invoicePersonKey(nm)
+          if (!key) continue
+          const set = map.get(key) || new Set<string>()
+          set.add(slot)
+          map.set(key, set)
+        }
+      }
+      return map
+    },
+    staleTime: 30_000,
+  })
+  return data || new Map<string, Set<string>>()
 }
 
 /** 이미 지급완료된 기존 인보이스에 커미션 키를 연결한다(이시형처럼 발행 전 지급된 건 정리용).

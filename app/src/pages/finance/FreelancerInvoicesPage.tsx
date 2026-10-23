@@ -47,6 +47,8 @@ import {
   useUpdateInvoiceStatus,
   useDeleteInvoice,
   usePaidCoveredIncentiveKeys,
+  usePaidInvoiceCoverage,
+  invoicePersonKey,
   invoiceDisplayName,
   type FreelancerInvoice,
   type InvoiceItem,
@@ -1532,6 +1534,8 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
   const paidCoveredKeys = usePaidCoveredIncentiveKeys()
   // '이 달까지는 전원 지급 끝' 선언 — 그 이전 달 치는 올리지 않는다
   const settledThrough = useSettledThroughMonth()
+  // 지급 원장이 이미 아는 것 — '누구의 · 어느 게시판 · 어느 정산월' 이 지급 끝났는지
+  const paidCoverage = usePaidInvoiceCoverage()
   const annualFees = useConsultantAnnualFees()
   const sessionsByConsultant = useConsultantSessions(month)
   return useMemo(() => {
@@ -1565,15 +1569,22 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
     // 지난 달 미지급분도 함께 센다 — 발행 화면(청구 목록)과 같은 기준이어야 놓치지 않는다.
     // 지급완료된 인보이스가 덮는 줄은 여기서도 빠져야 한다. 두 화면의 기준이 어긋나면
     // 한쪽에서는 끝난 건이 다른 쪽에는 남는다.
-    const live = (kind: string, id: string, om: string) => {
-      if (isSettled(om, settledThrough)) return false
+    // 이 집계는 사람마다 돌므로, 지급 원장 판정도 그 사람 이름으로 해야 한다.
+    // 자동청구 집계는 개인·사업자 파트너 줄을 함께 세므로 두 게시판을 모두 본다.
+    const coveredFor = (person: string | undefined, om: string) => {
+      const slots = paidCoverage.get(invoicePersonKey(person))
+      if (!slots) return false
+      return slots.has(`individual:${om}`) || slots.has(`business:${om}`)
+    }
+    const live = (kind: string, id: string, om: string, person?: string) => {
+      if (isSettled(om, settledThrough) || coveredFor(person, om)) return false
       const key = lineKey(kind, id, om)
       return !paidCoveredKeys.has(key) && carryState(incentiveStatus.get(key), month) !== 'hide'
     }
     // 관리비만 옛 키 보완이 필요하다 — legacyMgmtReceivedMap 설명 참고
     const legacyMgmt = legacyMgmtReceivedMap(incentiveStatus)
-    const mgmtLive = (sid: string, om: string, idx: number) => {
-      if (isSettled(om, settledThrough)) return false
+    const mgmtLive = (sid: string, om: string, idx: number, person?: string) => {
+      if (isSettled(om, settledThrough) || coveredFor(person, om)) return false
       const key = lineKey('mgmt', `${sid}#${idx}`, om)
       if (paidCoveredKeys.has(key)) return false
       const st = incentiveStatus.get(key) || (legacyMgmt.get(`${sid}|${om}`) || [])[idx - 1]
@@ -1586,7 +1597,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       void key
       for (const s of entry.students) {
         s.pairs.forEach(bp => {
-          if (!mgmtLive(s.id, bp.month, bp.idx)) return
+          if (!mgmtLive(s.id, bp.month, bp.idx, entry.name)) return
           add(entry.name, { label: `${s.label} · 관리비${aged(bp.month)}`, amount: 0 })
         })
       }
@@ -1594,7 +1605,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
     // 회당 정산 컨설턴트
     annualFees.forEach(fee => {
       for (const l of sessionFeeLines(sessionsByConsultant.get(fee.nameKey) || [], fee, carryMonths)) {
-        if (!live('sess-fee', l.id, l.month)) continue
+        if (!live('sess-fee', l.id, l.month, fee.displayName)) continue
         add(fee.displayName, { label: `${l.label}${aged(l.month)}`, amount: l.amount })
       }
     })
@@ -1603,7 +1614,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       if (!p.consultantName) continue
       for (const om of carryMonths) {
         const line = essayLineForMonth(p, om)
-        if (!line || !live('essay', p.id, om)) continue
+        if (!line || !live('essay', p.id, om, p.consultantName)) continue
         const s = studentsById.get(p.studentId)
         const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ') || (s ? studentLabel(s.name, s.koreanName) : '학생')
         add(p.consultantName, { label: `${who} · 원서에세이 (${line.index}/${line.count}월차)${aged(om)}`, amount: line.amount })
@@ -1623,7 +1634,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
       for (const om of carryMonths) {
         pairsClosingInMonth(dates, om).forEach((_, k) => {
-          if (!live('editor', `${studentId}#${k + 1}`, om)) return
+          if (!live('editor', `${studentId}#${k + 1}`, om, editor)) return
           add(editor, { label: `${who} · 에세이에디터${aged(om)}`, amount: 0 })
         })
       }
@@ -1638,7 +1649,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
       for (const om of carryMonths) {
         if (startMonth && startMonth > om) continue
-        if (!live('coach', a.id, om)) continue
+        if (!live('coach', a.id, om, mt.koreanName || mt.englishName)) continue
         add(mt.koreanName || mt.englishName, { label: `${who} · 학습코칭 (월정액)${aged(om)}`, amount: COACHING_MONTHLY })
       }
     }
@@ -1646,14 +1657,14 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       const asg = asgById.get(sess.coachingId)
       const mt = mentorById.get((sess.mentorId || asg?.mentorId) || ''); if (!mt || mt.type !== 'major') continue
       const om = (sess.sessionDate || '').slice(0, 7)
-      if (!carryMonths.includes(om) || !live('sess', sess.id, om)) continue
+      if (!carryMonths.includes(om) || !live('sess', sess.id, om, mt.koreanName || mt.englishName)) continue
       const s = studentsById.get((sess.studentId || asg?.studentId) || '')
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
       // 등급마다 단가가 다르므로 인보이스에도 등급명을 적는다('전공별멘토' 하나로는 구분이 안 됨)
       add(mt.koreanName || mt.englishName, { label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})${aged(om)}`, amount: majorTierAmount(mt.tier) })
     }
     return out
-  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus, paidCoveredKeys, settledThrough, annualFees, sessionsByConsultant])
+  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus, paidCoveredKeys, settledThrough, paidCoverage, annualFees, sessionsByConsultant])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
@@ -1801,6 +1812,8 @@ export function FreelancerInvoicesPage(
   const paidCoveredKeys = usePaidCoveredIncentiveKeys()
   // '이 달까지는 전원 지급 끝' 선언 — 그 이전 달 치는 올리지 않는다
   const settledThrough = useSettledThroughMonth()
+  // 지급 원장이 이미 아는 것 — '누구의 · 어느 게시판 · 어느 정산월' 이 지급 끝났는지
+  const paidCoverage = usePaidInvoiceCoverage()
   const setIncentiveReceived = useSetIncentiveReceived()
 
   // who = 이 줄이 누구에 대한 것인지. 한 학생이 여러 달 치로 여러 줄이 되므로,
@@ -1823,6 +1836,7 @@ export function FreelancerInvoicesPage(
       return out
     }
     const myKey = consultantNameKey(effectiveName)
+    const boardGroup = isIncentive ? 'incentive' : isBusinessBoard ? 'business' : 'individual'
     // 소급 범위 — 지난 몇 달 치를 함께 올린다. 지급완료로 찍힌 건은 각 라인에서 걸러낸다.
     const carryMonths = monthsUpTo(issueMonth, CARRY_OVER_MONTHS)
     /**
@@ -1836,14 +1850,18 @@ export function FreelancerInvoicesPage(
      * incentive_status 의 수기 표시는 그대로 남겨 둔다 — 인보이스 없이 현금으로
      * 지급한 건을 손으로 끄는 길이 필요하다.
      */
+    /** 이 게시판·이 사람의 그 달 치가 지급완료 인보이스로 덮이는가 */
+    const coveredByInvoice = (originMonth: string) =>
+      paidCoverage.get(invoicePersonKey(effectiveName))?.has(`${boardGroup}:${originMonth}`) === true
+
     const lineState = (key: string, originMonth: string) =>
-      isSettled(originMonth, settledThrough) || paidCoveredKeys.has(key)
+      isSettled(originMonth, settledThrough) || paidCoveredKeys.has(key) || coveredByInvoice(originMonth)
         ? 'hide'
         : carryState(incentiveStatus.get(key), issueMonth)
     // 새 번호로 못 찾으면 옛 번호로 찍어 둔 표시를 가져다 쓴다(legacyMgmtReceivedMap 설명 참고)
     const legacyMgmt = legacyMgmtReceivedMap(incentiveStatus)
     const mgmtState = (key: string, sid: string, month: string, idx: number) => {
-      if (isSettled(month, settledThrough) || paidCoveredKeys.has(key)) return 'hide'
+      if (isSettled(month, settledThrough) || paidCoveredKeys.has(key) || coveredByInvoice(month)) return 'hide'
       const st = incentiveStatus.get(key) || (legacyMgmt.get(`${sid}|${month}`) || [])[idx - 1]
       return carryState(st, issueMonth)
     }
@@ -1998,7 +2016,7 @@ export function FreelancerInvoicesPage(
     }
 
     return [...perSession, ...mgmt, ...essay, ...editorLines, ...mentorLines]
-  }, [typeMatchesBoard, isIncentive, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, paidCoveredKeys, settledThrough, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions, annualFees, mySessions])
+  }, [typeMatchesBoard, isIncentive, isBusinessBoard, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, paidCoveredKeys, settledThrough, paidCoverage, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions, annualFees, mySessions])
 
   // 발행 대상 = 아직 지급완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
@@ -2430,10 +2448,10 @@ export function FreelancerInvoicesPage(
           {/* 두 게시판의 설명을 같게 둔다 — 종전에는 관리비 쪽에 이월·지급완료 이야기가
               아예 없었고, 줄을 끌 버튼도 없어서 지급을 끝낸 달이 영영 올라왔다. */}
           <p className="text-[11px] text-muted-foreground">
-            <b>이 목록은 저절로 정리됩니다</b> — 「인보이스 발행」으로 만든 인보이스를 재무가 <b>지급완료</b>로 찍으면
-            그 인보이스에 담긴 줄은 다음 달부터 올라오지 않습니다. 줄마다 따로 누르지 않아도 됩니다.
-            {' '}줄을 직접 누르는 것은 <b>인보이스 없이 현금으로 지급한 건</b>을 끌 때만 쓰세요
-            (대표·부대표·재무이사{canToggleReceived ? '' : ' — 현재 계정은 조회만 가능'}).
+            <b>이 목록은 지급 원장을 보고 저절로 정리됩니다</b> — 그 사람의 그 정산월 인보이스가 <b>지급완료</b>
+            (지급일 기록)이면 그 달 줄은 올라오지 않습니다. 줄마다 따로 누르지 않아도 됩니다.
+            {' '}줄을 직접 누르는 것은 <b>인보이스 없이 현금으로 지급한 건</b>이나 <b>쪼개 지급해 일부만 끝난 달</b>을
+            맞출 때 쓰세요 (대표·부대표·재무이사{canToggleReceived ? '' : ' — 현재 계정은 조회만 가능'}).
             {' '}미지급 건은 최근 {CARRY_OVER_MONTHS}개월까지 (원래 달) 태그를 달고 함께 올라옵니다
             {settledThrough ? <> — 단 <b>{settledThrough}</b> 이전은 정산 완료로 보아 올리지 않습니다</> : null}.
             {isIncentive
