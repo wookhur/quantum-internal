@@ -46,7 +46,7 @@ import {
   useUpdateInvoiceStatus,
   useDeleteInvoice,
   usePaidCoveredIncentiveKeys,
-  usePaidInvoiceCoverage,
+  useInvoiceCoverage,
   invoicePersonKey,
   invoiceDisplayName,
   type FreelancerInvoice,
@@ -1546,8 +1546,8 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
   const incentiveStatus = useIncentiveStatus()
   // 지급완료(paid_date) 인보이스가 정산한 줄 키 — 이 줄들은 저절로 내려간다
   const paidCoveredKeys = usePaidCoveredIncentiveKeys()
-  // 지급 원장이 이미 아는 것 — '누구의 · 어느 게시판 · 어느 정산월' 이 지급 끝났는지
-  const paidCoverage = usePaidInvoiceCoverage()
+  // 지급 원장이 이미 아는 것 — '누구의 · 어느 게시판 · 어느 정산월' 이 어떤 상태인지
+  const paidCoverage = useInvoiceCoverage()
   const annualFees = useConsultantAnnualFees()
   const sessionsByConsultant = useConsultantSessions(month)
   return useMemo(() => {
@@ -1586,7 +1586,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
     const coveredFor = (person: string | undefined, om: string) => {
       const slots = paidCoverage.get(invoicePersonKey(person))
       if (!slots) return false
-      return slots.has(`individual:${om}`) || slots.has(`business:${om}`)
+      return slots.get(`individual:${om}`)?.paid === true || slots.get(`business:${om}`)?.paid === true
     }
     const live = (kind: string, id: string, om: string, person?: string) => {
       if (coveredFor(person, om)) return false
@@ -1822,8 +1822,8 @@ export function FreelancerInvoicesPage(
   const incentiveStatus = useIncentiveStatus()
   // 지급완료(paid_date) 인보이스가 정산한 줄 키 — 이 줄들은 저절로 내려간다
   const paidCoveredKeys = usePaidCoveredIncentiveKeys()
-  // 지급 원장이 이미 아는 것 — '누구의 · 어느 게시판 · 어느 정산월' 이 지급 끝났는지
-  const paidCoverage = usePaidInvoiceCoverage()
+  // 지급 원장이 이미 아는 것 — '누구의 · 어느 게시판 · 어느 정산월' 이 어떤 상태인지
+  const paidCoverage = useInvoiceCoverage()
   const setIncentiveReceived = useSetIncentiveReceived()
 
   // who = 이 줄이 누구에 대한 것인지. 한 학생이 여러 달 치로 여러 줄이 되므로,
@@ -1862,7 +1862,7 @@ export function FreelancerInvoicesPage(
      */
     /** 이 게시판·이 사람의 그 달 치가 지급완료 인보이스로 덮이는가 */
     const coveredByInvoice = (originMonth: string) =>
-      paidCoverage.get(invoicePersonKey(effectiveName))?.has(`${boardGroup}:${originMonth}`) === true
+      paidCoverage.get(invoicePersonKey(effectiveName))?.get(`${boardGroup}:${originMonth}`)?.paid === true
 
     const lineState = (key: string, originMonth: string) =>
       paidCoveredKeys.has(key) || coveredByInvoice(originMonth)
@@ -2086,13 +2086,37 @@ export function FreelancerInvoicesPage(
     setIncentiveReceived.mutate({ key: id, received: !currentlyReceived, month: issueMonth })
   }
 
-  // 밀린 지난 달 치. 한꺼번에 정리하는 일은 인보이스설정의 '정산 완료 기준월'이
-  // 맡는다 — 여기서 일괄 처리를 두면 사람마다 한 번씩 눌러야 해서(서른 명이면
-  // 서른 번) 줄마다 누르는 것과 크게 다르지 않다.
+  // 밀린 지난 달 치
   const agedItems = useMemo(
     () => displayItems.filter(d => !d.received && !!d.originMonth && d.originMonth < issueMonth),
     [displayItems, issueMonth],
   )
+
+  /**
+   * 밀린 달마다 '왜 아직 안 내려갔는지'.
+   *
+   * 지급은 받았는데 줄이 계속 올라오는 일이 있었다. 원인은 인보이스가 반려된 채
+   * 남아 있던 것이었는데, 이 게시판에는 반려 사실이 전혀 안 보여 알 길이 없었다.
+   * 목록이 인보이스를 보고 정리되는 이상, 그 인보이스가 어떤 상태인지도 같은
+   * 자리에 보여야 한다.
+   */
+  const agedReasons = useMemo(() => {
+    const slots = paidCoverage.get(invoicePersonKey(effectiveName))
+    const group = isIncentive ? 'incentive' : isBusinessBoard ? 'business' : 'individual'
+    const months = [...new Set(agedItems.map(d => d.originMonth).filter(Boolean))].sort() as string[]
+    return months.map(m => {
+      const count = agedItems.filter(d => d.originMonth === m).length
+      const st = slots?.get(`${group}:${m}`)
+      const why =
+        !st ? '그 달 인보이스가 없습니다 — 발행하고 지급완료(지급일)를 찍으면 내려갑니다.'
+        : st.pendingStatus === 'rejected'
+          ? `인보이스가 반려되었습니다${st.pendingAmount ? ` (${formatKRW(st.pendingAmount)})` : ''} — 다시 발행해야 내려갑니다.`
+        : st.pendingStatus === 'draft'
+          ? '인보이스가 임시저장 상태입니다 — 제출·승인 뒤 지급완료를 찍으면 내려갑니다.'
+          : '인보이스는 있으나 지급일이 기록되지 않았습니다 — 지급 원장에서 지급완료 처리하면 내려갑니다.'
+      return { month: m, count, why }
+    })
+  }, [agedItems, paidCoverage, effectiveName, isIncentive, isBusinessBoard])
 
   // "인보이스 발행" — open the form pre-filled with this month's source lines.
   const openIssueInvoice = () => {
@@ -2480,6 +2504,17 @@ export function FreelancerInvoicesPage(
                     )
                   })}
                 </div>
+              ))}
+            </div>
+          )}
+          {/* 밀린 달이 왜 안 내려갔는지 — 반려된 인보이스가 보이지 않아 '지급은 받았는데
+              줄은 계속 올라온다' 가 되던 것을 여기서 드러낸다. */}
+          {agedReasons.length > 0 && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-2 space-y-1">
+              {agedReasons.map(r => (
+                <p key={r.month} className="text-[11px] text-amber-900">
+                  <b>{monthLabelKo(r.month, issueMonth)}분 {r.count}건</b> · {r.why}
+                </p>
               ))}
             </div>
           )}

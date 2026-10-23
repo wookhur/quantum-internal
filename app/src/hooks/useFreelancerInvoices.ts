@@ -512,36 +512,60 @@ export function invoicePersonKey(s?: string): string {
   return v
 }
 
-/** Map<이름키, Set<`${게시판}:${정산월}`>> — 지급완료(paid_date) 인보이스만. */
-export function usePaidInvoiceCoverage() {
+export interface InvoiceSlotState {
+  /** 지급일이 찍힌 인보이스가 하나라도 있는가 — 줄을 내릴지 가르는 기준 */
+  paid: boolean
+  /** 지급되지 않은 인보이스 중 가장 최근 것의 상태. 왜 안 내려가는지 알려 준다. */
+  pendingStatus?: 'draft' | 'submitted' | 'approved' | 'rejected'
+  pendingAmount?: number
+}
+
+/**
+ * Map<이름키, Map<`${게시판}:${정산월}`, 상태>>.
+ *
+ * 지급 여부만 보면 '왜 이 달이 안 내려가지' 에 답할 수 없다. 김지현님의 9월
+ * 관리비 인보이스가 반려된 채 남아 있던 건이 그 예다 — 게시판에는 반려됐다는
+ * 사실이 전혀 안 보여, 지급은 받았는데 줄은 계속 올라오는 것으로만 보였다.
+ * 그래서 지급되지 않은 인보이스의 상태도 함께 들고 온다.
+ */
+export function useInvoiceCoverage() {
   const { data } = useQuery({
-    queryKey: ['paid-invoice-coverage'],
+    queryKey: ['invoice-coverage'],
     queryFn: async () => {
-      const map = new Map<string, Set<string>>()
+      const map = new Map<string, Map<string, InvoiceSlotState>>()
       const { data, error } = await supabase
         .from('freelancer_invoices')
-        .select('kind, invoice_month, client_name, paid_date, profiles!freelancer_invoices_freelancer_id_fkey(name)')
-        .not('paid_date', 'is', null)
-      if (error) { console.warn('지급완료 인보이스 조회 실패:', error.message); return map }
+        .select('kind, invoice_month, client_name, paid_date, status, total_amount, created_at, profiles!freelancer_invoices_freelancer_id_fkey(name)')
+        .order('created_at', { ascending: true })
+      if (error) { console.warn('인보이스 조회 실패:', error.message); return map }
       for (const r of (data || []) as Record<string, unknown>[]) {
         const month = (r.invoice_month as string) || ''
         if (!/^\d{4}-\d{2}$/.test(month)) continue
         const slot = `${invoiceBoardGroup(r.kind as string)}:${month}`
+        const isPaid = !!r.paid_date
         const prof = r.profiles as Record<string, unknown> | null
         // 대리발행이면 client_name 이 수령인이다. 본인 발행이면 프로필 이름.
         for (const nm of [r.client_name as string, prof?.name as string]) {
           const key = invoicePersonKey(nm)
           if (!key) continue
-          const set = map.get(key) || new Set<string>()
-          set.add(slot)
-          map.set(key, set)
+          const slots = map.get(key) || new Map<string, InvoiceSlotState>()
+          const cur = slots.get(slot) || { paid: false }
+          if (isPaid) {
+            cur.paid = true
+          } else {
+            // created_at 오름차순이라 뒤에 오는 것이 더 최근 — 그대로 덮는다
+            cur.pendingStatus = r.status as InvoiceSlotState['pendingStatus']
+            cur.pendingAmount = Number(r.total_amount) || 0
+          }
+          slots.set(slot, cur)
+          map.set(key, slots)
         }
       }
       return map
     },
     staleTime: 30_000,
   })
-  return data || new Map<string, Set<string>>()
+  return data || new Map<string, Map<string, InvoiceSlotState>>()
 }
 
 /** 이미 지급완료된 기존 인보이스에 커미션 키를 연결한다(이시형처럼 발행 전 지급된 건 정리용).
