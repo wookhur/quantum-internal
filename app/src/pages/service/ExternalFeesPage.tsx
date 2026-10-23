@@ -78,7 +78,11 @@ function contributorRows(
     const auto = autoTeam(s.name)
     const team = (s.override as ContributorTeam | null | undefined) ?? auto
     const source: ContribRow['source'] = s.override ? 'manual' : auto ? 'auto' : 'none'
-    const rate = rateForTeam(team, salesRate, serviceRate)
+    // 수기 입금 건은 건별로 고른 요율을 쓴다 — 불규칙 정산이라 파트너사 기준율이
+    // 맞지 않고, 애초에 걸린 파트너사도 없다. useServiceIncentiveLines 와 같은
+    // 규칙이어야 한다: 여기서 3%로 보여 주고 인보이스는 10%로 지급하면,
+    // 화면의 숫자와 실제 지급액이 어긋난다.
+    const rate = f.incentiveRate ?? rateForTeam(team, salesRate, serviceRate)
     out.push({ name: s.name, slot: s.slot, override: s.override, team, source, rate, inc: rate ? Math.round((billed * rate) / 100) : 0 })
   }
   return out
@@ -243,7 +247,8 @@ export function ExternalFeesPage() {
                   const er = ratesFor(f.label)
                   const rows = contributorRows(f, autoTeam, er.salesRate, er.serviceRate)
                   const inc = rows.reduce((s, c) => s + c.inc, 0)
-                  const needsTeam = rows.some(c => !c.team && c.override !== 'none')
+                  // 수기 건은 요율이 건별로 정해져 있어 팀을 몰라도 인센티브가 잡힌다
+                  const needsTeam = f.source !== 'manual' && rows.some(c => !c.team && c.override !== 'none')
                   const isPaid = f.collectionStatus === 'paid'
                   return (
                     <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(f.id)}>
@@ -288,7 +293,14 @@ export function ExternalFeesPage() {
                             {rows.map((c, i) => (
                               <div key={i} className="text-sm flex items-center gap-1.5">
                                 <span className="min-w-[64px]">{c.name}</span>
-                                {isAdmin ? (
+                                {/* 수기 입금 건은 요율을 건별로 적어 두므로 팀과 무관하다.
+                                    드롭다운을 두면 눌러도 아무 일이 없어(setTeam 에서 막음)
+                                    팀을 바꾸면 요율이 바뀌는 것처럼 오해를 부른다. */}
+                                {f.source === 'manual' ? (
+                                  <Badge variant="outline" className="border-purple-200 bg-purple-50 px-1 py-0 text-[10px] text-purple-700">
+                                    건별 {c.rate}%
+                                  </Badge>
+                                ) : isAdmin ? (
                                   <>
                                     <Select value={c.override || 'auto'} onValueChange={v => setTeam(f, c.slot, (v as 'auto' | ContributorTeam | 'none') || 'auto')}>
                                       <SelectTrigger className={`h-6 w-[86px] text-xs px-2 ${!c.team && c.override !== 'none' ? 'text-amber-600 border-amber-300' : ''}`}>
