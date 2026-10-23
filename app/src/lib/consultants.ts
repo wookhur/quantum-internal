@@ -44,6 +44,10 @@ const CONSULTANT_NAME_ALIASES: Record<string, string> = {
   // 관리비가 서로 다른 이름에 쌓여 인보이스에서 사라졌다. 실제 프로필 이름으로 모은다.
   'aidan lee': '이준형',
   'aidan': '이준형',
+  // 인보이스를 8월엔 '곽지수', 9월엔 'Jisoo Kwak' 으로 내셨다. 한글·영문 표기라
+  // 자동으로는 한 사람으로 모이지 않아, 지급이 끝난 달을 못 알아봤다.
+  'jisoo kwak': '곽지수',
+  'kwak jisoo': '곽지수',
 }
 
 /** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현).
