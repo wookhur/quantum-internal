@@ -17,12 +17,12 @@ import {
 } from '@/components/ui/popover'
 import {
   Loader2, Search, CheckCircle2, Clock, HandCoins, Lock, Link as LinkIcon, X,
-  Plus, Trash2, PencilLine,
+  Plus, Trash2, PencilLine, Pencil,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
-  useAllServiceProgramFees, useCreateManualServiceFee, useDeleteManualServiceFee,
-  type ServiceProgramFee,
+  useAllServiceProgramFees, useCreateManualServiceFee, useUpdateManualServiceFee,
+  useDeleteManualServiceFee, type ServiceProgramFee,
 } from '@/hooks/useServiceProgramFees'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { compareStudentsKo, studentPickerLabel } from '@/lib/studentDisplay'
@@ -271,7 +271,7 @@ export function ExternalFeesPage() {
                                   {SERVICE_MONTH_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
                                 </select>
                               )}
-                              {f.source === 'manual' && isAdmin && <ManualFeeDelete feeId={f.id} />}
+                              {f.source === 'manual' && isAdmin && <ManualFeeRowActions fee={f} />}
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {f.source === 'manual' ? '수기' : f.source === 'ec' ? 'EC' : 'Academic'}
@@ -767,16 +767,22 @@ function ProgramFeeDialog({
  * 인센티브 = 입금액 × 요율. 요율은 파트너사 수수료표가 아니라 건별로 직접 고른다
  * (불규칙 정산이라 기준율이 맞지 않고, 걸린 파트너사도 없다).
  */
-function ManualFeeEntry() {
+function ManualFeeForm({ fee, onDone }: { fee?: ServiceProgramFee; onDone: () => void }) {
   const { user } = useAuth()
   const create = useCreateManualServiceFee()
+  const update = useUpdateManualServiceFee()
   const { data: students = [] } = useServiceStudents()
   const { data: profiles = [] } = useProfiles()
+  const editing = !!fee
 
-  const thisMonth = todayKST().slice(0, 7)
-  const blank = { studentId: '', month: thisMonth, title: '', amount: '', rate: '3', contributor: '' }
-  const [form, setForm] = useState(blank)
-  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState(() => ({
+    studentId: fee?.studentId || '',
+    month: fee?.settlementMonth || todayKST().slice(0, 7),
+    title: fee?.manualTitle || '',
+    amount: fee?.billedAmount != null ? String(fee.billedAmount) : '',
+    rate: String(fee?.incentiveRate ?? 3),
+    contributor: fee?.contributor1 || '',
+  }))
   const [error, setError] = useState('')
 
   const studentOptions = useMemo(
@@ -797,29 +803,122 @@ function ManualFeeEntry() {
     return s ? studentPickerLabel(s) : ''
   }
 
+  const pending = create.isPending || update.isPending
+  const fail = (e: unknown) => setError(e instanceof Error ? e.message : '저장하지 못했습니다.')
+
   const submit = () => {
     setError('')
     if (!form.studentId) return setError('학생을 골라 주세요.')
     if (!/^\d{4}-\d{2}$/.test(form.month)) return setError('정산월을 골라 주세요.')
     if (amount <= 0) return setError('입금액을 적어 주세요.')
     if (!form.contributor) return setError('담당자를 골라 주세요. 담당자가 없으면 인센티브가 잡히지 않습니다.')
-    create.mutate(
-      {
-        studentId: form.studentId,
-        settlementMonth: form.month,
-        title: form.title,
-        billedAmount: amount,
-        incentiveRate: rate,
-        contributor1: form.contributor,
-        createdBy: user?.id,
-        authorName: user?.name,
-      },
-      {
-        onSuccess: () => { setForm({ ...blank }); setOpen(false) },
-        onError: (e) => setError(e instanceof Error ? e.message : '저장하지 못했습니다.'),
-      },
-    )
+    const values = {
+      studentId: form.studentId,
+      settlementMonth: form.month,
+      title: form.title,
+      billedAmount: amount,
+      incentiveRate: rate,
+      contributor1: form.contributor,
+    }
+    if (fee) {
+      update.mutate({ id: fee.id, ...values }, { onSuccess: onDone, onError: fail })
+    } else {
+      // 적은 사람은 처음 적을 때만 남긴다 — 나중에 고친 사람으로 덮어쓰지 않는다
+      create.mutate(
+        { ...values, createdBy: user?.id, authorName: user?.name },
+        { onSuccess: onDone, onError: fail },
+      )
+    }
   }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+        <div className="space-y-1 col-span-2">
+          <label className="text-[11px] text-muted-foreground">학생</label>
+          <Select value={form.studentId} onValueChange={v => setForm(f => ({ ...f, studentId: v ?? '' }))}>
+            <SelectTrigger className="h-8 w-full text-sm">
+              <span className="truncate">{studentName(form.studentId) || '선택'}</span>
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {studentOptions.map(s => (
+                <SelectItem key={s.id} value={s.id}>{studentPickerLabel(s)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">정산월</label>
+          <Input
+            type="month" value={form.month} className="h-8 text-sm"
+            onChange={e => setForm(f => ({ ...f, month: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">입금액</label>
+          <Input
+            type="number" value={form.amount} placeholder="0" className="h-8 text-sm"
+            onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">인센티브 율</label>
+          <Select value={form.rate} onValueChange={v => setForm(f => ({ ...f, rate: v ?? '3' }))}>
+            <SelectTrigger className="h-8 w-full text-sm">
+              <span>{form.rate}%</span>
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 10 }, (_, i) => String(i + 1)).map(r => (
+                <SelectItem key={r} value={r}>{r}%</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">Sales Contributor</label>
+          <Select value={form.contributor} onValueChange={v => setForm(f => ({ ...f, contributor: v ?? '' }))}>
+            <SelectTrigger className="h-8 w-full text-sm">
+              <span className="truncate">{form.contributor || '선택'}</span>
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {staff.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-end">
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted-foreground">내용 (선택)</label>
+          <Input
+            value={form.title} className="h-8 text-sm"
+            placeholder="예: 10월 비정기 수업 4회 정산"
+            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-[11px] text-muted-foreground">인센티브 (입금액 × {rate}%)</div>
+            <div className="text-base font-bold tabular-nums text-blue-600">{formatCurrency(incentive)}</div>
+          </div>
+          <Button size="sm" onClick={submit} disabled={pending}>
+            {pending ? <Loader2 className="size-3.5 animate-spin" /> : editing ? '저장' : '추가'}
+          </Button>
+        </div>
+      </div>
+
+      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      <p className="text-[11px] text-muted-foreground">
+        적는 순간 <b>수금 완료</b>로 들어가고, 고른 <b>정산월</b>이 그대로 인센티브가 잡히는 달이 됩니다
+        (재무 대시보드 인센티브 원장 · 담당자 개인 인센티브 인보이스).
+      </p>
+    </div>
+  )
+}
+
+/** 목록 위의 접힌 [수기 입금 추가] 버튼과 펼친 입력 칸. */
+function ManualFeeEntry() {
+  const [open, setOpen] = useState(false)
 
   if (!open) {
     return (
@@ -838,108 +937,61 @@ function ManualFeeEntry() {
           <span className="text-[11px] text-muted-foreground ml-1">
             불규칙 수업 정산처럼 Student 360 프로그램에 걸 수 없는 입금을 직접 적습니다
           </span>
-          <Button size="sm" variant="ghost" className="size-7 ml-auto" onClick={() => { setOpen(false); setError('') }}>
+          <Button size="sm" variant="ghost" className="size-7 ml-auto" onClick={() => setOpen(false)}>
             <X className="size-4" />
           </Button>
         </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-          <div className="space-y-1 col-span-2">
-            <label className="text-[11px] text-muted-foreground">학생</label>
-            <Select value={form.studentId} onValueChange={v => setForm(f => ({ ...f, studentId: v ?? '' }))}>
-              <SelectTrigger className="h-8 w-full text-sm">
-                <span className="truncate">{studentName(form.studentId) || '선택'}</span>
-              </SelectTrigger>
-              <SelectContent className="max-h-72">
-                {studentOptions.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{studentPickerLabel(s)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[11px] text-muted-foreground">정산월</label>
-            <Input
-              type="month" value={form.month} className="h-8 text-sm"
-              onChange={e => setForm(f => ({ ...f, month: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[11px] text-muted-foreground">입금액</label>
-            <Input
-              type="number" value={form.amount} placeholder="0" className="h-8 text-sm"
-              onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[11px] text-muted-foreground">인센티브 율</label>
-            <Select value={form.rate} onValueChange={v => setForm(f => ({ ...f, rate: v ?? '3' }))}>
-              <SelectTrigger className="h-8 w-full text-sm">
-                <span>{form.rate}%</span>
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 10 }, (_, i) => String(i + 1)).map(r => (
-                  <SelectItem key={r} value={r}>{r}%</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[11px] text-muted-foreground">Sales Contributor</label>
-            <Select value={form.contributor} onValueChange={v => setForm(f => ({ ...f, contributor: v ?? '' }))}>
-              <SelectTrigger className="h-8 w-full text-sm">
-                <span className="truncate">{form.contributor || '선택'}</span>
-              </SelectTrigger>
-              <SelectContent className="max-h-72">
-                {staff.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-end">
-          <div className="space-y-1">
-            <label className="text-[11px] text-muted-foreground">내용 (선택)</label>
-            <Input
-              value={form.title} className="h-8 text-sm"
-              placeholder="예: 10월 비정기 수업 4회 정산"
-              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            />
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <div className="text-[11px] text-muted-foreground">인센티브 (입금액 × {rate}%)</div>
-              <div className="text-base font-bold tabular-nums text-blue-600">{formatCurrency(incentive)}</div>
-            </div>
-            <Button size="sm" onClick={submit} disabled={create.isPending}>
-              {create.isPending ? <Loader2 className="size-3.5 animate-spin" /> : '추가'}
-            </Button>
-          </div>
-        </div>
-
-        {error && <p className="text-[11px] text-red-600">{error}</p>}
-        <p className="text-[11px] text-muted-foreground">
-          적는 순간 <b>수금 완료</b>로 들어가고, 고른 <b>정산월</b>이 그대로 인센티브가 잡히는 달이 됩니다
-          (재무 대시보드 인센티브 원장 · 담당자 개인 인센티브 인보이스).
-        </p>
+        {/* 닫으면 폼이 사라져 입력값도 함께 비워진다 */}
+        <ManualFeeForm onDone={() => setOpen(false)} />
       </CardContent>
     </Card>
   )
 }
 
-/** 수기 입금 행을 지운다 — EC·학습지원 행과 달리 여기서만 지울 수 있다. */
-function ManualFeeDelete({ feeId }: { feeId: string }) {
+/**
+ * 수기 입금 행의 수정·삭제. EC·학습지원 행은 Student 360 이 원본이라 여기서 고칠 수
+ * 없지만, 수기 건은 이 줄이 원본이므로 여기서만 고치고 지울 수 있다.
+ */
+function ManualFeeRowActions({ fee }: { fee: ServiceProgramFee }) {
   const del = useDeleteManualServiceFee()
+  const [editing, setEditing] = useState(false)
+
   return (
-    <button
-      onClick={e => {
-        e.stopPropagation()
-        if (confirm('이 수기 입금 내역을 삭제할까요? 인센티브에서도 빠집니다.')) del.mutate(feeId)
-      }}
-      className="text-gray-300 hover:text-red-500"
-      title="수기 입금 삭제"
-    >
-      <Trash2 className="size-3.5" />
-    </button>
+    <>
+      <button
+        onClick={e => { e.stopPropagation(); setEditing(true) }}
+        className="text-gray-300 hover:text-blue-600"
+        title="수기 입금 수정"
+      >
+        <Pencil className="size-3.5" />
+      </button>
+      <button
+        onClick={e => {
+          e.stopPropagation()
+          if (confirm('이 수기 입금 내역을 삭제할까요? 인센티브에서도 빠집니다.')) del.mutate(fee.id)
+        }}
+        className="text-gray-300 hover:text-red-500"
+        title="수기 입금 삭제"
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+
+      {/* 행 클릭(상세 열기)과 겹치지 않게 입력 칸은 창으로 띄운다 */}
+      <Dialog open={editing} onOpenChange={setEditing}>
+        <DialogContent className="max-w-3xl" onClick={e => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-1.5">
+              <PencilLine className="size-4 text-purple-600" /> 수기 입금 수정
+            </DialogTitle>
+            <DialogDescription>
+              {fee.studentName}
+              {fee.studentKoreanName && fee.studentKoreanName !== fee.studentName ? ` · ${fee.studentKoreanName}` : ''}
+              {fee.settlementMonth ? ` · ${fee.settlementMonth} 정산` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <ManualFeeForm fee={fee} onDone={() => setEditing(false)} />
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

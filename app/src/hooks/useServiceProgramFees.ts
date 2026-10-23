@@ -31,6 +31,10 @@ export interface ServiceProgramFee {
   contributor2Team?: 'sales' | 'service' | 'none'
   /** 건별로 직접 고른 인센티브 요율(%). 있으면 파트너사 수수료표 대신 이걸 쓴다. */
   incentiveRate?: number
+  /** 수기 건의 정산월 'YYYY-MM' 원본. 목록의 월 칩('10월')과 달리 수정 화면에 그대로 넣는다. */
+  settlementMonth?: string
+  /** 수기 건의 제목 원본. label 은 비었을 때 '수기 정산'으로 채워지므로 수정 화면에 쓸 수 없다. */
+  manualTitle?: string
   // 환불(건별)
   refundStatus?: RefundStatus
   refundAmount?: number
@@ -153,6 +157,8 @@ export function useAllServiceProgramFees() {
             // 인센티브가 잡히는 달은 paidDate 의 월이다 — 고른 정산월 1일로 맞춘다
             paidDate: month ? `${month}-01` : undefined,
             incentiveRate: num(r.incentive_rate),
+            settlementMonth: month || undefined,
+            manualTitle: (r.title as string) || undefined,
           })
         }
       }
@@ -208,6 +214,8 @@ export function useUpdateManualServiceFee() {
   return useMutation({
     mutationFn: async (input: Partial<ManualFeeInput> & { id: string }) => {
       const row: Record<string, unknown> = {}
+      // 학생을 잘못 고른 건은 지우고 다시 적을 일이 아니라 여기서 바로잡는다
+      if (input.studentId !== undefined) row.student_id = input.studentId
       if (input.settlementMonth !== undefined) row.settlement_month = input.settlementMonth
       if (input.title !== undefined) row.title = input.title?.trim() || null
       if (input.billedAmount !== undefined) row.billed_amount = input.billedAmount
