@@ -544,22 +544,25 @@ export function useInvoiceCoverage() {
         const slot = `${invoiceBoardGroup(r.kind as string)}:${month}`
         const isPaid = !!r.paid_date
         const prof = r.profiles as Record<string, unknown> | null
-        // 대리발행이면 client_name 이 수령인이다. 본인 발행이면 프로필 이름.
-        for (const nm of [r.client_name as string, prof?.name as string]) {
-          const key = invoicePersonKey(nm)
-          if (!key) continue
-          const slots = map.get(key) || new Map<string, InvoiceSlotState>()
-          const cur = slots.get(slot) || { paid: false }
-          if (isPaid) {
-            cur.paid = true
-          } else {
-            // created_at 오름차순이라 뒤에 오는 것이 더 최근 — 그대로 덮는다
-            cur.pendingStatus = r.status as InvoiceSlotState['pendingStatus']
-            cur.pendingAmount = Number(r.total_amount) || 0
-          }
-          slots.set(slot, cur)
-          map.set(key, slots)
+        // 받는 사람은 하나다 — 대리발행이면 client_name, 본인 발행이면(그 칸이 비어
+        // 있으면) 발행 계정의 이름.
+        //
+        // 종전에는 두 이름 모두에 걸었는데, 그러면 '내가 남의 것을 대신 발행한' 것이
+        // '내가 받은' 것으로 잡힌다. 실제로 이준형님 계정으로 이상민님께 발행된
+        // 2026-09 인보이스가 이준형님의 9월 미지급분을 꺼 버렸다.
+        const key = invoicePersonKey((r.client_name as string) || (prof?.name as string))
+        if (!key) continue
+        const slots = map.get(key) || new Map<string, InvoiceSlotState>()
+        const cur = slots.get(slot) || { paid: false }
+        if (isPaid) {
+          cur.paid = true
+        } else {
+          // created_at 오름차순이라 뒤에 오는 것이 더 최근 — 그대로 덮는다
+          cur.pendingStatus = r.status as InvoiceSlotState['pendingStatus']
+          cur.pendingAmount = Number(r.total_amount) || 0
         }
+        slots.set(slot, cur)
+        map.set(key, slots)
       }
       return map
     },
