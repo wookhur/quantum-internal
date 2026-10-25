@@ -521,12 +521,45 @@ export interface InvoiceSlotState {
 }
 
 /**
+ * 자동청구로 담긴 항목인지. '미팅 2026-08-30 · 8월 발생 · 2개월 이월(소급)' 처럼
+ * 발행 화면이 비고에 적어 둔 흔적을 본다. 손으로 적거나 양식으로 올린 항목에는 없다.
+ */
+const AUTO_ITEM_REMARK = /미팅 \d{4}-\d{2}-\d{2}|\d{1,2}월 발생/
+/** 항목명 앞머리의 '(8월분)' — 소급돼 담긴 항목이 어느 달 치인지 */
+const CARRIED_ITEM_MONTH = /^\((\d{1,2})월분\)/
+
+/** 'YYYY-MM' 에서 N월을 찾는다. N이 그 달보다 크면 지난해다(소급은 길어야 몇 달). */
+function monthOfNumber(n: number, invoiceMonth: string): string {
+  const [y, m] = invoiceMonth.split('-').map(Number)
+  const year = n <= m ? y : y - 1
+  return `${year}-${String(n).padStart(2, '0')}`
+}
+
+/**
  * Map<이름키, Map<`${게시판}:${정산월}`, 상태>>.
  *
  * 지급 여부만 보면 '왜 이 달이 안 내려가지' 에 답할 수 없다. 김지현님의 9월
  * 관리비 인보이스가 반려된 채 남아 있던 건이 그 예다 — 게시판에는 반려됐다는
  * 사실이 전혀 안 보여, 지급은 받았는데 줄은 계속 올라오는 것으로만 보였다.
  * 그래서 지급되지 않은 인보이스의 상태도 함께 들고 온다.
+ *
+ * 누구 것인지·어느 달 치인지를 '인보이스 안의 항목' 에서 읽는다
+ * ------------------------------------------------------------------
+ * 이름만으로 맞추면 틀린다. 이준형님 관리비는 이상민님 이름으로, 김지현님 관리비는
+ * (주)조이에듀케이션 이름으로 청구·수령하기 때문이다. 지급은 끝났는데 청구 목록은
+ * 영영 미지급으로 남았다.
+ *
+ * 그런데 인보이스 항목에 이미 다 적혀 있다 — '(8월분) 8월 1회차 · 박태현' 과
+ * 비고의 '미팅 2026-08-30 · 8월 발생 · 2개월 이월(소급)'. 이건 발행 화면이 직접
+ * 쓴 문구라, 그 인보이스가 '발행한 사람의 자동청구 줄' 을 담고 있다는 증거다.
+ * 그래서 그런 인보이스는
+ *   · 받는 사람 이름이 아니라 '발행한 계정' 의 줄을 정산한 것으로 보고,
+ *   · 항목의 '(N월분)' 을 모아 그 달들까지 함께 덮는다.
+ * 손으로 적거나 양식으로 올린 대리발행에는 그 흔적이 없으므로 종전대로 수령인 이름을
+ * 쓴다 — 재무가 남의 것을 대신 발행한 게 본인 줄을 끄면 안 된다.
+ *
+ * 앞으로 발행하는 건은 줄 번호(covered_incentive_keys)가 함께 저장되므로 이 추론이
+ * 필요 없다. 이건 그 연결이 없던 시절 건을 이어 주기 위한 것이다.
  */
 export function useInvoiceCoverage() {
   const { data } = useQuery({
@@ -535,33 +568,63 @@ export function useInvoiceCoverage() {
       const map = new Map<string, Map<string, InvoiceSlotState>>()
       const { data, error } = await supabase
         .from('freelancer_invoices')
-        .select('kind, invoice_month, client_name, paid_date, status, total_amount, created_at, profiles!freelancer_invoices_freelancer_id_fkey(name)')
+        .select('id, kind, invoice_month, client_name, paid_date, status, total_amount, created_at, profiles!freelancer_invoices_freelancer_id_fkey(name)')
         .order('created_at', { ascending: true })
       if (error) { console.warn('인보이스 조회 실패:', error.message); return map }
+
+      // 항목을 따로 받아 인보이스별로 묶는다(중첩 select 는 관계 이름에 의존해 깨지기 쉽다)
+      const itemsByInvoice = new Map<string, { name: string; remark: string }[]>()
+      const itemRes = await supabase.from('freelancer_invoice_items').select('invoice_id, item_name, remark')
+      if (itemRes.error) {
+        console.warn('인보이스 항목 조회 실패:', itemRes.error.message)
+      } else {
+        for (const it of (itemRes.data || []) as Record<string, unknown>[]) {
+          const id = it.invoice_id as string
+          const arr = itemsByInvoice.get(id) || []
+          arr.push({ name: (it.item_name as string) || '', remark: (it.remark as string) || '' })
+          itemsByInvoice.set(id, arr)
+        }
+      }
+
       for (const r of (data || []) as Record<string, unknown>[]) {
         const month = (r.invoice_month as string) || ''
         if (!/^\d{4}-\d{2}$/.test(month)) continue
-        const slot = `${invoiceBoardGroup(r.kind as string)}:${month}`
+        const group = invoiceBoardGroup(r.kind as string)
         const isPaid = !!r.paid_date
         const prof = r.profiles as Record<string, unknown> | null
-        // 받는 사람은 하나다 — 대리발행이면 client_name, 본인 발행이면(그 칸이 비어
-        // 있으면) 발행 계정의 이름.
-        //
-        // 종전에는 두 이름 모두에 걸었는데, 그러면 '내가 남의 것을 대신 발행한' 것이
-        // '내가 받은' 것으로 잡힌다. 실제로 이준형님 계정으로 이상민님께 발행된
-        // 2026-09 인보이스가 이준형님의 9월 미지급분을 꺼 버렸다.
-        const key = invoicePersonKey((r.client_name as string) || (prof?.name as string))
+        const items = itemsByInvoice.get(r.id as string) || []
+        // 자동청구 흔적이 있으면 '발행한 계정' 의 줄을 담은 것이다 — 수령인 이름이
+        // 달라도(이상민·(주)조이에듀케이션) 그 줄의 주인은 발행자다.
+        const fromAutoBilling = items.some(it => AUTO_ITEM_REMARK.test(it.remark) || CARRIED_ITEM_MONTH.test(it.name))
+        const owner = fromAutoBilling
+          ? ((prof?.name as string) || (r.client_name as string))
+          : ((r.client_name as string) || (prof?.name as string))
+        const key = invoicePersonKey(owner)
         if (!key) continue
-        const slots = map.get(key) || new Map<string, InvoiceSlotState>()
-        const cur = slots.get(slot) || { paid: false }
-        if (isPaid) {
-          cur.paid = true
-        } else {
-          // created_at 오름차순이라 뒤에 오는 것이 더 최근 — 그대로 덮는다
-          cur.pendingStatus = r.status as InvoiceSlotState['pendingStatus']
-          cur.pendingAmount = Number(r.total_amount) || 0
+
+        // 덮는 달: 인보이스의 정산월 + 항목에 '(N월분)' 으로 적힌 소급분의 달.
+        // 한 장에 8월분과 9월분이 함께 담기므로 정산월만 보면 8월이 영영 안 내려간다.
+        const months = new Set<string>([month])
+        if (fromAutoBilling) {
+          for (const it of items) {
+            const m = CARRIED_ITEM_MONTH.exec(it.name)
+            if (m) months.add(monthOfNumber(Number(m[1]), month))
+          }
         }
-        slots.set(slot, cur)
+
+        const slots = map.get(key) || new Map<string, InvoiceSlotState>()
+        for (const om of months) {
+          const slot = `${group}:${om}`
+          const cur = slots.get(slot) || { paid: false }
+          if (isPaid) {
+            cur.paid = true
+          } else {
+            // created_at 오름차순이라 뒤에 오는 것이 더 최근 — 그대로 덮는다
+            cur.pendingStatus = r.status as InvoiceSlotState['pendingStatus']
+            cur.pendingAmount = Number(r.total_amount) || 0
+          }
+          slots.set(slot, cur)
+        }
         map.set(key, slots)
       }
       return map
