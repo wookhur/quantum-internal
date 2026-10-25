@@ -60,6 +60,8 @@ interface Row {
   invoiceType: PartnerInvoiceType
   accountRegion: PartnerAccountRegion
   hidden: boolean
+  /** 돈을 실제로 받는 사람. 본인과 같으면 비워 둔다. */
+  payeeName?: string
 }
 
 function SettingsBody() {
@@ -89,6 +91,7 @@ function SettingsBody() {
         invoiceType: pt?.invoiceType || 'individual',
         accountRegion: pt?.accountRegion || 'domestic',
         hidden: pt?.hidden === true,
+        payeeName: pt?.payeeName,
       })
     }
     for (const p of profiles) if (!p.isExternal || p.role === 'freelancer') put(p.name, !!p.resigned)
@@ -139,6 +142,10 @@ function SettingsBody() {
               발행 대상이 아닌 사람은 오른쪽 휴지통으로 <b>이 목록에서만</b> 뺍니다 — 인사관리의 계정은 그대로이고,
               <b>뺀 사람 보기</b>에서 언제든 되돌릴 수 있습니다.
             </p>
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              <b>수령인</b>은 일한 사람과 돈을 받는 사람이 다를 때만 적습니다. 적어 두면 발행할 때 수령인 칸이 그 이름으로
+              채워지고, <b>그 이름으로 지급된 건이 이 사람의 청구 목록을 내려 줍니다</b>. 비워 두면 본인이 받습니다.
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -187,13 +194,14 @@ function SettingsBody() {
                   <TableHead className="w-32">1회분</TableHead>
                   <TableHead className="w-40">발행유형</TableHead>
                   <TableHead className="w-40">계좌구분</TableHead>
+                  <TableHead className="w-44">수령인</TableHead>
                   <TableHead className="w-24" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                       {showHidden ? '뺀 사람이 없습니다.' : '해당하는 사람이 없습니다.'}
                     </TableCell>
                   </TableRow>
@@ -215,7 +223,17 @@ function SettingRow({ row }: { row: Row }) {
   // 저장 전까지는 화면 값만 바뀐다 — 한 칸 칠 때마다 저장되면 되돌리기가 어렵다
   const [amount, setAmount] = useState(row.annualAmount ? String(row.annualAmount) : '')
   const [sessions, setSessions] = useState(String(row.sessions || 30))
+  const [payee, setPayee] = useState(row.payeeName || '')
   const [err, setErr] = useState('')
+
+  const payeeDirty = payee.trim() !== (row.payeeName || '')
+  const savePayee = () => {
+    setErr('')
+    setType.mutate(
+      { name: row.name, payeeName: payee.trim() },
+      { onError: e => setErr(e instanceof Error ? e.message : '저장하지 못했습니다.') },
+    )
+  }
 
   const amt = Number(amount) || 0
   const per = amt > 0 && Number(sessions) > 0 ? Math.round(amt / Number(sessions)) : 0
@@ -317,6 +335,20 @@ function SettingRow({ row }: { row: Row }) {
               }`}
             >{rg === 'overseas' ? '해외계좌' : '국내계좌'}</button>
           ))}
+        </div>
+      </TableCell>
+      <TableCell>
+        {/* 일한 사람과 받는 사람이 다른 경우(이준형님 몫을 이상민님 이름으로 등).
+            비워 두면 본인이 받는다. 적어 두면 발행할 때 수령인 칸이 그 이름으로
+            채워지고, 그 이름으로 지급된 건이 이 사람의 청구 목록을 내려 준다. */}
+        <div className="flex items-center gap-1">
+          <Input
+            value={payee} placeholder="본인" className="h-8 w-28 text-sm"
+            onChange={e => setPayee(e.target.value)}
+          />
+          <Button size="sm" variant="outline" className="h-8" disabled={busy || !payeeDirty} onClick={savePayee}>
+            {setType.isPending ? <Loader2 className="size-3.5 animate-spin" /> : '저장'}
+          </Button>
         </div>
       </TableCell>
       <TableCell className="text-right">

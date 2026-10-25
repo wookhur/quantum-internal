@@ -34,7 +34,7 @@ import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
 import { useIncentiveStatus, useSetIncentiveReceived, type IncentiveStatus } from '@/hooks/useIncentiveStatus'
-import { usePartnerInvoiceTypes, invoiceTypeOf, accountRegionOf } from '@/hooks/usePartnerInvoiceTypes'
+import { usePartnerInvoiceTypes, invoiceTypeOf, accountRegionOf, payeeOf } from '@/hooks/usePartnerInvoiceTypes'
 import { useProfiles, canAccessAccount, canManageInvoiceSettings } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
 import {
@@ -1548,6 +1548,8 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
   const paidCoveredKeys = usePaidCoveredIncentiveKeys()
   // 지급 원장이 이미 아는 것 — '누구의 · 어느 게시판 · 어느 정산월' 이 어떤 상태인지
   const paidCoverage = useInvoiceCoverage()
+  // 받는 사람이 청구 대상과 다른 경우(이준형님 몫을 이상민님 이름으로 등) 매칭용
+  const { data: invoiceTypeMap } = usePartnerInvoiceTypes()
   const annualFees = useConsultantAnnualFees()
   const sessionsByConsultant = useConsultantSessions(month)
   return useMemo(() => {
@@ -1584,7 +1586,8 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
     // 이 집계는 사람마다 돌므로, 지급 원장 판정도 그 사람 이름으로 해야 한다.
     // 자동청구 집계는 개인·사업자 파트너 줄을 함께 세므로 두 게시판을 모두 본다.
     const coveredFor = (person: string | undefined, om: string) => {
-      const slots = paidCoverage.get(invoicePersonKey(person))
+      // 지급 원장은 '받는 사람' 이름으로 적힌다 — 지정된 수령인이 있으면 그 이름으로
+      const slots = paidCoverage.get(invoicePersonKey(payeeOf(invoiceTypeMap, person)))
       if (!slots) return false
       return slots.get(`individual:${om}`)?.paid === true || slots.get(`business:${om}`)?.paid === true
     }
@@ -1676,7 +1679,7 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       add(mt.koreanName || mt.englishName, { label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})${aged(om)}`, amount: majorTierAmount(mt.tier) })
     }
     return out
-  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus, paidCoveredKeys, paidCoverage, annualFees, sessionsByConsultant])
+  }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus, paidCoveredKeys, paidCoverage, invoiceTypeMap, annualFees, sessionsByConsultant])
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────
@@ -1820,6 +1823,9 @@ export function FreelancerInvoicesPage(
   const { data: invoiceTypeMap } = usePartnerInvoiceTypes()
   const partnerType = invoiceTypeOf(invoiceTypeMap, effectiveName)
   const partnerAccountRegion = accountRegionOf(invoiceTypeMap, effectiveName)
+  // 돈을 실제로 받는 사람. 지정이 없으면 본인.
+  const payeeName = payeeOf(invoiceTypeMap, effectiveName)
+  const payeeDiffers = !!payeeName && consultantNameKey(payeeName) !== consultantNameKey(effectiveName)
   const typeMatchesBoard = isIncentive ? true
     : isBusinessBoard ? partnerType === 'business'
     : isIndividualBoard ? partnerType !== 'business'
@@ -1867,8 +1873,10 @@ export function FreelancerInvoicesPage(
      * 지급한 건을 손으로 끄는 길이 필요하다.
      */
     /** 이 게시판·이 사람의 그 달 치가 지급완료 인보이스로 덮이는가 */
+    // 지급 원장은 '받는 사람' 이름으로 적힌다. 이준형님 관리비를 이상민님 이름으로
+    // 청구·수령하는 것처럼 둘이 다를 수 있어, 지정된 수령인으로 찾는다.
     const coveredByInvoice = (originMonth: string) =>
-      paidCoverage.get(invoicePersonKey(effectiveName))?.get(`${boardGroup}:${originMonth}`)?.paid === true
+      paidCoverage.get(invoicePersonKey(payeeName))?.get(`${boardGroup}:${originMonth}`)?.paid === true
 
     const lineState = (key: string, originMonth: string) =>
       paidCoveredKeys.has(key) || coveredByInvoice(originMonth)
@@ -2028,7 +2036,7 @@ export function FreelancerInvoicesPage(
     }
 
     return [...perSession, ...mgmt, ...essay, ...editorLines, ...mentorLines]
-  }, [typeMatchesBoard, isIncentive, isBusinessBoard, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, paidCoveredKeys, paidCoverage, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions, annualFees, mySessions])
+  }, [typeMatchesBoard, isIncentive, isBusinessBoard, linesByPerson, myName, issueMonth, byConsultant, incentiveStatus, paidCoveredKeys, paidCoverage, payeeName, essayPlans, allEditorMeetings, allStudentsForEditor, effectiveName, allMentors, allMentorAssignments, allMentorSessions, annualFees, mySessions])
 
   // 발행 대상 = 아직 지급완료 안 된 항목
   const issueItems = useMemo(() => displayItems.filter(d => !d.received).map(d => ({
@@ -2144,6 +2152,9 @@ export function FreelancerInvoicesPage(
         : [emptyItem()],
     }
     initial.accountRegion = partnerAccountRegion   // 파트너 계좌구분(국내/해외) 기본 반영
+    // 받는 사람이 따로 지정돼 있으면 수령인 칸을 미리 채운다 — 손으로 고쳐 쓰다 보면
+    // 이번처럼 '누구 관리비가 누구 이름으로 나갔나' 가 흐려진다
+    if (payeeDiffers) initial.name = payeeName
     setEditInvoice(undefined)
     setManualEntry(false)
     setUploadedData(initial)
@@ -2430,6 +2441,13 @@ export function FreelancerInvoicesPage(
         {/* 연 관리비·발행유형·계좌구분은 인보이스설정 한 곳에서 본다.
             이 자리에 두면 미리보기 대상을 한 사람씩 바꿔 가며 봐야 하고,
             사업자 파트너인 사람의 연 관리비를 개인 게시판에서 다루는 꼴이 된다. */}
+        {/* 받는 사람이 본인과 다르면 눈에 띄게 적는다 — 이걸 모르면 '내 관리비가
+            왜 남의 이름으로 나갔나' 를 나중에 되짚어야 한다 */}
+        {payeeDiffers && (
+          <p className="self-center text-[12px] font-medium text-purple-700">
+            💳 수령인 <b>{payeeName}</b> — {effectiveName}님 몫이 이 이름으로 청구·지급됩니다
+          </p>
+        )}
         {(isIndividualBoard || isBusinessBoard) && canManageInvoiceSettings(user) && (
           <Link to="/invoices/settings" className="self-end pb-2 text-xs font-medium text-blue-600 hover:underline">
             인보이스설정
