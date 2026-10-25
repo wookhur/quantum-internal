@@ -1795,6 +1795,12 @@ export function FreelancerInvoicesPage(
   const annualFees = useConsultantAnnualFees()
   const mySessions = useConsultantSessions(issueMonth)
   const effectiveName = isManager && previewName ? previewName : (user?.name || '')
+  // 남의 목록을 보는 중에는 발행을 막는다 — 남의 몫이 내 이름으로 나가면 안 된다.
+  // 다만 미리보기로 '자기 자신' 을 고른 경우는 목록이 본인 것과 똑같으므로 막지 않는다.
+  // 종전에는 previewName 이 차 있기만 하면 막아서, 제 몫을 보다가 그대로 발행하려면
+  // 대상을 '나' 로 되돌려야 했다.
+  const previewingOther = isManager && !!previewName
+    && consultantNameKey(previewName) !== consultantNameKey(user?.name)
   const previewNameOptions = useMemo(() => {
     const names = new Set<string>()
     for (const p of previewProfiles) {
@@ -2411,11 +2417,11 @@ export function FreelancerInvoicesPage(
           </div>
         )}
         {canEdit && (
-          <Button className="gap-1.5" onClick={openIssueInvoice} disabled={issueItems.length === 0 || (isManager && !!previewName)}>
+          <Button className="gap-1.5" onClick={openIssueInvoice} disabled={issueItems.length === 0 || previewingOther}>
             <Plus className="size-4" />인보이스 발행
           </Button>
         )}
-        {isManager && !!previewName && (
+        {previewingOther && (
           <p className="text-[12px] text-amber-600 self-center">👁 {previewName} 미리보기 중 — 발행하려면 대상을 ‘나’로 바꾸세요</p>
         )}
         {/* 연 관리비·발행유형·계좌구분은 인보이스설정 한 곳에서 본다.
