@@ -2416,9 +2416,12 @@ export function FreelancerInvoicesPage(
             </Select>
           </div>
         )}
+        {/* 몇 건이 담기는지 버튼에 적는다 — '한 건씩 따로 발행해야 하는 줄 알았다' 는
+            오해가 있었다. 한 번 누르면 미지급 줄이 한 장에 전부 들어간다. */}
         {canEdit && (
           <Button className="gap-1.5" onClick={openIssueInvoice} disabled={issueItems.length === 0 || previewingOther}>
-            <Plus className="size-4" />인보이스 발행
+            <Plus className="size-4" />
+            인보이스 발행{issueItems.length > 0 ? ` (${issueItems.length}건 한 장에)` : ''}
           </Button>
         )}
         {previewingOther && (
