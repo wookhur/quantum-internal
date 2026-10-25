@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { isValidDateInput, isValidMonthInput } from '@/lib/invoiceForm'
 import { canonicalConsultantName } from '@/lib/consultants'
+import { fetchAllRows } from '@/lib/supabasePaging'
 
 export interface InvoiceItem {
   id: string
@@ -503,6 +504,9 @@ export function invoicePersonKey(s?: string): string {
   // 먼저 별칭 표를 거친다 — 'Julie Kim' → '김지현' 처럼 한 사람이 두 표기로
   // 저장된 건을 모은다(lib/consultants 의 CONSULTANT_NAME_ALIASES)
   let v = canonicalConsultantName((s || '').trim()).trim()
+  // 앞머리의 법인 표기를 뗀다 — 같은 회사가 '(주)조이에듀케이션' 과 '조이에듀케이션'
+  // 두 가지로 적혀 서로 다른 곳으로 잡혔다
+  v = v.replace(/^\s*(\(주\)|（주）|㈜|주식회사)\s*/, '').trim()
   // 뒤에 붙은 괄호(소속·회사)를 떼되, 떼고 나서 아무것도 안 남으면 두고 쓴다
   const stripped = v.replace(/[(（][^)）]*[)）]\s*$/, '').trim()
   if (stripped) v = stripped
@@ -572,18 +576,22 @@ export function useInvoiceCoverage() {
         .order('created_at', { ascending: true })
       if (error) { console.warn('인보이스 조회 실패:', error.message); return map }
 
-      // 항목을 따로 받아 인보이스별로 묶는다(중첩 select 는 관계 이름에 의존해 깨지기 쉽다)
+      // 항목을 따로 받아 인보이스별로 묶는다(중첩 select 는 관계 이름에 의존해 깨지기 쉽다).
+      // 한 요청 1000행 제한에 걸리면 '에러 없이 조용히' 잘려서, 오래된 인보이스의 항목이
+      // 통째로 빠지고 그 사람 줄만 영영 안 내려간다 — 전량을 나눠 받는다.
       const itemsByInvoice = new Map<string, { name: string; remark: string }[]>()
-      const itemRes = await supabase.from('freelancer_invoice_items').select('invoice_id, item_name, remark')
-      if (itemRes.error) {
-        console.warn('인보이스 항목 조회 실패:', itemRes.error.message)
-      } else {
-        for (const it of (itemRes.data || []) as Record<string, unknown>[]) {
+      try {
+        const rows = await fetchAllRows<Record<string, unknown>>((from, to) =>
+          supabase.from('freelancer_invoice_items').select('invoice_id, item_name, remark').range(from, to),
+        )
+        for (const it of rows) {
           const id = it.invoice_id as string
           const arr = itemsByInvoice.get(id) || []
           arr.push({ name: (it.item_name as string) || '', remark: (it.remark as string) || '' })
           itemsByInvoice.set(id, arr)
         }
+      } catch (e) {
+        console.warn('인보이스 항목 조회 실패:', e instanceof Error ? e.message : e)
       }
 
       for (const r of (data || []) as Record<string, unknown>[]) {

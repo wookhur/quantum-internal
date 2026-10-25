@@ -1586,8 +1586,11 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
     // 이 집계는 사람마다 돌므로, 지급 원장 판정도 그 사람 이름으로 해야 한다.
     // 자동청구 집계는 개인·사업자 파트너 줄을 함께 세므로 두 게시판을 모두 본다.
     const coveredFor = (person: string | undefined, om: string) => {
-      // 지급 원장은 '받는 사람' 이름으로 적힌다 — 지정된 수령인이 있으면 그 이름으로
-      const slots = paidCoverage.get(invoicePersonKey(payeeOf(invoiceTypeMap, person)))
+      // 근무자 이름으로 찾는다. 자동청구 건은 '발행한 계정(=근무자)' 앞으로 모여 있어
+      // 수령인이 달라도(이상민) 여기서 맞는다. 다만 양식 업로드로 법인명만 적힌 건은
+      // 단서가 없어, 인보이스설정에 지정해 둔 수령인으로 한 번 더 찾는다.
+      const slots = paidCoverage.get(invoicePersonKey(person))
+        || paidCoverage.get(invoicePersonKey(payeeOf(invoiceTypeMap, person)))
       if (!slots) return false
       return slots.get(`individual:${om}`)?.paid === true || slots.get(`business:${om}`)?.paid === true
     }
@@ -1873,10 +1876,14 @@ export function FreelancerInvoicesPage(
      * 지급한 건을 손으로 끄는 길이 필요하다.
      */
     /** 이 게시판·이 사람의 그 달 치가 지급완료 인보이스로 덮이는가 */
-    // 지급 원장은 '받는 사람' 이름으로 적힌다. 이준형님 관리비를 이상민님 이름으로
-    // 청구·수령하는 것처럼 둘이 다를 수 있어, 지정된 수령인으로 찾는다.
-    const coveredByInvoice = (originMonth: string) =>
-      paidCoverage.get(invoicePersonKey(payeeName))?.get(`${boardGroup}:${originMonth}`)?.paid === true
+    // 근무자 이름으로 찾는다 — 수령인이 아니다. 자동청구 건은 발행한 계정 앞으로
+    // 모여 있으므로, 이름이 달라도(이상민·(주)조이에듀케이션) 여기서 맞는다.
+    const coveredByInvoice = (originMonth: string) => {
+      const slot = `${boardGroup}:${originMonth}`
+      if (paidCoverage.get(invoicePersonKey(effectiveName))?.get(slot)?.paid === true) return true
+      // 양식 업로드로 법인명만 적힌 건(김지현님↔조이에듀케이션)은 지정해 둔 수령인으로 찾는다
+      return paidCoverage.get(invoicePersonKey(payeeName))?.get(slot)?.paid === true
+    }
 
     const lineState = (key: string, originMonth: string) =>
       paidCoveredKeys.has(key) || coveredByInvoice(originMonth)
