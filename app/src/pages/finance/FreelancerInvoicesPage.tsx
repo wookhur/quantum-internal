@@ -2121,13 +2121,24 @@ export function FreelancerInvoicesPage(
    * 목록이 인보이스를 보고 정리되는 이상, 그 인보이스가 어떤 상태인지도 같은
    * 자리에 보여야 한다.
    */
-  const agedReasons = useMemo(() => {
-    const slots = paidCoverage.get(invoicePersonKey(effectiveName))
+  /**
+   * 소급 범위 각 달의 상태 — 지급완료로 봤으면 '어느 인보이스 때문인지' 까지 적는다.
+   *
+   * 종전에는 가려진 달이 그냥 사라졌다. 그러면 '10월이 왜 하나도 안 나오지' 에
+   * 화면만 보고는 답할 수 없고, 매번 DB를 뒤져야 했다. 판단 근거를 같은 자리에 둔다.
+   */
+  const monthStates = useMemo(() => {
     const group = isIncentive ? 'incentive' : isBusinessBoard ? 'business' : 'individual'
-    const months = [...new Set(agedItems.map(d => d.originMonth).filter(Boolean))].sort() as string[]
-    return months.map(m => {
-      const count = agedItems.filter(d => d.originMonth === m).length
-      const st = slots?.get(`${group}:${m}`)
+    const slots = paidCoverage.get(invoicePersonKey(effectiveName))
+    const viaPayee = paidCoverage.get(invoicePersonKey(payeeName))
+    return monthsUpTo(issueMonth, CARRY_OVER_MONTHS).map(m => {
+      const own = slots?.get(`${group}:${m}`)
+      const alt = viaPayee?.get(`${group}:${m}`)
+      const st = own?.paid ? own : alt?.paid ? alt : (own || alt)
+      const count = displayItems.filter(d => d.originMonth === m && !d.received).length
+      if (st?.paid) {
+        return { month: m, count, paid: true, why: `지급완료 — ${st.paidBy || '인보이스로 정산됨'}` }
+      }
       const why =
         !st ? '그 달 인보이스가 없습니다 — 발행하고 지급완료(지급일)를 찍으면 내려갑니다.'
         : st.pendingStatus === 'rejected'
@@ -2135,9 +2146,9 @@ export function FreelancerInvoicesPage(
         : st.pendingStatus === 'draft'
           ? '인보이스가 임시저장 상태입니다 — 제출·승인 뒤 지급완료를 찍으면 내려갑니다.'
           : '인보이스는 있으나 지급일이 기록되지 않았습니다 — 지급 원장에서 지급완료 처리하면 내려갑니다.'
-      return { month: m, count, why }
+      return { month: m, count, paid: false, why }
     })
-  }, [agedItems, paidCoverage, effectiveName, isIncentive, isBusinessBoard])
+  }, [displayItems, paidCoverage, effectiveName, payeeName, issueMonth, isIncentive, isBusinessBoard])
 
   // "인보이스 발행" — open the form pre-filled with this month's source lines.
   const openIssueInvoice = () => {
@@ -2541,17 +2552,16 @@ export function FreelancerInvoicesPage(
               ))}
             </div>
           )}
-          {/* 밀린 달이 왜 안 내려갔는지 — 반려된 인보이스가 보이지 않아 '지급은 받았는데
-              줄은 계속 올라온다' 가 되던 것을 여기서 드러낸다. */}
-          {agedReasons.length > 0 && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-2 space-y-1">
-              {agedReasons.map(r => (
-                <p key={r.month} className="text-[11px] text-amber-900">
-                  <b>{monthLabelKo(r.month, issueMonth)}분 {r.count}건</b> · {r.why}
-                </p>
-              ))}
-            </div>
-          )}
+          {/* 소급 범위 각 달의 상태. 가려진 달이 그냥 사라지면 '10월이 왜 안 나오지' 에
+              화면만 보고는 답할 수 없다 — 지급완료로 봤으면 그 근거까지 적는다. */}
+          <div className="rounded-md border bg-muted/30 p-2 space-y-1">
+            {monthStates.map(r => (
+              <p key={r.month} className={`text-[11px] ${r.paid ? 'text-emerald-800' : r.count > 0 ? 'text-amber-900' : 'text-muted-foreground'}`}>
+                <b>{monthLabelKo(r.month, issueMonth)}분</b>
+                {r.count > 0 ? ` ${r.count}건` : ''} · {r.why}
+              </p>
+            ))}
+          </div>
           {/* 두 게시판의 설명을 같게 둔다 — 종전에는 관리비 쪽에 이월·지급완료 이야기가
               아예 없었고, 줄을 끌 버튼도 없어서 지급을 끝낸 달이 영영 올라왔다. */}
           <p className="text-[11px] text-muted-foreground">
