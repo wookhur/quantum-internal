@@ -2121,34 +2121,6 @@ export function FreelancerInvoicesPage(
    * 목록이 인보이스를 보고 정리되는 이상, 그 인보이스가 어떤 상태인지도 같은
    * 자리에 보여야 한다.
    */
-  /**
-   * 소급 범위 각 달의 상태 — 지급완료로 봤으면 '어느 인보이스 때문인지' 까지 적는다.
-   *
-   * 종전에는 가려진 달이 그냥 사라졌다. 그러면 '10월이 왜 하나도 안 나오지' 에
-   * 화면만 보고는 답할 수 없고, 매번 DB를 뒤져야 했다. 판단 근거를 같은 자리에 둔다.
-   */
-  const monthStates = useMemo(() => {
-    const group = isIncentive ? 'incentive' : isBusinessBoard ? 'business' : 'individual'
-    const slots = paidCoverage.get(invoicePersonKey(effectiveName))
-    const viaPayee = paidCoverage.get(invoicePersonKey(payeeName))
-    return monthsUpTo(issueMonth, CARRY_OVER_MONTHS).map(m => {
-      const own = slots?.get(`${group}:${m}`)
-      const alt = viaPayee?.get(`${group}:${m}`)
-      const st = own?.paid ? own : alt?.paid ? alt : (own || alt)
-      const count = displayItems.filter(d => d.originMonth === m && !d.received).length
-      if (st?.paid) {
-        return { month: m, count, paid: true, why: `지급완료 — ${st.paidBy || '인보이스로 정산됨'}` }
-      }
-      const why =
-        !st ? '그 달 인보이스가 없습니다 — 발행하고 지급완료(지급일)를 찍으면 내려갑니다.'
-        : st.pendingStatus === 'rejected'
-          ? `인보이스가 반려되었습니다${st.pendingAmount ? ` (${formatKRW(st.pendingAmount)})` : ''} — 다시 발행해야 내려갑니다.`
-        : st.pendingStatus === 'draft'
-          ? '인보이스가 임시저장 상태입니다 — 제출·승인 뒤 지급완료를 찍으면 내려갑니다.'
-          : '인보이스는 있으나 지급일이 기록되지 않았습니다 — 지급 원장에서 지급완료 처리하면 내려갑니다.'
-      return { month: m, count, paid: false, why }
-    })
-  }, [displayItems, paidCoverage, effectiveName, payeeName, issueMonth, isIncentive, isBusinessBoard])
 
   // "인보이스 발행" — open the form pre-filled with this month's source lines.
   const openIssueInvoice = () => {
@@ -2459,13 +2431,6 @@ export function FreelancerInvoicesPage(
         {/* 연 관리비·발행유형·계좌구분은 인보이스설정 한 곳에서 본다.
             이 자리에 두면 미리보기 대상을 한 사람씩 바꿔 가며 봐야 하고,
             사업자 파트너인 사람의 연 관리비를 개인 게시판에서 다루는 꼴이 된다. */}
-        {/* 받는 사람이 본인과 다르면 눈에 띄게 적는다 — 이걸 모르면 '내 관리비가
-            왜 남의 이름으로 나갔나' 를 나중에 되짚어야 한다 */}
-        {payeeDiffers && (
-          <p className="self-center text-[12px] font-medium text-purple-700">
-            💳 수령인 <b>{payeeName}</b> — {effectiveName}님 몫이 이 이름으로 청구·지급됩니다
-          </p>
-        )}
         {(isIndividualBoard || isBusinessBoard) && canManageInvoiceSettings(user) && (
           <Link to="/invoices/settings" className="self-end pb-2 text-xs font-medium text-blue-600 hover:underline">
             인보이스설정
@@ -2552,16 +2517,6 @@ export function FreelancerInvoicesPage(
               ))}
             </div>
           )}
-          {/* 소급 범위 각 달의 상태. 가려진 달이 그냥 사라지면 '10월이 왜 안 나오지' 에
-              화면만 보고는 답할 수 없다 — 지급완료로 봤으면 그 근거까지 적는다. */}
-          <div className="rounded-md border bg-muted/30 p-2 space-y-1">
-            {monthStates.map(r => (
-              <p key={r.month} className={`text-[11px] ${r.paid ? 'text-emerald-800' : r.count > 0 ? 'text-amber-900' : 'text-muted-foreground'}`}>
-                <b>{monthLabelKo(r.month, issueMonth)}분</b>
-                {r.count > 0 ? ` ${r.count}건` : ''} · {r.why}
-              </p>
-            ))}
-          </div>
           {/* 두 게시판의 설명을 같게 둔다 — 종전에는 관리비 쪽에 이월·지급완료 이야기가
               아예 없었고, 줄을 끌 버튼도 없어서 지급을 끝낸 달이 영영 올라왔다. */}
           <p className="text-[11px] text-muted-foreground">

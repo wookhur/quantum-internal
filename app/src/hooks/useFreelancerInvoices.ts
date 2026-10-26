@@ -522,8 +522,6 @@ export interface InvoiceSlotState {
   /** 지급되지 않은 인보이스 중 가장 최근 것의 상태. 왜 안 내려가는지 알려 준다. */
   pendingStatus?: 'draft' | 'submitted' | 'approved' | 'rejected'
   pendingAmount?: number
-  /** 어느 인보이스가 이 달을 덮었는지 — '왜 안 올라오지' 에 답하려면 근거가 보여야 한다 */
-  paidBy?: string
 }
 
 /**
@@ -628,7 +626,6 @@ export function useInvoiceCoverage() {
           const cur = slots.get(slot) || { paid: false }
           if (isPaid) {
             cur.paid = true
-            cur.paidBy = `${month} 인보이스 · ${(r.client_name as string) || '본인'} · 지급 ${r.paid_date as string}`
           } else {
             // created_at 오름차순이라 뒤에 오는 것이 더 최근 — 그대로 덮는다
             cur.pendingStatus = r.status as InvoiceSlotState['pendingStatus']
