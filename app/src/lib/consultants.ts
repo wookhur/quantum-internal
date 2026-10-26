@@ -52,6 +52,9 @@ const CONSULTANT_NAME_ALIASES: Record<string, string> = {
   // 합치지 않으면 인센티브가 두 이름에 나뉘어 한쪽이 인보이스에서 빠진다
   // — 'Aidan Lee'↔'이준형' 과 같은 건이다.
   'liz': '유리즈',
+  // 인보이스가 9월엔 '김용훈'(입금자명), 그 밖엔 'John Kim' 으로 들어왔다. 운영 기준은
+  // 'John Kim' 이므로 그쪽으로 모은다 — 입금자명은 따로 보지 않는다.
+  '김용훈': 'John Kim',
 }
 
 /** Collapse alias names to their canonical form (e.g. Julie Kim → 김지현).
