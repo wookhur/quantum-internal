@@ -1153,9 +1153,24 @@ export function ColdCallView() {
                           </span>
                         )
                       })()}
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        {lead.leadDate}
-                      </p>
+                      {/* 목록 정렬은 '최근 문의일' 기준인데 적히는 건 최초 유입일이라
+                          위치와 날짜가 어긋났다. 정렬 기준을 적고 최초 유입일은 아래에. */}
+                      {(() => {
+                        const shown = latestInquiryDate(lead.leadDate, lead.memo)
+                        const origin = (lead.leadDate || '').slice(0, 10)
+                        const reinquired = shown !== origin
+                        return (
+                          <>
+                            <p className={`text-[10px] mt-1 ${reinquired ? 'text-blue-600 font-medium' : 'text-muted-foreground'}`}
+                               title={reinquired ? '홈페이지로 다시 문의한 날 (목록 정렬 기준)' : undefined}>
+                              {shown}
+                            </p>
+                            {reinquired && (
+                              <p className="text-[10px] text-muted-foreground" title="처음 유입된 날">최초 {origin}</p>
+                            )}
+                          </>
+                        )
+                      })()}
                     </div>
                   </div>
                 </button>

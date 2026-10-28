@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { homepageOriginBadge, hasHomepageReinquiry, reinquiryBadge, homepageTouch, latestInquiryDate, parseHomepageInquiries } from '@/lib/homepageInquiry'
+import { homepageOriginBadge, reinquiryBadge, homepageTouch, latestInquiryDate } from '@/lib/homepageInquiry'
 import { useT } from '@/i18n/LanguageContext'
 import { Link, useLocation } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -783,13 +783,29 @@ function LeadsTableView() {
                         })()}
                       </div>
                     </td>
+                    {/* 목록은 '최근 문의일' 순으로 줄을 세운다. 그런데 큰 글씨로는 최초
+                        유입일을 적고 있어, 10월 줄들 사이에 1월이 끼어 보였다. 줄 위치와
+                        적힌 날짜가 어긋나면 목록을 믿을 수 없다 — 정렬 기준을 크게 적고,
+                        최초 유입일은 그 아래 기록으로 남긴다. */}
                     <td className="text-xs text-muted-foreground font-mono whitespace-nowrap">
-                      {formatDate(lead.leadDate)}
-                      {hasHomepageReinquiry(lead.sourceChannel, lead.memo) && (
-                        <span className="block text-[10px] text-blue-600" title="홈페이지로 다시 문의한 날">
-                          ↻ {parseHomepageInquiries(lead.memo)[0].date.slice(5)}
-                        </span>
-                      )}
+                      {(() => {
+                        const shown = latestInquiryDate(lead.leadDate, lead.memo)
+                        const origin = (lead.leadDate || '').slice(0, 10)
+                        const reinquired = shown !== origin
+                        return (
+                          <>
+                            <span className={reinquired ? 'text-blue-600 font-medium' : undefined}
+                                  title={reinquired ? '홈페이지로 다시 문의한 날 (목록 정렬 기준)' : undefined}>
+                              {formatDate(shown)}
+                            </span>
+                            {reinquired && (
+                              <span className="block text-[10px] text-muted-foreground" title="처음 유입된 날">
+                                최초 {formatDate(origin)}
+                              </span>
+                            )}
+                          </>
+                        )
+                      })()}
                     </td>
                     <td className="font-medium">
                       <Link
