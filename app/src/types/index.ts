@@ -549,6 +549,8 @@ export interface ServiceStudent {
   contractType?: string
   /** 담당 컨설턴트 변경 이력 (from→to, 변경일). 현재 담당자는 assignedConsultant 유지. */
   consultantHistory?: { from?: string; to: string; date: string }[]
+  /** 에세이 에디터 교체 이력. 현재 에디터는 essayEditor 유지 — 컨설턴트와 같은 방식. */
+  essayEditorHistory?: { from?: string; to: string; date: string }[]
   applicationCount?: number
   additionalServices?: string
   contractDetails?: ContractDetails

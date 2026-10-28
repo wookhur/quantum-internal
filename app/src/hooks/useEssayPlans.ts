@@ -10,6 +10,13 @@ export interface EssayPlan {
   consultantName?: string
   totalAmount: number
   startMonth: string      // 'YYYY-MM' (신청월)
+  /**
+   * 지급을 끊는 달 'YYYY-MM'. 비우면 그해 12월까지(종전과 같음).
+   *
+   * 에디터가 중간에 바뀌어 끝까지 못 맡은 경우에 쓴다 — 11월에 교체됐으면 10월로
+   * 적어 11·12월분이 그 사람에게 나가지 않게 한다.
+   */
+  endMonth?: string
   packageLabel?: string   // 선택한 원서/에세이 패키지 (자동 총액 근거)
   currency?: string
   notes?: string
@@ -21,31 +28,44 @@ export interface EssayPlan {
 // ─── 월 급여 계산 (시작월 포함 ~ 그해 12월) ─────────────────────────────────────
 /** 'YYYY-MM' → 월 숫자(1~12) */
 function monthNum(m: string): number { return Number((m || '').slice(5, 7)) || 0 }
-/** 종료월 = 시작월 그해 12월 */
+/** 약정상 종료월 = 시작월 그해 12월. 월 지급액을 나누는 기준은 늘 이쪽이다. */
 export function essayEndMonth(startMonth: string): string {
   return `${(startMonth || '').slice(0, 4)}-12`
 }
-/** 시작월~12월 개월수 (6월→7, 8월→5) */
+/** 실제로 지급을 끊는 달 — 중간에 끊었으면 그 달, 아니면 약정 종료월(12월) */
+export function essayPaidThrough(plan: Pick<EssayPlan, 'startMonth' | 'endMonth'>): string {
+  const full = essayEndMonth(plan.startMonth)
+  const e = (plan.endMonth || '').trim()
+  // 약정 범위 밖으로 적힌 값은 무시한다 — 시작월보다 이르거나 12월을 넘길 수 없다
+  if (!e || e < plan.startMonth || e > full) return full
+  return e
+}
+/** 시작월~12월 개월수 (6월→7, 8월→5). 중간에 끊어도 이 값은 변하지 않는다. */
 export function essayMonthCount(startMonth: string): number {
   const s = monthNum(startMonth)
   return s ? 12 - s + 1 : 0
 }
 /**
  * 특정 정산월(month, 'YYYY-MM')에 지급될 원서·에세이 급여.
- * 범위(시작월~12월) 밖이면 null. 반올림 잔액은 마지막 달(12월)에 보정해 합계=총액.
+ *
+ * 나누는 기준(count)은 늘 '시작월~그해 12월' 이다. 중간에 끊어도 월 지급액은
+ * 그대로 두고 지급 범위만 줄인다 — 끊었다고 월액이 올라가면, 못 받은 달의 몫이
+ * 받은 달로 옮겨 붙어 더 많이 지급된다.
+ *
+ * 잔액 보정은 약정 마지막 달(12월)에만 한다. 중간에 끊은 경우 남은 금액은
+ * 그대로 미지급으로 둔다 — 서비스를 끝까지 못 했으므로 총액을 다 받지 않는다.
  */
 export function essayLineForMonth(
-  plan: Pick<EssayPlan, 'totalAmount' | 'startMonth'>,
+  plan: Pick<EssayPlan, 'totalAmount' | 'startMonth' | 'endMonth'>,
   month: string,
 ): { amount: number; index: number; count: number } | null {
   const start = plan.startMonth
-  const end = essayEndMonth(start)
-  if (!start || month < start || month > end) return null
+  if (!start || month < start || month > essayPaidThrough(plan)) return null
   const count = essayMonthCount(start)
   if (count <= 0) return null
   const index = monthNum(month) - monthNum(start) + 1
   const base = Math.floor((plan.totalAmount || 0) / count)
-  // 마지막 달(12월)은 잔액까지 포함 → 합계가 정확히 총액
+  // 약정 마지막 달(12월)은 잔액까지 포함 → 끝까지 간 경우 합계가 정확히 총액
   const amount = monthNum(month) === 12 ? (plan.totalAmount || 0) - base * (count - 1) : base
   return { amount, index, count }
 }
@@ -60,6 +80,7 @@ function mapRow(row: Record<string, unknown>): EssayPlan {
     consultantName: (row.consultant_name as string) || undefined,
     totalAmount: row.total_amount != null ? Number(row.total_amount) : 0,
     startMonth: (row.start_month as string) || '',
+    endMonth: (row.end_month as string) || undefined,
     packageLabel: (row.package_label as string) || undefined,
     currency: (row.currency as string) || 'KRW',
     notes: (row.notes as string) || undefined,
@@ -118,6 +139,7 @@ export function useCreateEssayPlan() {
         consultant_name: p.consultantName || null,
         total_amount: p.totalAmount ?? 0,
         start_month: p.startMonth,
+        end_month: p.endMonth || null,
         package_label: p.packageLabel || null,
         currency: p.currency || 'KRW',
         notes: p.notes || null,
@@ -141,6 +163,8 @@ export function useUpdateEssayPlan() {
       if (p.consultantName !== undefined) row.consultant_name = p.consultantName || null
       if (p.totalAmount !== undefined) row.total_amount = p.totalAmount ?? 0
       if (p.startMonth !== undefined) row.start_month = p.startMonth
+      // 빈 값 = 끊지 않음(그해 12월까지)
+      if (p.endMonth !== undefined) row.end_month = p.endMonth || null
       if (p.packageLabel !== undefined) row.package_label = p.packageLabel || null
       if (p.currency !== undefined) row.currency = p.currency || 'KRW'
       if (p.notes !== undefined) row.notes = p.notes || null

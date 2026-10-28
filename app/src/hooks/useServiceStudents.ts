@@ -39,6 +39,7 @@ function mapStudent(row: Record<string, unknown>): ServiceStudent {
     majorDetail: (row.major_detail as string) || undefined,
     contractType: (row.contract_type as string) || undefined,
     consultantHistory: (row.consultant_history as ServiceStudent['consultantHistory']) || undefined,
+    essayEditorHistory: (row.essay_editor_history as ServiceStudent['essayEditorHistory']) || undefined,
     applicationCount: (row.application_count as number) || undefined,
     additionalServices: (row.additional_services as string) || undefined,
     contractDetails: (row.contract_details as ServiceStudent['contractDetails']) || undefined,
@@ -247,6 +248,7 @@ export function useUpdateServiceStudent() {
       majorDetail?: string
       contractType?: string
       consultantHistory?: ServiceStudent['consultantHistory']
+      essayEditorHistory?: ServiceStudent['essayEditorHistory']
       applicationCount?: number
       additionalServices?: string
       contractDetails?: ServiceStudent['contractDetails']
@@ -289,6 +291,7 @@ export function useUpdateServiceStudent() {
       if (rest.majorDetail !== undefined) update.major_detail = rest.majorDetail || null
       if (rest.contractType !== undefined) update.contract_type = rest.contractType || null
       if (rest.consultantHistory !== undefined) update.consultant_history = rest.consultantHistory
+      if (rest.essayEditorHistory !== undefined) update.essay_editor_history = rest.essayEditorHistory
       if (rest.applicationCount !== undefined) update.application_count = rest.applicationCount || null
       if (rest.additionalServices !== undefined) update.additional_services = rest.additionalServices || null
       if (rest.contractDetails !== undefined) update.contract_details = rest.contractDetails || null

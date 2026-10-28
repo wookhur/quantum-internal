@@ -65,7 +65,7 @@ import {
 } from '@/hooks/useECActivities'
 import {
   useEssayPlans, useCreateEssayPlan, useUpdateEssayPlan, useDeleteEssayPlan,
-  essayEndMonth, essayMonthCount, type EssayPlan,
+  essayEndMonth, essayMonthCount, essayPaidThrough, type EssayPlan,
 } from '@/hooks/useEssayPlans'
 import { useContracts, useReadContractPdf } from '@/hooks/useContracts'
 import {
@@ -1016,7 +1016,7 @@ function ProfileSection({ student, linkedContract, onDeleted, createdBy, canEdit
         <Field label={t('student360.grade')} value={student.grade} />
         <Field icon={<GraduationCap className="size-4" />} label={t('student360.school')} value={student.school} />
         <ConsultantField student={student} canEdit={canEdit} />
-        <Field label={t('student360.essayEditor')} value={student.essayEditor} />
+        <EssayEditorField student={student} canEdit={canEdit} />
         <Field label={t('student360.contractType')} value={contractTypeText(student, linkedContract?.contractType, t('student360.scholarshipLabel'))} />
         <Field label={t('contracts.applicationCount')} value={(linkedContract?.applicationCount ?? student.applicationCount) != null ? `${linkedContract?.applicationCount ?? student.applicationCount}개` : undefined} />
         <Field label={t('student360.majorTrack')} value={[student.majorTrack ? MAJOR_TRACK_LABEL[student.majorTrack] : '', student.majorDetail].filter(Boolean).join(' · ') || undefined} />
@@ -1320,6 +1320,95 @@ function ConsultantField({ student, canEdit }: { student: ServiceStudent; canEdi
   )
 }
 
+
+/**
+ * 에세이 에디터 — 담당 컨설턴트와 같은 방식으로 교체 이력을 남긴다.
+ *
+ * 종전에는 읽기 전용 칸이라, 에디터가 바뀌면 학생 정보 수정 창을 열어 덮어썼다.
+ * 그러면 누가 언제까지 맡았는지가 사라진다. 원서·에세이 서비스비는 그 사람에게
+ * 매월 나가는 돈이라, 교체 시점이 남아야 어느 달까지 누구 몫인지 가릴 수 있다.
+ */
+function EssayEditorField({ student, canEdit }: { student: ServiceStudent; canEdit: boolean }) {
+  const t = useT()
+  const update = useUpdateServiceStudent()
+  const consultantPool = useConsultantPool()
+  const today = new Date().toISOString().slice(0, 10)
+  const [adding, setAdding] = useState(false)
+  const [newE, setNewE] = useState('')
+  const [date, setDate] = useState(today)
+  const history = student.essayEditorHistory || []
+
+  // 에디터 선택지 = 에세이 에디터 프리셋 + 컨설턴트 풀 (이름 표기를 하나로)
+  const options = useMemo(() => {
+    const byKey = new Map<string, string>()
+    for (const e of ESSAY_EDITORS) { const k = consultantNameKey(e); if (k && !byKey.has(k)) byKey.set(k, e) }
+    for (const c of consultantPool) { const k = consultantNameKey(c.name); if (k && !byKey.has(k)) byKey.set(k, c.name) }
+    return Array.from(byKey.values()).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [consultantPool])
+
+  const saveChange = () => {
+    if (!canEdit || !newE) return
+    const entry = { from: student.essayEditor || undefined, to: newE, date: date || today }
+    update.mutate({ id: student.id, essayEditor: newE, essayEditorHistory: [...history, entry] })
+    setAdding(false); setNewE(''); setDate(today)
+  }
+  // 이력 삭제(정정용): 가장 최근 교체를 지우면 현재 에디터를 그 전 값으로 되돌린다.
+  const removeEntry = (i: number) => {
+    const entry = history[i]
+    const next = history.filter((_, idx) => idx !== i)
+    const data: { id: string; essayEditorHistory: typeof next; essayEditor?: string } = { id: student.id, essayEditorHistory: next }
+    if (i === history.length - 1) data.essayEditor = entry.from || undefined
+    update.mutate(data)
+  }
+
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-0.5">{t('student360.essayEditor')}</p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span>{student.essayEditor || '—'}</span>
+        {canEdit && !adding && (
+          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs gap-0.5" onClick={() => setAdding(true)}>
+            <Plus className="size-3" />교체
+          </Button>
+        )}
+      </div>
+
+      {history.length > 0 && (
+        <div className="mt-1 space-y-0.5">
+          {history.map((h, i) => (
+            <div key={i} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <span className="tabular-nums">{h.date}</span>
+              <span>·</span>
+              <span>{h.from || '—'} → {h.to}</span>
+              {canEdit && (
+                <button className="ml-0.5 text-red-400 hover:text-red-600" title={t('common.delete')} onClick={() => removeEntry(i)}>×</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <>
+          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <select value={newE} onChange={e => setNewE(e.target.value)} className="h-7 rounded border px-1 text-xs bg-background">
+              <option value="">{t('common.select')}</option>
+              {options.map(n => <option key={n} value={n}>{n}</option>)}
+            </select>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-7 rounded border px-1 text-xs bg-background" />
+            <Button size="sm" className="h-7 text-xs" onClick={saveChange} disabled={!newE}>{t('common.save')}</Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAdding(false); setNewE('') }}>{t('common.cancel')}</Button>
+          </div>
+          {/* 교체해도 서비스비는 원래 플랜대로 계속 나간다 — 끊으려면 플랜에서 종료월을 적어야 한다 */}
+          <p className="mt-1 text-[11px] text-amber-700">
+            교체만으로는 <b>원서·에세이 서비스비가 끊기지 않습니다.</b> 전 담당자에게 더 지급하지 않으려면
+            아래 <b>원서·에세이 서비스</b>에서 그 플랜의 <b>지급 종료월</b>을 적어 주세요.
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
 
 // ────────────────────────── EC Services ──────────────────────────
 function ECServicesSection({ studentId, createdBy, canEdit }: { studentId: string; createdBy?: string; canEdit: boolean }) {
@@ -2333,6 +2422,9 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
         )}
         {plans.map(p => {
           const count = essayMonthCount(p.startMonth)
+          // 중간에 끊었으면 그 달까지만 지급된다 — 카드에서 바로 보여야 한다
+          const through = essayPaidThrough(p)
+          const stopped = through < essayEndMonth(p.startMonth)
           return (
             <div key={p.id} className="rounded-lg border p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -2342,6 +2434,11 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
                   <Badge variant="outline" className="text-[10px] h-4 bg-indigo-50 text-indigo-700 border-indigo-200">
                     {p.startMonth} ~ {essayEndMonth(p.startMonth)} · {count}개월
                   </Badge>
+                  {stopped && (
+                    <Badge variant="outline" className="text-[10px] h-4 bg-amber-50 text-amber-700 border-amber-200">
+                      {through} 까지만 지급
+                    </Badge>
+                  )}
                 </div>
                 {canEdit && (
                   <div className="flex gap-1">
@@ -2382,7 +2479,12 @@ function EssayServiceSection({ studentId, applicationCount, defaultConsultant, c
                   </div>
                 )
               })()}
-              <p className="text-[11px] text-muted-foreground">인보이스 발행 시 {p.consultantName || '담당 컨설턴트'}의 해당 월 인보이스에 <b>총액÷개월수</b>로 시작월~12월 매월 자동 추가됩니다.</p>
+              <p className="text-[11px] text-muted-foreground">
+                인보이스 발행 시 {p.consultantName || '담당 컨설턴트'}의 해당 월 인보이스에 <b>총액÷개월수</b>로{' '}
+                {stopped
+                  ? <>시작월~<b className="text-amber-700">{through}</b>까지만 자동 추가됩니다. 그 다음 달부터는 올라오지 않습니다.</>
+                  : <>시작월~12월 매월 자동 추가됩니다.</>}
+              </p>
             </div>
           )
         })}
@@ -2417,6 +2519,8 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
   const [open, setOpen] = useState(false)
   const [consultant, setConsultant] = useState(plan?.consultantName || defaultConsultant || '')
   const [startMonth, setStartMonth] = useState(plan?.startMonth || `${SERVICE_YEAR}-06`)
+  // 중간에 끊은 달. 비우면 그해 12월까지 — 끝까지 맡은 보통의 경우다.
+  const [endMonth, setEndMonth] = useState(plan?.endMonth || '')
   const [count, setCount] = useState(() => (plan?.packageLabel || '').match(/\d+/)?.[0] || '')
   const [total, setTotal] = useState(plan?.totalAmount ? String(plan.totalAmount) : '')
   const [notes, setNotes] = useState(plan?.notes || '')
@@ -2425,6 +2529,12 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
   const months = essayMonthCount(startMonth)
   const monthly = months > 0 ? Math.floor(totalNum / months) : 0
   const lastMonthly = months > 0 ? totalNum - monthly * (months - 1) : 0
+  // 중간에 끊으면 월액은 그대로이고 지급 달 수만 줄어든다 → 실지급 합계도 줄어든다
+  const paidThrough = essayPaidThrough({ startMonth, endMonth })
+  const paidMonths = Math.max(0, Number(paidThrough.slice(5, 7)) - Number(startMonth.slice(5, 7)) + 1)
+  const paidTotal = paidThrough >= essayEndMonth(startMonth)
+    ? totalNum
+    : monthly * paidMonths
 
   const save = () => {
     if (!canEdit || !consultant.trim() || !startMonth) return
@@ -2432,6 +2542,7 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
     const base = {
       consultantName: consultant.trim(),
       startMonth,
+      endMonth: endMonth || undefined,
       packageLabel: count ? `원서 ${count}개` : undefined,
       notes: notes.trim() || undefined,
       ...(isManager ? { totalAmount: totalNum } : {}),
@@ -2469,6 +2580,23 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
               <Input className="mt-1" type="number" min={0} value={count} onChange={e => setCount(e.target.value)} placeholder="예: 10" />
             </div>
           </div>
+          <div>
+            <Label className="text-xs">
+              지급 종료월 <span className="text-muted-foreground font-normal">(중간에 끊을 때만 — 비우면 그해 12월까지)</span>
+            </Label>
+            <div className="mt-1 flex items-center gap-2">
+              <Input type="month" value={endMonth} min={startMonth} max={essayEndMonth(startMonth)}
+                onChange={e => setEndMonth(e.target.value)} />
+              {endMonth && (
+                <Button size="sm" variant="ghost" className="h-9 text-xs text-muted-foreground"
+                  onClick={() => setEndMonth('')}>지우기</Button>
+              )}
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              에디터가 바뀌어 끝까지 못 맡은 경우에 씁니다. 예: 11월에 교체 → <b>{`${SERVICE_YEAR}-10`}</b>.
+              월 지급액은 그대로이고 그 다음 달부터 인보이스에 올라오지 않습니다.
+            </p>
+          </div>
           {isManager ? (
             <>
               <div>
@@ -2478,7 +2606,14 @@ function EssayServiceDialog({ studentId, plan, defaultConsultant, createdBy, can
               <div className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800 space-y-0.5">
                 <div>기간: <b>{startMonth}</b> ~ <b>{essayEndMonth(startMonth)}</b> (그해 12월 종료) · <b>{months}개월</b></div>
                 <div>월 지급액(단가): <b>{formatCurrency(monthly, 'KRW')}</b>{months > 1 && <> · 12월 <b>{formatCurrency(lastMonthly, 'KRW')}</b> (잔액 보정)</>}</div>
-                <div className="text-indigo-500">인보이스 발행 시 시작월~12월 매월 자동 추가됩니다.</div>
+                {paidThrough < essayEndMonth(startMonth) ? (
+                  <div className="text-amber-700">
+                    ⚠ <b>{paidThrough}</b> 까지만 지급 · 실지급 <b>{formatCurrency(paidTotal, 'KRW')}</b>
+                    {' '}(남은 {formatCurrency(totalNum - paidTotal, 'KRW')}은 지급되지 않습니다)
+                  </div>
+                ) : (
+                  <div className="text-indigo-500">인보이스 발행 시 시작월~12월 매월 자동 추가됩니다.</div>
+                )}
               </div>
             </>
           ) : (
