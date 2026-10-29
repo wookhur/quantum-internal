@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { fetchAllRows, fetchAllRowsByIds } from '@/lib/supabasePaging'
+import { canonicalPartnerName } from '@/lib/partners'
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -402,7 +403,8 @@ export function useIncentivesByInstallment() {
           if (!billed) continue
           const student = p.service_students as Record<string, unknown> | null
           const studentName = (student?.name as string) || ''
-          const label = (p[pq.labelCol] as string) || ''
+          // 같은 학원이 '김효진' · '김효진수학' 처럼 여러 표기로 적혀 있어 통일한다
+          const label = canonicalPartnerName(p[pq.labelCol] as string) || ''
           const detail = (p[pq.detailCol] as string) || ''
           const fullLabel = detail ? `${label} · ${detail}` : label
           const currency = ((p.currency as string) || 'KRW') as 'KRW' | 'USD'

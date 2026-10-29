@@ -61,7 +61,11 @@ export function useServiceIncentiveLines(): ServiceIncentiveLine[] {
         if (amount <= 0) return
         // 학생명은 Student360(service_students) 기준 한글+영어로 통일 표기
         const studentDisplay = [f.studentKoreanName, f.studentName].filter(Boolean).join(' ') || f.studentName
-        const label = [studentDisplay, f.label].filter(Boolean).join(' · ') || f.label
+        // 어느 달 수업인지를 항목명에 남긴다. 같은 학원 줄이 달마다 올라오면
+        // 월이 없을 때 어느 줄이 어느 달 것인지 알 수 없다. 이월 태그의 '(8월분)'은
+        // 정산월(돈이 들어온 달)이라 이것과 다른 값이다.
+        const program = [f.label, f.serviceMonth].filter(Boolean).join(' ')
+        const label = [studentDisplay, program].filter(Boolean).join(' · ') || program
         lines.push({ id: `s:${f.id}:${idx}`, name: canonicalConsultantName(s.name), label, amount, month: paidMonth })
       })
     }
