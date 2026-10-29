@@ -1573,8 +1573,23 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       arr.push(item); out.set(nm, arr)
     }
     if (isIncentive) {
+      // 이미 받은 건은 '미제출'이 아니다 — 개인 파트너 쪽(coveredFor)과 같은 기준으로
+      // 지급완료 인보이스가 덮는 줄을 빼야, 승인완료로 뜨는 사람 옆의 건수·금액이
+      // 지급 원장과 맞는다. 종전에는 그 달에 발생한 전액이 그대로 찍혔다.
+      const coveredIncentive = (person: string, om: string) => {
+        const slots = paidCoverage.get(invoicePersonKey(person))
+          || paidCoverage.get(invoicePersonKey(payeeOf(invoiceTypeMap, person)))
+        return slots?.get(`incentive:${om}`)?.paid === true
+      }
       linesByPerson.forEach((lines, name) => {
-        for (const l of lines) if (l.month === month) add(name, { label: l.label, amount: l.amount })
+        for (const l of lines) {
+          if (l.month !== month) continue
+          if (paidCoveredKeys.has(l.id)) continue
+          if (coveredIncentive(name, l.month)) continue
+          // 인보이스 없이 현금으로 지급해 손으로 꺼 둔 건도 뺀다
+          if (carryState(incentiveStatus.get(l.id), month) === 'hide') continue
+          add(name, { label: l.label, amount: l.amount })
+        }
       })
       return out
     }
@@ -1850,7 +1865,19 @@ export function FreelancerInvoicesPage(
     if (!typeMatchesBoard) return []
     if (isIncentive) {
       const out: DItem[] = []
+      /**
+       * 지급완료 인보이스가 덮는 줄은 그대로 내린다 — 개인·사업자 게시판과 같은 규칙이다.
+       *
+       * 종전에는 이 분기가 지급 원장을 보지 않고 먼저 돌아 나갔다(아래 coveredByInvoice
+       * 까지 내려오지 않는다). 그래서 9월분 인센티브를 인보이스로 받아 지급완료가 찍힌
+       * 사람도 10월·11월에 그 줄이 계속 다시 올라왔고, 화면의 안내문("지급 원장을 보고
+       * 저절로 정리됩니다")과 어긋나 있었다. 이 게시판만 손으로 꺼야 했던 이유다.
+       */
+      const coveredIncentive = (om: string) =>
+        paidCoverage.get(invoicePersonKey(effectiveName))?.get(`incentive:${om}`)?.paid === true
+        || paidCoverage.get(invoicePersonKey(payeeName))?.get(`incentive:${om}`)?.paid === true
       for (const l of (linesByPerson.get(myName) || [])) {
+        if (paidCoveredKeys.has(l.id) || coveredIncentive(l.month)) continue
         const st = incentiveStatus.get(l.id)
         if (st?.received) {
           if (st.receivedMonth === issueMonth) out.push({ id: l.id, label: l.label, amount: l.amount, originMonth: l.month, received: true, sourceDetail: l.sourceDetail })

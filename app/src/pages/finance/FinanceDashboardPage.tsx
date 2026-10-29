@@ -109,6 +109,42 @@ function groupByPerson(
   return [...map.values()].sort((a, b) => b.amount - a.amount)
 }
 
+/**
+ * 인보이스 미제출 현황 두 판.
+ *
+ * 제출은 달 단위라 이 패널만 따로 달을 옮겨 볼 수 있어야 한다 — 지난 달에 누가
+ * 안 냈는지 보려고 위의 정산월을 통째로 바꾸면 대시보드 전체가 따라 움직인다.
+ * 위 정산월을 바꾸면 이 패널도 그 달로 다시 맞춰진다(부모에서 key 로 다시 그린다).
+ */
+function MissingInvoiceBoards({ defaultMonth, months, canEdit }: { defaultMonth: string; months: string[]; canEdit: boolean }) {
+  const [m, setM] = useState(defaultMonth)
+  // 위 정산월이 최근 12개월 밖이면 목록에 없다 — 고른 달이 빈칸으로 보이면 안 된다
+  const opts = useMemo(() => (months.includes(m) ? months : [m, ...months]), [months, m])
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3 pt-2">
+        <h2 className="text-sm font-semibold text-muted-foreground">인보이스 미제출 현황</h2>
+        <Select value={m} onValueChange={v => v && setM(v)}>
+          <SelectTrigger className="h-8 w-32"><span>{m}</span></SelectTrigger>
+          <SelectContent>
+            {opts.map(x => <SelectItem key={x} value={x}>{x}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground px-0.5">개인 파트너 (관리비·원서에세이 등)</p>
+          <MissingInvoices month={m} kind="freelancer" canEdit={canEdit} />
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground px-0.5">세일즈 인센티브</p>
+          <MissingInvoices month={m} kind="sales_incentive" canEdit={canEdit} />
+        </div>
+      </div>
+    </>
+  )
+}
+
 export function FinanceDashboardPage() {
   const t = useT()
   const { user } = useAuth()
@@ -899,25 +935,7 @@ export function FinanceDashboardPage() {
              여기로 모았다. 이번 달에 누가 아직 안 냈는지 한 화면에서 본다. */}
       {allowed && (
         <>
-          <div className="flex items-center justify-between pt-2">
-            <h2 className="text-sm font-semibold text-muted-foreground">
-              인보이스 미제출 현황
-              <span className="ml-2 font-normal text-xs">{missingMonth}</span>
-            </h2>
-            {month === 'all' && (
-              <span className="text-xs text-muted-foreground">전체 기간에는 이번 달 기준으로 보여 줍니다</span>
-            )}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground px-0.5">개인 파트너 (관리비·원서에세이 등)</p>
-              <MissingInvoices month={missingMonth} kind="freelancer" canEdit={allowed} />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground px-0.5">세일즈 인센티브</p>
-              <MissingInvoices month={missingMonth} kind="sales_incentive" canEdit={allowed} />
-            </div>
-          </div>
+          <MissingInvoiceBoards key={missingMonth} defaultMonth={missingMonth} months={months} canEdit={allowed} />
         </>
       )}
 
