@@ -298,6 +298,15 @@ export interface PaymentInstallment {
 /** 환불 진행 상태: requested=환불신청, completed=환불완료 */
 export type RefundStatus = 'requested' | 'completed'
 
+/**
+ * 서비스입금관리의 수금상태.
+ * - pending   미수금 — 들어와야 하는데 입금 확인이 안 된 건
+ * - paid      수금 완료 — 입금금액·입금일이 적혀 자동으로 잡힌 건. 인센티브가 발생한다.
+ * - cancelled 발생취소 — 인센티브가 발생해야 하나 취소된 건(원가 진행·수익쉐어 없음 등).
+ *             돈은 들어왔을 수 있어 입금 기록은 지우지 않고, 인센티브만 잡히지 않는다.
+ */
+export type CollectionStatus = 'pending' | 'paid' | 'cancelled'
+
 export interface RevenueShare {
   id: string
   installmentId: string

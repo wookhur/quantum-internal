@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { canonicalPartnerName } from '@/lib/partners'
-import type { RefundStatus } from '@/types'
+import type { CollectionStatus, RefundStatus } from '@/types'
 
 export interface AcademicSupportItem {
   id: string
@@ -19,9 +19,9 @@ export interface AcademicSupportItem {
   salesContributor2?: string
   // Billing / incentive (set by admins in External Service Fees)
   billedAmount?: number
-  paidAmount?: number      // 실제 입금금액(페이백 반영)
+  paidAmount?: number | null   // 실제 입금금액(페이백 반영). null = 기록 지움(미수금으로 되돌릴 때)
   currency?: string
-  collectionStatus?: 'pending' | 'paid'
+  collectionStatus?: CollectionStatus
   paidDate?: string
   contributor1Percentage?: number
   contributor2Percentage?: number
@@ -53,7 +53,7 @@ function mapRow(row: Record<string, unknown>): AcademicSupportItem {
     billedAmount: row.billed_amount != null ? Number(row.billed_amount) : undefined,
     paidAmount: row.paid_amount != null ? Number(row.paid_amount) : undefined,
     currency: (row.currency as string) || 'KRW',
-    collectionStatus: (row.collection_status as 'pending' | 'paid') || 'pending',
+    collectionStatus: (row.collection_status as CollectionStatus) || 'pending',
     paidDate: (row.paid_date as string) || undefined,
     contributor1Percentage: row.contributor_1_percentage != null ? Number(row.contributor_1_percentage) : undefined,
     contributor2Percentage: row.contributor_2_percentage != null ? Number(row.contributor_2_percentage) : undefined,

@@ -1443,8 +1443,15 @@ export function ContractDetailPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" className="text-blue-700 border-blue-200 bg-blue-100 text-xs">{ec.partner || 'EC'}</Badge>
                       {ec.program && <span className="text-sm">{ec.program}</span>}
-                      <Badge className={ec.collectionStatus === 'paid' ? 'bg-green-100 text-green-700 text-[10px] h-4' : 'bg-amber-100 text-amber-700 text-[10px] h-4'}>
-                        {ec.collectionStatus === 'paid' ? t('contracts.status.fullyPaid') : t('incentive.unpaid')}
+                      {/* 발생취소 = 돈은 들어왔을 수 있고 인센티브만 접은 건. 미수금으로 보이면 안 된다. */}
+                      <Badge className={
+                        ec.collectionStatus === 'paid' ? 'bg-green-100 text-green-700 text-[10px] h-4'
+                          : ec.collectionStatus === 'cancelled' ? 'bg-slate-100 text-slate-500 text-[10px] h-4'
+                          : 'bg-amber-100 text-amber-700 text-[10px] h-4'
+                      }>
+                        {ec.collectionStatus === 'paid' ? t('contracts.status.fullyPaid')
+                          : ec.collectionStatus === 'cancelled' ? t('svcpay.cancelled')
+                          : t('incentive.unpaid')}
                       </Badge>
                     </div>
                     <span className="font-mono font-semibold text-sm">{formatCurrency(ec.billedAmount || 0, (ec.currency as 'KRW' | 'USD') || 'KRW')}</span>

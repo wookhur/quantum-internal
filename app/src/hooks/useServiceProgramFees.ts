@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { canonicalPartnerName } from '@/lib/partners'
-import type { RefundStatus } from '@/types'
+import type { CollectionStatus, RefundStatus } from '@/types'
 
 /** A Student-360 program (EC activity or academic support) surfaced as an
  *  external service fee item. Contributors come from Student 360; billing and
@@ -23,7 +23,7 @@ export interface ServiceProgramFee {
   billedAmount?: number
   paidAmount?: number      // 실제 입금금액(페이백 반영). 인센티브는 청구금액 기준.
   currency: string
-  collectionStatus: 'pending' | 'paid'
+  collectionStatus: CollectionStatus
   paidDate?: string
   contributor1Percentage?: number
   contributor2Percentage?: number
@@ -46,6 +46,28 @@ export interface ServiceProgramFee {
 
 function num(v: unknown): number | undefined {
   return v != null ? Number(v) : undefined
+}
+
+function status(v: unknown): CollectionStatus {
+  return v === 'paid' || v === 'cancelled' ? v : 'pending'
+}
+
+/**
+ * 인센티브가 잡히는 건인가.
+ * 발생취소(cancelled)는 돈이 들어왔어도 인센티브를 만들지 않는다 — 원가로 진행해
+ * 수익쉐어가 없거나, 발생해야 할 인센티브를 접은 건이다.
+ */
+export function feeIncentivePayable(f: Pick<ServiceProgramFee, 'collectionStatus' | 'paidDate'>): boolean {
+  return f.collectionStatus === 'paid' && !!f.paidDate
+}
+
+/**
+ * 돈이 실제로 들어온 건인가(수금액 집계 기준).
+ * 발생취소는 '인센티브 취소'지 '미수금'이 아니다. 입금일이 적혀 있으면 수금은 된 것이니
+ * 수금 총액에서 빼면 실제로 들어온 돈이 장부에서 사라진다.
+ */
+export function feeCollected(f: Pick<ServiceProgramFee, 'collectionStatus' | 'paidDate'>): boolean {
+  return f.collectionStatus === 'paid' || (f.collectionStatus === 'cancelled' && !!f.paidDate)
 }
 
 /** All EC + academic-support programs across every student, for the fees page. */
@@ -89,7 +111,7 @@ export function useAllServiceProgramFees() {
           billedAmount: num(r.billed_amount),
           paidAmount: num(r.paid_amount),
           currency: (r.currency as string) || 'KRW',
-          collectionStatus: (r.collection_status as 'pending' | 'paid') || 'pending',
+          collectionStatus: status(r.collection_status),
           paidDate: (r.paid_date as string) || undefined,
           contributor1Percentage: num(r.contributor_1_percentage),
           contributor2Percentage: num(r.contributor_2_percentage),
@@ -120,7 +142,7 @@ export function useAllServiceProgramFees() {
           billedAmount: num(r.billed_amount),
           paidAmount: num(r.paid_amount),
           currency: (r.currency as string) || 'KRW',
-          collectionStatus: (r.collection_status as 'pending' | 'paid') || 'pending',
+          collectionStatus: status(r.collection_status),
           paidDate: (r.paid_date as string) || undefined,
           contributor1Percentage: num(r.contributor_1_percentage),
           contributor2Percentage: num(r.contributor_2_percentage),
@@ -156,8 +178,9 @@ export function useAllServiceProgramFees() {
             // 입금액 하나만 받는다 — 청구금액과 실입금이 같은 건이다
             paidAmount: num(r.billed_amount),
             currency: (r.currency as string) || 'KRW',
-            // 돈이 들어온 것을 적는 칸이라 수금 완료로 둔다
-            collectionStatus: 'paid',
+            // 돈이 들어온 것을 적는 칸이라 수금 완료가 기본이다. 다만 요율 칸이 0을
+            // 받지 않으므로(check > 0), 인센티브만 접는 건은 발생취소로 표시한다.
+            collectionStatus: r.collection_status === 'cancelled' ? 'cancelled' : 'paid',
             // 인센티브가 잡히는 달은 paidDate 의 월이다 — 고른 정산월 1일로 맞춘다
             paidDate: month ? `${month}-01` : undefined,
             incentiveRate: num(r.incentive_rate),
@@ -216,8 +239,11 @@ export function useCreateManualServiceFee() {
 export function useUpdateManualServiceFee() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: Partial<ManualFeeInput> & { id: string }) => {
+    mutationFn: async (input: Partial<ManualFeeInput> & { id: string; collectionStatus?: CollectionStatus }) => {
       const row: Record<string, unknown> = {}
+      // 수기 건은 요율을 0으로 둘 수 없어(check > 0) 인센티브만 접을 방법이 없었다.
+      // 지우면 들어온 돈의 기록까지 사라지므로 발생취소로 남긴다.
+      if (input.collectionStatus !== undefined) row.collection_status = input.collectionStatus
       // 학생을 잘못 고른 건은 지우고 다시 적을 일이 아니라 여기서 바로잡는다
       if (input.studentId !== undefined) row.student_id = input.studentId
       if (input.settlementMonth !== undefined) row.settlement_month = input.settlementMonth

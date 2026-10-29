@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useAllServiceProgramFees } from './useServiceProgramFees'
+import { useAllServiceProgramFees, feeIncentivePayable } from './useServiceProgramFees'
 import { usePartnerRateMap, useDefaultRates, normalizePartner, rateForTeam, type ContributorTeam } from './usePartnerCommissionRates'
 import { useProfiles } from './useProfiles'
 import { canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
@@ -36,7 +36,8 @@ export function useServiceIncentiveLines(): ServiceIncentiveLine[] {
 
     const lines: ServiceIncentiveLine[] = []
     for (const f of fees) {
-      if (f.collectionStatus !== 'paid' || !f.paidDate) continue
+      // 수금 완료 + 입금일이 있어야 인센티브가 잡힌다. 발생취소는 돈이 들어왔어도 제외.
+      if (!feeIncentivePayable(f) || !f.paidDate) continue
       const paidMonth = f.paidDate.slice(0, 7)
       const billed = f.billedAmount || 0
       if (!billed) continue

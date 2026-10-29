@@ -17,12 +17,12 @@ import {
 } from '@/components/ui/popover'
 import {
   Loader2, Search, CheckCircle2, Clock, HandCoins, Lock, Link as LinkIcon, X,
-  Plus, Trash2, PencilLine, Pencil, StickyNote,
+  Plus, Trash2, PencilLine, Pencil, StickyNote, Ban,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   useAllServiceProgramFees, useCreateManualServiceFee, useUpdateManualServiceFee,
-  useDeleteManualServiceFee, type ServiceProgramFee,
+  useDeleteManualServiceFee, feeCollected, feeIncentivePayable, type ServiceProgramFee,
 } from '@/hooks/useServiceProgramFees'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
 import { compareStudentsKo, studentPickerLabel } from '@/lib/studentDisplay'
@@ -35,7 +35,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCreateClawbacks, useAllClawbacks, useSetClawbackStatus, useDeleteClawback, nextMonthKey, type ClawbackInput } from '@/hooks/useClawbacks'
 import { useT } from '@/i18n/LanguageContext'
 import { todayKST } from '@/lib/date'
-import { formatCurrency, type RefundStatus } from '@/types'
+import { formatCurrency, type CollectionStatus, type RefundStatus } from '@/types'
 
 /** 교육비 처리 월 옵션 (Student360과 동일) */
 const SERVICE_MONTH_OPTIONS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월', '여름특강', '겨울특강'] as const
@@ -93,6 +93,18 @@ function incentiveOf(f: ServiceProgramFee, autoTeam: TeamResolver, salesRate: nu
   return contributorRows(f, autoTeam, salesRate, serviceRate).reduce((s, c) => s + c.inc, 0)
 }
 
+/** 수금상태 배지 — 목록·수금처리 창·계약 상세가 같은 모양으로 보이게 한 군데서 만든다. */
+export function CollectionStatusBadge({ status }: { status: CollectionStatus }) {
+  const t = useT()
+  if (status === 'paid') {
+    return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1 hover:bg-emerald-100"><CheckCircle2 className="size-3" /> {t('svcpay.paid')}</Badge>
+  }
+  if (status === 'cancelled') {
+    return <Badge variant="outline" className="text-slate-500 border-slate-300 bg-slate-50 gap-1" title={t('svcpay.cancelledHint')}><Ban className="size-3" /> {t('svcpay.cancelled')}</Badge>
+  }
+  return <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1"><Clock className="size-3" /> {t('svcpay.unpaid')}</Badge>
+}
+
 export function ExternalFeesPage() {
   const t = useT()
   const teamLabel = (team: ContributorTeam) => t(team === 'sales' ? 'svcpay.teamSales' : 'svcpay.teamService')
@@ -103,6 +115,7 @@ export function ExternalFeesPage() {
   const { data: profiles = [] } = useProfiles()
   const updateEC = useUpdateECActivity()
   const updateAC = useUpdateAcademicSupport()
+  const updateMF = useUpdateManualServiceFee()
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -115,6 +128,31 @@ export function ExternalFeesPage() {
     const base = { id: f.id, studentId: f.studentId }
     const payload = slot === 0 ? { ...base, contributor1Team: val } : { ...base, contributor2Team: val }
     ;(f.source === 'ec' ? updateEC : updateAC).mutate(payload)
+  }
+
+  /**
+   * 수금상태를 목록에서 바로 바꾼다. 세 단계다.
+   * - 수금 완료: 입금 기록이 없으면 청구금액·오늘 날짜로 채운다(그래야 그 달에 인센티브가 잡힌다)
+   * - 미수금: 입금 기록을 지운다. 남겨 두면 '안 들어온 돈'에 입금일이 붙는다
+   * - 발생취소: 입금 기록은 그대로 둔다. 돈은 들어왔고 인센티브만 접은 건이다
+   */
+  const setCollectionStatus = (f: ServiceProgramFee, next: CollectionStatus) => {
+    if (f.collectionStatus === next) return
+    // 수기 건은 들어온 돈을 적는 칸이라 미수금이 없다. 요율 칸이 0을 받지 않으므로
+    // 인센티브만 접는 길이 발생취소뿐이다.
+    if (f.source === 'manual') {
+      updateMF.mutate({ id: f.id, collectionStatus: next === 'cancelled' ? 'cancelled' : 'paid' })
+      return
+    }
+    const base = { id: f.id, studentId: f.studentId }
+    const mut = f.source === 'ec' ? updateEC : updateAC
+    if (next === 'paid') {
+      mut.mutate({ ...base, collectionStatus: 'paid', paidDate: f.paidDate || todayKST(), paidAmount: f.paidAmount ?? f.billedAmount ?? null })
+    } else if (next === 'pending') {
+      mut.mutate({ ...base, collectionStatus: 'pending', paidDate: '', paidAmount: null })
+    } else {
+      mut.mutate({ ...base, collectionStatus: 'cancelled' })
+    }
   }
 
   // set '몇월 교육비' inline from the list
@@ -155,10 +193,11 @@ export function ExternalFeesPage() {
   }, [fees, search])
 
   const totalBilled = fees.reduce((s, f) => s + (f.billedAmount || 0), 0)
-  const collected = fees.filter(f => f.collectionStatus === 'paid').reduce((s, f) => s + (f.billedAmount || 0), 0)
-  // 총 인센티브 = 수금 완료된 항목의 (기여자별 적용 수수료율 합계)
+  // 발생취소도 입금일이 있으면 돈은 들어온 것이다 — 수금액에서 빼면 장부가 비어 보인다
+  const collected = fees.filter(feeCollected).reduce((s, f) => s + (f.billedAmount || 0), 0)
+  // 총 인센티브 = 수금 완료된 항목의 (기여자별 적용 수수료율 합계). 발생취소는 제외.
   const totalIncentive = fees
-    .filter(f => f.collectionStatus === 'paid')
+    .filter(feeIncentivePayable)
     .reduce((s, f) => { const r = ratesFor(f.label); return s + incentiveOf(f, autoTeam, r.salesRate, r.serviceRate) }, 0)
 
   const selected = selectedId ? fees.find(f => f.id === selectedId) ?? null : null
@@ -250,6 +289,7 @@ export function ExternalFeesPage() {
                   // 수기 건은 요율이 건별로 정해져 있어 팀을 몰라도 인센티브가 잡힌다
                   const needsTeam = f.source !== 'manual' && rows.some(c => !c.team && c.override !== 'none')
                   const isPaid = f.collectionStatus === 'paid'
+                  const isCancelled = f.collectionStatus === 'cancelled'
                   return (
                     <TableRow key={f.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(f.id)}>
                       <TableCell>
@@ -343,17 +383,42 @@ export function ExternalFeesPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {isPaid ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1"><CheckCircle2 className="size-3" /> {t('svcpay.paid')}</Badge>
+                        <div className="flex flex-wrap items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                          {/* 수금완료·미수금은 입금금액·입금일에서 자동으로 잡히지만,
+                              '인센티브가 발생해야 하나 취소된' 건은 자동으로 알 수 없다.
+                              그래서 여기서 직접 고른다. */}
+                          {isAdmin ? (
+                            <Select value={f.collectionStatus} onValueChange={v => setCollectionStatus(f, v as CollectionStatus)}>
+                              <SelectTrigger
+                                className={`h-7 w-[108px] px-2 text-xs ${
+                                  isPaid ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                    : isCancelled ? 'border-slate-300 bg-slate-50 text-slate-500'
+                                    : 'border-amber-200 bg-amber-50 text-amber-700'
+                                }`}
+                                title={isCancelled ? t('svcpay.cancelledHint') : undefined}
+                              >
+                                <span className="truncate text-left">{t(isPaid ? 'svcpay.paid' : isCancelled ? 'svcpay.cancelled' : 'svcpay.unpaid')}</span>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {/* 수기 건은 들어온 돈을 적는 칸이라 미수금이 없다 */}
+                                {f.source !== 'manual' && <SelectItem value="pending">{t('svcpay.unpaid')}</SelectItem>}
+                                <SelectItem value="paid">{t('svcpay.paid')}</SelectItem>
+                                <SelectItem value="cancelled">{t('svcpay.cancelled')}</SelectItem>
+                              </SelectContent>
+                            </Select>
                           ) : (
-                            <Badge variant="outline" className="text-amber-600 border-amber-200 gap-1"><Clock className="size-3" /> {t('svcpay.unpaid')}</Badge>
+                            <CollectionStatusBadge status={f.collectionStatus} />
                           )}
                           <RefundCell fee={f} />
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
-                        {inc <= 0 ? (
+                        {isCancelled ? (
+                          // 숫자를 지우지 않고 그어서 보여 준다 — 얼마가 취소된 건지가 남아야 한다
+                          <span className="text-xs text-slate-400 line-through" title={t('svcpay.cancelledHint')}>
+                            {inc > 0 ? formatCurrency(inc, f.currency as 'KRW' | 'USD') : '-'}
+                          </span>
+                        ) : inc <= 0 ? (
                           <span className="text-xs text-muted-foreground">{needsTeam ? t('svcpay.needTeam') : '-'}</span>
                         ) : isPaid ? (
                           <span className="text-emerald-600">{formatCurrency(inc, f.currency as 'KRW' | 'USD')}</span>
@@ -547,12 +612,30 @@ function ProgramFeeDialog({
   const [team2, setTeam2] = useState<TeamChoice>(fee.contributor2Team || 'auto')
   // 수금 특이사항. Student 360 에 보이는 프로그램 메모와 섞이면 안 돼 따로 둔 칸이다.
   const [memo, setMemo] = useState(fee.collectionMemo || '')
+  // 발생취소 — 인센티브가 발생해야 하나 취소된 건. 입금 기록으로는 알 수 없어 직접 고른다.
+  const [cancelled, setCancelled] = useState(fee.collectionStatus === 'cancelled')
 
   const saving = updateEC.isPending || updateAC.isPending
   const billedNum = Number(billed) || 0
   const paidAmtNum = Number(paidAmt) || 0
   // 입금금액 + 입금일이 모두 기록되면 자동 수금완료. 인센티브는 청구금액(billedNum) 기준.
-  const isPaid = paidAmtNum > 0 && !!paidDt
+  // 발생취소를 고르면 입금 기록이 있어도 수금완료로 올리지 않는다.
+  const autoPaid = paidAmtNum > 0 && !!paidDt
+  const status: CollectionStatus = cancelled ? 'cancelled' : autoPaid ? 'paid' : 'pending'
+  const isPaid = status === 'paid'
+
+  /** 수금상태를 직접 고를 때 입금 칸도 함께 맞춘다 (발생취소는 입금 기록을 건드리지 않는다). */
+  const pickStatus = (v: CollectionStatus) => {
+    if (v === 'cancelled') { setCancelled(true); return }
+    setCancelled(false)
+    if (v === 'paid') {
+      if (!paidDt) setPaidDt(todayKST())
+      if (!paidAmtNum) setPaidAmt(billed || '')
+    } else {
+      setPaidAmt('')
+      setPaidDt('')
+    }
+  }
 
   const slots = [
     { name: name1, setName: setName1, team: team1, setTeam: setTeam1 },
@@ -573,10 +656,12 @@ function ProgramFeeDialog({
       id: fee.id,
       studentId: fee.studentId,
       billedAmount: billed ? Number(billed) : undefined,
-      paidAmount: paidAmt ? paidAmtNum : undefined,
+      paidAmount: paidAmt ? paidAmtNum : null,
       // 입금금액·입금일이 모두 있으면 수금완료로 자동 처리(그 달 인센티브 반영).
-      collectionStatus: (isPaid ? 'paid' : 'pending') as 'pending' | 'paid',
-      paidDate: isPaid ? paidDt : '',
+      // 발생취소는 직접 고른 값이라 자동 판정보다 우선한다.
+      collectionStatus: status,
+      // 발생취소는 돈이 들어온 건일 수 있어 입금일을 지우지 않는다
+      paidDate: cancelled || isPaid ? paidDt : '',
       salesContributor1: name1.trim() || undefined,
       salesContributor2: name2.trim() || undefined,
       contributor1Team: team1 === 'auto' ? null : team1,
@@ -639,12 +724,25 @@ function ProgramFeeDialog({
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">{t('svcpay.status')}</label>
-            <div className="h-8 flex items-center">
-              {isPaid
-                ? <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">{t('svcpay.paid')}</Badge>
-                : <Badge variant="outline" className="text-muted-foreground">{t('svcpay.unpaid')}</Badge>}
-            </div>
-            {isAdmin && <p className="text-[10px] text-muted-foreground">입금금액·입금일 입력 시 자동 수금완료</p>}
+            {isAdmin && fee.source !== 'manual' ? (
+              <Select value={status} onValueChange={v => pickStatus(v as CollectionStatus)}>
+                <SelectTrigger className={`h-8 text-sm ${cancelled ? 'border-slate-300 bg-slate-50 text-slate-500' : isPaid ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+                  <span className="truncate text-left">{t(isPaid ? 'svcpay.paid' : cancelled ? 'svcpay.cancelled' : 'svcpay.unpaid')}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">{t('svcpay.unpaid')}</SelectItem>
+                  <SelectItem value="paid">{t('svcpay.paid')}</SelectItem>
+                  <SelectItem value="cancelled">{t('svcpay.cancelled')}</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="h-8 flex items-center"><CollectionStatusBadge status={status} /></div>
+            )}
+            {isAdmin && (
+              <p className="text-[10px] text-muted-foreground">
+                {cancelled ? t('svcpay.cancelledHint') : '입금금액·입금일 입력 시 자동 수금완료'}
+              </p>
+            )}
           </div>
         </div>
 
@@ -759,7 +857,9 @@ function ProgramFeeDialog({
           })}
           <div className="flex items-center justify-between text-sm pt-1 border-t">
             <span className="text-muted-foreground">{t('svcpay.totalIncentive')}</span>
-            <span className="font-mono font-medium">{totalInc > 0 ? formatCurrency(totalInc, fee.currency as 'KRW' | 'USD') : '-'}</span>
+            <span className={`font-mono font-medium ${cancelled ? 'text-slate-400 line-through' : ''}`} title={cancelled ? t('svcpay.cancelledHint') : undefined}>
+              {totalInc > 0 ? formatCurrency(totalInc, fee.currency as 'KRW' | 'USD') : '-'}
+            </span>
           </div>
         </div>
 
