@@ -2717,12 +2717,16 @@ export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month
   const [openName, setOpenName] = useState<string | null>(null)
 
   const rows = useMemo(() => {
-    const out: { name: string; count: number; total: number; items: PayeeItem[]; status: 'none' | 'submitted' | 'approved' }[] = []
+    const out: { name: string; count: number; total: number; items: PayeeItem[]; status: 'none' | 'submitted' | 'approved' | 'paid'; paidDate?: string }[] = []
     payees.forEach((items, name) => {
       const theirs = invoices.filter(inv => canonicalConsultantName(inv.freelancerName) === name)
-      const status = theirs.some(i => i.status === 'approved') ? 'approved'
+      // 승인완료와 지급완료는 다르다. 결재가 난 것과 돈이 나간 것을 한 배지로 묶어 두니
+      // '승인완료인데 받은 내역이 없다'로 읽혔다 — 정산월이 9월이어도 지급은 10월에 난다.
+      const paidDate = theirs.map(i => i.paidDate || '').filter(Boolean).sort().pop()
+      const status = paidDate ? 'paid'
+        : theirs.some(i => i.status === 'approved') ? 'approved'
         : theirs.some(i => i.status === 'submitted') ? 'submitted' : 'none'
-      out.push({ name, count: items.length, total: items.reduce((s, i) => s + i.amount, 0), items, status })
+      out.push({ name, count: items.length, total: items.reduce((s, i) => s + i.amount, 0), items, status, paidDate })
     })
     return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   }, [payees, invoices])
@@ -2749,7 +2753,12 @@ export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month
     <Card>
       <CardContent className="p-0">
         <div className="p-4 text-sm text-muted-foreground">
-          {month} {isIncentive ? '인센티브 발생자별' : '급여 지급 대상자별'} 현황입니다. 이름을 클릭하면 <b>상세 내역</b>이 펼쳐집니다. '승인완료'가 아닌 대상에게 요청 메시지를 보낼 수 있습니다.
+          {month} {isIncentive ? '인센티브 발생자별' : '급여 지급 대상자별'} 현황입니다. 이름을 클릭하면 <b>상세 내역</b>이 펼쳐집니다. 아직 제출·승인 전인 대상에게 요청 메시지를 보낼 수 있습니다.
+          <br />
+          {/* 정산월과 지급월이 다른 것을 모르면 '승인완료인데 받은 내역이 없다'로 읽힌다 */}
+          <span className="text-xs">
+            여기의 <b>{month}</b> 은 <b>정산월</b>입니다 — 그 달에 발생한 몫이라는 뜻이고, 실제 지급은 보통 다음 달에 납니다. 지급된 건은 <b>지급일</b>이 함께 표시됩니다.
+          </span>
         </div>
         <Table>
           <TableHeader>
@@ -2779,12 +2788,18 @@ export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month
                     <TableCell className="text-center">{r.count}건</TableCell>
                     <TableCell className="text-right tabular-nums font-medium">{r.total > 0 ? formatKRW(r.total) : '—'}</TableCell>
                     <TableCell>
-                      {r.status === 'approved' ? <Badge className="bg-green-100 text-green-700">승인완료</Badge>
+                      {r.status === 'paid' ? (
+                        <div className="flex flex-col gap-0.5">
+                          <Badge className="bg-emerald-100 text-emerald-700 w-fit">지급완료</Badge>
+                          {/* 정산월과 지급월이 달라 '그럼 언제 받은 건데'가 늘 따라붙는다 */}
+                          <span className="text-[10px] text-muted-foreground">{r.paidDate} 지급</span>
+                        </div>
+                      ) : r.status === 'approved' ? <Badge className="bg-green-100 text-green-700">승인완료(미지급)</Badge>
                         : r.status === 'submitted' ? <Badge className="bg-blue-100 text-blue-700">제출됨(미승인)</Badge>
                         : <Badge className="bg-red-100 text-red-700">미제출</Badge>}
                     </TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
-                      {canEdit && r.status !== 'approved' && (
+                      {canEdit && r.status !== 'approved' && r.status !== 'paid' && (
                         <Button size="sm" variant="outline" disabled={sending === r.name} onClick={() => request(r.name)}>
                           {sending === r.name ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}요청
                         </Button>
