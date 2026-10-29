@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/popover'
 import {
   Loader2, Search, CheckCircle2, Clock, HandCoins, Lock, Link as LinkIcon, X,
-  Plus, Trash2, PencilLine, Pencil,
+  Plus, Trash2, PencilLine, Pencil, StickyNote,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
@@ -281,6 +281,13 @@ export function ExternalFeesPage() {
                             <div className="text-xs text-muted-foreground">
                               {f.source === 'manual' ? '수기' : f.source === 'ec' ? 'EC' : 'Academic'}
                             </div>
+                            {/* 메모는 리마인더다 — 열어 봐야 알면 리마인더가 아니다 */}
+                            {f.collectionMemo && (
+                              <div className="mt-0.5 flex items-start gap-1 text-[11px] text-amber-700" title={f.collectionMemo}>
+                                <StickyNote className="mt-px size-3 shrink-0" />
+                                <span className="line-clamp-2">{f.collectionMemo}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </TableCell>
@@ -538,6 +545,8 @@ function ProgramFeeDialog({
   const [name2, setName2] = useState(fee.contributor2 || '')
   const [team1, setTeam1] = useState<TeamChoice>(fee.contributor1Team || 'auto')
   const [team2, setTeam2] = useState<TeamChoice>(fee.contributor2Team || 'auto')
+  // 수금 특이사항. Student 360 에 보이는 프로그램 메모와 섞이면 안 돼 따로 둔 칸이다.
+  const [memo, setMemo] = useState(fee.collectionMemo || '')
 
   const saving = updateEC.isPending || updateAC.isPending
   const billedNum = Number(billed) || 0
@@ -572,6 +581,7 @@ function ProgramFeeDialog({
       salesContributor2: name2.trim() || undefined,
       contributor1Team: team1 === 'auto' ? null : team1,
       contributor2Team: team2 === 'auto' ? null : team2,
+      collectionMemo: memo.trim() || undefined,
     }
     if (fee.source === 'manual') { onClose(); return }
     const mut = fee.source === 'ec' ? updateEC : updateAC
@@ -752,6 +762,24 @@ function ProgramFeeDialog({
             <span className="font-mono font-medium">{totalInc > 0 ? formatCurrency(totalInc, fee.currency as 'KRW' | 'USD') : '-'}</span>
           </div>
         </div>
+
+        {/* 수금 특이사항 — 리마인더로 쓰는 칸이라 목록의 행에도 함께 보여 준다.
+            수기 입금 건은 이 창에서 저장하지 않으므로(제 창이 따로 있다) 내보내지 않는다. */}
+        {fee.source !== 'manual' && (
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">
+              메모 <span className="font-normal">· 특이사항·다음에 확인할 것</span>
+            </label>
+            <textarea
+              value={memo}
+              onChange={e => setMemo(e.target.value)}
+              disabled={!isAdmin}
+              rows={2}
+              placeholder="예: 11월 입금 예정 · 페이백 5% 별도 정산 · 담당자 변경 확인 필요"
+              className="w-full rounded-md border border-input bg-white px-2 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:bg-muted/40"
+            />
+          </div>
+        )}
 
         <p className="text-[11px] text-muted-foreground">{t('svcpay.footerNote')}</p>
 

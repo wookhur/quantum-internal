@@ -28,6 +28,8 @@ export interface ECActivity {
   refundAmount?: number | null
   refundDate?: string | null
   refundReason?: string | null
+  /** 수금 처리 때 적어 두는 특이사항. Student 360 의 프로그램 메모와 섞이면 안 돼 따로 둔다. */
+  collectionMemo?: string
   createdBy?: string
   createdAt: string
   updatedAt: string
@@ -57,6 +59,7 @@ function mapRow(row: Record<string, unknown>): ECActivity {
     refundAmount: row.refund_amount != null ? Number(row.refund_amount) : undefined,
     refundDate: (row.refund_date as string) || undefined,
     refundReason: (row.refund_reason as string) || undefined,
+    collectionMemo: (row.collection_memo as string) || undefined,
     createdBy: (row.created_by as string) || undefined,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -147,6 +150,7 @@ export function useUpdateECActivity() {
       if (a.refundAmount !== undefined) row.refund_amount = a.refundAmount ?? null
       if (a.refundDate !== undefined) row.refund_date = a.refundDate || null
       if (a.refundReason !== undefined) row.refund_reason = a.refundReason || null
+      if (a.collectionMemo !== undefined) row.collection_memo = a.collectionMemo || null
       const { error } = await supabase.from('service_ec_activities').update(row).eq('id', a.id)
       if (error) throw error
     },

@@ -35,6 +35,8 @@ export interface ServiceProgramFee {
   settlementMonth?: string
   /** 수기 건의 제목 원본. label 은 비었을 때 '수기 정산'으로 채워지므로 수정 화면에 쓸 수 없다. */
   manualTitle?: string
+  /** 수금 처리 때 적어 둔 특이사항(리마인더). 목록에서도 보이게 함께 싣는다. */
+  collectionMemo?: string
   // 환불(건별)
   refundStatus?: RefundStatus
   refundAmount?: number
@@ -97,6 +99,7 @@ export function useAllServiceProgramFees() {
           refundAmount: num(r.refund_amount),
           refundDate: (r.refund_date as string) || undefined,
           refundReason: (r.refund_reason as string) || undefined,
+          collectionMemo: (r.collection_memo as string) || undefined,
         })
       }
       for (const r of acRes.data || []) {
@@ -127,6 +130,7 @@ export function useAllServiceProgramFees() {
           refundAmount: num(r.refund_amount),
           refundDate: (r.refund_date as string) || undefined,
           refundReason: (r.refund_reason as string) || undefined,
+          collectionMemo: (r.collection_memo as string) || undefined,
         })
       }
       // 수기 입금 내역. 마이그레이션 전이면 테이블이 없으니 조용히 건너뛴다 —
