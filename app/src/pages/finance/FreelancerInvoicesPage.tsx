@@ -2101,6 +2101,24 @@ export function FreelancerInvoicesPage(
     sourceDetail: d.sourceDetail,   // 미팅 2건 일자 등 → 비고에 기록
   })), [displayItems, issueMonth])
 
+  /**
+   * 정산월 규칙으로 내려간 줄.
+   *
+   * 옛 인보이스에는 줄 단위 연결(covered_incentive_keys)이 없어, 정산월 전체를
+   * 덮는 수밖에 없다. 그런데 그 인보이스가 지급된 뒤에 새로 생긴 줄 — 수수료
+   * 대상을 뒤늦게 채운 건 같은 것 — 까지 '이미 받은 것'으로 묶여 내려간다.
+   * 조용히 사라지면 못 받은 돈이 그대로 없어지므로, 지우지 않고 보여 준다.
+   */
+  const monthCoveredLines = useMemo(() => {
+    if (!isIncentive) return []
+    const coveredIncentive = (om: string) =>
+      paidCoverage.get(invoicePersonKey(effectiveName))?.get(`incentive:${om}`)?.paid === true
+      || paidCoverage.get(invoicePersonKey(payeeName))?.get(`incentive:${om}`)?.paid === true
+    return (linesByPerson.get(myName) || [])
+      .filter(l => l.month <= issueMonth && !paidCoveredKeys.has(l.id) && coveredIncentive(l.month))
+      .sort((a, b) => a.month.localeCompare(b.month))
+  }, [isIncentive, linesByPerson, myName, issueMonth, paidCoveredKeys, paidCoverage, effectiveName, payeeName])
+
   /** 줄이 아니라 사람을 센다 — 소급으로 한 학생이 여러 줄이 되기 때문. */
   const studentCount = useMemo(
     () => new Set(displayItems.map(d => d.who).filter(Boolean)).size,
@@ -2576,6 +2594,30 @@ export function FreelancerInvoicesPage(
               ? ' "인보이스 발행"은 미지급 건을 이름·금액에 채웁니다.'
               : ' "인보이스 발행"을 누르면 위 항목이 채워진 폼이 열립니다. 여러 건 발행할 수 있습니다.'}
           </p>
+          {/* 정산월 규칙으로 내려간 줄 — 그 인보이스에 실제로 담겼는지는 옛 인보이스에서
+              알 수 없다. 조용히 지우지 않고 여기 남겨, 빠진 게 있으면 눈에 띄게 한다. */}
+          {isIncentive && monthCoveredLines.length > 0 && (
+            <details className="mt-1 rounded-md border border-amber-200 bg-amber-50/50 p-2">
+              <summary className="cursor-pointer text-xs font-medium text-amber-800 select-none">
+                ⚠️ 지급완료 인보이스로 내려간 줄 {monthCoveredLines.length}건 · {formatKRW(monthCoveredLines.reduce((s, l) => s + l.amount, 0))} — 확인해 보세요
+              </summary>
+              <div className="mt-2 divide-y divide-amber-200/70">
+                {monthCoveredLines.map(l => (
+                  <div key={l.id} className="flex items-start gap-3 py-1.5 text-xs">
+                    <span className="w-16 shrink-0 text-amber-700">{monthLabelKo(l.month, issueMonth)}분</span>
+                    <span className="flex-1 truncate" title={l.label}>{l.label}</span>
+                    <span className="tabular-nums shrink-0">{formatKRW(l.amount)}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-amber-800">
+                그 달 인보이스가 <b>지급완료</b>라서 내렸습니다. 다만 옛 인보이스에는 줄 단위 기록이 없어
+                <b> 이 줄들이 실제로 그 인보이스에 담겼는지는 알 수 없습니다</b> — 정산이 끝난 뒤에 수수료 대상을
+                채운 건이라면 아직 못 받으신 돈입니다. 인보이스 상세에서 항목을 대조해 보시고, 빠져 있으면
+                <b> 직접 입력</b>으로 그 건만 따로 발행하세요.
+              </p>
+            </details>
+          )}
           {isIncentive && displayItems.length > 0 && (
             <details className="mt-1 rounded-md border bg-muted/20 p-2">
               <summary className="cursor-pointer text-xs font-medium text-muted-foreground select-none">🔎 원천 상세 보기 (진단용) — 각 인센티브가 어디서 나왔는지</summary>
