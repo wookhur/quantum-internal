@@ -51,6 +51,7 @@ import {
   invoicePersonKey,
   invoiceDisplayName,
   type FreelancerInvoice,
+  type InvoiceCurrency,
   type InvoiceItem,
   type OverseasBank,
 } from '@/hooks/useFreelancerInvoices'
@@ -69,8 +70,12 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: 'fInvoice.statusRejected',
 }
 
+/** 금액 표기. 통화를 안 주면 원 — 기존 화면은 그대로 두고, 통화를 아는 자리만 넘긴다. */
+function money(n: number, cur: InvoiceCurrency = 'KRW') {
+  return new Intl.NumberFormat(cur === 'USD' ? 'en-US' : 'ko-KR', { style: 'currency', currency: cur }).format(n)
+}
 function formatKRW(n: number) {
-  return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(n)
+  return money(n)
 }
 
 function getCurrentMonth() {
@@ -100,6 +105,7 @@ interface ParsedInvoice {
   bankAccount: string
   note?: string
   accountRegion?: string   // 'domestic' | 'overseas' — 파트너 설정에서 기본값
+  currency?: InvoiceCurrency  // 'KRW'(기본) | 'USD' — 연 관리비 통화에서 기본값
   items: ItemRow[]
 }
 
@@ -194,6 +200,10 @@ export function InvoiceFormDialog({
     (invoice?.accountRegion as 'domestic' | 'overseas') || (initialData?.accountRegion as 'domestic' | 'overseas') || 'domestic',
   )
   const [ovb, setOvb] = useState<OverseasBank>(invoice?.overseasBank || {})
+  // 통화 — 인보이스 한 장은 한 통화다. 연 관리비를 달러로 정한 사람은 달러로 열린다.
+  const [currency, setCurrency] = useState<InvoiceCurrency>(
+    invoice?.currency || initialData?.currency || 'KRW',
+  )
   const setOvbField = (k: keyof OverseasBank, v: string) => setOvb(p => ({ ...p, [k]: v }))
   const [note, setNote] = useState(initialData?.note || invoice?.note || '')
   const [items, setItems] = useState<ItemRow[]>(
@@ -216,6 +226,7 @@ export function InvoiceFormDialog({
     setPhone(initialData.phone || '')
     if (initialData.email) setEmail(initialData.email)
     setAccountRegion((initialData.accountRegion as 'domestic' | 'overseas') || 'domestic'); setOvb({})
+    setCurrency(initialData.currency || 'KRW')
     setNote(initialData.note || '')
     const b = splitBank(initialData.bankAccount || '')
     setBankName(b.bankName); setAccountNumber(b.accountNumber); setAccountHolder(b.accountHolder)
@@ -283,6 +294,7 @@ export function InvoiceFormDialog({
           bankAccount,
           note,
           accountRegion,
+          currency,
           overseasBank: accountRegion === 'overseas' ? ovb : undefined,
           items: validItems,
         })
@@ -300,6 +312,7 @@ export function InvoiceFormDialog({
           note,
           coveredIncentiveKeys,
           accountRegion,
+          currency,
           overseasBank: accountRegion === 'overseas' ? ovb : undefined,
           items: validItems,
         })
@@ -369,6 +382,17 @@ export function InvoiceFormDialog({
                   </Select>
                 </div>
               )}
+              <div className="min-w-[150px] space-y-1.5 rounded-md border bg-muted/30 p-3">
+                <Label className="text-xs">통화</Label>
+                <div className="flex gap-1 rounded-md border bg-background p-0.5">
+                  {(['KRW', 'USD'] as const).map(c => (
+                    <button key={c} type="button" onClick={() => setCurrency(c)}
+                      className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${currency === c ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>
+                      {c === 'USD' ? '$ 달러' : '₩ 원'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {kind !== 'sales_incentive' && (
                 <div className="flex-1 min-w-[180px] space-y-1.5 rounded-md border bg-muted/30 p-3">
                   <Label className="text-xs">계좌 종류</Label>
@@ -483,7 +507,7 @@ export function InvoiceFormDialog({
                         />
                       </TableCell>
                       <TableCell className="text-sm text-right font-medium">
-                        {formatKRW(item.quantity * item.unitPrice)}
+                        {money(item.quantity * item.unitPrice, currency)}
                       </TableCell>
                       <TableCell>
                         <Input
@@ -508,7 +532,7 @@ export function InvoiceFormDialog({
                   ))}
                   <TableRow className="bg-gray-50 font-semibold">
                     <TableCell colSpan={4} className="text-right text-sm">{t('fInvoice.totalAmount')}</TableCell>
-                    <TableCell className="text-right text-sm">{formatKRW(totalAmount)}</TableCell>
+                    <TableCell className="text-right text-sm">{money(totalAmount, currency)}</TableCell>
                     <TableCell colSpan={2} />
                   </TableRow>
                 </TableBody>
@@ -1072,14 +1096,14 @@ function InvoiceDetailDialog({
                     <TableCell className="text-center">{item.itemOrder}</TableCell>
                     <TableCell>{item.itemName}</TableCell>
                     <TableCell className="text-right">{item.quantity}</TableCell>
-                    <TableCell className="text-right">{formatKRW(item.unitPrice)}</TableCell>
-                    <TableCell className="text-right font-medium">{formatKRW(item.supplyAmount)}</TableCell>
+                    <TableCell className="text-right">{money(item.unitPrice, invoice.currency)}</TableCell>
+                    <TableCell className="text-right font-medium">{money(item.supplyAmount, invoice.currency)}</TableCell>
                     <TableCell className="text-muted-foreground">{item.remark}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow className="bg-gray-50 font-semibold">
                   <TableCell colSpan={4} className="text-right">{t('fInvoice.totalAmount')}</TableCell>
-                  <TableCell className="text-right">{formatKRW(invoice.totalAmount)}</TableCell>
+                  <TableCell className="text-right">{money(invoice.totalAmount, invoice.currency)}</TableCell>
                   <TableCell />
                 </TableRow>
               </TableBody>
@@ -1162,7 +1186,7 @@ function InvoiceDetailDialog({
                   const confirmMsg = isApproved
                     ? t('fInvoice.deleteApprovedConfirm', {
                         name: invoiceDisplayName(invoice),
-                        amount: formatKRW(invoice.totalAmount),
+                        amount: money(invoice.totalAmount, invoice.currency),
                       })
                     : t('fInvoice.deleteConfirm')
                   if (confirm(confirmMsg)) {
@@ -1805,7 +1829,12 @@ export function FreelancerInvoicesPage(
   }, [invoices, rawPayees, isBusinessBoard])
 
   const monthOptions = getMonthOptions()
-  const grandTotal = filtered.reduce((s, inv) => s + inv.totalAmount, 0)
+  // 통화가 섞이면 더할 수 없다 — 통화별로 따로 센다
+  const grandTotals = filtered.reduce<Record<string, number>>((acc, inv) => {
+    const c = inv.currency || 'KRW'
+    acc[c] = (acc[c] || 0) + inv.totalAmount
+    return acc
+  }, {})
 
   const handleExport = async () => {
     setExporting(true)
@@ -1862,6 +1891,8 @@ export function FreelancerInvoicesPage(
   const { data: invoiceTypeMap } = usePartnerInvoiceTypes()
   const partnerType = invoiceTypeOf(invoiceTypeMap, effectiveName)
   const partnerAccountRegion = accountRegionOf(invoiceTypeMap, effectiveName)
+  // 이 사람의 연 관리비 통화(인보이스설정). 달러면 줄 금액도 인보이스도 달러로 나간다.
+  const myFeeCurrency: InvoiceCurrency = annualFeeOf(annualFees, effectiveName)?.currency || 'KRW'
   // 돈을 실제로 받는 사람. 지정이 없으면 본인.
   const payeeName = payeeOf(invoiceTypeMap, effectiveName)
   const payeeDiffers = !!payeeName && consultantNameKey(payeeName) !== consultantNameKey(effectiveName)
@@ -2208,6 +2239,8 @@ export function FreelancerInvoicesPage(
         : [emptyItem()],
     }
     initial.accountRegion = partnerAccountRegion   // 파트너 계좌구분(국내/해외) 기본 반영
+    // 연 관리비를 달러로 정한 사람은 인보이스도 달러로 연다(인보이스설정의 통화)
+    initial.currency = myFeeCurrency
     // 받는 사람이 따로 지정돼 있으면 수령인 칸을 미리 채운다 — 손으로 고쳐 쓰다 보면
     // 이번처럼 '누구 관리비가 누구 이름으로 나갔나' 가 흐려진다
     if (payeeDiffers) initial.name = payeeName
@@ -2231,6 +2264,7 @@ export function FreelancerInvoicesPage(
       invoiceDate: new Date().toISOString().slice(0, 10),
       residentNumber: '', phone: '', email: user?.email || '', bankAccount: '',
       accountRegion: partnerAccountRegion,
+      currency: myFeeCurrency,
       items: [emptyItem()],
     })
     setIssueKeys([])        // 수기 입력은 자동청구 줄과 무관하다
@@ -2310,7 +2344,10 @@ export function FreelancerInvoicesPage(
         )}
 
         <div className="ml-auto text-sm font-medium">
-          {filtered.length} {t('fInvoice.count')} · {formatKRW(grandTotal)}
+          {filtered.length} {t('fInvoice.count')}
+          {Object.entries(grandTotals).map(([c, v]) => (
+            <span key={c}> · {money(v, c as InvoiceCurrency)}</span>
+          ))}
         </div>
       </div>
 
@@ -2357,7 +2394,7 @@ export function FreelancerInvoicesPage(
                     )}
                     <TableCell>{inv.invoiceMonth}</TableCell>
                     <TableCell>{inv.invoiceDate}</TableCell>
-                    <TableCell className="text-right font-medium">{formatKRW(inv.totalAmount)}</TableCell>
+                    <TableCell className="text-right font-medium">{money(inv.totalAmount, inv.currency)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{inv.bankAccount}</TableCell>
                     <TableCell>
                       <Badge className={`text-[11px] ${STATUS_COLORS[inv.status]}`}>{t(STATUS_LABELS[inv.status])}</Badge>
@@ -2391,7 +2428,7 @@ export function FreelancerInvoicesPage(
                               const confirmMsg = isApproved
                                 ? t('fInvoice.deleteApprovedConfirm', {
                                     name: invoiceDisplayName(inv),
-                                    amount: formatKRW(inv.totalAmount),
+                                    amount: money(inv.totalAmount, inv.currency),
                                   })
                                 : t('fInvoice.deleteConfirm')
                               if (confirm(confirmMsg)) {
@@ -2573,7 +2610,7 @@ export function FreelancerInvoicesPage(
                       >
                         {r.received && <CheckCircle2 className="size-3" />}
                         {/* 관리비 줄은 금액이 0이다 — 단가를 발행할 때 손으로 적기 때문에 ₩0 을 붙이면 안 된다 */}
-                        <span>{who ? lineShortLabel(r) : r.label}{r.amount > 0 ? ` · ${formatKRW(r.amount)}` : ''}</span>
+                        <span>{who ? lineShortLabel(r) : r.label}{r.amount > 0 ? ` · ${money(r.amount, myFeeCurrency)}` : ''}</span>
                         {/* 소급이 해를 넘기면 '12월분' 만으로는 어느 해인지 모른다 */}
                         {carried && <span className={`text-[10px] font-medium ${r.received ? 'text-emerald-100' : 'text-amber-600'}`}>({monthLabelKo(r.originMonth, issueMonth)}분{delay > 0 ? ` · ${delay}개월 이월` : ''})</span>}
                       </button>

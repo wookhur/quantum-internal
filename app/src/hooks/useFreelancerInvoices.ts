@@ -39,9 +39,13 @@ export interface FreelancerInvoice {
   coveredIncentiveKeys?: string[]
   /** 국내/해외 계좌 구분: 'domestic' | 'overseas' */
   accountRegion?: string
+  /** 통화: 'KRW' | 'USD'. 해외 파트너는 달러로 발행한다. 없으면 원. */
+  currency?: InvoiceCurrency
   /** 해외 송금 상세 (accountRegion='overseas'일 때) */
   overseasBank?: OverseasBank
 }
+
+export type InvoiceCurrency = 'KRW' | 'USD'
 
 export interface OverseasBank {
   country?: string
@@ -77,6 +81,7 @@ function mapInvoice(r: Record<string, unknown>): FreelancerInvoice {
     updatedAt: r.updated_at as string,
     coveredIncentiveKeys: (r.covered_incentive_keys as string[]) || undefined,
     accountRegion: (r.account_region as string) || undefined,
+    currency: r.currency === 'USD' ? 'USD' : 'KRW',
     overseasBank: (r.overseas_bank as OverseasBank) || undefined,
     freelancerName: profile?.name as string | undefined,
     freelancerEmail: profile?.email as string | undefined,
@@ -218,6 +223,7 @@ export function useCreateInvoice() {
       note?: string
       coveredIncentiveKeys?: string[]   // 이 인보이스가 정산하는 커미션 라인 키
       accountRegion?: string            // 'domestic' | 'overseas'
+      currency?: InvoiceCurrency        // 'KRW'(기본) | 'USD'
       overseasBank?: OverseasBank
       items: { itemName: string; quantity: number; unitPrice: number; remark?: string }[]
     }) => {
@@ -249,6 +255,8 @@ export function useCreateInvoice() {
         insertRow.covered_incentive_keys = input.coveredIncentiveKeys
       }
       if (input.clientEmail) insertRow.client_email = input.clientEmail   // 값 있을 때만(마이그레이션 전 안전)
+      // 달러일 때만 컬럼을 건드린다 — 원화 발행은 마이그레이션 전에도 그대로 된다
+      if (input.currency === 'USD') insertRow.currency = 'USD'
       // 해외계좌일 때만 컬럼 참조(국내=기본, 마이그레이션 전에도 국내 발행은 안 깨짐)
       if (input.accountRegion === 'overseas') {
         insertRow.account_region = 'overseas'
@@ -300,6 +308,7 @@ export function useUpdateInvoice() {
       bankAccount?: string
       note?: string
       accountRegion?: string
+      currency?: InvoiceCurrency
       overseasBank?: OverseasBank
       items?: { itemName: string; quantity: number; unitPrice: number; remark?: string }[]
     }) => {
@@ -312,6 +321,7 @@ export function useUpdateInvoice() {
       }
       if (input.clientName !== undefined) updates.client_name = input.clientName || null
       if (input.clientEmail) updates.client_email = input.clientEmail   // 값 있을 때만(마이그레이션 전 안전)
+      if (input.currency !== undefined) updates.currency = input.currency
       if (input.accountRegion === 'overseas') {
         updates.account_region = 'overseas'
         if (input.overseasBank) updates.overseas_bank = input.overseasBank

@@ -17,9 +17,10 @@ import {
   type PartnerInvoiceType, type PartnerAccountRegion,
 } from '@/hooks/usePartnerInvoiceTypes'
 import { canonicalConsultantName, consultantNameKey } from '@/lib/consultants'
+import type { FeeCurrency } from '@/lib/sessionFee'
 
-const formatKRW = (n: number) =>
-  new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(n)
+const money = (n: number, cur: FeeCurrency = 'KRW') =>
+  new Intl.NumberFormat(cur === 'USD' ? 'en-US' : 'ko-KR', { style: 'currency', currency: cur }).format(n)
 
 /**
  * 인보이스설정 — '얼마를, 어느 양식으로 받는가'를 한 곳에서 정한다.
@@ -57,6 +58,8 @@ interface Row {
   resigned: boolean
   annualAmount?: number
   sessions?: number
+  /** 연 관리비 통화. 해외 파트너는 달러로 정하고 인보이스도 달러로 나간다. */
+  currency: FeeCurrency
   invoiceType: PartnerInvoiceType
   accountRegion: PartnerAccountRegion
   hidden: boolean
@@ -88,6 +91,7 @@ function SettingsBody() {
         name, nameKey, resigned,
         annualAmount: fee?.annualAmount,
         sessions: fee?.sessions,
+        currency: fee?.currency || 'KRW',
         invoiceType: pt?.invoiceType || 'individual',
         accountRegion: pt?.accountRegion || 'domestic',
         hidden: pt?.hidden === true,
@@ -223,6 +227,7 @@ function SettingRow({ row }: { row: Row }) {
   // 저장 전까지는 화면 값만 바뀐다 — 한 칸 칠 때마다 저장되면 되돌리기가 어렵다
   const [amount, setAmount] = useState(row.annualAmount ? String(row.annualAmount) : '')
   const [sessions, setSessions] = useState(String(row.sessions || 30))
+  const [currency, setCurrency] = useState<FeeCurrency>(row.currency)
   const [payee, setPayee] = useState(row.payeeName || '')
   const [err, setErr] = useState('')
 
@@ -236,9 +241,12 @@ function SettingRow({ row }: { row: Row }) {
   }
 
   const amt = Number(amount) || 0
-  const per = amt > 0 && Number(sessions) > 0 ? Math.round(amt / Number(sessions)) : 0
+  // 달러는 센트까지 남긴다 — 원처럼 반올림하면 $100.50 이 $101 로 보인다
+  const perRaw = amt > 0 && Number(sessions) > 0 ? amt / Number(sessions) : 0
+  const per = currency === 'USD' ? Math.round(perRaw * 100) / 100 : Math.round(perRaw)
   const dirty = amount !== (row.annualAmount ? String(row.annualAmount) : '')
     || sessions !== String(row.sessions || 30)
+    || currency !== row.currency
   const busy = setFee.isPending || clearFee.isPending
 
   /**
@@ -270,7 +278,7 @@ function SettingRow({ row }: { row: Row }) {
       return
     }
     setFee.mutate(
-      { name: row.name, annualAmount: amt, sessions: Number(sessions) || 30 },
+      { name: row.name, annualAmount: amt, sessions: Number(sessions) || 30, currency },
       { onError: e => setErr(e instanceof Error ? e.message : '저장하지 못했습니다.') },
     )
   }
@@ -283,8 +291,24 @@ function SettingRow({ row }: { row: Row }) {
       </TableCell>
       <TableCell>
         <div className="flex items-center gap-1">
+          {/* 통화 — 해외 파트너는 달러로 정하고 그 사람 인보이스도 달러로 나간다 */}
+          <div className="inline-flex shrink-0 items-center gap-0.5 rounded-md border bg-muted/30 p-0.5">
+            {(['KRW', 'USD'] as const).map(c => (
+              <button
+                key={c} type="button"
+                onClick={() => setCurrency(c)}
+                title={c === 'USD' ? '달러로 정합니다 — 이 사람 인보이스도 달러로 나갑니다' : '원화로 정합니다'}
+                className={`rounded px-1.5 py-0.5 text-[11px] font-medium transition-colors ${
+                  currency === c ? 'bg-slate-700 text-white' : 'text-muted-foreground hover:bg-white'
+                }`}
+              >
+                {c === 'USD' ? '$' : '₩'}
+              </button>
+            ))}
+          </div>
           <Input
-            type="number" value={amount} placeholder="비우면 2회=1개월분"
+            type="number" step={currency === 'USD' ? '0.01' : '1'}
+            value={amount} placeholder="비우면 2회=1개월분"
             className="h-8 w-36 text-sm"
             onChange={e => setAmount(e.target.value)}
           />
@@ -302,7 +326,7 @@ function SettingRow({ row }: { row: Row }) {
       </TableCell>
       <TableCell className="text-sm tabular-nums">
         {per > 0
-          ? <span className="font-medium text-blue-600">{formatKRW(per)}</span>
+          ? <span className="font-medium text-blue-600">{money(per, currency)}</span>
           : <span className="text-muted-foreground">—</span>}
       </TableCell>
       <TableCell>

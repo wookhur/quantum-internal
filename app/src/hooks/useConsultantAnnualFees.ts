@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { consultantNameKey } from '@/lib/consultants'
-import type { AnnualFee } from '@/lib/sessionFee'
+import type { AnnualFee, FeeCurrency } from '@/lib/sessionFee'
 
 export interface ConsultantFee extends AnnualFee {
   nameKey: string
@@ -20,7 +20,7 @@ export function useConsultantAnnualFees() {
       const map: AnnualFeeMap = new Map()
       const { data, error } = await supabase
         .from('consultant_annual_fees')
-        .select('name_key, display_name, annual_amount, sessions')
+        .select('name_key, display_name, annual_amount, sessions, currency')
       if (error) {
         // 표가 아직 없으면 조용히 빈 값 — 기존 방식으로 계속 동작한다.
         console.warn('consultant_annual_fees not found:', error.message)
@@ -32,6 +32,7 @@ export function useConsultantAnnualFees() {
           displayName: (r.display_name as string) || (r.name_key as string),
           annualAmount: Number(r.annual_amount) || 0,
           sessions: Number(r.sessions) || 30,
+          currency: r.currency === 'USD' ? 'USD' : 'KRW',
         })
       }
       return map
@@ -50,7 +51,7 @@ export function annualFeeOf(map: AnnualFeeMap | undefined, name?: string): Consu
 export function useSetConsultantAnnualFee() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ name, annualAmount, sessions }: { name: string; annualAmount: number; sessions: number }) => {
+    mutationFn: async ({ name, annualAmount, sessions, currency = 'KRW' }: { name: string; annualAmount: number; sessions: number; currency?: FeeCurrency }) => {
       const key = consultantNameKey(name)
       if (!key) throw new Error('이름이 비어 있습니다.')
       const { data, error } = await supabase
@@ -58,8 +59,10 @@ export function useSetConsultantAnnualFee() {
         .upsert({
           name_key: key,
           display_name: name,
-          annual_amount: Math.max(0, Math.round(annualAmount)),
+          // 달러는 센트까지 둔다 — 원처럼 반올림하면 $2,500.50 이 $2,501 이 된다
+          annual_amount: Math.max(0, currency === 'USD' ? Math.round(annualAmount * 100) / 100 : Math.round(annualAmount)),
           sessions: Math.max(1, Math.round(sessions)),
+          currency,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'name_key' })
         .select('name_key')

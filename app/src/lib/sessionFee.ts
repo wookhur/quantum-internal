@@ -14,17 +14,25 @@
  * 연 관리비가 정해지지 않은 컨설턴트는 종전 방식 그대로다(이 파일을 거치지 않는다).
  */
 
+export type FeeCurrency = 'KRW' | 'USD'
+
 export interface AnnualFee {
-  /** 연 관리비(원) */
+  /** 연 관리비 */
   annualAmount: number
   /** 연 기준 횟수 — 1회분 = annualAmount / sessions */
   sessions: number
+  /** 통화. 해외 파트너는 달러로 정하고 인보이스도 달러로 나간다. 없으면 원. */
+  currency?: FeeCurrency
 }
 
-/** 1회분 단가. 원 단위로 반올림한다(4,000,000 ÷ 30 = 133,333원). */
+/**
+ * 1회분 단가. 원은 원 단위로, 달러는 센트까지 반올림한다
+ * (4,000,000원 ÷ 30 = 133,333원 / $3,000 ÷ 30 = $100.00).
+ */
 export function perSessionAmount(fee: AnnualFee): number {
   if (!fee.annualAmount || !fee.sessions || fee.sessions <= 0) return 0
-  return Math.round(fee.annualAmount / fee.sessions)
+  const raw = fee.annualAmount / fee.sessions
+  return fee.currency === 'USD' ? Math.round(raw * 100) / 100 : Math.round(raw)
 }
 
 export interface SessionLike {
