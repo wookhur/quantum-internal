@@ -47,6 +47,7 @@ import {
   useDeleteInvoice,
   usePaidCoveredIncentiveKeys,
   useInvoiceCoverage,
+  slotCoversLine,
   invoicePersonKey,
   invoiceDisplayName,
   type FreelancerInvoice,
@@ -1583,16 +1584,16 @@ function useBillablePayees(month: string, kind: string): BillablePayees {
       // 이미 받은 건은 '미제출'이 아니다 — 개인 파트너 쪽(coveredFor)과 같은 기준으로
       // 지급완료 인보이스가 덮는 줄을 빼야, 승인완료로 뜨는 사람 옆의 건수·금액이
       // 지급 원장과 맞는다. 종전에는 그 달에 발생한 전액이 그대로 찍혔다.
-      const coveredIncentive = (person: string, om: string) => {
+      const coveredIncentive = (person: string, om: string, label: string) => {
         const slots = paidCoverage.get(invoicePersonKey(person))
           || paidCoverage.get(invoicePersonKey(payeeOf(invoiceTypeMap, person)))
-        return slots?.get(`incentive:${om}`)?.paid === true
+        return slotCoversLine(slots?.get(`incentive:${om}`), label)
       }
       linesByPerson.forEach((lines, name) => {
         for (const l of lines) {
           if (l.month !== month) continue
           if (paidCoveredKeys.has(l.id)) continue
-          if (coveredIncentive(name, l.month)) continue
+          if (coveredIncentive(name, l.month, l.label)) continue
           // 인보이스 없이 현금으로 지급해 손으로 꺼 둔 건도 뺀다
           const st = carryState(incentiveStatus.get(l.id), month)
           if (st === 'hide') continue
@@ -1893,11 +1894,11 @@ export function FreelancerInvoicesPage(
        * 사람도 10월·11월에 그 줄이 계속 다시 올라왔고, 화면의 안내문("지급 원장을 보고
        * 저절로 정리됩니다")과 어긋나 있었다. 이 게시판만 손으로 꺼야 했던 이유다.
        */
-      const coveredIncentive = (om: string) =>
-        paidCoverage.get(invoicePersonKey(effectiveName))?.get(`incentive:${om}`)?.paid === true
-        || paidCoverage.get(invoicePersonKey(payeeName))?.get(`incentive:${om}`)?.paid === true
+      const coveredIncentive = (om: string, label: string) =>
+        slotCoversLine(paidCoverage.get(invoicePersonKey(effectiveName))?.get(`incentive:${om}`), label)
+        || slotCoversLine(paidCoverage.get(invoicePersonKey(payeeName))?.get(`incentive:${om}`), label)
       for (const l of (linesByPerson.get(myName) || [])) {
-        if (paidCoveredKeys.has(l.id) || coveredIncentive(l.month)) continue
+        if (paidCoveredKeys.has(l.id) || coveredIncentive(l.month, l.label)) continue
         const st = incentiveStatus.get(l.id)
         if (st?.received) {
           if (st.receivedMonth === issueMonth) out.push({ id: l.id, label: l.label, amount: l.amount, originMonth: l.month, received: true, sourceDetail: l.sourceDetail })
@@ -2111,11 +2112,11 @@ export function FreelancerInvoicesPage(
    */
   const monthCoveredLines = useMemo(() => {
     if (!isIncentive) return []
-    const coveredIncentive = (om: string) =>
-      paidCoverage.get(invoicePersonKey(effectiveName))?.get(`incentive:${om}`)?.paid === true
-      || paidCoverage.get(invoicePersonKey(payeeName))?.get(`incentive:${om}`)?.paid === true
+    const coveredIncentive = (om: string, label: string) =>
+      slotCoversLine(paidCoverage.get(invoicePersonKey(effectiveName))?.get(`incentive:${om}`), label)
+      || slotCoversLine(paidCoverage.get(invoicePersonKey(payeeName))?.get(`incentive:${om}`), label)
     return (linesByPerson.get(myName) || [])
-      .filter(l => l.month <= issueMonth && !paidCoveredKeys.has(l.id) && coveredIncentive(l.month))
+      .filter(l => l.month <= issueMonth && !paidCoveredKeys.has(l.id) && coveredIncentive(l.month, l.label))
       .sort((a, b) => a.month.localeCompare(b.month))
   }, [isIncentive, linesByPerson, myName, issueMonth, paidCoveredKeys, paidCoverage, effectiveName, payeeName])
 

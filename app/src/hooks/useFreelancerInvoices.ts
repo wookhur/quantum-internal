@@ -522,6 +522,44 @@ export interface InvoiceSlotState {
   /** 지급되지 않은 인보이스 중 가장 최근 것의 상태. 왜 안 내려가는지 알려 준다. */
   pendingStatus?: 'draft' | 'submitted' | 'approved' | 'rejected'
   pendingAmount?: number
+  /** 줄 키를 안 들고 있는 지급완료 인보이스가 있는가(옛 인보이스). 이때만 이름으로 대조한다. */
+  paidKeyless?: boolean
+  /** 그 옛 인보이스들의 항목명 — 이 줄이 실제로 담겼는지 이름으로 맞춰 본다. */
+  paidItemNames?: string[]
+}
+
+/** 라벨에서 사람 이름을 뽑는다. '남연주 Clare Nam · 김효진수학 8월' → ko:['남연주'] en:'clarenam' */
+function nameTokens(s: string): { ko: string[]; en: string } {
+  const head = (s || '').split('·')[0]
+  const ko = [...head.matchAll(/[가-힣]{2,5}/g)].map(m => m[0])
+  const en = [...head.matchAll(/[A-Za-z]+/g)].map(m => m[0].toLowerCase()).join('')
+  return { ko, en }
+}
+
+/**
+ * 지급완료 인보이스가 이 줄을 실제로 담았는가.
+ *
+ * 옛 인보이스에는 줄 단위 기록(covered_incentive_keys)이 없어 '그 달은 통째로 끝'
+ * 으로 볼 수밖에 없었다. 그런데 그러면 그 인보이스가 지급된 뒤에 생긴 줄 — 수수료
+ * 대상을 뒤늦게 채운 건 같은 것 — 까지 같이 묻혀, 못 받은 돈이 조용히 사라진다.
+ * 그래서 인보이스 항목명에 그 줄의 사람 이름이 있는지 맞춰 본다.
+ *
+ * 영문 이름은 'Kim' 처럼 흔한 토막이 많아 쓰지 않는다(한글 이름이 없을 때만, 통째로).
+ * 항목을 못 읽었으면 종전처럼 그 달 전체를 덮는다 — 그때는 중복 청구가 더 위험하다.
+ */
+export function slotCoversLine(slot: InvoiceSlotState | undefined, lineLabel: string): boolean {
+  if (!slot?.paid) return false
+  if (!slot.paidKeyless) return false          // 줄 키가 전부를 말한다 — 이름 대조 불필요
+  const items = slot.paidItemNames || []
+  if (!items.length) return true               // 항목을 못 읽음 → 종전대로 그 달 전체
+  const want = nameTokens(lineLabel)
+  if (!want.ko.length && want.en.length < 4) return true
+  return items.some(it => {
+    const got = nameTokens(it)
+    if (want.ko.length && got.ko.length) return want.ko.some(k => got.ko.includes(k))
+    if (want.en.length >= 4 && got.en.length >= 4) return got.en.includes(want.en) || want.en.includes(got.en)
+    return false
+  })
 }
 
 /**
@@ -572,7 +610,7 @@ export function useInvoiceCoverage() {
       const map = new Map<string, Map<string, InvoiceSlotState>>()
       const { data, error } = await supabase
         .from('freelancer_invoices')
-        .select('id, kind, invoice_month, client_name, paid_date, status, total_amount, created_at, profiles!freelancer_invoices_freelancer_id_fkey(name)')
+        .select('id, kind, invoice_month, client_name, paid_date, status, total_amount, created_at, covered_incentive_keys, profiles!freelancer_invoices_freelancer_id_fkey(name)')
         .order('created_at', { ascending: true })
       if (error) { console.warn('인보이스 조회 실패:', error.message); return map }
 
@@ -626,6 +664,11 @@ export function useInvoiceCoverage() {
           const cur = slots.get(slot) || { paid: false }
           if (isPaid) {
             cur.paid = true
+            // 줄 키를 안 들고 있는 지급완료 인보이스만 이름 대조 대상이다
+            if (!((r.covered_incentive_keys as string[]) || []).length) {
+              cur.paidKeyless = true
+              cur.paidItemNames = [...(cur.paidItemNames || []), ...items.map(it => it.name).filter(Boolean)]
+            }
           } else {
             // created_at 오름차순이라 뒤에 오는 것이 더 최근 — 그대로 덮는다
             cur.pendingStatus = r.status as InvoiceSlotState['pendingStatus']
