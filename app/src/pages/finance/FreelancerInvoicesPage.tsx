@@ -2757,7 +2757,7 @@ export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month
           <br />
           {/* 정산월과 지급월이 다른 것을 모르면 '승인완료인데 받은 내역이 없다'로 읽힌다 */}
           <span className="text-xs">
-            여기의 <b>{month}</b> 은 <b>정산월</b>입니다 — 그 달에 발생한 몫이라는 뜻이고, 실제 지급은 보통 다음 달에 납니다. 지급된 건은 <b>지급일</b>이 함께 표시됩니다.
+            여기의 <b>{month}</b> 은 <b>정산월</b>입니다 — 그 달에 발생한 몫이라는 뜻이고, 지급은 <b>다음 달 5일 급여일</b>에 납니다. 지급된 건은 지급일이 함께 표시됩니다.
           </span>
         </div>
         <Table>
