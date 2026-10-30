@@ -421,7 +421,21 @@ export function ExternalFeesPage() {
                         ) : inc <= 0 ? (
                           <span className="text-xs text-muted-foreground">{needsTeam ? t('svcpay.needTeam') : '-'}</span>
                         ) : isPaid ? (
-                          <span className="text-emerald-600">{formatCurrency(inc, f.currency as 'KRW' | 'USD')}</span>
+                          <div>
+                            <span className="text-emerald-600">{formatCurrency(inc, f.currency as 'KRW' | 'USD')}</span>
+                            {/* 인센티브가 잡히는 달은 '몇월 교육비'가 아니라 입금일의 달이다.
+                                6월 수업이 10월에 입금되면 10월 인센티브로 간다 — 이게 안 보여서
+                                '수금완료인데 왜 그 달 세일즈 인센티브에 없냐'가 되풀이됐다. */}
+                            {f.paidDate ? (
+                              <div className="text-[10px] font-normal text-muted-foreground" title={`입금일 ${f.paidDate} → ${f.paidDate.slice(0, 7)} 세일즈 인센티브로 잡힙니다`}>
+                                {Number(f.paidDate.slice(5, 7))}월 인센티브
+                              </div>
+                            ) : (
+                              <div className="text-[10px] font-normal text-amber-600" title="입금일이 없으면 어느 달 인센티브인지 정할 수 없어 세일즈 인센티브 목록에 올라가지 않습니다. 수금처리에서 입금일을 적어 주세요.">
+                                입금일 없음 · 미반영
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-muted-foreground">{t('svcpay.expected')} {formatCurrency(inc, f.currency as 'KRW' | 'USD')}</span>
                         )}
