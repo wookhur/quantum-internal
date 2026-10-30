@@ -33,7 +33,7 @@ import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
-import { useIncentiveStatus, useSetIncentiveReceived, type IncentiveStatus } from '@/hooks/useIncentiveStatus'
+import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived, type IncentiveStatus } from '@/hooks/useIncentiveStatus'
 import { usePartnerInvoiceTypes, invoiceTypeOf, accountRegionOf, payeeOf } from '@/hooks/usePartnerInvoiceTypes'
 import { useProfiles, canAccessAccount, canManageInvoiceSettings } from '@/hooks/useProfiles'
 import { useSendMessage } from '@/hooks/useMessages'
@@ -1528,10 +1528,13 @@ export function useIncentiveLinesByPerson() {
 }
 
 // ─── 급여 지급 대상자(모든 소스) + 상세 라인 ──────────────────────────────
-export interface PayeeItem { label: string; amount: number }
+export interface PayeeItem { key: string; originMonth: string; label: string; amount: number }
+
+/** 미제출 현황이 돌려주는 두 묶음 — 아직 남은 것(live)과 이번 달에 처리완료로 뺀 것(dismissed). */
+interface BillablePayees { live: Map<string, PayeeItem[]>; dismissed: Map<string, PayeeItem[]> }
 /** 이 달 급여를 받아야 하는 사람(이름) → 상세 라인 목록.
  *  관리비(2회 미팅) · 원서·에세이 · 에세이 에디터 · 멘토(학습코칭·전공별) / 인센티브. */
-function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]> {
+function useBillablePayees(month: string, kind: string): BillablePayees {
   const isIncentive = kind === 'sales_incentive'
   const byConsultant = useConsultantBillable(month, CARRY_OVER_MONTHS)
   const { data: essayPlans = [] } = useAllEssayPlans()
@@ -1565,12 +1568,16 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       }
     }
     const out = new Map<string, PayeeItem[]>()
-    const add = (rawName: string | undefined, item: PayeeItem) => {
+    // 이번 달에 '처리완료'로 찍어 목록에서 뺀 것. 그대로 사라지면 잘못 누른 걸
+    // 되돌릴 길이 없어, 이 달 안에는 따로 들고 있다가 아래에 보여 준다.
+    const dismissed = new Map<string, PayeeItem[]>()
+    const add = (rawName: string | undefined, item: PayeeItem, state: 'pending' | 'received' = 'pending') => {
       const nm = canonicalConsultantName(rawName || '')
       if (!nm || /^[0-9a-f-]{36}$/i.test(nm)) return
       if (excludedKeys.has(consultantNameKey(nm))) return
-      const arr = out.get(nm) || []
-      arr.push(item); out.set(nm, arr)
+      const target = state === 'received' ? dismissed : out
+      const arr = target.get(nm) || []
+      arr.push(item); target.set(nm, arr)
     }
     if (isIncentive) {
       // 이미 받은 건은 '미제출'이 아니다 — 개인 파트너 쪽(coveredFor)과 같은 기준으로
@@ -1587,11 +1594,12 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
           if (paidCoveredKeys.has(l.id)) continue
           if (coveredIncentive(name, l.month)) continue
           // 인보이스 없이 현금으로 지급해 손으로 꺼 둔 건도 뺀다
-          if (carryState(incentiveStatus.get(l.id), month) === 'hide') continue
-          add(name, { label: l.label, amount: l.amount })
+          const st = carryState(incentiveStatus.get(l.id), month)
+          if (st === 'hide') continue
+          add(name, { key: l.id, originMonth: l.month, label: l.label, amount: l.amount }, st)
         }
       })
-      return out
+      return { live: out, dismissed }
     }
     const studentsById = new Map(students.map(s => [s.id, s]))
     const carryMonths = monthsUpTo(month, CARRY_OVER_MONTHS)
@@ -1609,19 +1617,23 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       if (!slots) return false
       return slots.get(`individual:${om}`)?.paid === true || slots.get(`business:${om}`)?.paid === true
     }
-    const live = (kind: string, id: string, om: string, person?: string) => {
-      if (coveredFor(person, om)) return false
+    /** 이 줄을 이 달 목록에 올릴지. null 이면 안 올린다(지급완료 인보이스가 덮거나 지난 달에 처리됨). */
+    const live = (kind: string, id: string, om: string, person?: string): { key: string; state: 'pending' | 'received' } | null => {
+      if (coveredFor(person, om)) return null
       const key = lineKey(kind, id, om)
-      return !paidCoveredKeys.has(key) && carryState(incentiveStatus.get(key), month) !== 'hide'
+      if (paidCoveredKeys.has(key)) return null
+      const st = carryState(incentiveStatus.get(key), month)
+      return st === 'hide' ? null : { key, state: st }
     }
     // 관리비만 옛 키 보완이 필요하다 — legacyMgmtReceivedMap 설명 참고
     const legacyMgmt = legacyMgmtReceivedMap(incentiveStatus)
-    const mgmtLive = (sid: string, om: string, idx: number, person?: string) => {
-      if (coveredFor(person, om)) return false
+    const mgmtLive = (sid: string, om: string, idx: number, person?: string): { key: string; state: 'pending' | 'received' } | null => {
+      if (coveredFor(person, om)) return null
       const key = lineKey('mgmt', `${sid}#${idx}`, om)
-      if (paidCoveredKeys.has(key)) return false
-      const st = incentiveStatus.get(key) || (legacyMgmt.get(`${sid}|${om}`) || [])[idx - 1]
-      return carryState(st, month) !== 'hide'
+      if (paidCoveredKeys.has(key)) return null
+      const prev = incentiveStatus.get(key) || (legacyMgmt.get(`${sid}|${om}`) || [])[idx - 1]
+      const st = carryState(prev, month)
+      return st === 'hide' ? null : { key, state: st }
     }
     const aged = (om: string) => (om < month ? ` (${monthNum(om)}월분)` : '')
     // 관리비 — 연 관리비가 정해진 사람은 회당, 아니면 종전 '2회 1개월분'
@@ -1630,16 +1642,18 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       void key
       for (const s of entry.students) {
         s.pairs.forEach(bp => {
-          if (!mgmtLive(s.id, bp.month, bp.idx, entry.name)) return
-          add(entry.name, { label: `${s.label} · 관리비${aged(bp.month)}`, amount: 0 })
+          const ln = mgmtLive(s.id, bp.month, bp.idx, entry.name)
+          if (!ln) return
+          add(entry.name, { key: ln.key, originMonth: bp.month, label: `${s.label} · 관리비${aged(bp.month)}`, amount: 0 }, ln.state)
         })
       }
     })
     // 회당 정산 컨설턴트
     annualFees.forEach(fee => {
       for (const l of sessionFeeLines(sessionsByConsultant.get(fee.nameKey) || [], fee, carryMonths)) {
-        if (!live('sess-fee', l.id, l.month, fee.displayName)) continue
-        add(fee.displayName, { label: `${l.label}${aged(l.month)}`, amount: l.amount })
+        const ln = live('sess-fee', l.id, l.month, fee.displayName)
+        if (!ln) continue
+        add(fee.displayName, { key: ln.key, originMonth: l.month, label: `${l.label}${aged(l.month)}`, amount: l.amount }, ln.state)
       }
     })
     // 원서·에세이 (총액÷개월수)
@@ -1647,10 +1661,12 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       if (!p.consultantName) continue
       for (const om of carryMonths) {
         const line = essayLineForMonth(p, om)
-        if (!line || !live('essay', p.id, om, p.consultantName)) continue
+        if (!line) continue
+        const ln = live('essay', p.id, om, p.consultantName)
+        if (!ln) continue
         const s = studentsById.get(p.studentId)
         const who = [p.studentKoreanName, p.studentName].filter(Boolean).join(' ') || (s ? studentLabel(s.name, s.koreanName) : '학생')
-        add(p.consultantName, { label: `${who} · 원서에세이 (${line.index}/${line.count}월차)${aged(om)}`, amount: line.amount })
+        add(p.consultantName, { key: ln.key, originMonth: om, label: `${who} · 원서에세이 (${line.index}/${line.count}월차)${aged(om)}`, amount: line.amount }, ln.state)
       }
     }
     // 에세이 에디터 (원서·에세이 플랜 학생 제외, 2회 짝 마감월 · 단가 발행 시 입력)
@@ -1667,8 +1683,9 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
       for (const om of carryMonths) {
         pairsClosingInMonth(dates, om).forEach((_, k) => {
-          if (!live('editor', `${studentId}#${k + 1}`, om, editor)) return
-          add(editor, { label: `${who} · 에세이에디터${aged(om)}`, amount: 0 })
+          const ln = live('editor', `${studentId}#${k + 1}`, om, editor)
+          if (!ln) return
+          add(editor, { key: ln.key, originMonth: om, label: `${who} · 에세이에디터${aged(om)}`, amount: 0 }, ln.state)
         })
       }
     })
@@ -1682,21 +1699,24 @@ function useBillablePayees(month: string, kind: string): Map<string, PayeeItem[]
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
       for (const om of carryMonths) {
         if (startMonth && startMonth > om) continue
-        if (!live('coach', a.id, om, mt.koreanName || mt.englishName)) continue
-        add(mt.koreanName || mt.englishName, { label: `${who} · 학습코칭 (월정액)${aged(om)}`, amount: COACHING_MONTHLY })
+        const ln = live('coach', a.id, om, mt.koreanName || mt.englishName)
+        if (!ln) continue
+        add(mt.koreanName || mt.englishName, { key: ln.key, originMonth: om, label: `${who} · 학습코칭 (월정액)${aged(om)}`, amount: COACHING_MONTHLY }, ln.state)
       }
     }
     for (const sess of sessions) {
       const asg = asgById.get(sess.coachingId)
       const mt = mentorById.get((sess.mentorId || asg?.mentorId) || ''); if (!mt || mt.type !== 'major') continue
       const om = (sess.sessionDate || '').slice(0, 7)
-      if (!carryMonths.includes(om) || !live('sess', sess.id, om, mt.koreanName || mt.englishName)) continue
+      if (!carryMonths.includes(om)) continue
+      const ln = live('sess', sess.id, om, mt.koreanName || mt.englishName)
+      if (!ln) continue
       const s = studentsById.get((sess.studentId || asg?.studentId) || '')
       const who = s ? studentLabel(s.name, s.koreanName) : '학생'
       // 등급마다 단가가 다르므로 인보이스에도 등급명을 적는다('전공별멘토' 하나로는 구분이 안 됨)
-      add(mt.koreanName || mt.englishName, { label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})${aged(om)}`, amount: majorTierAmount(mt.tier) })
+      add(mt.koreanName || mt.englishName, { key: ln.key, originMonth: om, label: `${who} · ${majorTierLabel(mt.tier)} (${sess.sessionDate})${aged(om)}`, amount: majorTierAmount(mt.tier) }, ln.state)
     }
-    return out
+    return { live: out, dismissed }
   }, [isIncentive, byConsultant, essayPlans, editorMeetings, students, mentors, assignments, sessions, profiles, linesByPerson, month, incentiveStatus, paidCoveredKeys, paidCoverage, invoiceTypeMap, annualFees, sessionsByConsultant])
 }
 
@@ -1775,7 +1795,7 @@ export function FreelancerInvoicesPage(
 
   // 이름 드롭다운 옵션 = 이 달 급여 지급 대상자(모든 소스) + 이미 제출한 사람.
   // 사업자 파트너 게시판은 자동 청구 목록을 쓰지 않으므로(수기 전용) 제출자 이름만.
-  const rawPayees = useBillablePayees(selectedMonth === 'all' ? getCurrentMonth() : selectedMonth, sourceKind)
+  const { live: rawPayees } = useBillablePayees(selectedMonth === 'all' ? getCurrentMonth() : selectedMonth, sourceKind)
   const nameOptions = useMemo(() => {
     const set = new Set<string>()
     if (!isBusinessBoard) rawPayees.forEach((_items, name) => set.add(name))
@@ -2711,10 +2731,14 @@ export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month
     month, kind === 'freelancer' ? ['freelancer', 'freelancer_business'] : kind,
   )
   const { data: profiles = [] } = useProfiles()
-  const payees = useBillablePayees(month, kind)
+  const { live: payees, dismissed } = useBillablePayees(month, kind)
   const send = useSendMessage()
   const [sending, setSending] = useState<string | null>(null)
   const [openName, setOpenName] = useState<string | null>(null)
+  // 인보이스 없이 이미 처리한 건을 목록에서 빼는 권한 — 대표·부대표·재무이사만
+  const { user } = useAuth()
+  const canDismiss = canManageInvoiceSettings(user)
+  const bulkSetReceived = useBulkSetIncentiveReceived()
 
   const rows = useMemo(() => {
     const out: { name: string; count: number; total: number; items: PayeeItem[]; status: 'none' | 'submitted' | 'approved' | 'paid'; paidDate?: string }[] = []
@@ -2730,6 +2754,34 @@ export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month
     })
     return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   }, [payees, invoices])
+
+  /** 이번 달에 처리완료로 빼 둔 사람들 — 잘못 누른 건을 이 달 안에는 되돌릴 수 있게 남겨 둔다. */
+  const dismissedRows = useMemo(() => {
+    const out: { name: string; items: PayeeItem[]; total: number }[] = []
+    dismissed.forEach((items, name) => out.push({ name, items, total: items.reduce((s, i) => s + i.amount, 0) }))
+    return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }, [dismissed])
+
+  /**
+   * 인보이스 없이 이미 처리한 건을 목록에서 뺀다.
+   *
+   * 발생 기록(계약·미팅·수금)은 그대로 둔다 — 그건 지우면 안 되는 원장이다.
+   * 여기서 하는 일은 '이 달에 처리완료로 찍는 것'뿐이고, 발행 화면과 같은 표를 쓴다.
+   */
+  const dismiss = (name: string, items: PayeeItem[]) => {
+    if (!canDismiss || !items.length) return
+    if (!confirm(
+      `${name}님의 ${month} ${items.length}건을 목록에서 뺄까요?\n\n` +
+      `인보이스 없이 이미 처리한 건을 정리하는 기능입니다.\n` +
+      `발생 기록은 지워지지 않고 '처리완료'로 표시만 됩니다.\n` +
+      `이 달 안에는 표 아래 '처리완료로 뺀 항목'에서 되돌릴 수 있습니다.`,
+    )) return
+    bulkSetReceived.mutate(items.map(i => ({ key: i.key, received: true, month })))
+  }
+  const restore = (items: PayeeItem[]) => {
+    if (!canDismiss || !items.length) return
+    bulkSetReceived.mutate(items.map(i => ({ key: i.key, received: false, month })))
+  }
 
   const request = async (name: string) => {
     if (!canEdit) return
@@ -2799,11 +2851,25 @@ export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month
                         : <Badge className="bg-red-100 text-red-700">미제출</Badge>}
                     </TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
-                      {canEdit && r.status !== 'approved' && r.status !== 'paid' && (
-                        <Button size="sm" variant="outline" disabled={sending === r.name} onClick={() => request(r.name)}>
-                          {sending === r.name ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}요청
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {canEdit && r.status !== 'approved' && r.status !== 'paid' && (
+                          <Button size="sm" variant="outline" disabled={sending === r.name} onClick={() => request(r.name)}>
+                            {sending === r.name ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}요청
+                          </Button>
+                        )}
+                        {/* 인보이스 없이 이미 처리한 건 — 제출을 기다릴 이유가 없다 */}
+                        {canDismiss && (
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                            title="인보이스 없이 이미 처리한 건입니다 — 목록에서 뺍니다 (기록은 남습니다)"
+                            disabled={bulkSetReceived.isPending}
+                            onClick={() => dismiss(r.name, r.items)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                   {open && (
@@ -2825,6 +2891,34 @@ export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month
             })}
           </TableBody>
         </Table>
+
+        {/* 이번 달에 뺀 항목 — 잘못 누른 건을 되돌릴 데가 있어야 한다.
+            다음 달부터는 이 목록에도 올라오지 않는다(carryState 가 'hide'로 바뀐다). */}
+        {dismissedRows.length > 0 && (
+          <div className="border-t px-4 py-2.5 space-y-1">
+            <p className="text-[11px] font-medium text-muted-foreground">{month} 처리완료로 뺀 항목</p>
+            {dismissedRows.map(d => (
+              <div key={d.name} className="flex items-center justify-between gap-2 text-xs">
+                <span className="text-muted-foreground">
+                  <span className="line-through">{d.name} · {d.items.length}건</span>
+                  {d.total > 0 && <span className="ml-1 tabular-nums line-through">{formatKRW(d.total)}</span>}
+                </span>
+                {canDismiss && (
+                  <button
+                    className="shrink-0 text-[11px] text-blue-600 hover:underline disabled:opacity-50"
+                    disabled={bulkSetReceived.isPending}
+                    onClick={() => restore(d.items)}
+                  >
+                    되돌리기
+                  </button>
+                )}
+              </div>
+            ))}
+            <p className="text-[10px] text-muted-foreground pt-0.5">
+              발생 기록은 그대로 있습니다 — 목록에서만 뺀 것입니다. 되돌리기는 이 달 안에만 됩니다.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
