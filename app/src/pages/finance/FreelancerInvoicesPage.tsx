@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef, Fragment } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import { useT } from '@/i18n/LanguageContext'
 import { useCanEdit } from '@/hooks/usePermissions'
@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   FileText, Plus, Trash2, Download, CheckCircle2, XCircle, Pencil,
-  Eye, Loader2, ChevronDown, ChevronRight,
+  Eye, Loader2,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useServiceStudents } from '@/hooks/useServiceStudents'
@@ -33,10 +33,9 @@ import { useIncentivesByInstallment } from '@/hooks/useIncentives'
 import { useServiceIncentiveLines } from '@/hooks/useServiceIncentives'
 import { useAllClawbacks } from '@/hooks/useClawbacks'
 import { useAllEssayPlans, essayLineForMonth } from '@/hooks/useEssayPlans'
-import { useIncentiveStatus, useSetIncentiveReceived, useBulkSetIncentiveReceived, type IncentiveStatus } from '@/hooks/useIncentiveStatus'
+import { useIncentiveStatus, useSetIncentiveReceived, type IncentiveStatus } from '@/hooks/useIncentiveStatus'
 import { usePartnerInvoiceTypes, invoiceTypeOf, accountRegionOf, payeeOf } from '@/hooks/usePartnerInvoiceTypes'
 import { useProfiles, canAccessAccount, canManageInvoiceSettings } from '@/hooks/useProfiles'
-import { useSendMessage } from '@/hooks/useMessages'
 import {
   useFreelancerInvoices,
   useMyInvoices,
@@ -2797,209 +2796,5 @@ export function FreelancerInvoicesPage(
         />
       )}
     </div>
-  )
-}
-
-// ─── Missing-invoice tracking (accounting) ─────────────────────────────────
-// 재무 대시보드에서 보드별로 나뉘지 않고 한눈에 보도록 밖으로 뺀다.
-// (보드마다 흩어져 있으면 이번 달에 누가 아직 안 냈는지 세 군데를 돌아야 했다)
-
-export function MissingInvoices({ month, kind = 'freelancer', canEdit }: { month: string; kind?: string; canEdit: boolean }) {
-  const isIncentive = kind === 'sales_incentive'
-  // 사업자로 낸 사람이 '미제출'로 잡히면 안 된다 — 두 종류를 함께 본다
-  const { data: invoices = [] } = useFreelancerInvoices(
-    month, kind === 'freelancer' ? ['freelancer', 'freelancer_business'] : kind,
-  )
-  const { data: profiles = [] } = useProfiles()
-  const { live: payees, dismissed } = useBillablePayees(month, kind)
-  const send = useSendMessage()
-  const [sending, setSending] = useState<string | null>(null)
-  const [openName, setOpenName] = useState<string | null>(null)
-  // 인보이스 없이 이미 처리한 건을 목록에서 빼는 권한 — 대표·부대표·재무이사만
-  const { user } = useAuth()
-  const canDismiss = canManageInvoiceSettings(user)
-  const bulkSetReceived = useBulkSetIncentiveReceived()
-
-  const rows = useMemo(() => {
-    const out: { name: string; count: number; total: number; items: PayeeItem[]; status: 'none' | 'submitted' | 'approved' | 'paid'; paidDate?: string }[] = []
-    payees.forEach((items, name) => {
-      const theirs = invoices.filter(inv => canonicalConsultantName(inv.freelancerName) === name)
-      // 승인완료와 지급완료는 다르다. 결재가 난 것과 돈이 나간 것을 한 배지로 묶어 두니
-      // '승인완료인데 받은 내역이 없다'로 읽혔다 — 정산월이 9월이어도 지급은 10월에 난다.
-      const paidDate = theirs.map(i => i.paidDate || '').filter(Boolean).sort().pop()
-      const status = paidDate ? 'paid'
-        : theirs.some(i => i.status === 'approved') ? 'approved'
-        : theirs.some(i => i.status === 'submitted') ? 'submitted' : 'none'
-      out.push({ name, count: items.length, total: items.reduce((s, i) => s + i.amount, 0), items, status, paidDate })
-    })
-    return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [payees, invoices])
-
-  /** 이번 달에 처리완료로 빼 둔 사람들 — 잘못 누른 건을 이 달 안에는 되돌릴 수 있게 남겨 둔다. */
-  const dismissedRows = useMemo(() => {
-    const out: { name: string; items: PayeeItem[]; total: number }[] = []
-    dismissed.forEach((items, name) => out.push({ name, items, total: items.reduce((s, i) => s + i.amount, 0) }))
-    return out.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [dismissed])
-
-  /**
-   * 인보이스 없이 이미 처리한 건을 목록에서 뺀다.
-   *
-   * 발생 기록(계약·미팅·수금)은 그대로 둔다 — 그건 지우면 안 되는 원장이다.
-   * 여기서 하는 일은 '이 달에 처리완료로 찍는 것'뿐이고, 발행 화면과 같은 표를 쓴다.
-   */
-  const dismiss = (name: string, items: PayeeItem[]) => {
-    if (!canDismiss || !items.length) return
-    if (!confirm(
-      `${name}님의 ${month} ${items.length}건을 목록에서 뺄까요?\n\n` +
-      `인보이스 없이 이미 처리한 건을 정리하는 기능입니다.\n` +
-      `발생 기록은 지워지지 않고 '처리완료'로 표시만 됩니다.\n` +
-      `이 달 안에는 표 아래 '처리완료로 뺀 항목'에서 되돌릴 수 있습니다.`,
-    )) return
-    bulkSetReceived.mutate(items.map(i => ({ key: i.key, received: true, month })))
-  }
-  const restore = (items: PayeeItem[]) => {
-    if (!canDismiss || !items.length) return
-    bulkSetReceived.mutate(items.map(i => ({ key: i.key, received: false, month })))
-  }
-
-  const request = async (name: string) => {
-    if (!canEdit) return
-    const profile = profiles.find(p => canonicalConsultantName(p.name) === name)
-    if (!profile) { alert(`'${name}' 직원 계정을 찾을 수 없습니다.`); return }
-    setSending(name)
-    try {
-      const msg = isIncentive
-        ? `[인보이스 요청] ${month} 세일즈인센티브 정산 인보이스를 발행·제출해 주세요. (인센티브 발생 내역이 있습니다)`
-        : `[인보이스 요청] ${month} 프리랜서 인보이스를 발행·제출해 주세요. (청구 가능 학생이 있습니다)`
-      await send.mutateAsync({ receiverId: profile.id, content: msg })
-      alert(`${name}님에게 인보이스 요청 메시지를 보냈습니다.`)
-    } catch (e) {
-      alert(e instanceof Error ? e.message : '전송에 실패했습니다.')
-    } finally {
-      setSending(null)
-    }
-  }
-
-  return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="p-4 text-sm text-muted-foreground">
-          {month} {isIncentive ? '인센티브 발생자별' : '급여 지급 대상자별'} 현황입니다. 이름을 클릭하면 <b>상세 내역</b>이 펼쳐집니다. 아직 제출·승인 전인 대상에게 요청 메시지를 보낼 수 있습니다.
-          <br />
-          {/* 정산월과 지급월이 다른 것을 모르면 '승인완료인데 받은 내역이 없다'로 읽힌다 */}
-          <span className="text-xs">
-            여기의 <b>{month}</b> 은 <b>정산월</b>입니다 — 그 달에 발생한 몫이라는 뜻이고, 지급은 <b>다음 달 5일 급여일</b>에 납니다. 지급된 건은 지급일이 함께 표시됩니다.
-          </span>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="text-xs">
-              <TableHead>{isIncentive ? '발생자' : '지급 대상자'}</TableHead>
-              <TableHead className="text-center w-20">건수</TableHead>
-              <TableHead className="text-right w-32">금액</TableHead>
-              <TableHead className="w-36">상태</TableHead>
-              <TableHead className="w-24"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 && (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">대상이 없습니다.</TableCell></TableRow>
-            )}
-            {rows.map(r => {
-              const open = openName === r.name
-              return (
-                <Fragment key={r.name}>
-                  <TableRow className="cursor-pointer hover:bg-muted/40" onClick={() => setOpenName(open ? null : r.name)}>
-                    <TableCell className="font-medium">
-                      <span className="inline-flex items-center gap-1">
-                        {open ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
-                        {r.name}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">{r.count}건</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{r.total > 0 ? formatKRW(r.total) : '—'}</TableCell>
-                    <TableCell>
-                      {r.status === 'paid' ? (
-                        <div className="flex flex-col gap-0.5">
-                          <Badge className="bg-emerald-100 text-emerald-700 w-fit">지급완료</Badge>
-                          {/* 정산월과 지급월이 달라 '그럼 언제 받은 건데'가 늘 따라붙는다 */}
-                          <span className="text-[10px] text-muted-foreground">{r.paidDate} 지급</span>
-                        </div>
-                      ) : r.status === 'approved' ? <Badge className="bg-green-100 text-green-700">승인완료(미지급)</Badge>
-                        : r.status === 'submitted' ? <Badge className="bg-blue-100 text-blue-700">제출됨(미승인)</Badge>
-                        : <Badge className="bg-red-100 text-red-700">미제출</Badge>}
-                    </TableCell>
-                    <TableCell onClick={e => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        {canEdit && r.status !== 'approved' && r.status !== 'paid' && (
-                          <Button size="sm" variant="outline" disabled={sending === r.name} onClick={() => request(r.name)}>
-                            {sending === r.name ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}요청
-                          </Button>
-                        )}
-                        {/* 인보이스 없이 이미 처리한 건 — 제출을 기다릴 이유가 없다 */}
-                        {canDismiss && (
-                          <Button
-                            size="sm" variant="ghost"
-                            className="h-8 px-2 text-muted-foreground hover:text-destructive"
-                            title="인보이스 없이 이미 처리한 건입니다 — 목록에서 뺍니다 (기록은 남습니다)"
-                            disabled={bulkSetReceived.isPending}
-                            onClick={() => dismiss(r.name, r.items)}
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {open && (
-                    <TableRow className="bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={5} className="py-2">
-                        <div className="space-y-1 pl-6 pr-2">
-                          {r.items.map((it, i) => (
-                            <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                              <span className="text-muted-foreground">{it.label}</span>
-                              <span className="tabular-nums shrink-0">{it.amount > 0 ? formatKRW(it.amount) : <span className="text-muted-foreground">발행 시 입력</span>}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              )
-            })}
-          </TableBody>
-        </Table>
-
-        {/* 이번 달에 뺀 항목 — 잘못 누른 건을 되돌릴 데가 있어야 한다.
-            다음 달부터는 이 목록에도 올라오지 않는다(carryState 가 'hide'로 바뀐다). */}
-        {dismissedRows.length > 0 && (
-          <div className="border-t px-4 py-2.5 space-y-1">
-            <p className="text-[11px] font-medium text-muted-foreground">{month} 처리완료로 뺀 항목</p>
-            {dismissedRows.map(d => (
-              <div key={d.name} className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-muted-foreground">
-                  <span className="line-through">{d.name} · {d.items.length}건</span>
-                  {d.total > 0 && <span className="ml-1 tabular-nums line-through">{formatKRW(d.total)}</span>}
-                </span>
-                {canDismiss && (
-                  <button
-                    className="shrink-0 text-[11px] text-blue-600 hover:underline disabled:opacity-50"
-                    disabled={bulkSetReceived.isPending}
-                    onClick={() => restore(d.items)}
-                  >
-                    되돌리기
-                  </button>
-                )}
-              </div>
-            ))}
-            <p className="text-[10px] text-muted-foreground pt-0.5">
-              발생 기록은 그대로 있습니다 — 목록에서만 뺀 것입니다. 되돌리기는 이 달 안에만 됩니다.
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   )
 }
