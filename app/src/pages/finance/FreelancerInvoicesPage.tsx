@@ -1411,12 +1411,16 @@ function useConsultantSessions(month: string): Map<string, SessionLike[]> {
       const counts = isNoShowStatus(mt.status) || mt.reportStatus === 'submitted' || !!mt.reportUrl
       if (!counts || mt.status === 'cancelled' || !mt.meetingDate) continue
       const s = byId.get(mt.studentId)
-      if (!s || !isActiveStudent(s.status) || isOnPause(s, today) || !s.assignedConsultant) continue
+      // 담당 컨설턴트 칸이 비었다고 건너뛰면 안 된다 — 미팅을 진행한 사람은 따로
+      // 적혀 있고, 그 사람은 일을 했다. 종전에는 담당이 빈 학생의 미팅이 통째로
+      // 사라져 아무에게도 관리비가 잡히지 않았다(John Kim 이 맡던 학생들).
+      if (!s || !isActiveStudent(s.status) || isOnPause(s, today)) continue
       // 그 미팅을 누가 진행했는지는 미팅 기록에 이미 적혀 있다. 학생 단위 변경
       // 이력은 사람이 손으로 관리하는 두 번째 장부라 어긋나기 쉽고(이력의 끝이 옛
       // 담당자에 머물면 그 뒤 미팅이 통째로 그 사람 앞으로 간다), 어긋나도 조용하다.
       // 그래서 미팅 기록을 먼저 보고, 비어 있을 때만 이력으로 돌아간다.
       const whoId = mt.consultantId || consultantAtDate(s, mt.meetingDate) || s.assignedConsultant
+      if (!whoId) continue
       const key = consultantNameKey(consultantName(whoId))
       if (!key) continue
       const arr = out.get(key) || []
@@ -1467,7 +1471,8 @@ function useConsultantBillable(month: string, lookbackMonths: number = 1) {
     // 이름 매칭을 대소문자·공백에 견고하게: 정규화 키로 그룹핑, 표시용 이름은 함께 보관
     const byConsultant = new Map<string, { name: string; students: BillableStudent[] }>()
     const today = todayKST()   // 복귀예정일이 지난 휴면 학생은 다시 관리비 청구 대상
-    students.filter(s => isActiveStudent(s.status) && !isOnPause(s, today) && s.assignedConsultant).forEach(s => {
+    // 담당 컨설턴트 칸이 비어도 센다 — 주인은 아래에서 그 미팅의 진행자로 정한다
+    students.filter(s => isActiveStudent(s.status) && !isOnPause(s, today)).forEach(s => {
       const pairs = pairsByStudent.get(s.id) || []
       if (pairs.length === 0) return      // 이번 달 청구분 없음
       // 관리비는 '지금 담당자'가 아니라 '그 미팅을 맡고 있던 사람' 몫이다.
@@ -1479,6 +1484,7 @@ function useConsultantBillable(month: string, lookbackMonths: number = 1) {
         const whoId = whoByMeeting.get(`${s.id}|${bp.pair[1]}`)
           || consultantAtDate(s, bp.pair[1])
           || s.assignedConsultant
+        if (!whoId) continue
         const display = consultantName(whoId)
         const key = consultantNameKey(display)
         const g = byWho.get(key) || { display, pairs: [] }
