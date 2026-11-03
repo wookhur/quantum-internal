@@ -1262,6 +1262,15 @@ function ConsultantField({ student, canEdit }: { student: ServiceStudent; canEdi
   const [newC, setNewC] = useState('')
   const [date, setDate] = useState(today)
   const history = student.consultantHistory || []
+  /**
+   * 이력의 끝과 현재 담당자가 어긋났는가.
+   *
+   * 어긋나면 그 뒤의 미팅 관리비가 이력에 적힌 옛 담당자 앞으로 잡힌다. 화면에는
+   * 새 담당자만 보이니 아무도 모른 채 몇 달이 지난다 — 그래서 눈에 띄게 적는다.
+   */
+  const dated = history.filter(h => h?.date && h?.to).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+  const lastDated = dated.length ? dated[dated.length - 1] : undefined
+  const tailMismatch = !!lastDated && !!student.assignedConsultant && lastDated.to !== student.assignedConsultant
 
   const saveChange = () => {
     if (!canEdit || !newC) return
@@ -1289,6 +1298,15 @@ function ConsultantField({ student, canEdit }: { student: ServiceStudent; canEdi
           </Button>
         )}
       </div>
+
+      {tailMismatch && lastDated && (
+        <div className="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+          변경 이력의 끝이 <b>{consultantName(lastDated.to)}</b>({lastDated.date})인데 현재 담당자는{' '}
+          <b>{consultantName(student.assignedConsultant)}</b>입니다. 이대로면 {lastDated.date} 이후 미팅의
+          관리비가 <b>{consultantName(lastDated.to)}</b> 앞으로 잡힙니다 — 관리비는 그 미팅을 맡고 있던
+          사람 몫으로 가기 때문입니다. 아래 이력을 고치거나 <b>[+ 변경]</b>으로 넘긴 날짜를 적어 주세요.
+        </div>
+      )}
 
       {history.length > 0 && (
         <div className="mt-1 space-y-0.5">
@@ -3381,7 +3399,29 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
         : undefined,
     }
     if (student) {
-      update.mutate({ id: student.id, ...payload }, { onSuccess: () => setOpen(false), onError: reportSaveError })
+      /**
+       * 담당 컨설턴트를 이 창에서 바꿔도 변경 이력을 남긴다.
+       *
+       * 종전에는 [+ 변경] 버튼만 이력을 적었고, 이 창에서 바꾸면 이력의 끝이 옛
+       * 담당자에 머물렀다. 관리비는 '지금 담당자'가 아니라 '그 미팅 날짜에 맡고
+       * 있던 사람'(consultantAtDate)에게 가므로, 이력이 어긋나면 그 뒤의 모든
+       * 미팅이 옛 담당자 앞으로 잡힌다 — 새 담당자의 청구 목록에서는 그 학생이
+       * 통째로 사라진다. 조용히 어긋나므로 아무도 모른 채 몇 달이 지난다.
+       */
+      const changed = (payload.assignedConsultant || '') !== (student.assignedConsultant || '')
+      const withHistory = changed
+        ? {
+            consultantHistory: [
+              ...(student.consultantHistory || []),
+              {
+                from: student.assignedConsultant || undefined,
+                to: payload.assignedConsultant,
+                date: new Date().toISOString().slice(0, 10),
+              },
+            ],
+          }
+        : {}
+      update.mutate({ id: student.id, ...payload, ...withHistory }, { onSuccess: () => setOpen(false), onError: reportSaveError })
     } else {
       create.mutate({ ...payload, createdBy }, {
         onSuccess: (s) => { setOpen(false); onSaved?.(s) },
