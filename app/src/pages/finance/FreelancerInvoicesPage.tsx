@@ -1412,7 +1412,11 @@ function useConsultantSessions(month: string): Map<string, SessionLike[]> {
       if (!counts || mt.status === 'cancelled' || !mt.meetingDate) continue
       const s = byId.get(mt.studentId)
       if (!s || !isActiveStudent(s.status) || isOnPause(s, today) || !s.assignedConsultant) continue
-      const whoId = consultantAtDate(s, mt.meetingDate) || s.assignedConsultant
+      // 그 미팅을 누가 진행했는지는 미팅 기록에 이미 적혀 있다. 학생 단위 변경
+      // 이력은 사람이 손으로 관리하는 두 번째 장부라 어긋나기 쉽고(이력의 끝이 옛
+      // 담당자에 머물면 그 뒤 미팅이 통째로 그 사람 앞으로 간다), 어긋나도 조용하다.
+      // 그래서 미팅 기록을 먼저 보고, 비어 있을 때만 이력으로 돌아간다.
+      const whoId = mt.consultantId || consultantAtDate(s, mt.meetingDate) || s.assignedConsultant
       const key = consultantNameKey(consultantName(whoId))
       if (!key) continue
       const arr = out.get(key) || []
@@ -1433,6 +1437,8 @@ function useConsultantBillable(month: string, lookbackMonths: number = 1) {
   return useMemo(() => {
     // 학생별 리포트완료(미취소) 미팅일자 수집
     const datesByStudent = new Map<string, string[]>()
+    // `${학생}|${날짜}` → 그 미팅을 진행한 사람. 학생 단위 이력보다 이걸 먼저 믿는다.
+    const whoByMeeting = new Map<string, string>()
     for (const mt of meetings) {
       // 노쇼는 학생 사정으로 불발된 것이라 컨설턴트는 시간을 비우고 준비까지 마쳤다.
       // 미팅 일지를 요구하지 않고 그대로 청구 대상에 넣는다.
@@ -1441,6 +1447,9 @@ function useConsultantBillable(month: string, lookbackMonths: number = 1) {
         const arr = datesByStudent.get(mt.studentId) || []
         arr.push(mt.meetingDate)
         datesByStudent.set(mt.studentId, arr)
+        // 짝을 닫은 미팅을 누가 진행했는지 — 아래에서 관리비 주인을 정할 때 쓴다
+        const k = `${mt.studentId}|${mt.meetingDate}`
+        if (mt.consultantId && !whoByMeeting.has(k)) whoByMeeting.set(k, mt.consultantId)
       }
     }
     // 학생별: 조회 범위의 각 달에 마감된 짝(들). 지난 달 짝도 함께 올려 미지급분이
@@ -1465,7 +1474,11 @@ function useConsultantBillable(month: string, lookbackMonths: number = 1) {
       // 10월에 인수인계를 받았다면 9월에 닫힌 짝은 넘겨준 사람의 관리비다.
       const byWho = new Map<string, { display: string; pairs: BillablePair[] }>()
       for (const bp of pairs) {
-        const whoId = consultantAtDate(s, bp.pair[1]) || s.assignedConsultant
+        // 짝을 닫은(두 번째) 미팅의 진행자가 그 짝의 주인이다. 미팅 기록이 비었을
+        // 때만 학생 단위 변경 이력으로 돌아간다 — 이력은 어긋나도 조용하기 때문이다.
+        const whoId = whoByMeeting.get(`${s.id}|${bp.pair[1]}`)
+          || consultantAtDate(s, bp.pair[1])
+          || s.assignedConsultant
         const display = consultantName(whoId)
         const key = consultantNameKey(display)
         const g = byWho.get(key) || { display, pairs: [] }
