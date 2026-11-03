@@ -36,6 +36,7 @@ import {
   type StudentCoaching, type Mentor,
 } from '@/hooks/useMentors'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
+import { consultantAtDate } from '@/lib/consultantAtDate'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, OTHER_MAJOR, gradeBucket } from '@/lib/majorTaxonomy'
 import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
@@ -1261,22 +1262,33 @@ function ConsultantField({ student, canEdit }: { student: ServiceStudent; canEdi
   const [adding, setAdding] = useState(false)
   const [newC, setNewC] = useState('')
   const [date, setDate] = useState(today)
+  // 넘겨준 사람(from). 지난 날짜로 소급해 적을 때는 '지금 담당자'가 아니라 '그때
+  // 맡고 있던 사람'이어야 한다 — 그대로 두면 'Isabela → Isabela' 같은 줄이 생긴다.
+  const [fromC, setFromC] = useState('')
   const history = student.consultantHistory || []
-  /**
-   * 이력의 끝과 현재 담당자가 어긋났는가.
-   *
-   * 어긋나면 그 뒤의 미팅 관리비가 이력에 적힌 옛 담당자 앞으로 잡힌다. 화면에는
-   * 새 담당자만 보이니 아무도 모른 채 몇 달이 지난다 — 그래서 눈에 띄게 적는다.
-   */
-  const dated = history.filter(h => h?.date && h?.to).sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-  const lastDated = dated.length ? dated[dated.length - 1] : undefined
-  const tailMismatch = !!lastDated && !!student.assignedConsultant && lastDated.to !== student.assignedConsultant
+
+  /** 그 날짜에 맡고 있던 사람 — [+ 변경] 의 '이전 담당' 기본값. */
+  const whoAt = (d: string) => consultantAtDate(student, d) || student.assignedConsultant || ''
+
+  const openAdd = () => {
+    setFromC(whoAt(today))
+    setDate(today)
+    setNewC('')
+    setAdding(true)
+  }
+  // 날짜를 바꾸면 그때 맡고 있던 사람으로 '이전 담당'을 다시 맞춘다(직접 고칠 수도 있다)
+  const pickDate = (d: string) => { setDate(d); setFromC(whoAt(d)) }
+
+  const sameBoth = !!newC && newC === fromC
 
   const saveChange = () => {
-    if (!canEdit || !newC) return
-    const entry = { from: student.assignedConsultant || undefined, to: newC, date: date || today }
-    update.mutate({ id: student.id, assignedConsultant: newC, consultantHistory: [...history, entry] })
-    setAdding(false); setNewC(''); setDate(today)
+    if (!canEdit || !newC || sameBoth) return
+    const entry = { from: fromC || undefined, to: newC, date: date || today }
+    const next = [...history, entry].sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+    // 현재 담당자는 '가장 나중 변경'의 결과다 — 소급해 끼워 넣으면 바뀌지 않는다
+    const latest = next[next.length - 1]
+    update.mutate({ id: student.id, assignedConsultant: latest.to, consultantHistory: next })
+    setAdding(false); setNewC(''); setFromC(''); setDate(today)
   }
   // 이력 삭제(정정용): 가장 최근 변경을 지우면 현재 담당자를 그 전 값으로 되돌린다.
   const removeEntry = (i: number) => {
@@ -1293,20 +1305,11 @@ function ConsultantField({ student, canEdit }: { student: ServiceStudent; canEdi
       <div className="flex items-center gap-2 flex-wrap">
         <span>{consultantName(student.assignedConsultant) || '—'}</span>
         {canEdit && !adding && (
-          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs gap-0.5" onClick={() => setAdding(true)}>
+          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs gap-0.5" onClick={openAdd}>
             <Plus className="size-3" />{t('student360.consultantChange')}
           </Button>
         )}
       </div>
-
-      {tailMismatch && lastDated && (
-        <div className="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
-          변경 이력의 끝이 <b>{consultantName(lastDated.to)}</b>({lastDated.date})인데 현재 담당자는{' '}
-          <b>{consultantName(student.assignedConsultant)}</b>입니다. 이대로면 {lastDated.date} 이후 미팅의
-          관리비가 <b>{consultantName(lastDated.to)}</b> 앞으로 잡힙니다 — 관리비는 그 미팅을 맡고 있던
-          사람 몫으로 가기 때문입니다. 아래 이력을 고치거나 <b>[+ 변경]</b>으로 넘긴 날짜를 적어 주세요.
-        </div>
-      )}
 
       {history.length > 0 && (
         <div className="mt-1 space-y-0.5">
@@ -1324,14 +1327,27 @@ function ConsultantField({ student, canEdit }: { student: ServiceStudent; canEdi
       )}
 
       {adding && (
-        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-          <select value={newC} onChange={e => setNewC(e.target.value)} className="h-7 rounded border px-1 text-xs bg-background">
-            <option value="">{t('common.select')}</option>
-            {consultantPool.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-7 rounded border px-1 text-xs bg-background" />
-          <Button size="sm" className="h-7 text-xs" onClick={saveChange} disabled={!newC}>{t('common.save')}</Button>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAdding(false); setNewC('') }}>{t('common.cancel')}</Button>
+        <div className="mt-1.5 space-y-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <input type="date" value={date} onChange={e => pickDate(e.target.value)} className="h-7 rounded border px-1 text-xs bg-background" title="넘긴 날짜 — 이 날부터 새 담당자 몫입니다" />
+            {/* 넘겨준 사람도 고른다. 지난 날짜로 소급해 적을 때 '지금 담당자'를
+                그대로 쓰면 '남연서 → Isabela' 로 적어야 할 것이 'Isabela → Isabela'
+                가 된다. 날짜를 고르면 그때 맡고 있던 사람으로 먼저 채워 둔다. */}
+            <select value={fromC} onChange={e => setFromC(e.target.value)} className="h-7 rounded border px-1 text-xs bg-background" title="넘겨준 사람">
+              <option value="">—</option>
+              {consultantPool.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <span className="text-xs text-muted-foreground">→</span>
+            <select value={newC} onChange={e => setNewC(e.target.value)} className="h-7 rounded border px-1 text-xs bg-background" title="넘겨받은 사람">
+              <option value="">{t('common.select')}</option>
+              {consultantPool.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <Button size="sm" className="h-7 text-xs" onClick={saveChange} disabled={!newC || sameBoth}>{t('common.save')}</Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setAdding(false); setNewC(''); setFromC('') }}>{t('common.cancel')}</Button>
+          </div>
+          {sameBoth && (
+            <p className="text-[11px] text-amber-700">넘겨준 사람과 넘겨받은 사람이 같습니다 — 바뀐 게 없는 줄은 적지 않습니다.</p>
+          )}
         </div>
       )}
     </div>
