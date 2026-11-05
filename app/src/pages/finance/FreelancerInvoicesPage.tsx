@@ -601,6 +601,23 @@ const QUOTE_LAYOUT: Record<'individual' | 'business', QuoteLayout> = {
 }
 
 /** 견적서 양식 한 장을 채운다(머리말 + 품목표 + 합계). 양식 파일만 다르고 절차는 같다. */
+/**
+ * 엑셀 금액 칸 서식.
+ *
+ * 양식의 금액 칸에는 통화 표시가 없어 숫자만 찍힌다. 원화 양식에서는 그게
+ * 자연스럽지만 달러 인보이스에서는 '98' 이 98원처럼 읽힌다. 그래서 달러일 때만
+ * $ 를 붙이고 센트까지 적는다. 원화는 양식 그대로 둔다(건드리면 지금 모양이 바뀐다).
+ */
+function moneyNumFmt(cur?: InvoiceCurrency): string | null {
+  return cur === 'USD' ? '"$"#,##0.00' : null
+}
+
+/** 금액 칸에 통화 서식을 입힌다. 원화면 아무것도 하지 않는다. */
+function applyMoneyFmt(cell: import('exceljs').Cell, cur?: InvoiceCurrency) {
+  const fmt = moneyNumFmt(cur)
+  if (fmt) cell.numFmt = fmt
+}
+
 function fillQuoteSheet(
   ws: import('exceljs').Worksheet,
   layout: QuoteLayout,
@@ -652,6 +669,8 @@ function fillQuoteSheet(
       ws.getCell(r, 3).value = it.quantity
       ws.getCell(r, 4).value = it.unitPrice
       ws.getCell(r, 5).value = it.supplyAmount
+      applyMoneyFmt(ws.getCell(r, 4), invoice.currency)
+      applyMoneyFmt(ws.getCell(r, 5), invoice.currency)
       ws.getCell(r, 6).value = remarkOf(it)
     } else {
       ws.getCell(r, 1).value = null
@@ -661,6 +680,7 @@ function fillQuoteSheet(
   }
   // 양식의 합계칸에 SUM 수식이 들어 있어도 실제 합계로 덮는다(줄을 늘리면 범위가 어긋나므로).
   ws.getCell(sumRow, 5).value = total
+  applyMoneyFmt(ws.getCell(sumRow, 5), invoice.currency)
   return sumRow
 }
 
@@ -738,12 +758,12 @@ export async function downloadSalesIncentiveExcel(
     items.forEach((it, i) => {
       const row = ws.getRow(6 + i)
       row.values = [i + 1, it.itemName, it.quantity, it.supplyAmount, salesRemark(it.remark)]
-      row.getCell(4).numFmt = '#,##0'; row.getCell(4).alignment = { horizontal: 'right' }
+      row.getCell(4).numFmt = moneyNumFmt(invoice.currency) || '#,##0'; row.getCell(4).alignment = { horizontal: 'right' }
       row.getCell(3).alignment = { horizontal: 'center' }; row.getCell(1).alignment = { horizontal: 'center' }
     })
     const sr = 6 + items.length; const row = ws.getRow(sr)
     row.getCell(2).value = '합 계'; row.getCell(2).font = { bold: true }
-    row.getCell(4).value = total; row.getCell(4).numFmt = '#,##0'; row.getCell(4).font = { bold: true }; row.getCell(4).alignment = { horizontal: 'right' }
+    row.getCell(4).value = total; row.getCell(4).numFmt = moneyNumFmt(invoice.currency) || '#,##0'; row.getCell(4).font = { bold: true }; row.getCell(4).alignment = { horizontal: 'right' }
     row.eachCell((c: import('exceljs').Cell) => { c.border = { top: { style: 'double' } } })
     await save(wb, `${name}_세일즈커미션.xlsx`)
     return
@@ -876,9 +896,12 @@ export async function downloadOverseasInvoiceExcel(
       ws.getCell(r, 2).value = it.unitPrice
       ws.getCell(r, 3).value = it.quantity
       ws.getCell(r, 4).value = it.supplyAmount
+      applyMoneyFmt(ws.getCell(r, 2), invoice.currency)
+      applyMoneyFmt(ws.getCell(r, 4), invoice.currency)
     }
   }
   set('D21', total)
+  applyMoneyFmt(ws.getCell('D21'), invoice.currency)
   const b = invoice.overseasBank || {}
   const rows = [b.country, b.bankName, b.bankAddress, b.swift, b.routing, b.iban, b.accountNumber, b.accountName, b.accountType, b.beneficiaryEmail]
   rows.forEach((v, i) => set(`B${24 + i}`, v))
