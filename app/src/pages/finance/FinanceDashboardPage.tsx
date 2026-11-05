@@ -109,6 +109,19 @@ function groupByPerson(
   return [...map.values()].sort((a, b) => b.amount - a.amount)
 }
 
+/** 통화별 합계 — 원화만 있으면 종전과 같고, 달러가 섞이면 ' · ' 로 나란히 적는다. */
+function MoneyTotals({ totals }: { totals: Record<string, number> }) {
+  const parts = Object.entries(totals).filter(([, v]) => v !== 0)
+  if (!parts.length) return <>{formatCurrency(0)}</>
+  return (
+    <>
+      {parts.map(([c, v], i) => (
+        <span key={c}>{i > 0 ? ' · ' : ''}{formatCurrency(v, c as 'KRW' | 'USD')}</span>
+      ))}
+    </>
+  )
+}
+
 export function FinanceDashboardPage() {
   const t = useT()
   const { user } = useAuth()
@@ -171,11 +184,17 @@ export function FinanceDashboardPage() {
       e.count++; e.total += inv.totalAmount || 0
       byKind.set(k, e)
     }
-    const grandTotal = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0)
+    // 통화가 섞이면 더할 수 없다 — 달러 인보이스 882 를 원화 합계에 보태면 안 된다
+    const sumByCurrency = (rows: typeof invoices) => rows.reduce<Record<string, number>>((acc, i) => {
+      const c = i.currency || 'KRW'
+      acc[c] = (acc[c] || 0) + (i.totalAmount || 0)
+      return acc
+    }, {})
+    const grandTotal = sumByCurrency(invoices)
     // 승인완료·미지급(=지급 예정) vs 지급완료(paidDate 있음)
-    const approvedTotal = invoices.filter(i => i.status === 'approved' && !i.paidDate).reduce((s, i) => s + (i.totalAmount || 0), 0)
-    const pendingTotal = invoices.filter(i => i.status === 'submitted').reduce((s, i) => s + (i.totalAmount || 0), 0)
-    const paidTotal = invoices.filter(i => !!i.paidDate).reduce((s, i) => s + (i.totalAmount || 0), 0)
+    const approvedTotal = sumByCurrency(invoices.filter(i => i.status === 'approved' && !i.paidDate))
+    const pendingTotal = sumByCurrency(invoices.filter(i => i.status === 'submitted'))
+    const paidTotal = sumByCurrency(invoices.filter(i => !!i.paidDate))
     const paidCount = invoices.filter(i => !!i.paidDate).length
     return { byKind, grandTotal, approvedTotal, pendingTotal, paidTotal, paidCount }
   }, [invoices])
@@ -421,21 +440,21 @@ export function FinanceDashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card><CardContent className="py-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Wallet className="size-4" /> 전체 신청 총액</div>
-          <div className="text-xl font-bold mt-1">{formatCurrency(invoiceSummary.grandTotal)}</div>
+          <div className="text-xl font-bold mt-1"><MoneyTotals totals={invoiceSummary.grandTotal} /></div>
           <div className="text-[11px] text-muted-foreground">{invoices.length}건</div>
         </CardContent></Card>
         <Card><CardContent className="py-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Clock className="size-4 text-amber-500" /> 승인 대기</div>
-          <div className="text-xl font-bold mt-1 text-amber-600">{formatCurrency(invoiceSummary.pendingTotal)}</div>
+          <div className="text-xl font-bold mt-1 text-amber-600"><MoneyTotals totals={invoiceSummary.pendingTotal} /></div>
           <div className="text-[11px] text-muted-foreground">{pending.length}건</div>
         </CardContent></Card>
         <Card><CardContent className="py-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><CheckCircle2 className="size-4 text-emerald-500" /> 승인 완료(지급 예정)</div>
-          <div className="text-xl font-bold mt-1 text-emerald-600">{formatCurrency(invoiceSummary.approvedTotal)}</div>
+          <div className="text-xl font-bold mt-1 text-emerald-600"><MoneyTotals totals={invoiceSummary.approvedTotal} /></div>
         </CardContent></Card>
         <Card><CardContent className="py-4">
           <div className="text-xs text-muted-foreground flex items-center gap-1.5"><Banknote className="size-4 text-indigo-500" /> 지급 완료</div>
-          <div className="text-xl font-bold mt-1 text-indigo-600">{formatCurrency(invoiceSummary.paidTotal)}</div>
+          <div className="text-xl font-bold mt-1 text-indigo-600"><MoneyTotals totals={invoiceSummary.paidTotal} /></div>
           <div className="text-[11px] text-muted-foreground">{invoiceSummary.paidCount}건</div>
         </CardContent></Card>
       </div>
@@ -508,7 +527,7 @@ export function FinanceDashboardPage() {
                         className="text-primary hover:underline underline-offset-2 tabular-nums"
                         title="인보이스 상세 보기"
                       >
-                        {formatCurrency(inv.totalAmount)}
+                        {formatCurrency(inv.totalAmount, inv.currency)}
                       </button>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{inv.invoiceDate}</TableCell>
@@ -601,7 +620,7 @@ export function FinanceDashboardPage() {
                     <TableCell className="text-sm tabular-nums">{inv.invoiceMonth}</TableCell>
                     <TableCell className="text-sm text-right font-semibold tabular-nums">
                       <button type="button" onClick={() => setDetailInv(inv)} className="text-primary hover:underline underline-offset-2 tabular-nums" title="인보이스 상세 보기">
-                        {formatCurrency(inv.totalAmount)}
+                        {formatCurrency(inv.totalAmount, inv.currency)}
                       </button>
                     </TableCell>
                     <TableCell>
@@ -643,7 +662,7 @@ export function FinanceDashboardPage() {
                           <TableCell className="text-sm tabular-nums">{inv.invoiceMonth}</TableCell>
                           <TableCell className="text-sm text-right font-semibold tabular-nums">
                             <button type="button" onClick={() => setDetailInv(inv)} className="text-primary hover:underline underline-offset-2 tabular-nums" title="인보이스 상세 보기">
-                              {formatCurrency(inv.totalAmount)}
+                              {formatCurrency(inv.totalAmount, inv.currency)}
                             </button>
                           </TableCell>
                           <TableCell><StatusBadge status="paid" /></TableCell>
@@ -951,7 +970,7 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
 
   const handleDelete = () => {
     if (!invoice) return
-    if (!confirm(`이 인보이스를 완전히 삭제할까요?\n제출자: ${invoiceDisplayName(invoice)} · ${invoice.invoiceMonth} · ${formatCurrency(invoice.totalAmount)}\n(되돌릴 수 없습니다. 테스트·오입력 건 정리용)`)) return
+    if (!confirm(`이 인보이스를 완전히 삭제할까요?\n제출자: ${invoiceDisplayName(invoice)} · ${invoice.invoiceMonth} · ${formatCurrency(invoice.totalAmount, invoice.currency)}\n(되돌릴 수 없습니다. 테스트·오입력 건 정리용)`)) return
     deleteInvoice.mutate(invoice.id, { onSuccess: onClose })
   }
 
@@ -1008,8 +1027,8 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
                         <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
                         <TableCell className="text-sm max-w-[240px] break-all whitespace-normal">{it.itemName || '-'}</TableCell>
                         <TableCell className="text-sm text-right tabular-nums">{it.quantity}</TableCell>
-                        <TableCell className="text-sm text-right tabular-nums">{formatCurrency(it.unitPrice)}</TableCell>
-                        <TableCell className="text-sm text-right tabular-nums font-medium">{formatCurrency(it.supplyAmount)}</TableCell>
+                        <TableCell className="text-sm text-right tabular-nums">{formatCurrency(it.unitPrice, invoice.currency)}</TableCell>
+                        <TableCell className="text-sm text-right tabular-nums font-medium">{formatCurrency(it.supplyAmount, invoice.currency)}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{it.remark || ''}</TableCell>
                       </TableRow>
                     ))}
@@ -1022,7 +1041,7 @@ function InvoiceDetailDialog({ invoice, onClose }: { invoice: FreelancerInvoice 
             {/* 합계 & 메모 */}
             <div className="flex items-center justify-between border-t pt-3">
               <span className="text-sm font-semibold">합계</span>
-              <span className="text-base font-bold tabular-nums">{formatCurrency(invoice.totalAmount)}</span>
+              <span className="text-base font-bold tabular-nums">{formatCurrency(invoice.totalAmount, invoice.currency)}</span>
             </div>
             {invoice.note && (
               <div className="rounded-lg bg-muted/40 p-3 text-sm">
@@ -1451,7 +1470,7 @@ function CategoryBoard({ label, invoices, showKind, onSelect }: {
                     className="text-sm font-semibold tabular-nums text-primary hover:underline underline-offset-2"
                     title="인보이스 상세 보기"
                   >
-                    {formatCurrency(inv.totalAmount)}
+                    {formatCurrency(inv.totalAmount, inv.currency)}
                   </button>
                 </div>
               </div>
