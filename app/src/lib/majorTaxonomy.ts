@@ -109,6 +109,33 @@ export function majorsForTrack(trackKey?: string): string[] {
   return MAJOR_TRACKS.find(t => t.key === trackKey)?.majors || []
 }
 
+/**
+ * 모든 세부전공을 계열 구분 없이 알파벳순으로.
+ *
+ * 계열을 먼저 고르게 하면 'Psychology 가 사회과학인가 생명과학인가' 를 알아야
+ * 전공을 적을 수 있다. 전공부터 고르고 계열은 따라오게 하려고 평평한 목록을 둔다.
+ */
+export const ALL_MAJORS: string[] = Array.from(
+  new Set(MAJOR_TRACKS.flatMap(t => t.majors)),
+).sort((a, b) => a.localeCompare(b, 'en'))
+
+/** 세부전공 → 그 전공이 속한 계열 key. 전공을 고르면 계열이 저절로 정해진다. */
+const TRACK_BY_MAJOR: Record<string, string> = Object.fromEntries(
+  MAJOR_TRACKS.flatMap(t => t.majors.map(m => [m.toLowerCase(), t.key])),
+)
+
+export function trackOfMajor(major?: string): string | undefined {
+  return major ? TRACK_BY_MAJOR[major.trim().toLowerCase()] : undefined
+}
+
+/** 목록에 있는 표기로 맞춘다 ('psychology' → 'Psychology'). 없으면 적은 그대로. */
+export function canonicalMajor(major?: string): string {
+  const m = (major || '').trim()
+  if (!m) return ''
+  const hit = ALL_MAJORS.find(x => x.toLowerCase() === m.toLowerCase())
+  return hit || m
+}
+
 // ── 학년 정규화: 자유입력 grade를 G6~G12/기타 버킷으로 묶는다 ──
 // (좌석표·전공표의 기본 학년은 G9~G12이지만, 데이터에 G8 등 다른 학년이 있으면 그 학년도 표시)
 export const GRADE_BUCKETS = ['G9', 'G10', 'G11', 'G12', '기타'] as const

@@ -37,7 +37,7 @@ import {
 } from '@/hooks/useMentors'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
 import { consultantAtDate } from '@/lib/consultantAtDate'
-import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, OTHER_MAJOR, gradeBucket } from '@/lib/majorTaxonomy'
+import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, ALL_MAJORS, trackOfMajor, canonicalMajor, OTHER_MAJOR, gradeBucket } from '@/lib/majorTaxonomy'
 import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
   type EditorMeeting,
@@ -356,6 +356,9 @@ export function Student360Page() {
   const [gradeFilter, setGradeFilter] = useState('all')
   const [ecPartnerFilter, setEcPartnerFilter] = useState('all')
   const [regionFilter, setRegionFilter] = useState<'all' | RegionGroup>('all')
+  // 희망전공 필터 + 전공순 정렬. 같은 전공 학생을 한눈에 모아 보려고 둔다.
+  const [majorFilter, setMajorFilter] = useState('all')
+  const [sortByMajor, setSortByMajor] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
   const [pausedOnly, setPausedOnly] = useState(false)
   const [scholarshipOnly, setScholarshipOnly] = useState(false)
@@ -478,6 +481,11 @@ export function Student360Page() {
       if (gradeFilter !== 'all' && gradeBucket(s.grade) !== gradeFilter) return false
       if (ecPartnerFilter !== 'all' && !(ecPartnersByStudent.get(s.id)?.has(ecPartnerFilter))) return false
       if (regionFilter !== 'all' && regionByStudent.get(s.id) !== regionFilter) return false
+      // 표기가 흔들려도('psychology'/'Psychology') 같은 전공으로 묶는다
+      if (majorFilter !== 'all') {
+        const mj = canonicalMajor(s.majorDetail) || '(미입력)'
+        if (mj !== majorFilter) return false
+      }
       if (!q) return true
       return (
         s.name.toLowerCase().includes(q) ||
@@ -486,7 +494,7 @@ export function Student360Page() {
         (s.parentName || '').toLowerCase().includes(q)
       )
     })
-  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, ecPartnerFilter, ecPartnersByStudent, regionFilter, regionByStudent, pausedOnly, scholarshipOnly, mentorStudentIds])
+  }, [students, search, filterName, consultantName, gradeFilter, essayEditorFilter, ecPartnerFilter, ecPartnersByStudent, regionFilter, regionByStudent, majorFilter, pausedOnly, scholarshipOnly, mentorStudentIds])
   const archiveCount = useMemo(() => baseFiltered.filter(s => isArchivedStatus(s.status)).length, [baseFiltered])
   const activeCount = baseFiltered.length - archiveCount
 
@@ -509,12 +517,36 @@ export function Student360Page() {
   const todayStr = todayKST()
   const pausedCount = useMemo(() => students.filter(s => isOnPause(s, todayStr) && !isArchivedStatus(s.status)).length, [students, todayStr])
   const scholarshipCount = useMemo(() => students.filter(s => s.scholarship && !isArchivedStatus(s.status)).length, [students])
-  const filtered = useMemo(() =>
-    baseFiltered
-      .filter(s => showArchive ? isArchivedStatus(s.status) : !isArchivedStatus(s.status))
-      .sort(compareStudentsKo),
-    [baseFiltered, showArchive],
-  )
+  const filtered = useMemo(() => {
+    const rows = baseFiltered.filter(s => showArchive ? isArchivedStatus(s.status) : !isArchivedStatus(s.status))
+    if (!sortByMajor) return rows.sort(compareStudentsKo)
+    // 전공순: 전공 알파벳순으로 묶고, 전공이 없는 학생은 맨 뒤로. 같은 전공 안에서는 이름순.
+    return rows.sort((a, b) => {
+      const ma = canonicalMajor(a.majorDetail)
+      const mb = canonicalMajor(b.majorDetail)
+      if (ma !== mb) {
+        if (!ma) return 1
+        if (!mb) return -1
+        return ma.localeCompare(mb, 'en')
+      }
+      return compareStudentsKo(a, b)
+    })
+  }, [baseFiltered, showArchive, sortByMajor])
+
+  /** 희망전공 드롭다운 — 실제로 쓰이는 전공만, 인원수와 함께 알파벳순. */
+  const majorOptions = useMemo(() => {
+    const count = new Map<string, number>()
+    for (const s of students) {
+      if (isArchivedStatus(s.status)) continue
+      const mj = canonicalMajor(s.majorDetail) || '(미입력)'
+      count.set(mj, (count.get(mj) || 0) + 1)
+    }
+    return [...count.entries()].sort((a, b) => {
+      if (a[0] === '(미입력)') return 1
+      if (b[0] === '(미입력)') return -1
+      return a[0].localeCompare(b[0], 'en')
+    })
+  }, [students])
 
   const selected = students.find(s => s.id === selectedId) || null
 
@@ -634,7 +666,29 @@ export function Student360Page() {
               ))}
             </SelectContent>
           </Select>
+          {/* 희망전공 — 실제로 쓰이는 전공만 인원수와 함께 */}
+          <Select value={majorFilter} onValueChange={v => setMajorFilter(v ?? 'all')}>
+            <SelectTrigger className="w-full">
+              <span className="truncate">{majorFilter === 'all' ? '전체 희망전공' : majorFilter}</span>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">전체 희망전공</SelectItem>
+              {majorOptions.map(([mj, n]) => (
+                <SelectItem key={mj} value={mj}>{mj} ({n})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+        {/* 전공순 보기 — 같은 전공 학생이 붙어 보인다(전공 없는 학생은 맨 뒤) */}
+        <button
+          type="button"
+          onClick={() => setSortByMajor(v => !v)}
+          className={`mb-2 w-full rounded-md border px-2 py-1.5 text-xs transition-colors ${
+            sortByMajor ? 'border-blue-300 bg-blue-50 text-blue-700 font-medium' : 'text-muted-foreground hover:bg-muted/50'
+          }`}
+        >
+          {sortByMajor ? '✓ 희망전공순으로 보는 중' : '희망전공순으로 보기'}
+        </button>
         {/* Active / Archive toggle */}
         <div className="mb-2 flex rounded-md border overflow-hidden text-xs">
           <button
@@ -748,6 +802,10 @@ export function Student360Page() {
               </div>
               <div className="text-xs text-muted-foreground mt-1 truncate">
                 {[s.school, s.grade].filter(Boolean).join(' · ') || '—'}
+                {/* 전공순으로 볼 때 무엇으로 묶였는지가 보여야 한다 */}
+                {s.majorDetail && (
+                  <span className="ml-1.5 text-blue-600">· {canonicalMajor(s.majorDetail)}</span>
+                )}
               </div>
               {(() => {
                 const { completed, noShow, target, currentYear, past } = meetingProgressFor(s)
@@ -3485,34 +3543,39 @@ function StudentDialog({ student, trigger, onSaved, createdBy, canEdit }: {
               {ESSAY_EDITORS.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
-          {/* 전공: 1단계 계열 → 2단계 세부전공(연동). 목록에 없으면 Other로 직접 입력 */}
+          {/* 희망전공을 먼저 고르면 계열이 따라온다.
+              종전에는 계열을 골라야 전공 칸이 열려, 'Psychology 가 사회과학인가
+              생명과학인가' 를 알아야 전공을 적을 수 있었다. 그래서 옆의 자유 입력
+              칸에 손으로 적는 일이 생겼고(Phsycology 같은 오타), 전공별로 묶이지
+              않았다. 이제 전공 목록은 계열과 무관한 알파벳순 한 벌이다. */}
           <div className="col-span-2 grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs">{t('student360.majorTrack')}</Label>
-              <select value={form.majorTrack} onChange={e => setForm(f => ({ ...f, majorTrack: e.target.value, majorDetail: '', majorIsOther: false }))}
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-                <option value="">—</option>
-                {MAJOR_TRACKS.map(tr => <option key={tr.key} value={tr.key}>{tr.label}</option>)}
-              </select>
-            </div>
             <div>
               <Label className="text-xs">{t('student360.majorDetail')}</Label>
               <select
                 value={form.majorIsOther ? OTHER_MAJOR : form.majorDetail}
-                disabled={!form.majorTrack}
                 onChange={e => {
                   const v = e.target.value
-                  if (v === OTHER_MAJOR) setForm(f => ({ ...f, majorIsOther: true, majorDetail: '' }))
-                  else setForm(f => ({ ...f, majorIsOther: false, majorDetail: v }))
+                  if (v === OTHER_MAJOR) { setForm(f => ({ ...f, majorIsOther: true, majorDetail: '' })); return }
+                  // 전공을 고르면 계열은 저절로 — 사람이 둘을 맞출 일이 없다
+                  setForm(f => ({ ...f, majorIsOther: false, majorDetail: v, majorTrack: trackOfMajor(v) || f.majorTrack }))
                 }}
-                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none disabled:opacity-50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
                 <option value="">—</option>
-                {majorsForTrack(form.majorTrack).map(mj => <option key={mj} value={mj}>{mj}</option>)}
-                <option value={OTHER_MAJOR}>Other</option>
+                {ALL_MAJORS.map(mj => <option key={mj} value={mj}>{mj}</option>)}
+                <option value={OTHER_MAJOR}>Other (직접 입력)</option>
               </select>
               {form.majorIsOther && (
                 <Input className="h-9 mt-1" placeholder={t('student360.majorDetailOther')} value={form.majorDetail} onChange={e => setForm(f => ({ ...f, majorDetail: e.target.value }))} />
               )}
+            </div>
+            <div>
+              <Label className="text-xs">{t('student360.majorTrack')}</Label>
+              <select value={form.majorTrack} onChange={e => setForm(f => ({ ...f, majorTrack: e.target.value }))}
+                className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
+                <option value="">—</option>
+                {MAJOR_TRACKS.map(tr => <option key={tr.key} value={tr.key}>{tr.label}</option>)}
+              </select>
+              <p className="mt-1 text-[11px] text-muted-foreground">전공을 고르면 자동으로 채워집니다</p>
             </div>
           </div>
           <LabeledInput label={t('student360.majors')} value={form.majors} onChange={v => set('majors', v)} />
