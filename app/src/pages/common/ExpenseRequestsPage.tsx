@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
-import { Plus, Trash2, Pencil, X, Check, XCircle, Banknote, AlertTriangle, MessageSquare, Send, Receipt, Download, PieChart, FileSpreadsheet } from 'lucide-react'
+import { Plus, Trash2, Pencil, X, Check, XCircle, Banknote, AlertTriangle, MessageSquare, Send, Receipt, Download, PieChart, FileSpreadsheet, FileText } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import { useAuth } from '@/contexts/AuthContext'
@@ -129,7 +129,9 @@ export function ExpenseRequestsPage() {
               {availableMonths.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
-          <a href="/expense-report-template.xlsx" download="직원개인지출내역서.xlsx" className="inline-flex items-center h-9 px-3 rounded-md border text-sm hover:bg-muted gap-1.5"><FileSpreadsheet className="size-4" />양식 다운로드</a>
+          {/* 엑셀을 못 쓰는 직원이 있어 워드도 함께 내려받게 한다 — 같은 양식이다 */}
+          <a href="/expense-report-template.xlsx" download="지출결의서.xlsx" className="inline-flex items-center h-9 px-3 rounded-md border text-sm hover:bg-muted gap-1.5" title="엑셀 양식"><FileSpreadsheet className="size-4" />양식 (엑셀)</a>
+          <a href="/expense-report-template.docx" download="지출결의서.docx" className="inline-flex items-center h-9 px-3 rounded-md border text-sm hover:bg-muted gap-1.5" title="워드 양식 — 엑셀을 쓰기 어려우면 이쪽"><FileText className="size-4" />양식 (워드)</a>
           <Button size="sm" variant="outline" onClick={exportExcel} disabled={filtered.length === 0}><Download className="size-4 mr-1" />목록 엑셀</Button>
           <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true) }}><Plus className="size-4 mr-1" /> 새 지출결의</Button>
         </div>
@@ -365,7 +367,20 @@ function ExpenseAttachments({ requestId, kind, label, icon, profileName, userId,
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">{icon}{label} {existing.length > 0 && `(${existing.length})`}</span>
         <button className="text-[11px] text-primary" onClick={() => inputRef.current?.click()} disabled={upload.isPending}>{upload.isPending ? '업로드 중…' : '파일 추가'}</button>
-        <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) upload.mutate({ requestId, file: f, kind, uploadedBy: userId }); if (inputRef.current) inputRef.current.value = '' }} />
+        {/* 사진도 받는다 — 엑셀·워드를 쓰기 어려우면 종이에 적어 찍어 올리면 된다.
+            휴대폰 카메라로 바로 찍을 수 있게 capture 는 걸지 않는다(앨범 선택도 돼야 한다). */}
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept="image/*,.pdf,.xlsx,.xls,.csv,.docx,.doc,.hwp,.hwpx,.ppt,.pptx,.txt,.heic,.heif"
+          className="hidden"
+          onChange={e => {
+            const list = Array.from(e.target.files || [])
+            for (const f of list) upload.mutate({ requestId, file: f, kind, uploadedBy: userId })
+            if (inputRef.current) inputRef.current.value = ''
+          }}
+        />
       </div>
       {existing.map(f => (
         <div key={f.id} className="flex items-center gap-2 text-sm">
@@ -447,8 +462,12 @@ function ExpenseFormDialog({ open, onOpenChange, editing, userId, userName, appr
           {!editing && (
             <div className="rounded-md bg-blue-50 border border-blue-100 p-2.5 text-xs text-blue-800 flex items-start gap-2">
               <FileSpreadsheet className="size-4 shrink-0 mt-0.5" />
-              <span><b>지출내역서 양식</b>을 받아 작성한 뒤 아래 기본정보를 입력해 <b>만들기</b> → 상세에서 <b>작성본·영수증</b>을 첨부하세요.
-                <a href="/expense-report-template.xlsx" download="직원개인지출내역서.xlsx" className="underline font-medium ml-1">양식 다운로드</a>
+              <span><b>지출결의서 양식</b>을 받아 작성한 뒤 아래 기본정보를 입력해 <b>만들기</b> → 상세에서 <b>작성본·영수증</b>을 첨부하세요.
+                양식에 <b>입금받을 계좌</b>를 꼭 적어 주세요.
+                <a href="/expense-report-template.xlsx" download="지출결의서.xlsx" className="underline font-medium ml-1">엑셀</a>
+                <span className="mx-1">·</span>
+                <a href="/expense-report-template.docx" download="지출결의서.docx" className="underline font-medium">워드</a>
+                <span className="ml-1">로 받을 수 있고, 작성본은 사진으로 찍어 올려도 됩니다.</span>
               </span>
             </div>
           )}
