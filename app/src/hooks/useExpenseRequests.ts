@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { storageSafeName } from '@/lib/storagePath'
 
 export type ExpenseStatus = 'pending' | 'approved' | 'rejected' | 'paid'
 export type ExpenseFileKind = 'quote' | 'proof'
@@ -171,7 +172,7 @@ export function useUploadExpenseFile() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ requestId, file, kind, uploadedBy }: { requestId: string; file: File; kind: ExpenseFileKind; uploadedBy?: string }) => {
-      const safe = file.name.replace(/[^\w.\-가-힣]/g, '_') || 'file'
+      const safe = storageSafeName(file.name)
       const path = `${requestId}/${Date.now()}-${safe}`
       // 형식을 또렷이 적어 올린다. 안 적으면 브라우저에 따라 application/octet-stream
       // 으로 올라가, 버킷에 허용 형식이 걸려 있을 때 사진이 통째로 막힌다.

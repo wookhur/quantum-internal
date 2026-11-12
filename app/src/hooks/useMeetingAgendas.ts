@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { storageSafeName } from '@/lib/storagePath'
 
 export type MeetingStatus = 'scheduled' | 'done' | 'cancelled'
 export type ItemStatus = 'open' | 'in_progress' | 'hold' | 'done' | 'cancelled'
@@ -323,7 +324,7 @@ export function useUploadMeetingFile() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ meetingId, file, uploadedBy }: { meetingId: string; file: File; uploadedBy?: string }) => {
-      const safe = file.name.replace(/[^\w.\-가-힣]/g, '_')
+      const safe = storageSafeName(file.name)
       const path = `${meetingId}/${Date.now()}-${safe}`
       const up = await supabase.storage.from('meeting-files').upload(path, file, { upsert: true })
       if (up.error) throw up.error

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { storageSafeName } from '@/lib/storagePath'
 
 export interface NoticeAttachment { name: string; url: string }
 
@@ -31,7 +32,7 @@ function mapRow(r: Record<string, unknown>): Notice {
 
 /** 공지 첨부파일 업로드 → {name, url} 반환 (notice-files 버킷). */
 export async function uploadNoticeFile(file: File): Promise<NoticeAttachment> {
-  const safe = file.name.replace(/[^\w.\-가-힣]/g, '_')
+  const safe = storageSafeName(file.name)
   const path = `${Date.now()}-${Math.floor(performance.now())}-${safe}`
   const { error } = await supabase.storage.from('notice-files').upload(path, file, { upsert: true })
   if (error) throw error

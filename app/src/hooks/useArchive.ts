@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { storageSafeName } from '@/lib/storagePath'
 
 export interface ArchiveAttachment { name: string; url: string }
 
@@ -36,7 +37,7 @@ function mapRow(r: Record<string, unknown>): ArchiveItem {
 
 /** Archive 첨부 업로드 → {name, url} (archive-files 버킷). */
 export async function uploadArchiveFile(file: File): Promise<ArchiveAttachment> {
-  const safe = file.name.replace(/[^\w.\-가-힣]/g, '_')
+  const safe = storageSafeName(file.name)
   const path = `${Date.now()}-${Math.floor(performance.now())}-${safe}`
   const { error } = await supabase.storage.from('archive-files').upload(path, file, { upsert: true })
   if (error) throw error

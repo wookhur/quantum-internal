@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 import { TRANSCRIPT_MAX_CHARS, type ConsultSummary } from '@/lib/transcriptText'
+import { storageSafeName } from '@/lib/storagePath'
 
 /** 계약 후 상담 기록 — 처리 상태는 둘뿐이다. */
 export type ConsultStatus = 'open' | 'done'
@@ -296,7 +297,7 @@ export function useSummarizeConsult() {
 
 /** 전사본 파일을 Storage 에 올리고 공개 주소를 돌려준다. */
 export async function uploadTranscript(studentId: string, file: File): Promise<string> {
-  const safe = file.name.replace(/[^\w.\-가-힣]/g, '_')
+  const safe = storageSafeName(file.name)
   const path = `${studentId}/${Date.now()}-${safe}`
   const { error } = await supabase.storage
     .from('consult-transcripts')
