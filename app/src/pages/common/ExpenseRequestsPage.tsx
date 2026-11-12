@@ -362,11 +362,39 @@ function ExpenseAttachments({ requestId, kind, label, icon, profileName, userId,
   const upload = useUploadExpenseFile()
   const del = useDeleteExpenseFile()
   const inputRef = useRef<HTMLInputElement>(null)
+  /**
+   * 올리다 실패한 파일.
+   *
+   * 종전에는 mutate 를 부르고 결과를 아무도 보지 않아, 실패해도 화면에 아무 말이
+   * 없었다. 사진이 안 붙는데 왜 안 붙는지 알 길이 없는 상태였다 — 실패는 반드시
+   * 보여야 한다.
+   */
+  const [failed, setFailed] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+
+  const pickFiles = async (files: File[]) => {
+    if (!files.length) return
+    setFailed([])
+    setBusy(true)
+    const bad: string[] = []
+    // 한 장씩 차례로 — 여러 장을 한꺼번에 던지면 어느 것이 실패했는지 알 수 없다
+    for (const f of files) {
+      try {
+        await upload.mutateAsync({ requestId, file: f, kind, uploadedBy: userId })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        bad.push(`${f.name} — ${msg}`)
+      }
+    }
+    setBusy(false)
+    setFailed(bad)
+  }
+
   return (
     <div className="border-t pt-2 space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">{icon}{label} {existing.length > 0 && `(${existing.length})`}</span>
-        <button className="text-[11px] text-primary" onClick={() => inputRef.current?.click()} disabled={upload.isPending}>{upload.isPending ? '업로드 중…' : '파일 추가'}</button>
+        <button className="text-[11px] text-primary" onClick={() => inputRef.current?.click()} disabled={busy}>{busy ? '업로드 중…' : '파일 추가'}</button>
         {/* 사진도 받는다 — 엑셀·워드를 쓰기 어려우면 종이에 적어 찍어 올리면 된다.
             휴대폰 카메라로 바로 찍을 수 있게 capture 는 걸지 않는다(앨범 선택도 돼야 한다). */}
         <input
@@ -377,11 +405,18 @@ function ExpenseAttachments({ requestId, kind, label, icon, profileName, userId,
           className="hidden"
           onChange={e => {
             const list = Array.from(e.target.files || [])
-            for (const f of list) upload.mutate({ requestId, file: f, kind, uploadedBy: userId })
             if (inputRef.current) inputRef.current.value = ''
+            void pickFiles(list)
           }}
         />
       </div>
+      {failed.length > 0 && (
+        <div className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700 space-y-0.5">
+          <p className="font-medium">올리지 못했습니다 ({failed.length}건)</p>
+          {failed.map((m, i) => <p key={i} className="break-all">{m}</p>)}
+          <p className="text-red-600/80">이 메시지를 그대로 알려주시면 원인을 찾을 수 있습니다.</p>
+        </div>
+      )}
       {existing.map(f => (
         <div key={f.id} className="flex items-center gap-2 text-sm">
           <a href={f.url} target="_blank" rel="noreferrer" className="text-primary underline truncate">{f.name}</a>

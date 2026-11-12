@@ -171,10 +171,26 @@ export function useUploadExpenseFile() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ requestId, file, kind, uploadedBy }: { requestId: string; file: File; kind: ExpenseFileKind; uploadedBy?: string }) => {
-      const safe = file.name.replace(/[^\w.\-가-힣]/g, '_')
+      const safe = file.name.replace(/[^\w.\-가-힣]/g, '_') || 'file'
       const path = `${requestId}/${Date.now()}-${safe}`
-      const up = await supabase.storage.from('expense-files').upload(path, file, { upsert: true })
-      if (up.error) throw up.error
+      // 형식을 또렷이 적어 올린다. 안 적으면 브라우저에 따라 application/octet-stream
+      // 으로 올라가, 버킷에 허용 형식이 걸려 있을 때 사진이 통째로 막힌다.
+      const up = await supabase.storage.from('expense-files').upload(path, file, {
+        upsert: true,
+        contentType: file.type || 'application/octet-stream',
+      })
+      if (up.error) {
+        // Storage 쪽 메시지는 'mime type ... is not supported' 처럼 영어로만 와서
+        // 무엇을 고쳐야 하는지 알기 어렵다. 읽을 수 있는 말을 붙여 준다.
+        const m = up.error.message || ''
+        if (/mime|content.?type/i.test(m)) {
+          throw new Error(`이 형식(${file.type || '알 수 없음'})은 저장소가 받지 않습니다. 관리자에게 버킷 허용 형식 해제를 요청하세요. (${m})`)
+        }
+        if (/size|large|exceed/i.test(m)) {
+          throw new Error(`파일이 너무 큽니다 (${Math.round(file.size / 1024 / 1024 * 10) / 10}MB). 사진 해상도를 줄여 다시 올려 주세요. (${m})`)
+        }
+        throw new Error(m || '저장소 업로드에 실패했습니다.')
+      }
       const { data: { publicUrl } } = supabase.storage.from('expense-files').getPublicUrl(path)
       const { error } = await supabase.from('expense_request_files').insert({ request_id: requestId, kind, name: file.name, url: publicUrl, path, uploaded_by: uploadedBy || null })
       if (error) throw error
