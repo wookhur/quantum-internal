@@ -60,12 +60,27 @@ const BOARD_GROUPS: { label: string; kinds: string[] }[] = [
 ]
 const GROUPED_KINDS = new Set(BOARD_GROUPS.flatMap(g => g.kinds))
 
+/** 오늘이 속한 달 'YYYY-MM'. 목록이 미래까지 늘어나도 기본값은 늘 이번 달이다. */
+function currentMonth(): string {
+  return todayKST().slice(0, 7)
+}
+
+/**
+ * 정산월 목록 — 지난 12개월부터 '내년 12월'까지, 최신순.
+ *
+ * 종전에는 오늘부터 과거 12개월뿐이라 다음 달 이후를 고를 수 없었다. 희망 지급일이
+ * 앞선 달에 잡힌 건(2027-01 등)을 미리 들여다볼 수가 없었다.
+ * 끝을 '내년 12월'로 두면 해가 바뀌어도 손댈 일이 없다.
+ */
 function monthOptions(): string[] {
-  const out: string[] = []
   const d = new Date()
-  for (let i = 0; i < 12; i++) {
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-    d.setMonth(d.getMonth() - 1)
+  // 달을 하나의 일련번호로 세면 연말·연초를 따로 다루지 않아도 된다
+  const idx = (y: number, m0: number) => y * 12 + m0
+  const start = idx(d.getFullYear(), d.getMonth()) - 11      // 11개월 전
+  const end = idx(d.getFullYear() + 1, 11)                   // 내년 12월
+  const out: string[] = []
+  for (let i = end; i >= start; i--) {
+    out.push(`${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`)
   }
   return out
 }
@@ -130,7 +145,8 @@ export function FinanceDashboardPage() {
   const allowed = isAccounting || isAdmin
 
   const months = useMemo(() => monthOptions(), [])
-  const [month, setMonth] = useState<string>(months[0])
+  // 목록이 내년 말까지 늘어났으므로 months[0] 은 더 이상 '이번 달'이 아니다
+  const [month, setMonth] = useState<string>(currentMonth)
 
   const { data: invoices = [], isLoading: invLoading } = useAllInvoices(month === 'all' ? undefined : month)
   const updateStatus = useUpdateInvoiceStatus()
@@ -563,14 +579,14 @@ export function FinanceDashboardPage() {
       <ExpenseSummaryCard month={month} />
 
       {/* 상여금 지급 (선택 월) */}
-      <BonusPayoutCard month={month === 'all' ? months[0] : month} />
+      <BonusPayoutCard month={month === 'all' ? currentMonth() : month} />
 
       {/* 인센티브 지급 원장 (월 선택 · 계약·서비스 인센티브) */}
       <IncentivePayoutLedger
         linesByPerson={linesByPerson}
         status={incentiveStatus}
         months={months}
-        defaultMonth={month === 'all' ? months[0] : month}
+        defaultMonth={month === 'all' ? currentMonth() : month}
         canToggle={allowed}
         onToggle={(id, received, m) => setIncentiveReceived.mutate({ key: id, received, month: m })}
         onBulk={rows => bulkSetIncentiveReceived.mutate(rows)}
