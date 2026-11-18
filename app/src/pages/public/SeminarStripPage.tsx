@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useSeminars } from '@/hooks/useSeminars'
 
 /**
@@ -49,10 +49,19 @@ export function SeminarStripPage() {
       })
       .filter(s => s.when && !isNaN(s.when.getTime()))
       .sort((a, b) => b.when!.getTime() - a.when!.getTime())
-      .slice(0, 12)
+      // 건수 제한 없음 — 날짜가 있는 세미나는 전부 흘려보낸다.
       // '모집 중' 판정은 목록을 만들 때 한 번만 한다(렌더 중 현재시각 조회 금지)
       .map(s => ({ ...s, upcoming: s.when!.getTime() > now }))
   }, [seminars, now])
+
+  /**
+   * 흐르는 속도를 건수에 맞춘다.
+   * 애니메이션은 track 의 절반(=목록 한 바퀴)을 주어진 시간에 지나간다. 시간을
+   * 고정해 두면 세미나가 늘수록 같은 시간에 더 먼 거리를 움직여 점점 빨라진다.
+   * 한 건당 초를 정해 두고 전체 시간을 거기서 끌어내면 건수와 무관하게 같은 속도가 된다.
+   */
+  const SEC_PER_ITEM = 3.7
+  const cycleSec = Math.max(20, Math.round(items.length * SEC_PER_ITEM))
 
   if (isLoading) return <div style={{ height: 200 }} />
   if (items.length === 0) return <div style={{ height: 0 }} />
@@ -66,14 +75,14 @@ export function SeminarStripPage() {
         .qa-tl{font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR",-apple-system,sans-serif;
           background:transparent;padding:0;overflow:hidden}
         .qa-tl *{box-sizing:border-box}
-        .qa-view{position:relative;height:470px;overflow:hidden;
+        .qa-view{position:relative;height:540px;overflow:hidden;
           -webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent);
           mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent)}
         /* 왼쪽 세로선 — 목록과 무관하게 항상 이어져 보이도록 뷰 전체에 그린다 */
         .qa-view::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:1.5px;
           background:linear-gradient(180deg,rgba(12,54,86,.06),rgba(12,54,86,.22) 18%,rgba(12,54,86,.22) 82%,rgba(12,54,86,.06))}
         .qa-track{position:absolute;left:0;right:0;top:0;
-          animation:qa-down 44s linear infinite}
+          animation:qa-down var(--qa-cycle,44s) linear infinite}
         .qa-view:hover .qa-track{animation-play-state:paused}
         /* 위로 흐른다: 아래에서 다음 항목이 올라오는 방향 */
         @keyframes qa-down{from{transform:translateY(0)}to{transform:translateY(-50%)}}
@@ -94,7 +103,10 @@ export function SeminarStripPage() {
       `}</style>
 
       <div className="qa-view">
-        <div className="qa-track">
+        <div
+          className="qa-track"
+          style={{ '--qa-cycle': `${cycleSec}s` } as CSSProperties}
+        >
           {loop.map((s, i) => {
             const d = s.when!
             const upcoming = s.upcoming
