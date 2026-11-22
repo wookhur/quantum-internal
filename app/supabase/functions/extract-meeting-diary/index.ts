@@ -59,18 +59,45 @@ async function fetchGoogleDocText(docId: string): Promise<string | null> {
   }
 }
 
-async function fetchDrivePdfBase64(fileId: string): Promise<string | null> {
-  // Works only when the file is shared "Anyone with the link".
+function toBase64(buf: Uint8Array): string {
+  // 한 번에 String.fromCharCode(...buf) 를 쓰면 큰 파일에서 스택이 터진다
+  let bin = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < buf.length; i += CHUNK) {
+    bin += String.fromCharCode(...buf.subarray(i, i + CHUNK))
+  }
+  return btoa(bin)
+}
+
+/** 드라이브에서 받은 바이트가 무엇인지. 사인인 페이지를 파일로 착각하지 않게 가려낸다. */
+function sniff(buf: Uint8Array): 'pdf' | 'png' | 'jpeg' | 'html' | 'other' {
+  const b = (i: number) => buf[i]
+  if (buf.length >= 4 && b(0) === 0x25 && b(1) === 0x50 && b(2) === 0x44 && b(3) === 0x46) return 'pdf'  // %PDF
+  if (buf.length >= 4 && b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47) return 'png'
+  if (buf.length >= 3 && b(0) === 0xff && b(1) === 0xd8 && b(2) === 0xff) return 'jpeg'
+  const head = new TextDecoder().decode(buf.subarray(0, 200)).trim().toLowerCase()
+  if (head.startsWith('<!doctype html') || head.startsWith('<html')) return 'html'
+  return 'other'
+}
+
+interface DriveFile { kind: 'pdf' | 'png' | 'jpeg'; base64: string }
+
+/**
+ * 드라이브 파일을 받아 온다.
+ *
+ * 'Anyone with the link' 로 공유돼 있어야 한다. 그렇지 않으면 구글이 파일 대신
+ * 로그인 페이지(HTML)를 200 으로 돌려주는데, 종전에는 그걸 그대로 PDF 라고
+ * 적어 Claude 에 보냈다 — 그래서 돌아온 것이 400 이었다.
+ */
+async function fetchDriveFile(fileId: string): Promise<DriveFile | null> {
   const url = `https://drive.google.com/uc?export=download&id=${fileId}`
   try {
     const res = await fetch(url, { redirect: 'follow' })
     if (!res.ok) return null
     const buf = new Uint8Array(await res.arrayBuffer())
-    // Quick PDF sniff
-    if (buf.length < 4 || buf[0] !== 0x25 || buf[1] !== 0x50) return null // %P
-    let bin = ''
-    for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i])
-    return btoa(bin)
+    const kind = sniff(buf)
+    if (kind === 'html' || kind === 'other') return null
+    return { kind, base64: toBase64(buf) }
   } catch {
     return null
   }
@@ -89,7 +116,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}))
     let { text, url } = (body || {}) as { text?: string; url?: string }
-    let pdfBase64: string | null = null
+    let file: DriveFile | null = null
 
     if (!text && url) {
       const docId = extractGoogleDocId(url)
@@ -99,30 +126,48 @@ Deno.serve(async (req) => {
       }
       if (!text) {
         const driveId = extractDriveFileId(url)
-        if (driveId) pdfBase64 = await fetchDrivePdfBase64(driveId)
+        if (driveId) {
+          file = await fetchDriveFile(driveId)
+          // 드라이브에 담긴 구글 문서는 uc?export=download 로 안 나온다 —
+          // 같은 id 로 문서 내보내기를 한 번 더 두드려 본다.
+          if (!file) {
+            const asDoc = await fetchGoogleDocText(driveId)
+            if (asDoc) text = asDoc
+          }
+        }
       }
     }
 
-    if (!text && !pdfBase64) {
+    if (!text && !file) {
       return new Response(
         JSON.stringify({
           ok: false,
           error:
-            'Could not read the report from URL. Make sure the Google Doc/Drive link is shared as "Anyone with the link", or paste the text directly.',
+            '링크에서 보고서를 읽지 못했습니다. 구글 문서·드라이브 링크를 ' +
+            '"링크가 있는 모든 사용자"로 공유했는지 확인해 주세요. ' +
+            '(공유 설정을 바꾸기 어려우면 아래 칸에 본문을 붙여넣으셔도 됩니다.)',
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
     const userContent: unknown[] = []
-    if (pdfBase64) {
-      userContent.push({
-        type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
-      })
+    if (file) {
+      // 보고서를 캡처해 올리는 경우가 있어 이미지도 받는다
+      if (file.kind === 'pdf') {
+        userContent.push({
+          type: 'document',
+          source: { type: 'base64', media_type: 'application/pdf', data: file.base64 },
+        })
+      } else {
+        userContent.push({
+          type: 'image',
+          source: { type: 'base64', media_type: `image/${file.kind}`, data: file.base64 },
+        })
+      }
       userContent.push({
         type: 'text',
-        text: '위 PDF는 한 학생의 미팅 요약 보고서입니다. 10개 항목으로 요약해 JSON으로 반환해주세요.',
+        text: '위 파일은 한 학생의 미팅 요약 보고서입니다. 10개 항목으로 요약해 JSON으로 반환해주세요.',
       })
     } else {
       const truncated = (text || '').slice(0, 30000)
@@ -147,9 +192,16 @@ Deno.serve(async (req) => {
     })
 
     if (!response.ok) {
+      // 상태 코드만 돌려주면 무엇이 잘못됐는지 알 길이 없다 — 본문을 함께 싣는다
       const err = await response.text()
+      let detail = err.slice(0, 600)
+      try {
+        const parsed = JSON.parse(err) as { error?: { message?: string } }
+        if (parsed?.error?.message) detail = parsed.error.message
+      } catch { /* 본문이 JSON 이 아니면 그대로 쓴다 */ }
+      console.error('Anthropic error', response.status, err.slice(0, 1000))
       return new Response(
-        JSON.stringify({ ok: false, error: `Claude API ${response.status}: ${err.slice(0, 500)}` }),
+        JSON.stringify({ ok: false, error: `Claude API ${response.status}: ${detail}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
