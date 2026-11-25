@@ -73,3 +73,27 @@ export function daysFromTodayKST(dateStr: string): number {
   const targetMs = new Date(target + 'T00:00:00').getTime()
   return Math.ceil((targetMs - todayMs) / (1000 * 60 * 60 * 24))
 }
+
+/** 'YYYY-MM-DD' 에 일수를 더한다(음수면 뺀다). 달·해를 넘어가도 맞다. */
+export function shiftDays(day: string, delta: number): string {
+  const t = Date.parse(`${day}T00:00:00Z`) + delta * 86_400_000
+  return new Date(t).toISOString().slice(0, 10)
+}
+
+/** 'YYYY-MM-DD' 두 날짜의 차이(일). b 가 뒤면 양수. */
+export function daysBetween(a: string, b: string): number {
+  const ms = Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)
+  return Math.round(ms / 86_400_000)
+}
+
+/** 그 날이 속한 주의 월요일. */
+export function weekStart(day: string): string {
+  const dow = new Date(`${day}T00:00:00Z`).getUTCDay()   // 0=일
+  return shiftDays(day, dow === 0 ? -6 : 1 - dow)
+}
+
+/** 그 주의 월~일 7일. */
+export function weekDates(day: string): string[] {
+  const mon = weekStart(day)
+  return Array.from({ length: 7 }, (_, i) => shiftDays(mon, i))
+}

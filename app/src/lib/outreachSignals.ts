@@ -14,6 +14,7 @@
  */
 
 import { isCompletedMeetingStatus, isNoShowStatus } from './meetingProgress'
+import { daysBetween, shiftDays, weekStart } from './date'
 import { isOnPause, type PausableStudent } from './studentPause'
 
 /** 마지막 미팅 이후 이만큼 비면 학부모가 먼저 불안해할 때가 됐다고 본다. */
@@ -72,12 +73,6 @@ export interface SignalDiary {
 /** 종료·취소된 학생은 보지 않는다. (Student360 의 분류와 같은 기준) */
 function isArchived(status?: string): boolean {
   return status === 'finished' || status === 'canceled'
-}
-
-/** 'YYYY-MM-DD' 두 개의 날짜 차이(일). b 가 뒤면 양수. */
-export function daysBetween(a: string, b: string): number {
-  const ms = Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)
-  return Math.round(ms / 86_400_000)
 }
 
 function dateOnly(v?: string): string {
@@ -238,14 +233,4 @@ export function detectOutreachSignals(input: {
   })
 }
 
-/** 'YYYY-MM-DD' 에 일수를 더한다(음수면 뺀다). */
-export function shiftDays(day: string, delta: number): string {
-  const t = Date.parse(`${day}T00:00:00Z`) + delta * 86_400_000
-  return new Date(t).toISOString().slice(0, 10)
-}
-
-/** 그 주의 월요일 (KST 기준 날짜 문자열을 받아 같은 형식으로 돌려준다). */
-export function weekStart(day: string): string {
-  const dow = new Date(`${day}T00:00:00Z`).getUTCDay()   // 0=일
-  return shiftDays(day, dow === 0 ? -6 : 1 - dow)
-}
+export { daysBetween, shiftDays, weekStart }

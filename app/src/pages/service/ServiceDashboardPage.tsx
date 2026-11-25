@@ -18,7 +18,7 @@ import {
 import {
   ChevronLeft, ChevronRight, ChevronDown, Plus, X, ExternalLink,
   Users, Calendar, AlertCircle, FileText, CheckSquare,
-  Loader2, Trash2, UserSearch, BarChart3, UserPlus, CheckCircle2, XCircle, Activity, GraduationCap, Sparkles,
+  Loader2, Trash2, UserSearch, BarChart3, UserPlus, CheckCircle2, XCircle, Activity, GraduationCap, Sparkles, Clock,
 } from 'lucide-react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -50,11 +50,14 @@ import {
   useServicePrograms, useCreateProgram, useUpdateProgram, useDeleteProgram, type ServiceProgram,
 } from '@/hooks/useProgramSeats'
 import type { ServiceStudent } from '@/types'
-import { todayKST, daysFromTodayKST } from '@/lib/date'
+import { todayKST, daysFromTodayKST, shiftDays, weekDates } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { canSuperviseService } from '@/hooks/useProfiles'
 import { useOutreachSignals } from '@/hooks/useOutreachSignals'
+import { useWorkShifts, SHIFT_KIND_LABEL, type WorkShift } from '@/hooks/useWorkShifts'
+import { WorkShiftDialog } from '@/components/WorkShiftDialog'
+import { useProfiles } from '@/hooks/useProfiles'
 import { useT } from '@/i18n/LanguageContext'
 import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus, MeetingStatus, MeetingCancelledBy } from '@/types'
 
@@ -851,6 +854,43 @@ function MeetingDialog({
 
 // ─── Week Calendar ────────────────────────────────────────────────────────────
 
+/** 캘린더에 한 줄로 얹는 출근 — 이름까지 붙여 둔다. */
+export interface ShiftChip {
+  userId: string
+  name: string
+  kind: WorkShift['kind']
+  startTime?: string
+  endTime?: string
+}
+
+/** 출근 띠 색 — 미팅(보라)과 섞이지 않게 회색 계열로 눌러 둔다. */
+const SHIFT_COLOR: Record<WorkShift['kind'], string> = {
+  office: 'bg-slate-100 text-slate-700 border-slate-200',
+  remote: 'bg-sky-50 text-sky-700 border-sky-200',
+  off:    'bg-gray-50 text-gray-400 border-gray-200',
+}
+
+function ShiftStrip({ shifts }: { shifts: ShiftChip[] }) {
+  if (!shifts.length) return null
+  return (
+    <div className="mb-1 space-y-0.5 border-b pb-1">
+      {shifts.map(s => (
+        <div
+          key={s.userId}
+          className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] ${SHIFT_COLOR[s.kind]}`}
+          title={`${s.name} · ${SHIFT_KIND_LABEL[s.kind]}${s.startTime ? ` ${s.startTime}–${s.endTime || ''}` : ''}`}
+        >
+          <Clock size={9} className="shrink-0 opacity-60" />
+          <span className="truncate font-medium">{s.name}</span>
+          <span className="ml-auto shrink-0 tabular-nums opacity-80">
+            {s.kind === 'off' ? '휴무' : s.startTime ? `${s.startTime}${s.endTime ? `–${s.endTime}` : ''}` : SHIFT_KIND_LABEL[s.kind]}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function WeekCalendar({
   days,
   meetings,
@@ -859,6 +899,7 @@ function WeekCalendar({
   ghostMeetings,
   consultantFilter,
   birthdaysByMmdd,
+  shiftsByDate,
   onEditMeeting,
   onAddMilestone,
   onEditMilestone,
@@ -871,6 +912,7 @@ function WeekCalendar({
   ghostMeetings: GhostMeeting[]
   consultantFilter: string
   birthdaysByMmdd: BirthdayMap
+  shiftsByDate: Map<string, ShiftChip[]>
   onEditMeeting: (m: DashboardMeeting) => void
   onAddMilestone: (dateStr: string) => void
   onEditMilestone: (m: DashboardMilestone) => void
@@ -921,6 +963,7 @@ function WeekCalendar({
 
           return (
             <div key={dateStr} className={`p-1.5 space-y-1 min-h-64 ${isToday ? 'bg-blue-50/30' : ''}`}>
+              <ShiftStrip shifts={shiftsByDate.get(dateStr) || []} />
               {dm.map(m => {
                 const cName = consultantName(m.consultantId || m.studentConsultant)
                 return (
@@ -2669,6 +2712,53 @@ export function ServiceDashboardPage() {
   const canSupervise = canSuperviseService(user)
   const isPartner = user?.role === 'freelancer' || user?.role === 'external'
   const partnerKey = (user?.name || '').trim().toLowerCase()
+
+  // ── 주간 출근 스케줄 ────────────────────────────────────────────────────
+  // 외부 파트너는 내부 직원의 근무 일정을 볼 일이 없다.
+  const showShifts = !isPartner
+  const [shiftDialogOpen, setShiftDialogOpen] = useState(false)
+  const { data: profiles = [] } = useProfiles()
+  const profileNames = useMemo(
+    () => new Map(profiles.map(p => [p.id, p.name])),
+    [profiles],
+  )
+  const { data: shifts = [] } = useWorkShifts(
+    showShifts ? viewStartDate : undefined,
+    showShifts ? viewEndDate : undefined,
+  )
+  const shiftsByDate = useMemo(() => {
+    const map = new Map<string, ShiftChip[]>()
+    if (!showShifts) return map
+    for (const s of shifts) {
+      // 컨설턴트를 한 명으로 좁혀 보고 있으면 출근도 그 사람만 — 화면 기준을 하나로 둔다
+      if (consultantFilter !== 'all' && s.userId !== consultantFilter) continue
+      const chip: ShiftChip = {
+        userId: s.userId,
+        name: profileNames.get(s.userId) || '—',
+        kind: s.kind,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      }
+      const arr = map.get(s.workDate)
+      if (arr) arr.push(chip); else map.set(s.workDate, [chip])
+    }
+    for (const arr of map.values()) arr.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+    return map
+  }, [shifts, profileNames, showShifts, consultantFilter])
+
+  // 다음 주를 아직 안 적었나 — 금요일이 마감이라 수요일부터 눈에 띄게 둔다
+  const nextWeek = useMemo(() => weekDates(shiftDays(today, 7)), [today])
+  const { data: nextWeekShifts = [] } = useWorkShifts(
+    showShifts ? nextWeek[0] : undefined,
+    showShifts ? nextWeek[6] : undefined,
+  )
+  const myId = user?.id
+  const myNextWeekCount = useMemo(
+    () => (myId ? nextWeekShifts.filter(s => s.userId === myId).length : 0),
+    [nextWeekShifts, myId],
+  )
+  const dow = new Date(`${today}T00:00:00Z`).getUTCDay()      // 1=월 … 5=금
+  const shiftNudge = showShifts && myNextWeekCount === 0 && (dow === 0 || dow >= 3)
   const { data: programFees = [] } = useAllServiceProgramFees()
   const visibleStudentIds = useMemo<Set<string> | null>(() => {
     if (!isPartner) return null
@@ -2874,6 +2964,20 @@ export function ServiceDashboardPage() {
               )}
             </div>
 
+            {/* 내 출근 입력 — 금요일까지 다음 주를 적는다 */}
+            {showShifts && user?.id && (
+              <Button
+                size="sm"
+                variant={shiftNudge ? 'default' : 'outline'}
+                className={`h-8 gap-1.5 ${shiftNudge ? 'bg-rose-600 hover:bg-rose-700' : ''}`}
+                onClick={() => setShiftDialogOpen(true)}
+                title="다음 주 출근 시간을 입력합니다"
+              >
+                <Clock size={14} />
+                {shiftNudge ? '다음 주 출근 미입력' : '내 출근 입력'}
+              </Button>
+            )}
+
             {/* Add milestone */}
             {canEdit && (
               <Button size="sm" className="h-8 gap-1.5" onClick={() => { setEditingMilestone(null); setDefaultMilestoneStudentId(undefined); setDefaultMilestoneDate(undefined); setShowAddMilestone(true) }}>
@@ -3011,6 +3115,7 @@ export function ServiceDashboardPage() {
             ghostMeetings={ghostMeetings}
             consultantFilter={consultantFilter}
             birthdaysByMmdd={birthdaysByMmdd}
+            shiftsByDate={shiftsByDate}
             onEditMeeting={openMeetingNote}
             onAddMilestone={dateStr => {
               if (!canEdit) return
@@ -3174,6 +3279,16 @@ export function ServiceDashboardPage() {
         meeting={editingMeeting}
         canEdit={canEdit}
       />
+
+      {/* 내 주간 출근 입력 */}
+      {user?.id && (
+        <WorkShiftDialog
+          open={shiftDialogOpen}
+          onOpenChange={setShiftDialogOpen}
+          userId={user.id}
+          userName={user.name}
+        />
+      )}
     </div>
   )
 }
