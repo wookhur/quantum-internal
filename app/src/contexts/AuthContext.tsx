@@ -32,6 +32,7 @@ function toUser(data: Record<string, unknown>, fallbackEmail: string): User {
     canApproveLeave: (data.can_approve_leave as boolean) || false,
     canEditAttendance: (data.can_edit_attendance as boolean) || false,
     isAccount: (data.is_account as boolean) || false,
+    isServiceSupervisor: (data.is_service_supervisor as boolean) || false,
     avatarUrl: data.avatar_url as string | undefined,
     createdAt: data.created_at as string,
   }

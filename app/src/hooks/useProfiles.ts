@@ -26,6 +26,7 @@ function mapProfile(row: Record<string, unknown>): User {
     canApproveLeave: (row.can_approve_leave as boolean) || false,
     canEditAttendance: (row.can_edit_attendance as boolean) || false,
     isAccount: (row.is_account as boolean) || false,
+    isServiceSupervisor: (row.is_service_supervisor as boolean) || false,
     workerType: (row.worker_type as WorkerType) || undefined,
     resigned: (row.resigned as boolean) || false,
     avatarUrl: (row.avatar_url as string) || undefined,
@@ -73,6 +74,7 @@ export function useUpdateProfile() {
       canApproveLeave?: boolean
       canEditAttendance?: boolean
       isAccount?: boolean
+      isServiceSupervisor?: boolean
       resigned?: boolean
       resignedAt?: string | null
     }) => {
@@ -98,6 +100,7 @@ export function useUpdateProfile() {
       if (updates.canApproveLeave !== undefined) row.can_approve_leave = updates.canApproveLeave
       if (updates.canEditAttendance !== undefined) row.can_edit_attendance = updates.canEditAttendance
       if (updates.isAccount !== undefined) row.is_account = updates.isAccount
+      if (updates.isServiceSupervisor !== undefined) row.is_service_supervisor = updates.isServiceSupervisor
       if (updates.resigned !== undefined) row.resigned = updates.resigned
       if (updates.resignedAt !== undefined) row.resigned_at = updates.resignedAt
 
@@ -268,18 +271,18 @@ export function canManageInvoiceSettings(
  * 게시판을 열람하는 전 직원이 남의 담당 학생 사정을 들여다볼 자리도 아니다. 그래서
  * 역할 기본값이나 접근권한 관리에서 서비스 게시판을 열어 준 사람에게도 따로 막는다.
  *
- * 허용 기준은 둘 — 서비스팀 총괄 역할(service_manager), 그리고 아래 명시된 계정.
- * 다른 사람에게 열어 줄 때는 이 목록에 이메일을 더하거나 역할을 service_manager 로 둔다.
- * (admin·c_level 을 넣지 않은 것은 의도다. '전 직원이 볼 내용은 아니다'가 요구사항이었다.)
+ * 기준은 profiles.is_service_supervisor 플래그 하나다. 역할(admin·c_level·
+ * service_manager)로 묶지 않은 것은 의도다 — 역할로 묶으면 그 역할을 받은 사람이
+ * 늘어날 때마다 이 화면이 조용히 따라 열린다. 누가 보는지를 사람이 직접 정한다.
+ *
+ * 권한을 주고 뺄 때는 SQL 한 줄:
+ *   update profiles set is_service_supervisor = true  where name = '홍길동';
+ *   update profiles set is_service_supervisor = false where name = '홍길동';
  */
-const SERVICE_SUPERVISOR_EMAILS: string[] = ['subscriptions@quantumadmissions.com']
-
 export function canSuperviseService(
-  user: { role?: string; email?: string } | null | undefined,
+  user: { isServiceSupervisor?: boolean } | null | undefined,
 ): boolean {
-  if (!user) return false
-  if (SERVICE_SUPERVISOR_EMAILS.includes((user.email || '').toLowerCase())) return true
-  return user.role === 'service_manager'
+  return user?.isServiceSupervisor === true
 }
 
 /** 전체 게시판 접근 등급(admin·account). account(재무담당)는 재무만이 아니라 전사 게시판을 봄. */
