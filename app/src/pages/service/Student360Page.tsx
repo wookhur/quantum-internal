@@ -98,7 +98,7 @@ import type {
   ServiceReportCategory,
 } from '@/types'
 import { formatCurrency } from '@/types'
-import { useProfiles, canAccessAccount } from '@/hooks/useProfiles'
+import { useProfiles, canAccessAccount, canSuperviseService } from '@/hooks/useProfiles'
 import { createNotificationsForUsers } from '@/hooks/useUserNotifications'
 
 // Consultant pool + helpers (shared with KPI page)
@@ -868,7 +868,8 @@ export function Student360Page() {
             <IssueReportSection studentId={selected.id} studentName={selected.name} userId={user?.id} userName={user?.name} isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit} />
             <MeetingsSection student={selected} createdBy={user?.id} authorName={user?.name} canEdit={canEdit} />
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} canEdit={canEdit} />
-            <ParentOutreachSection student={selected} canEdit={canEdit} />
+            {/* 슈퍼바이징 도구 — 서비스팀 총괄만 본다 */}
+            {canSuperviseService(user) && <ParentOutreachSection student={selected} canEdit={canEdit} />}
             <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} canEdit={canEdit} />
             <ArchiveSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
           </div>

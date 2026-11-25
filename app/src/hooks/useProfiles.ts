@@ -260,6 +260,28 @@ export function canManageInvoiceSettings(
   return user.role === 'admin' || canAccessAccount(user)
 }
 
+/**
+ * 학부모 소통 제안('로드') 열람 권한 — 서비스팀 총괄(슈퍼바이저) 전용.
+ *
+ * 이 화면은 컨설턴트가 올린 미팅 기록을 읽고 '이 담당자가 지금 무엇을 놓치고 있는지'를
+ * 짚는 슈퍼바이징 도구다. 컨설턴트 본인이 자기 평가를 미리 보는 자리가 아니고, 서비스
+ * 게시판을 열람하는 전 직원이 남의 담당 학생 사정을 들여다볼 자리도 아니다. 그래서
+ * 역할 기본값이나 접근권한 관리에서 서비스 게시판을 열어 준 사람에게도 따로 막는다.
+ *
+ * 허용 기준은 둘 — 서비스팀 총괄 역할(service_manager), 그리고 아래 명시된 계정.
+ * 다른 사람에게 열어 줄 때는 이 목록에 이메일을 더하거나 역할을 service_manager 로 둔다.
+ * (admin·c_level 을 넣지 않은 것은 의도다. '전 직원이 볼 내용은 아니다'가 요구사항이었다.)
+ */
+const SERVICE_SUPERVISOR_EMAILS: string[] = ['subscriptions@quantumadmissions.com']
+
+export function canSuperviseService(
+  user: { role?: string; email?: string } | null | undefined,
+): boolean {
+  if (!user) return false
+  if (SERVICE_SUPERVISOR_EMAILS.includes((user.email || '').toLowerCase())) return true
+  return user.role === 'service_manager'
+}
+
 /** 전체 게시판 접근 등급(admin·account). account(재무담당)는 재무만이 아니라 전사 게시판을 봄. */
 export function isFullAccessRole(user: { role?: string } | null | undefined): boolean {
   return user?.role === 'admin' || user?.role === 'account'

@@ -53,6 +53,7 @@ import type { ServiceStudent } from '@/types'
 import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
+import { canSuperviseService } from '@/hooks/useProfiles'
 import { useT } from '@/i18n/LanguageContext'
 import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus, MeetingStatus, MeetingCancelledBy } from '@/types'
 
@@ -2560,6 +2561,8 @@ export function ServiceDashboardPage() {
   // Partner (freelancer/external) users only see students they're linked to via the
   // student's "partners" field, so they can view/input schedules only for those.
   const { user } = useAuth()
+  // 학부모 소통 제안은 슈퍼바이징 도구다 — 서비스팀 총괄에게만 탭을 보여 준다
+  const canSupervise = canSuperviseService(user)
   const isPartner = user?.role === 'freelancer' || user?.role === 'external'
   const partnerKey = (user?.name || '').trim().toLowerCase()
   const { data: programFees = [] } = useAllServiceProgramFees()
@@ -2757,12 +2760,14 @@ export function ServiceDashboardPage() {
               >
                 <BarChart3 size={14} className="inline mr-1.5" />{t('serviceDash.metrics')}
               </button>
-              <button
-                onClick={() => setView('outreach')}
-                className={`px-3 h-8 text-sm font-medium border-l ${view === 'outreach' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-              >
-                <Sparkles size={14} className="inline mr-1.5" />학부모 소통
-              </button>
+              {canSupervise && (
+                <button
+                  onClick={() => setView('outreach')}
+                  className={`px-3 h-8 text-sm font-medium border-l ${view === 'outreach' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                >
+                  <Sparkles size={14} className="inline mr-1.5" />학부모 소통
+                </button>
+              )}
             </div>
 
             {/* Add milestone */}
@@ -3032,7 +3037,7 @@ export function ServiceDashboardPage() {
 
         {view === 'metrics' && <ServiceMetricsSection />}
 
-        {view === 'outreach' && <ParentOutreachBoard students={vStudents} />}
+        {view === 'outreach' && canSupervise && <ParentOutreachBoard students={vStudents} />}
       </div>
 
       {/* Session Prep Sheet */}
