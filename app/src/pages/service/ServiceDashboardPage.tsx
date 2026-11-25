@@ -18,7 +18,7 @@ import {
 import {
   ChevronLeft, ChevronRight, ChevronDown, Plus, X, ExternalLink,
   Users, Calendar, AlertCircle, FileText, CheckSquare,
-  Loader2, Trash2, UserSearch, BarChart3, UserPlus, CheckCircle2, XCircle, Activity, GraduationCap,
+  Loader2, Trash2, UserSearch, BarChart3, UserPlus, CheckCircle2, XCircle, Activity, GraduationCap, Sparkles,
 } from 'lucide-react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import {
@@ -42,7 +42,10 @@ import { useConsultantPool, useConsultantName } from '@/lib/consultants'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, MAJOR_TRACK_LABEL_EN, gradeBucket, gradesToShow } from '@/lib/majorTaxonomy'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
 import { groupBySchool } from '@/lib/schoolGroups'
-import { normalizeStatus } from './Student360Page'
+import { normalizeStatus, isArchivedStatus } from './Student360Page'
+import { isOnPause } from '@/lib/studentPause'
+import { supabase } from '@/lib/supabase'
+import { useParentOutreach, PRIORITY_LABEL, type OutreachStudentInput } from '@/hooks/useParentOutreach'
 import {
   useServicePrograms, useCreateProgram, useUpdateProgram, useDeleteProgram, type ServiceProgram,
 } from '@/hooks/useProgramSeats'
@@ -2306,6 +2309,197 @@ function ServiceMetricsSection() {
   )
 }
 
+/**
+ * 학부모 소통 제안 보드 ('로드').
+ *
+ * 담당 학생들의 미팅 다이어리를 훑어 '이번 주 먼저 연락할 학부모'를 줄 세운다.
+ * 사람이 고쳐 쓰는 초안이고, 여기서 학부모에게 나가는 글은 없다.
+ *
+ * 다이어리는 학생마다 따로 불러와야 해서, 고른 학생만 받아 온다 — 전체를 한꺼번에
+ * 읽으면 화면이 멈추고 비용도 그만큼 든다.
+ */
+function ParentOutreachBoard({ students }: { students: ServiceStudent[] }) {
+  const consultantName = useConsultantName()
+  const { run, loading, done, total, error, suggestions, reset } = useParentOutreach()
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  const today = todayKST()
+  const candidates = useMemo(
+    () => students
+      .filter(s => !isArchivedStatus(s.status) && !isOnPause(s, today))
+      .sort((a, b) => compareStudentsKo(a, b)),
+    [students, today],
+  )
+  const byId = useMemo(() => new Map(candidates.map(s => [s.id, s])), [candidates])
+
+  const toggle = (id: string) => setPicked(p => {
+    const n = new Set(p)
+    if (n.has(id)) n.delete(id); else n.add(id)
+    return n
+  })
+
+  const ask = async () => {
+    const ids = [...picked]
+    if (!ids.length) return
+    reset()
+    // 다이어리는 학생마다 한 번씩 — 고른 사람만이라 호출 수가 적다
+    const payload: OutreachStudentInput[] = []
+    for (const id of ids) {
+      const s = byId.get(id)
+      if (!s) continue
+      const { data } = await supabase
+        .from('service_diary')
+        .select('entry_date, agenda_items, meeting_summary, extracurricular_notes, identity_narrative_notes, questions_concerns, next_meeting_agenda, next_meeting_date, follow_up_commitments, assignments, critical_dates, critical_issue')
+        .eq('student_id', id)
+        .order('entry_date', { ascending: false, nullsFirst: false })
+        .limit(5)
+      payload.push({
+        id: s.id,
+        name: s.name,
+        koreanName: s.koreanName,
+        grade: s.grade,
+        school: s.school,
+        majorDetail: s.majorDetail,
+        contractType: s.contractType,
+        consultantName: consultantName(s.assignedConsultant),
+        parentName: s.parentName,
+        diaries: (data || []).map((d: Record<string, unknown>) => ({
+          entryDate: (d.entry_date as string) || undefined,
+          agendaItems: (d.agenda_items as string) || undefined,
+          meetingSummary: (d.meeting_summary as string) || undefined,
+          extracurricularNotes: (d.extracurricular_notes as string) || undefined,
+          identityNarrativeNotes: (d.identity_narrative_notes as string) || undefined,
+          questionsConcerns: (d.questions_concerns as string) || undefined,
+          nextMeetingAgenda: (d.next_meeting_agenda as string) || undefined,
+          nextMeetingDate: (d.next_meeting_date as string) || undefined,
+          followUpCommitments: (d.follow_up_commitments as string) || undefined,
+          assignments: (d.assignments as string) || undefined,
+          criticalDates: (d.critical_dates as string) || undefined,
+          criticalIssue: (d.critical_issue as string) || undefined,
+        })),
+      })
+    }
+    await run(payload)
+  }
+
+  const shown = suggestions.filter(s => s.priority !== 'none')
+  const skipped = suggestions.filter(s => s.priority === 'none')
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <Sparkles className="mt-0.5 size-4 shrink-0 text-violet-500" />
+            <div className="text-sm">
+              <p className="font-semibold">학부모 소통 제안 — 로드</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                고른 학생의 미팅 다이어리(최근 5건)를 읽고, 학부모가 먼저 묻기 전에 건넬 말을 짚어 줍니다.
+                <b> 여기서 학부모에게 나가는 글은 없습니다</b> — 초안을 고쳐서 직접 보내세요.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {candidates.map(s => (
+              <button
+                key={s.id}
+                onClick={() => toggle(s.id)}
+                className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                  picked.has(s.id) ? 'border-violet-400 bg-violet-50 text-violet-700 font-medium' : 'text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                {studentPickerLabel(s)}
+              </button>
+            ))}
+            {candidates.length === 0 && <p className="text-xs text-muted-foreground">대상 학생이 없습니다.</p>}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button size="sm" className="h-8 gap-1.5" disabled={loading || picked.size === 0} onClick={ask}>
+              {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+              {loading ? `읽는 중 ${done}/${total}` : `제안 받기 (${picked.size}명)`}
+            </Button>
+            {picked.size > 0 && !loading && (
+              <button className="text-[11px] text-muted-foreground hover:underline" onClick={() => setPicked(new Set())}>선택 해제</button>
+            )}
+          </div>
+
+          {error && (
+            <div className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">{error}</div>
+          )}
+        </CardContent>
+      </Card>
+
+      {shown.map(s => {
+        const st = byId.get(s.studentId)
+        return (
+          <Card key={s.studentId} className={
+            s.priority === 'high' ? 'border-l-[3px] border-l-rose-400'
+              : s.priority === 'medium' ? 'border-l-[3px] border-l-amber-400'
+              : 'border-l-[3px] border-l-blue-300'
+          }>
+            <CardContent className="p-4 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">{st ? studentPickerLabel(st) : s.studentId}</span>
+                <Badge variant="outline" className={`text-[10px] ${
+                  s.priority === 'high' ? 'border-rose-300 text-rose-700'
+                    : s.priority === 'medium' ? 'border-amber-300 text-amber-700'
+                    : 'border-blue-300 text-blue-700'
+                }`}>{PRIORITY_LABEL[s.priority]}</Badge>
+                {st?.assignedConsultant && (
+                  <span className="text-[11px] text-muted-foreground">{consultantName(st.assignedConsultant)}</span>
+                )}
+              </div>
+              {s.concern && <p className="text-sm font-medium">{s.concern}</p>}
+              {s.basis && <p className="text-xs text-muted-foreground whitespace-pre-wrap">근거 · {s.basis}</p>}
+              {s.suggestion && <p className="text-sm whitespace-pre-wrap">{s.suggestion}</p>}
+              {s.draftMessage && (
+                <div className="rounded border bg-muted/20 px-2.5 py-2">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-muted-foreground">카톡 초안</span>
+                    <button
+                      className="text-[11px] text-primary hover:underline"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(s.draftMessage)
+                        setCopiedId(s.studentId)
+                        setTimeout(() => setCopiedId(null), 1500)
+                      }}
+                    >
+                      {copiedId === s.studentId ? '복사됨' : '복사'}
+                    </button>
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm">{s.draftMessage}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )
+      })}
+
+      {skipped.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">
+              지금 연락할 이유가 없다고 본 학생: {skipped.map(s => {
+                const st = byId.get(s.studentId)
+                return st ? studentPickerLabel(st) : s.studentId
+              }).join(', ')}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {suggestions.length > 0 && (
+        <p className="px-1 text-[11px] text-muted-foreground">
+          로드의 추측입니다. 기록에 없는 사정은 모르니 보내기 전에 꼭 읽어 보세요.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function ServiceDashboardPage() {
   const t = useT()
   const canEdit = useCanEdit(useLocation().pathname)
@@ -2317,7 +2511,7 @@ export function ServiceDashboardPage() {
   // 캘린더의 학생 미팅을 클릭하면 해당 학생의 Student 360(미팅노트) 화면으로 이동
   const openMeetingNote = (m: DashboardMeeting) => routerNav(`/service/student-360?student=${m.studentId}`)
 
-  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student' | 'majors' | 'programs' | 'metrics'>('calendar')
+  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student' | 'majors' | 'programs' | 'metrics' | 'outreach'>('calendar')
   const [calMode,          setCalMode]          = useState<'week' | 'month'>('week')
   const [refDate,          setRefDate]          = useState<Date>(todayDate)
   const [consultantFilter, setConsultantFilter] = useState('all')
@@ -2506,6 +2700,7 @@ export function ServiceDashboardPage() {
                 majors: t('serviceDash.titleMajors'),
                 programs: t('serviceDash.titlePrograms'),
                 metrics: t('serviceDash.titleMetrics'),
+                outreach: '학부모 소통 제안',
               }[view]}
             </h1>
           </div>
@@ -2561,6 +2756,12 @@ export function ServiceDashboardPage() {
                 className={`px-3 h-8 text-sm font-medium border-l ${view === 'metrics' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
                 <BarChart3 size={14} className="inline mr-1.5" />{t('serviceDash.metrics')}
+              </button>
+              <button
+                onClick={() => setView('outreach')}
+                className={`px-3 h-8 text-sm font-medium border-l ${view === 'outreach' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+              >
+                <Sparkles size={14} className="inline mr-1.5" />학부모 소통
               </button>
             </div>
 
@@ -2830,6 +3031,8 @@ export function ServiceDashboardPage() {
         {view === 'programs' && <ProgramSeatBoard students={vStudents} canEdit={canEdit} />}
 
         {view === 'metrics' && <ServiceMetricsSection />}
+
+        {view === 'outreach' && <ParentOutreachBoard students={vStudents} />}
       </div>
 
       {/* Session Prep Sheet */}

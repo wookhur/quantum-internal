@@ -37,6 +37,7 @@ import {
 } from '@/hooks/useMentors'
 import { studentPickerLabel, compareStudentsKo } from '@/lib/studentDisplay'
 import { consultantAtDate } from '@/lib/consultantAtDate'
+import { useParentOutreach, PRIORITY_LABEL } from '@/hooks/useParentOutreach'
 import { MAJOR_TRACKS, MAJOR_TRACK_LABEL, majorsForTrack, ALL_MAJORS, trackOfMajor, canonicalMajor, OTHER_MAJOR, gradeBucket } from '@/lib/majorTaxonomy'
 import {
   useEditorMeetings, useCreateEditorMeeting, useUpdateEditorMeeting, useDeleteEditorMeeting,
@@ -867,6 +868,7 @@ export function Student360Page() {
             <IssueReportSection studentId={selected.id} studentName={selected.name} userId={user?.id} userName={user?.name} isAdmin={user?.role === 'admin' || user?.role === 'c_level'} canEdit={canEdit} />
             <MeetingsSection student={selected} createdBy={user?.id} authorName={user?.name} canEdit={canEdit} />
             <DiarySection studentId={selected.id} authorName={user?.name} createdBy={user?.id} canEdit={canEdit} />
+            <ParentOutreachSection student={selected} canEdit={canEdit} />
             <EditorMeetingsSection studentId={selected.id} createdBy={user?.id} defaultEditor={selected.essayEditor} canEdit={canEdit} />
             <ArchiveSection studentId={selected.id} createdBy={user?.id} canEdit={canEdit} />
           </div>
@@ -4461,6 +4463,149 @@ function MeetingDialog({ studentId, meeting, trigger, createdBy, canEdit }: {
 }
 
 // ────────────────────────── Diary ──────────────────────────
+/**
+ * 학부모 선제 소통 제안 ('로드').
+ *
+ * 미팅 다이어리를 읽고 '이 학부모가 지금 무엇을 궁금해할지'와 먼저 건넬 말을 짚어
+ * 준다. 학부모가 먼저 묻기 전에 움직이자는 것이지, 여기서 학부모에게 글이 나가는
+ * 것은 아니다 — 초안은 컨설턴트가 고쳐 쓰고 직접 보낸다.
+ */
+function ParentOutreachSection({ student, canEdit }: { student: ServiceStudent; canEdit: boolean }) {
+  const consultantName = useConsultantName()
+  const { data: diaries = [] } = useServiceDiary(student.id)
+  const { data: meetings = [] } = useServiceMeetings(student.id)
+  const { run, loading, error, suggestions, reset } = useParentOutreach()
+  const [expanded, setExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const held = meetings.filter(m => isCompletedMeetingStatus(m.status)).length
+  const noShows = meetings.filter(m => isNoShowStatus(m.status)).length
+  const lastMeeting = meetings
+    .map(m => m.meetingDate || '')
+    .filter(Boolean)
+    .sort()
+    .pop()
+
+  const ask = () => {
+    reset()
+    run([{
+      id: student.id,
+      name: student.name,
+      koreanName: student.koreanName,
+      grade: student.grade,
+      school: student.school,
+      majorDetail: student.majorDetail,
+      contractType: student.contractType,
+      consultantName: consultantName(student.assignedConsultant),
+      parentName: student.parentName,
+      meetingsDone: held,
+      meetingsTarget: DEFAULT_ANNUAL_MEETING_TARGET,
+      noShows,
+      lastMeetingDate: lastMeeting,
+      // 최근 5건이면 흐름을 보기에 충분하다 — 더 보내면 느려지고 비싸진다
+      diaries: diaries.slice(0, 5).map(d => ({
+        entryDate: d.entryDate,
+        agendaItems: d.agendaItems,
+        meetingSummary: d.meetingSummary,
+        extracurricularNotes: d.extracurricularNotes,
+        identityNarrativeNotes: d.identityNarrativeNotes,
+        questionsConcerns: d.questionsConcerns,
+        nextMeetingAgenda: d.nextMeetingAgenda,
+        nextMeetingDate: d.nextMeetingDate,
+        followUpCommitments: d.followUpCommitments,
+        assignments: d.assignments,
+        criticalDates: d.criticalDates,
+        criticalIssue: d.criticalIssue,
+      })),
+    }])
+  }
+
+  const s = suggestions[0]
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <button className="flex w-full items-center justify-between gap-2" onClick={() => setExpanded(v => !v)}>
+          <span className="flex items-center gap-1.5 text-sm font-semibold">
+            <Sparkles className="size-4 text-violet-500" />
+            학부모 소통 제안
+            <span className="text-[11px] font-normal text-muted-foreground">로드</span>
+          </span>
+          {expanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+        </button>
+
+        {expanded && (
+          <div className="mt-3 space-y-3">
+            <p className="text-[11px] text-muted-foreground">
+              미팅 다이어리 최근 {Math.min(diaries.length, 5)}건을 읽고, 학부모가 먼저 묻기 전에
+              건넬 말을 제안합니다. <b>초안은 여기서 발송되지 않습니다</b> — 고쳐서 직접 보내세요.
+            </p>
+
+            {diaries.length === 0 ? (
+              <p className="text-xs text-muted-foreground">미팅 다이어리가 아직 없습니다. 다이어리를 먼저 기록해 주세요.</p>
+            ) : (
+              <Button size="sm" variant="outline" className="h-8 gap-1.5" disabled={!canEdit || loading} onClick={ask}>
+                {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                {loading ? '로드가 읽는 중…' : suggestions.length ? '다시 보기' : '제안 받기'}
+              </Button>
+            )}
+
+            {error && (
+              <div className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
+                {error}
+              </div>
+            )}
+
+            {s && (
+              <div className={`rounded-md border px-3 py-2.5 space-y-2 ${
+                s.priority === 'high' ? 'border-rose-200 bg-rose-50/60'
+                  : s.priority === 'medium' ? 'border-amber-200 bg-amber-50/60'
+                  : s.priority === 'low' ? 'border-blue-200 bg-blue-50/50'
+                  : 'border-border bg-muted/30'
+              }`}>
+                <div className="flex items-center gap-1.5">
+                  <Badge variant="outline" className={`text-[10px] ${
+                    s.priority === 'high' ? 'border-rose-300 text-rose-700'
+                      : s.priority === 'medium' ? 'border-amber-300 text-amber-700'
+                      : s.priority === 'low' ? 'border-blue-300 text-blue-700'
+                      : 'text-muted-foreground'
+                  }`}>
+                    {PRIORITY_LABEL[s.priority]}
+                  </Badge>
+                </div>
+                {s.concern && <p className="text-sm font-medium">{s.concern}</p>}
+                {s.basis && <p className="text-xs text-muted-foreground whitespace-pre-wrap">근거 · {s.basis}</p>}
+                {s.suggestion && <p className="text-sm whitespace-pre-wrap">{s.suggestion}</p>}
+                {s.draftMessage && (
+                  <div className="rounded border bg-white px-2.5 py-2">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-muted-foreground">카톡 초안</span>
+                      <button
+                        className="text-[11px] text-primary hover:underline"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(s.draftMessage)
+                          setCopied(true)
+                          setTimeout(() => setCopied(false), 1500)
+                        }}
+                      >
+                        {copied ? '복사됨' : '복사'}
+                      </button>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm">{s.draftMessage}</p>
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  로드의 추측입니다. 기록에 없는 사정은 모르니 보내기 전에 꼭 읽어 보세요.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function DiarySection({ studentId, authorName, createdBy, canEdit }: {
   studentId: string
   authorName?: string
