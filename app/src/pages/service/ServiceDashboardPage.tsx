@@ -54,6 +54,7 @@ import { todayKST, daysFromTodayKST } from '@/lib/date'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { canSuperviseService } from '@/hooks/useProfiles'
+import { useOutreachSignals } from '@/hooks/useOutreachSignals'
 import { useT } from '@/i18n/LanguageContext'
 import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus, MeetingStatus, MeetingCancelledBy } from '@/types'
 
@@ -2319,6 +2320,99 @@ function ServiceMetricsSection() {
  * 다이어리는 학생마다 따로 불러와야 해서, 고른 학생만 받아 온다 — 전체를 한꺼번에
  * 읽으면 화면이 멈추고 비용도 그만큼 든다.
  */
+/**
+ * 버튼을 누르기 전에 이미 떠 있는 목록.
+ *
+ * 로드를 부르지 않고 기록만 세서 '지금 비어 있는 자리'를 보여 준다. 규칙이라
+ * 틀리지 않는 대신, 기록 밖의 사정(어제 통화로 이미 안심시켰다든지)은 모른다.
+ */
+function OutreachSignalsCard({ picked, onPickAll, onToggle }: {
+  picked: Set<string>
+  onPickAll: (ids: string[]) => void
+  onToggle: (id: string) => void
+}) {
+  const consultantName = useConsultantName()
+  const { data, isLoading } = useOutreachSignals()
+  const flagged = data?.flagged || []
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+          <Loader2 className="size-3.5 animate-spin" />기록을 세는 중…
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!flagged.length) {
+    return (
+      <Card className="border-l-[3px] border-l-emerald-400">
+        <CardContent className="p-4 text-sm">
+          <p className="font-semibold">지금 비어 있는 자리가 없습니다.</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            학생 {data?.scanned ?? 0}명을 봤습니다 — 미팅 공백·노쇼·미이행 약속·기록 누락 모두 기준 안입니다.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const highCount = flagged.filter(f => f.level === 'high').length
+
+  return (
+    <Card className="border-l-[3px] border-l-rose-400">
+      <CardContent className="space-y-3 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">지금 챙길 학생 {flagged.length}명</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              기록만 세서 고른 것입니다(AI 아님). 급한 쪽 {highCount}명.
+              {' '}기록에 없는 사정은 모르니, 이미 연락하셨다면 넘기셔도 됩니다.
+            </p>
+          </div>
+          <Button
+            size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
+            onClick={() => onPickAll(flagged.map(f => f.studentId))}
+          >
+            <Sparkles className="size-3" />이 학생들 전부 고르기
+          </Button>
+        </div>
+
+        <div className="divide-y rounded border">
+          {flagged.map(f => (
+            <button
+              key={f.studentId}
+              onClick={() => onToggle(f.studentId)}
+              className={`flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-left transition-colors ${
+                picked.has(f.studentId) ? 'bg-violet-50' : 'hover:bg-muted/40'
+              }`}
+            >
+              <span className={`size-1.5 shrink-0 rounded-full ${f.level === 'high' ? 'bg-rose-500' : 'bg-amber-400'}`} />
+              <span className="text-sm font-medium">{f.label}</span>
+              {f.assignedConsultant && (
+                <span className="text-[11px] text-muted-foreground">{consultantName(f.assignedConsultant)}</span>
+              )}
+              {f.signals.map(s => (
+                <Badge
+                  key={s.kind}
+                  variant="outline"
+                  className={`text-[10px] font-normal ${
+                    s.level === 'high' ? 'border-rose-300 text-rose-700' : 'border-amber-300 text-amber-700'
+                  }`}
+                  title={s.detail}
+                >
+                  {s.label}
+                </Badge>
+              ))}
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function ParentOutreachBoard({ students }: { students: ServiceStudent[] }) {
   const consultantName = useConsultantName()
   const { run, loading, done, total, error, suggestions, reset } = useParentOutreach()
@@ -2389,6 +2483,12 @@ function ParentOutreachBoard({ students }: { students: ServiceStudent[] }) {
 
   return (
     <div className="space-y-4">
+      <OutreachSignalsCard
+        picked={picked}
+        onPickAll={ids => setPicked(new Set(ids))}
+        onToggle={toggle}
+      />
+
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="flex items-start gap-2">
@@ -2512,7 +2612,11 @@ export function ServiceDashboardPage() {
   // 캘린더의 학생 미팅을 클릭하면 해당 학생의 Student 360(미팅노트) 화면으로 이동
   const openMeetingNote = (m: DashboardMeeting) => routerNav(`/service/student-360?student=${m.studentId}`)
 
-  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student' | 'majors' | 'programs' | 'metrics' | 'outreach'>('calendar')
+  // 알림에서 넘어오면(?view=outreach) 그 탭을 열어 둔다 — 벨을 누른 사람이 다시 찾지 않게
+  const initialView = new URLSearchParams(useLocation().search).get('view') === 'outreach'
+    ? 'outreach' as const
+    : 'calendar' as const
+  const [view,             setView]             = useState<'calendar' | 'cycle' | 'student' | 'majors' | 'programs' | 'metrics' | 'outreach'>(initialView)
   const [calMode,          setCalMode]          = useState<'week' | 'month'>('week')
   const [refDate,          setRefDate]          = useState<Date>(todayDate)
   const [consultantFilter, setConsultantFilter] = useState('all')

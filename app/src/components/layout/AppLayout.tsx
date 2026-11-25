@@ -14,6 +14,7 @@ import { useUnreadCount, useMessageSubscription } from '@/hooks/useMessages'
 import { useUIScale } from '@/hooks/useUIScale'
 import { useFeatureAccess, getEffectiveRoutes } from '@/hooks/useProfiles'
 import { useApplyMyInstructorAccess } from '@/hooks/usePartnerInstructors'
+import { useOutreachWatch } from '@/hooks/useOutreachWatch'
 
 export function AppLayout() {
   const { user } = useAuth()
@@ -26,6 +27,7 @@ export function AppLayout() {
   useMessageSubscription()
   useUIScale() // applies saved font-size to document root
   useApplyMyInstructorAccess() // 파트너 강사: 로그인 시 접근권한 자동 적용
+  useOutreachWatch() // 서비스 슈퍼바이저: 주 1회 '챙길 학생' 알림
 
   // Check route-level access
   const enabledRoutes = user ? getEffectiveRoutes(user, featureAccess) : []

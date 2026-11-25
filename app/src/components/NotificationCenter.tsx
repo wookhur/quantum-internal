@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { Bell, X, AlertTriangle, AlertCircle, Info, ExternalLink, Check, FileText } from 'lucide-react'
+import { Bell, X, AlertTriangle, AlertCircle, Info, ExternalLink, Check, FileText, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppNotifications } from '@/hooks/useNotifications'
 import { useUserNotifications, useAllUserNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/hooks/useUserNotifications'
@@ -114,11 +114,13 @@ export function NotificationCenter() {
   const typeIcon: Record<string, React.ReactNode> = {
     new_contract: <FileText className="size-4 text-green-600 shrink-0" />,
     consultant_assigned: <Info className="size-4 text-blue-600 shrink-0" />,
+    parent_outreach_weekly: <Sparkles className="size-4 text-violet-500 shrink-0" />,
   }
 
   const typeBg: Record<string, string> = {
     new_contract: 'bg-green-50 border-green-200',
     consultant_assigned: 'bg-blue-50 border-blue-200',
+    parent_outreach_weekly: 'bg-violet-50 border-violet-200',
   }
 
   return (
@@ -198,7 +200,7 @@ export function NotificationCenter() {
                             {loc.title}
                             {notif.isRead && <span className="text-[9px] text-gray-400 font-normal">{t('notif.read')}</span>}
                           </div>
-                          <div className="text-xs text-gray-600 mt-0.5">{loc.message}</div>
+                          <div className="text-xs text-gray-600 mt-0.5 whitespace-pre-line">{loc.message}</div>
                           <div className="text-[10px] text-gray-400 mt-1">{formatTimeAgo(notif.createdAt, t)}</div>
                           {notif.link && (
                             <button
@@ -244,7 +246,7 @@ export function NotificationCenter() {
                         {icon}
                         <div className="flex-1 min-w-0 pr-4">
                           <div className="text-sm font-medium text-gray-900">{loc.title}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">{loc.message}</div>
+                          <div className="text-xs text-gray-600 mt-0.5 whitespace-pre-line">{loc.message}</div>
                           <div className="text-[10px] text-gray-400 mt-1">
                             {formatTimeAgo(notif.createdAt, t)}
                           </div>
