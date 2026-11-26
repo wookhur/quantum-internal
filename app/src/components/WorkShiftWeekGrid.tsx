@@ -139,10 +139,19 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
   const spanMin = (toH - fromH) * 60
   const gridH = (toH - fromH) * HOUR_PX
 
-  // 범례 겸 색 순번 — 이번 주에 한 번이라도 나오는 사람을 이름순으로
+  /**
+   * 범례 겸 색 순번 — 사무실 근무가 있는 사람만.
+   *
+   * 이 표는 '오늘 사무실에 누가 같이 있나'를 보려고 만든 것이라, 색은 사무실
+   * 근무에만 준다. 재택만 있는 사람에게 색을 주면 범례에는 떠 있는데 정작
+   * 색 막대는 하나도 없어 찾게 된다.
+   */
   const legend = useMemo(() => {
     const seen = new Map<string, string>()
-    for (const s of shifts) if (!seen.has(s.userId)) seen.set(s.userId, nameOf(s.userId))
+    for (const s of shifts) {
+      if (s.kind !== 'office') continue
+      if (!seen.has(s.userId)) seen.set(s.userId, nameOf(s.userId))
+    }
     const people = [...seen.entries()]
       .map(([id, name]) => ({ id, name, fixed: FIXED_COLORS[consultantNameKey(name)] }))
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
@@ -210,6 +219,11 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
               <span className={`size-2.5 rounded-sm ${p.color}`} />{p.name}
             </span>
           ))}
+          {shifts.some(s => s.kind === 'remote') && (
+            <span className="flex items-center gap-1 text-[11px] text-gray-500">
+              <span className="size-2.5 rounded-sm border border-dashed border-gray-300 bg-gray-50" />재택
+            </span>
+          )}
           {!!timed.length && (
             <span className="flex items-center gap-1 text-[11px] text-gray-600">
               <span className="size-2.5 rounded-sm bg-slate-800" />정기 미팅
@@ -311,12 +325,16 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
                         return (
                           <div
                             key={b.key}
-                            className={`absolute overflow-hidden rounded py-0.5 text-[10px] leading-tight text-white ${
+                            className={`absolute overflow-hidden rounded py-0.5 text-[10px] leading-tight ${
                               // 좁은 칸은 여백부터 줄인다 — 한글 세 글자('남연서')가 들어가고 말고가 여기서 갈린다
                               share < 35 ? 'px-0.5' : 'px-1'
                             } ${
-                              colorById.get(b.userId) || PERSON_COLORS[0]
-                            } ${b.kind === 'remote' ? 'opacity-75 ring-1 ring-inset ring-white/70' : ''}`}
+                              // 재택은 색을 주지 않는다. 색이 곧 '사무실에 있음' 이라야
+                              // 한눈에 세어진다 — 재택까지 색을 입히면 같이 세게 된다.
+                              b.kind === 'remote'
+                                ? 'border border-dashed border-gray-300 bg-gray-50 text-gray-400'
+                                : `text-white ${colorById.get(b.userId) || PERSON_COLORS[0]}`
+                            }`}
                             style={{ top, height: h, left: `${b.lane * w}%`, width: `calc(${w}% - 2px)` }}
                             title={`${b.name} · ${SHIFT_KIND_LABEL[b.kind]} ${fmt(b.start)}–${fmt(b.end)}`}
                           >
@@ -324,7 +342,7 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
                             {roomy && h >= 32 && (
                               <p className="truncate opacity-85">{fmt(b.start)}~{fmt(b.end)}</p>
                             )}
-                            {b.kind === 'remote' && h >= 46 && <p className="truncate opacity-85">재택</p>}
+                            {b.kind === 'remote' && h >= 46 && <p className="truncate opacity-80">재택</p>}
                           </div>
                         )
                       })}
