@@ -4,7 +4,7 @@
 // consultants flow in automatically from the profiles table.
 
 import { useMemo } from 'react'
-import { useProfiles } from '@/hooks/useProfiles'
+import { useProfiles, isResigned } from '@/hooks/useProfiles'
 
 /** Legacy slug-id consultants used in historical DB rows. Do not remove. */
 const LEGACY_CONSULTANTS = [
@@ -80,7 +80,9 @@ export function useConsultantPool(): { id: string; name: string }[] {
   const { data: profiles = [] } = useProfiles()
   return useMemo(() => {
     const live = profiles
-      .filter(p => p.role === 'consultant' && !p.isExternal)
+      // 퇴사자는 드롭다운에서 뺀다. 이름 해석(useConsultantName)에는 남겨 두므로
+      // 과거 배정 기록은 계속 이름이 보인다.
+      .filter(p => p.role === 'consultant' && !p.isExternal && !isResigned(p))
       .map(p => ({ id: p.id, name: canonicalConsultantName(p.name) }))
       // Skip misconfigured profiles whose name is empty or just a UUID.
       .filter(c => c.name && !UUID_RE.test(c.name))

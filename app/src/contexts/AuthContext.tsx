@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
+import { isResigned } from '@/hooks/useProfiles'
 import type { Session } from '@supabase/supabase-js'
 import type { User, UserRole } from '@/types'
 
@@ -131,11 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const profile = await fetchInFlight.current
         if (isMounted) {
           if (profile) {
-            // 퇴사 처리 + 계약종료일 '다음날부터' 접속 차단 (앱단)
-            const end = profile.contractEndDate
-            const n = new Date()
-            const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
-            if (profile.resigned && end && today > end) {
+            // 퇴사 처리되면 접속 차단. 계약종료일이 적혀 있으면 그 '다음날부터'.
+            // 종료일을 안 적어 둔 퇴사자는 예전에 아무것도 안 막혔다 — 플래그만으로 끊는다.
+            if (isResigned(profile)) {
               await supabase.auth.signOut()
               if (isMounted) {
                 setUser(null); setSession(null); setLoading(false)

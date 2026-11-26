@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SHIFT_KIND_LABEL, type WorkShift } from '@/hooks/useWorkShifts'
+import { consultantNameKey } from '@/lib/consultants'
 
 /**
  * 직원 주간 근무 시간표.
@@ -25,13 +26,24 @@ export interface GridMeeting {
 /**
  * 사람별 색.
  *
- * 이름을 해시해서 고르면 두 사람이 같은 색을 받는 일이 생긴다(실제로 났다 —
- * Evelyn 과 Julie 가 둘 다 파랑이었다). 그래서 이번 주에 나오는 사람을 이름순으로
- * 줄 세우고 순서대로 집어 준다. 한 화면 안에서는 반드시 서로 다른 색이 된다.
+ * 세 사람은 색을 고정한다 — 운영자가 쓰던 주간 근무표와 같은 색이라야, 같은
+ * 막대를 두 곳에서 보고도 같은 사람으로 읽힌다. 표기가 'Julie Kim' 이든
+ * '김지현' 이든 한 사람으로 모이도록 consultantNameKey 로 맞춘다.
+ *
+ * 나머지는 순번으로 집어 준다. 이름을 해시해 고르면 두 사람이 같은 색을 받는
+ * 일이 생긴다(실제로 났다 — Evelyn 과 Julie 가 둘 다 파랑이었다). 이름순으로
+ * 줄 세우고 고정색이 쓴 색은 건너뛰면, 한 화면 안에서 반드시 서로 달라진다.
  */
+const FIXED_COLORS: Record<string, string> = {
+  [consultantNameKey('John Kim')]: 'bg-blue-600',    // 파랑
+  [consultantNameKey('남연서')]: 'bg-rose-800',       // 진한 빨강
+  [consultantNameKey('김지현')]: 'bg-amber-500',      // 주황
+}
+
 const PERSON_COLORS = [
   'bg-blue-600',
-  'bg-rose-700',
+  // rose-700 은 고정색 rose-800(남연서)과 너무 비슷해 뺐다 — 옆에 서면 같은 사람으로 보인다
+  'bg-teal-600',
   'bg-amber-500',
   'bg-emerald-600',
   'bg-violet-600',
@@ -131,10 +143,19 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
   const legend = useMemo(() => {
     const seen = new Map<string, string>()
     for (const s of shifts) if (!seen.has(s.userId)) seen.set(s.userId, nameOf(s.userId))
-    return [...seen.entries()]
-      .map(([id, name]) => ({ id, name }))
+    const people = [...seen.entries()]
+      .map(([id, name]) => ({ id, name, fixed: FIXED_COLORS[consultantNameKey(name)] }))
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-      .map((p, i) => ({ ...p, color: PERSON_COLORS[i % PERSON_COLORS.length] }))
+
+    // 고정색이 이미 쓴 색은 건너뛰고 나머지에 돌려 준다
+    const taken = new Set(people.map(p => p.fixed).filter(Boolean) as string[])
+    const spare = PERSON_COLORS.filter(c => !taken.has(c))
+    let next = 0
+    return people.map(p => ({
+      id: p.id,
+      name: p.name,
+      color: p.fixed || spare[next++ % Math.max(spare.length, 1)] || PERSON_COLORS[0],
+    }))
   }, [shifts, nameOf])
 
   const colorById = useMemo(

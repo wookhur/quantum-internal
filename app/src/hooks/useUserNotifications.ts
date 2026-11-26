@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { isResigned } from '@/hooks/useProfiles'
 
 export interface UserNotification {
   id: string
@@ -152,13 +153,18 @@ export async function createNotificationsForUsers(
 export async function getContractNotificationRecipients(): Promise<string[]> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, department, position')
+    .select('id, role, department, position, resigned, contract_end_date')
 
   if (error || !data) return []
 
   const recipients = new Set<string>()
 
   for (const profile of data as Record<string, unknown>[]) {
+    // 퇴사자에게는 알림을 보내지 않는다 — 읽지 않을 알림이 쌓이기만 한다
+    if (isResigned({
+      resigned: profile.resigned as boolean | undefined,
+      contractEndDate: profile.contract_end_date as string | undefined,
+    })) continue
     const role = profile.role as string
     const department = profile.department as string
     const position = profile.position as string

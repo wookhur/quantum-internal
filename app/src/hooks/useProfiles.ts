@@ -238,6 +238,27 @@ export const FEATURE_MODULES: { key: FeatureModule; labelKey: string; descriptio
   { key: 'my_incentive', labelKey: 'access.pkg.myIncentive', descriptionKey: 'access.pkg.myIncentiveDesc' },
 ]
 
+/**
+ * 퇴사자인가.
+ *
+ * 퇴사 처리된 사람의 권한은 전부 죽어야 한다. 예전에는 '퇴사 플래그 + 계약종료일이
+ * 지남' 일 때만 로그인을 막았는데, 계약종료일을 안 적어 두면 아무것도 안 막혔다.
+ * 실제로 퇴사한 컨설턴트와 서비스 팀장의 권한이 그대로 살아 있었다.
+ *
+ * 그래서 플래그 하나로 끊는다. 다만 계약종료일이 아직 안 지났으면 재직 중으로
+ * 본다 — 퇴사 예정자를 미리 등록해 두는 쓰임이 있기 때문이다.
+ */
+export function isResigned(
+  user: { resigned?: boolean; contractEndDate?: string } | null | undefined,
+  today?: string,
+): boolean {
+  if (!user?.resigned) return false
+  const end = (user.contractEndDate || '').slice(0, 10)
+  if (!end) return true
+  const now = today || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
+  return now > end
+}
+
 /** Routes that require admin role — non-admins are always blocked */
 export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info', '/partner/instructors', '/partner/mentors']
 
@@ -245,8 +266,10 @@ export const ADMIN_ONLY_ROUTES: string[] = ['/hr/employees', '/hr/personal-info'
 export const SERVICE_FINANCE_ROUTES: string[] = ['/service/external-fees']
 
 /** True for 관리자(admin)·재무담당(account) — 서비스입금관리 열람 및 수수료 수정 권한자. */
-export function canManageServiceFinance(user: { role?: string; email?: string } | null | undefined): boolean {
-  if (!user) return false
+export function canManageServiceFinance(
+  user: { role?: string; email?: string; resigned?: boolean; contractEndDate?: string } | null | undefined,
+): boolean {
+  if (!user || isResigned(user)) return false
   return user.role === 'admin' || user.role === 'account'
 }
 
@@ -260,9 +283,12 @@ export const INVOICE_SETTINGS_ROUTES: string[] = ['/invoices/settings']
  * 접근권한 관리에서 인보이스 게시판을 열어 준 사람에게도 이 메뉴는 따로 막는다.
  */
 export function canManageInvoiceSettings(
-  user: { role?: string; email?: string; isAccount?: boolean } | null | undefined,
+  user: {
+    role?: string; email?: string; isAccount?: boolean
+    resigned?: boolean; contractEndDate?: string
+  } | null | undefined,
 ): boolean {
-  if (!user) return false
+  if (!user || isResigned(user)) return false
   return user.role === 'admin' || canAccessAccount(user)
 }
 
@@ -283,8 +309,9 @@ export function canManageInvoiceSettings(
  *   update profiles set is_service_supervisor = false where name = '홍길동';
  */
 export function canSuperviseService(
-  user: { isServiceSupervisor?: boolean } | null | undefined,
+  user: { isServiceSupervisor?: boolean; resigned?: boolean; contractEndDate?: string } | null | undefined,
 ): boolean {
+  if (isResigned(user)) return false
   return user?.isServiceSupervisor === true
 }
 
@@ -299,8 +326,9 @@ export function canSuperviseService(
  *   update profiles set work_schedule_required = true where email = '...';
  */
 export function mustEnterWorkSchedule(
-  user: { workScheduleRequired?: boolean } | null | undefined,
+  user: { workScheduleRequired?: boolean; resigned?: boolean; contractEndDate?: string } | null | undefined,
 ): boolean {
+  if (isResigned(user)) return false
   return user?.workScheduleRequired === true
 }
 
@@ -312,25 +340,34 @@ export function mustEnterWorkSchedule(
  * 열어 준 외부 계정이 실제로 있다.)
  */
 export function canViewWorkSchedule(
-  user: { role?: string; isExternal?: boolean; workScheduleRequired?: boolean } | null | undefined,
+  user: {
+    role?: string; isExternal?: boolean; workScheduleRequired?: boolean
+    resigned?: boolean; contractEndDate?: string
+  } | null | undefined,
 ): boolean {
-  if (!user) return false
+  if (!user || isResigned(user)) return false
   if (mustEnterWorkSchedule(user)) return true
   const outsider = user.role === 'freelancer' || user.role === 'external' || user.isExternal === true
   return !outsider
 }
 
 /** 전체 게시판 접근 등급(admin·account). account(재무담당)는 재무만이 아니라 전사 게시판을 봄. */
-export function isFullAccessRole(user: { role?: string } | null | undefined): boolean {
+export function isFullAccessRole(
+  user: { role?: string; resigned?: boolean; contractEndDate?: string } | null | undefined,
+): boolean {
+  if (isResigned(user)) return false
   return user?.role === 'admin' || user?.role === 'account'
 }
 
 /** 재무(account) 화면 접근 권한 — admin과 독립. 재정대시보드·인보이스 승인/수령 게이팅에 사용.
  *  account 등급 · is_account 플래그 · (호환)회계 공용 이메일 중 하나면 허용. */
 export function canAccessAccount(
-  user: { role?: string; email?: string; isAccount?: boolean } | null | undefined,
+  user: {
+    role?: string; email?: string; isAccount?: boolean
+    resigned?: boolean; contractEndDate?: string
+  } | null | undefined,
 ): boolean {
-  if (!user) return false
+  if (!user || isResigned(user)) return false
   return user.role === 'account'
     || user.isAccount === true
     || (user.email || '').toLowerCase() === 'accounting@quantumadmissions.com'
@@ -448,6 +485,8 @@ export function getEffectiveRoutes(
   user: User,
   featureAccessRecords: FeatureAccessRecord[],
 ): string[] {
+  // 퇴사자는 어떤 게시판도 열리지 않는다 — 역할이 admin 이어도 마찬가지다
+  if (isResigned(user)) return []
   // 전체 접근(admin·account): 모든 라우트. (단, 아래 재정대시보드 필터는 이들에게도 적용됨)
   const isAdmin = isFullAccessRole(user)
   const custom = featureAccessRecords.find(r => r.userId === user.id)
