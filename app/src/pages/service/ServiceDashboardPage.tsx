@@ -58,7 +58,7 @@ import { useOutreachSignals } from '@/hooks/useOutreachSignals'
 import { useWorkShifts } from '@/hooks/useWorkShifts'
 import { WorkShiftDialog } from '@/components/WorkShiftDialog'
 import { WorkShiftWeekGrid, type GridMeeting } from '@/components/WorkShiftWeekGrid'
-import { useProfiles } from '@/hooks/useProfiles'
+import { useProfiles, mustEnterWorkSchedule, canViewWorkSchedule } from '@/hooks/useProfiles'
 import { useT } from '@/i18n/LanguageContext'
 import type { MilestoneType, MilestoneStatus, StudentMilestone, ServiceReportStatus, MeetingStatus, MeetingCancelledBy } from '@/types'
 
@@ -2675,9 +2675,13 @@ export function ServiceDashboardPage() {
   const partnerKey = (user?.name || '').trim().toLowerCase()
 
   // ── 주간 출근 스케줄 ────────────────────────────────────────────────────
-  // 외부 파트너는 내부 직원의 근무 일정을 볼 일이 없다.
-  const showShifts = !isPartner
+  // 보는 사람과 적는 사람이 다르다. 적는 사람은 profiles 플래그로 지정한다 —
+  // 역할(role)로는 못 가른다(freelancer 로 등록된 실제 컨설턴트가 있다).
+  const showShifts = canViewWorkSchedule(user)
+  const canEnterShift = mustEnterWorkSchedule(user)
   const [shiftDialogOpen, setShiftDialogOpen] = useState(false)
+  /** 연필로 열 때는 '보고 있는 주', 헤더 버튼으로 열 때는 '다음 주'. */
+  const [shiftDialogWeek, setShiftDialogWeek] = useState<string | undefined>(undefined)
   const { data: profiles = [] } = useProfiles()
   const profileNames = useMemo(
     () => new Map(profiles.map(p => [p.id, p.name])),
@@ -2698,12 +2702,22 @@ export function ServiceDashboardPage() {
     () => (id: string) => profileNames.get(id) || '—',
     [profileNames],
   )
+  // 이 주를 적어야 하는 사람(퇴사자 제외). 컨설턴트를 한 명으로 좁혀 보고 있으면
+  // 미입력 명단도 그 사람만 — 화면 기준을 하나로 둔다.
+  const shiftExpected = useMemo(
+    () => (showShifts ? profiles : [])
+      .filter(p => p.workScheduleRequired && !p.resigned)
+      .filter(p => consultantFilter === 'all' || p.id === consultantFilter)
+      .map(p => ({ id: p.id, name: p.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko')),
+    [profiles, showShifts, consultantFilter],
+  )
 
   // 다음 주를 아직 안 적었나 — 금요일이 마감이라 수요일부터 눈에 띄게 둔다
   const nextWeek = useMemo(() => weekDates(shiftDays(today, 7)), [today])
   const { data: nextWeekShifts = [] } = useWorkShifts(
-    showShifts ? nextWeek[0] : undefined,
-    showShifts ? nextWeek[6] : undefined,
+    canEnterShift ? nextWeek[0] : undefined,
+    canEnterShift ? nextWeek[6] : undefined,
   )
   const myId = user?.id
   const myNextWeekCount = useMemo(
@@ -2711,7 +2725,7 @@ export function ServiceDashboardPage() {
     [nextWeekShifts, myId],
   )
   const dow = new Date(`${today}T00:00:00Z`).getUTCDay()      // 1=월 … 5=금
-  const shiftNudge = showShifts && myNextWeekCount === 0 && (dow === 0 || dow >= 3)
+  const shiftNudge = canEnterShift && myNextWeekCount === 0 && (dow === 0 || dow >= 3)
   const { data: programFees = [] } = useAllServiceProgramFees()
   const visibleStudentIds = useMemo<Set<string> | null>(() => {
     if (!isPartner) return null
@@ -2939,12 +2953,12 @@ export function ServiceDashboardPage() {
             </div>
 
             {/* 내 출근 입력 — 금요일까지 다음 주를 적는다 */}
-            {showShifts && user?.id && (
+            {canEnterShift && user?.id && (
               <Button
                 size="sm"
                 variant={shiftNudge ? 'default' : 'outline'}
                 className={`h-8 gap-1.5 ${shiftNudge ? 'bg-rose-600 hover:bg-rose-700' : ''}`}
-                onClick={() => setShiftDialogOpen(true)}
+                onClick={() => { setShiftDialogWeek(undefined); setShiftDialogOpen(true) }}
                 title="다음 주 출근 시간을 입력합니다"
               >
                 <Clock size={14} />
@@ -3110,6 +3124,10 @@ export function ServiceDashboardPage() {
               shifts={gridShifts}
               nameOf={shiftNameOf}
               meetings={gridMeetings}
+              expected={shiftExpected}
+              onEdit={canEnterShift && user?.id
+                ? () => { setShiftDialogWeek(toDateStr(weekDays[0])); setShiftDialogOpen(true) }
+                : undefined}
             />
           </div>
         )}
@@ -3266,12 +3284,14 @@ export function ServiceDashboardPage() {
       />
 
       {/* 내 주간 출근 입력 */}
-      {user?.id && (
+      {canEnterShift && user?.id && (
         <WorkShiftDialog
+          key={shiftDialogWeek || 'next'}
           open={shiftDialogOpen}
           onOpenChange={setShiftDialogOpen}
           userId={user.id}
           userName={user.name}
+          defaultWeek={shiftDialogWeek}
         />
       )}
     </div>

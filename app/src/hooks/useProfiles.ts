@@ -27,6 +27,7 @@ function mapProfile(row: Record<string, unknown>): User {
     canEditAttendance: (row.can_edit_attendance as boolean) || false,
     isAccount: (row.is_account as boolean) || false,
     isServiceSupervisor: (row.is_service_supervisor as boolean) || false,
+    workScheduleRequired: (row.work_schedule_required as boolean) || false,
     workerType: (row.worker_type as WorkerType) || undefined,
     resigned: (row.resigned as boolean) || false,
     avatarUrl: (row.avatar_url as string) || undefined,
@@ -75,6 +76,7 @@ export function useUpdateProfile() {
       canEditAttendance?: boolean
       isAccount?: boolean
       isServiceSupervisor?: boolean
+      workScheduleRequired?: boolean
       resigned?: boolean
       resignedAt?: string | null
     }) => {
@@ -101,6 +103,7 @@ export function useUpdateProfile() {
       if (updates.canEditAttendance !== undefined) row.can_edit_attendance = updates.canEditAttendance
       if (updates.isAccount !== undefined) row.is_account = updates.isAccount
       if (updates.isServiceSupervisor !== undefined) row.is_service_supervisor = updates.isServiceSupervisor
+      if (updates.workScheduleRequired !== undefined) row.work_schedule_required = updates.workScheduleRequired
       if (updates.resigned !== undefined) row.resigned = updates.resigned
       if (updates.resignedAt !== undefined) row.resigned_at = updates.resignedAt
 
@@ -283,6 +286,38 @@ export function canSuperviseService(
   user: { isServiceSupervisor?: boolean } | null | undefined,
 ): boolean {
   return user?.isServiceSupervisor === true
+}
+
+/**
+ * 주간 출근 스케줄을 적어야 하는 사람인가 — profiles.work_schedule_required.
+ *
+ * 역할(role)로는 가를 수 없다는 것이 확인됐다. 이준형·양은영·Danny Kim 은 계정이
+ * freelancer 지만 실제로 학생을 담당하는 컨설턴트고(consultants.ts 의 레거시 명부),
+ * 반대로 external 계정 중에도 서비스 대시보드가 열린 사람이 있다. 그래서 사람이
+ * 직접 정한 플래그 하나만 본다.
+ *
+ *   update profiles set work_schedule_required = true where email = '...';
+ */
+export function mustEnterWorkSchedule(
+  user: { workScheduleRequired?: boolean } | null | undefined,
+): boolean {
+  return user?.workScheduleRequired === true
+}
+
+/**
+ * 직원 근무표를 '볼' 수 있는가 — 적는 것과는 다른 문제다.
+ *
+ * 적는 사람은 당연히 보고, 그 밖에는 내부 직원만 본다. 외부·프리랜서 계정에까지
+ * 전 직원 근무 일정을 펼쳐 둘 이유는 없다. (접근권한 관리에서 서비스 대시보드를
+ * 열어 준 외부 계정이 실제로 있다.)
+ */
+export function canViewWorkSchedule(
+  user: { role?: string; isExternal?: boolean; workScheduleRequired?: boolean } | null | undefined,
+): boolean {
+  if (!user) return false
+  if (mustEnterWorkSchedule(user)) return true
+  const outsider = user.role === 'freelancer' || user.role === 'external' || user.isExternal === true
+  return !outsider
 }
 
 /** 전체 게시판 접근 등급(admin·account). account(재무담당)는 재무만이 아니라 전사 게시판을 봄. */

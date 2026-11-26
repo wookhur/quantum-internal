@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { Pencil } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { SHIFT_KIND_LABEL, type WorkShift } from '@/hooks/useWorkShifts'
 
 /**
@@ -78,12 +80,16 @@ function assignLanes(items: { start: number; end: number }[]): { lane: number[];
   return { lane, lanes: Math.max(1, laneEnd.length) }
 }
 
-export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [] }: {
+export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expected = [], onEdit }: {
   /** 'YYYY-MM-DD' 월~일 7일 */
   days: string[]
   shifts: WorkShift[]
   nameOf: (userId: string) => string
   meetings?: GridMeeting[]
+  /** 이 주를 적어야 하는 사람 — 누가 아직 안 적었는지 보이려면 명단이 필요하다 */
+  expected?: { id: string; name: string }[]
+  /** 연필 — 본인이 입력 대상일 때만 넘어온다. 보고 있는 그 주를 연다. */
+  onEdit?: () => void
 }) {
   const shown = useMemo(() => {
     // 주말은 그날 근무나 미팅이 있을 때만 — 늘 비어 있는 칸 두 개가 화면을 먹는다
@@ -155,10 +161,28 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [] }: {
 
   const hasAnything = shifts.length > 0 || meetings.length > 0
 
+  // 한 줄도 안 적은 사람. '휴무'는 적은 것이므로 여기 안 들어온다 —
+  // 그래서 쉬는 날을 비워 두지 말라고 입력 창에서 따로 일러둔다.
+  const missing = useMemo(() => {
+    const entered = new Set(shifts.map(s => s.userId))
+    return expected.filter(p => !entered.has(p.id))
+  }, [shifts, expected])
+
   return (
     <div className="rounded-lg border bg-white">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
-        <p className="text-sm font-semibold text-gray-900">직원 주간 근무 스케줄</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-gray-900">직원 주간 근무 스케줄</p>
+          {onEdit && (
+            <Button
+              size="sm" variant="ghost" className="h-6 gap-1 px-1.5 text-[11px] text-gray-500 hover:text-gray-900"
+              onClick={onEdit}
+              title="보고 있는 주의 내 근무를 입력합니다"
+            >
+              <Pencil size={11} />내 근무 입력
+            </Button>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {legend.map(p => (
             <span key={p.id} className="flex items-center gap-1 text-[11px] text-gray-600">
@@ -173,9 +197,15 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [] }: {
         </div>
       </div>
 
+      {missing.length > 0 && (
+        <p className="border-b bg-amber-50 px-4 py-1.5 text-[11px] text-amber-800">
+          아직 안 적은 사람 {missing.length}명 · {missing.map(p => p.name).join(', ')}
+        </p>
+      )}
+
       {!hasAnything ? (
         <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-          이번 주에 입력된 근무가 없습니다. 위의 ‘내 출근 입력’으로 적어 주세요.
+          이 주에 입력된 근무가 없습니다.{onEdit ? ' 위의 ‘내 근무 입력’으로 적어 주세요.' : ''}
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -260,7 +290,10 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [] }: {
                         return (
                           <div
                             key={b.key}
-                            className={`absolute overflow-hidden rounded px-1 py-0.5 text-[10px] leading-tight text-white ${
+                            className={`absolute overflow-hidden rounded py-0.5 text-[10px] leading-tight text-white ${
+                              // 좁은 칸은 여백부터 줄인다 — 한글 세 글자('남연서')가 들어가고 말고가 여기서 갈린다
+                              share < 35 ? 'px-0.5' : 'px-1'
+                            } ${
                               colorById.get(b.userId) || PERSON_COLORS[0]
                             } ${b.kind === 'remote' ? 'opacity-75 ring-1 ring-inset ring-white/70' : ''}`}
                             style={{ top, height: h, left: `${b.lane * w}%`, width: `calc(${w}% - 2px)` }}

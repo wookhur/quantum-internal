@@ -27,6 +27,7 @@ export interface User {
   canEditAttendance?: boolean // '근태관리 수정' 권한 (지정된 사용자만)
   isAccount?: boolean         // 재무(account) 화면 접근 권한 — admin과 독립적으로 부여
   isServiceSupervisor?: boolean // 학부모 소통 제안('로드') 열람 권한 — 서비스팀 슈퍼바이저
+  workScheduleRequired?: boolean // 주간 출근 스케줄 입력 대상 — 매주 금요일까지 다음 주 기입
   resigned?: boolean          // 퇴사 처리 여부 — 계약종료일 다음날부터 접속 차단
   avatarUrl?: string
   createdAt: string
