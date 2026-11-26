@@ -103,21 +103,31 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
   /** 연필 — 본인이 입력 대상일 때만 넘어온다. 보고 있는 그 주를 연다. */
   onEdit?: () => void
 }) {
+  /**
+   * 이 표에 그리는 근무는 사무실 출근뿐이다.
+   *
+   * 쓸모가 '오늘 사무실에 누가 같이 있나'를 세는 것이라, 재택은 아예 빼 둔다.
+   * 색만 빼도 가로 한 칸을 차지해 사무실 막대가 그만큼 좁아졌다.
+   * 입력한 재택 기록 자체는 지우지 않는다 — '적었는가'를 셀 때는 그대로 센다.
+   */
+  const officeShifts = useMemo(() => shifts.filter(s => s.kind === 'office'), [shifts])
+
   const shown = useMemo(() => {
     // 주말은 그날 근무나 미팅이 있을 때만 — 늘 비어 있는 칸 두 개가 화면을 먹는다
     const weekendHas = (d: string) =>
-      shifts.some(s => s.workDate === d) || meetings.some(m => m.date === d)
+      officeShifts.some(s => s.workDate === d) || meetings.some(m => m.date === d)
     return days.filter((d, i) => i < 5 || weekendHas(d))
-  }, [days, shifts, meetings])
+  }, [days, officeShifts, meetings])
 
+  // 시간을 아는 미팅만 쓴다. 시간이 없는 미팅(service_meetings 에는 시:분 칸이
+  // 없다)을 요일 밑에 '시간 미정' 으로 적어 두었더니, 근무표를 보는 데 방해만 됐다.
   const timed = useMemo(() => meetings.filter(m => toMin(m.time) !== null), [meetings])
-  const untimed = useMemo(() => meetings.filter(m => toMin(m.time) === null), [meetings])
 
   // 시간축 범위 — 기록에 맞춰 넓히되 너무 납작해지지 않게 최소 폭을 둔다
   const [fromH, toH] = useMemo(() => {
     const starts: number[] = []
     const ends: number[] = []
-    for (const s of shifts) {
+    for (const s of officeShifts) {
       const a = toMin(s.startTime), b = toMin(s.endTime)
       if (a !== null) starts.push(a)
       if (b !== null) ends.push(b)
@@ -130,7 +140,7 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
     const lo = Math.max(0, Math.floor(Math.min(...starts) / 60))
     const hi = Math.min(24, Math.ceil(Math.max(...ends, Math.min(...starts) + 60) / 60))
     return [lo, Math.max(hi, lo + 4)]
-  }, [shifts, timed])
+  }, [officeShifts, timed])
 
   const hours = useMemo(
     () => Array.from({ length: toH - fromH + 1 }, (_, i) => fromH + i),
@@ -148,8 +158,7 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
    */
   const legend = useMemo(() => {
     const seen = new Map<string, string>()
-    for (const s of shifts) {
-      if (s.kind !== 'office') continue
+    for (const s of officeShifts) {
       if (!seen.has(s.userId)) seen.set(s.userId, nameOf(s.userId))
     }
     const people = [...seen.entries()]
@@ -165,7 +174,7 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
       name: p.name,
       color: p.fixed || spare[next++ % Math.max(spare.length, 1)] || PERSON_COLORS[0],
     }))
-  }, [shifts, nameOf])
+  }, [officeShifts, nameOf])
 
   const colorById = useMemo(
     () => new Map(legend.map(p => [p.id, p.color])),
@@ -174,8 +183,8 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
 
   /** 그 날짜의 근무 막대 — 출근·재택만(휴무는 시간이 없다). */
   const barsOf = (date: string): Bar[] => {
-    const raw = shifts
-      .filter(s => s.workDate === date && s.kind !== 'off')
+    const raw = officeShifts
+      .filter(s => s.workDate === date)
       .map(s => ({
         key: `${s.userId}-${date}`,
         userId: s.userId,
@@ -189,7 +198,7 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
     return raw.map((b, i) => ({ ...b, lane: lane[i], lanes }))
   }
 
-  const hasAnything = shifts.length > 0 || meetings.length > 0
+  const hasAnything = officeShifts.length > 0 || timed.length > 0
 
   // 한 줄도 안 적은 사람. '휴무'는 적은 것이므로 여기 안 들어온다 —
   // 그래서 쉬는 날을 비워 두지 말라고 입력 창에서 따로 일러둔다.
@@ -219,11 +228,6 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
               <span className={`size-2.5 rounded-sm ${p.color}`} />{p.name}
             </span>
           ))}
-          {shifts.some(s => s.kind === 'remote') && (
-            <span className="flex items-center gap-1 text-[11px] text-gray-500">
-              <span className="size-2.5 rounded-sm border border-dashed border-gray-300 bg-gray-50" />재택
-            </span>
-          )}
           {!!timed.length && (
             <span className="flex items-center gap-1 text-[11px] text-gray-600">
               <span className="size-2.5 rounded-sm bg-slate-800" />정기 미팅
@@ -251,25 +255,18 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
               {shown.map(d => {
                 const i = days.indexOf(d)
                 const offs = shifts.filter(s => s.workDate === d && s.kind === 'off')
-                const un = untimed.filter(m => m.date === d)
                 return (
                   <div key={d} className="min-w-0 flex-1 px-0.5">
                     <div className="rounded-t bg-slate-800 py-1 text-center text-white">
                       <p className="text-xs font-semibold">{WEEKDAY_LABEL[i] ?? ''}</p>
                       <p className="text-[10px] opacity-70">{d.slice(5).replace('-', '/')}</p>
                     </div>
-                    {(offs.length > 0 || un.length > 0) && (
+                    {offs.length > 0 && (
                       <div className="space-y-0.5 pt-0.5">
                         {offs.map(s => (
                           <p key={s.userId} className="truncate rounded bg-gray-50 px-1 text-[10px] text-gray-400"
                             title={`${nameOf(s.userId)} · ${SHIFT_KIND_LABEL.off}`}>
                             {nameOf(s.userId)} 휴무
-                          </p>
-                        ))}
-                        {un.map(m => (
-                          <p key={m.id} className="truncate rounded bg-violet-50 px-1 text-[10px] text-violet-700"
-                            title={`${m.label}${m.sublabel ? ` · ${m.sublabel}` : ''} · 시간 미정`}>
-                            {m.label} <span className="opacity-60">시간 미정</span>
                           </p>
                         ))}
                       </div>
@@ -328,13 +325,7 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
                             className={`absolute overflow-hidden rounded py-0.5 text-[10px] leading-tight ${
                               // 좁은 칸은 여백부터 줄인다 — 한글 세 글자('남연서')가 들어가고 말고가 여기서 갈린다
                               share < 35 ? 'px-0.5' : 'px-1'
-                            } ${
-                              // 재택은 색을 주지 않는다. 색이 곧 '사무실에 있음' 이라야
-                              // 한눈에 세어진다 — 재택까지 색을 입히면 같이 세게 된다.
-                              b.kind === 'remote'
-                                ? 'border border-dashed border-gray-300 bg-gray-50 text-gray-400'
-                                : `text-white ${colorById.get(b.userId) || PERSON_COLORS[0]}`
-                            }`}
+                            } text-white ${colorById.get(b.userId) || PERSON_COLORS[0]}`}
                             style={{ top, height: h, left: `${b.lane * w}%`, width: `calc(${w}% - 2px)` }}
                             title={`${b.name} · ${SHIFT_KIND_LABEL[b.kind]} ${fmt(b.start)}–${fmt(b.end)}`}
                           >
@@ -342,7 +333,6 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
                             {roomy && h >= 32 && (
                               <p className="truncate opacity-85">{fmt(b.start)}~{fmt(b.end)}</p>
                             )}
-                            {b.kind === 'remote' && h >= 46 && <p className="truncate opacity-80">재택</p>}
                           </div>
                         )
                       })}
