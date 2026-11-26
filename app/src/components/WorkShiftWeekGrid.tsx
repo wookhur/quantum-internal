@@ -158,6 +158,9 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
    */
   const legend = useMemo(() => {
     const seen = new Map<string, string>()
+    // 입력 대상은 아직 안 적었어도 색을 보여 준다 — 색표는 '누가 무슨 색인지'를
+    // 알려 주는 것이라, 그 주에 근무가 없다고 이름이 사라지면 표를 못 읽는다.
+    for (const p of expected) if (!seen.has(p.id)) seen.set(p.id, p.name)
     for (const s of officeShifts) {
       if (!seen.has(s.userId)) seen.set(s.userId, nameOf(s.userId))
     }
@@ -174,7 +177,7 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
       name: p.name,
       color: p.fixed || spare[next++ % Math.max(spare.length, 1)] || PERSON_COLORS[0],
     }))
-  }, [officeShifts, nameOf])
+  }, [officeShifts, expected, nameOf])
 
   const colorById = useMemo(
     () => new Map(legend.map(p => [p.id, p.color])),
@@ -223,11 +226,20 @@ export function WorkShiftWeekGrid({ days, shifts, nameOf, meetings = [], expecte
           )}
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          {legend.map(p => (
-            <span key={p.id} className="flex items-center gap-1 text-[11px] text-gray-600">
-              <span className={`size-2.5 rounded-sm ${p.color}`} />{p.name}
-            </span>
-          ))}
+          {legend.map(p => {
+            // 근무가 없다고 색을 흐리게 하면 정작 '누가 무슨 색인지'가 안 보인다.
+            // 안 적은 사람은 바로 아래 띠가 따로 알려 주므로, 색표는 또렷하게 둔다.
+            const working = officeShifts.some(s => s.userId === p.id)
+            return (
+              <span
+                key={p.id}
+                className="flex items-center gap-1 text-[11px] text-gray-600"
+                title={working ? p.name : `${p.name} · 이 주에 입력된 사무실 근무 없음`}
+              >
+                <span className={`size-2.5 rounded-sm ${p.color}`} />{p.name}
+              </span>
+            )
+          })}
           {!!timed.length && (
             <span className="flex items-center gap-1 text-[11px] text-gray-600">
               <span className="size-2.5 rounded-sm bg-slate-800" />정기 미팅
