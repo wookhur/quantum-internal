@@ -10,6 +10,11 @@ export interface FixedExpense {
   amount: number
   currency: 'KRW' | 'USD'
   isActive: boolean
+  /** 매달 며칠에 나가는가(1~31). 그 달에 없는 날이면 말일로 당긴다. */
+  payDay: number
+  /** 'YYYY-MM' — 이 달부터 / 이 달까지. 비우면 제한 없음. */
+  startMonth: string | null
+  endMonth: string | null
   notes: string | null
   createdBy: string | null
   createdAt: string
@@ -24,6 +29,10 @@ function mapExpense(row: Record<string, unknown>): FixedExpense {
     amount: Number(row.amount) || 0,
     currency: (row.currency as 'KRW' | 'USD') || 'KRW',
     isActive: row.is_active as boolean,
+    // 칸이 아직 없는 환경(마이그레이션 전)에서도 급여 지급일(5일)로 동작하게 둔다
+    payDay: Number(row.pay_day) || 5,
+    startMonth: (row.start_month as string) || null,
+    endMonth: (row.end_month as string) || null,
     notes: row.notes as string | null,
     createdBy: row.created_by as string | null,
     createdAt: row.created_at as string,
@@ -54,6 +63,9 @@ export function useCreateFixedExpense() {
       category: ExpenseCategory
       amount: number
       currency?: 'KRW' | 'USD'
+      payDay?: number
+      startMonth?: string | null
+      endMonth?: string | null
       notes?: string
       createdBy?: string
     }) => {
@@ -64,6 +76,9 @@ export function useCreateFixedExpense() {
           category: params.category,
           amount: params.amount,
           currency: params.currency || 'KRW',
+          pay_day: params.payDay ?? 5,
+          start_month: params.startMonth || null,
+          end_month: params.endMonth || null,
           notes: params.notes || null,
           created_by: params.createdBy || null,
         })
@@ -86,6 +101,9 @@ export function useUpdateFixedExpense() {
       amount?: number
       currency?: 'KRW' | 'USD'
       isActive?: boolean
+      payDay?: number
+      startMonth?: string | null
+      endMonth?: string | null
       notes?: string | null
     }) => {
       const { id, ...rest } = params
@@ -95,6 +113,9 @@ export function useUpdateFixedExpense() {
       if (rest.amount !== undefined) row.amount = rest.amount
       if (rest.currency !== undefined) row.currency = rest.currency
       if (rest.isActive !== undefined) row.is_active = rest.isActive
+      if (rest.payDay !== undefined) row.pay_day = rest.payDay
+      if (rest.startMonth !== undefined) row.start_month = rest.startMonth
+      if (rest.endMonth !== undefined) row.end_month = rest.endMonth
       if (rest.notes !== undefined) row.notes = rest.notes
       const { error } = await supabase.from('fixed_expenses').update(row).eq('id', id)
       if (error) throw error

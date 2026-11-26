@@ -26,6 +26,7 @@ import { useT } from '@/i18n/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useLocation } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
+import { CashflowTimeline } from '@/components/CashflowTimeline'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,6 +81,7 @@ function ExpenseDialog({
     category: 'etc' as ExpenseCategory,
     amount: '',
     currency: 'KRW' as 'KRW' | 'USD',
+    payDay: '5',
     notes: '',
   })
 
@@ -91,10 +93,11 @@ function ExpenseDialog({
         category: expense.category,
         amount: String(expense.amount),
         currency: expense.currency,
+        payDay: String(expense.payDay || 5),
         notes: expense.notes || '',
       })
     } else if (v) {
-      setForm({ name: '', category: 'etc', amount: '', currency: 'KRW', notes: '' })
+      setForm({ name: '', category: 'etc', amount: '', currency: 'KRW', payDay: '5', notes: '' })
     }
     onOpenChange(v)
   }, [expense, onOpenChange])
@@ -107,6 +110,7 @@ function ExpenseDialog({
         category: expense.category,
         amount: String(expense.amount),
         currency: expense.currency,
+        payDay: String(expense.payDay || 5),
         notes: expense.notes || '',
       })
     }
@@ -116,16 +120,19 @@ function ExpenseDialog({
     if (!canEdit) return
     if (!form.name.trim() || !form.amount) return
     const amt = Number(form.amount)
+    // 자금 흐름표가 '며칠에 나가는 돈인지'를 알아야 날짜순으로 설 수 있다.
+    // 그 달에 없는 날(2월 30일)은 계산할 때 말일로 당긴다.
+    const payDayNum = Math.min(Math.max(Number(form.payDay) || 5, 1), 31)
     if (amt <= 0) return
 
     if (expense) {
       update.mutate(
-        { id: expense.id, name: form.name.trim(), category: form.category, amount: amt, currency: form.currency, notes: form.notes || null },
+        { id: expense.id, name: form.name.trim(), category: form.category, amount: amt, currency: form.currency, payDay: payDayNum, notes: form.notes || null },
         { onSuccess: () => onOpenChange(false) },
       )
     } else {
       create.mutate(
-        { name: form.name.trim(), category: form.category, amount: amt, currency: form.currency, notes: form.notes || undefined, createdBy: user?.id },
+        { name: form.name.trim(), category: form.category, amount: amt, currency: form.currency, payDay: payDayNum, notes: form.notes || undefined, createdBy: user?.id },
         { onSuccess: () => onOpenChange(false) },
       )
     }
@@ -173,6 +180,15 @@ function ExpenseDialog({
             <Label className="text-xs">{t('cashflow.monthlyAmount')} *</Label>
             <Input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" />
           </div>
+
+          <div>
+            <Label className="text-xs">지급일 (매월 며칠)</Label>
+            <Input type="number" min={1} max={31} value={form.payDay}
+              onChange={e => setForm(f => ({ ...f, payDay: e.target.value }))} placeholder="5" />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              자금 흐름표에서 이 날짜에 섭니다. 그 달에 없는 날이면 말일로 당깁니다.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label className="text-xs">{t('common.notes')}</Label>
             <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
@@ -205,13 +221,16 @@ function monthSpan(from: string, to: string): number {
 
 export function CashflowPage() {
   const t = useT()
+  const { user } = useAuth()
   const canEdit = useCanEdit(useLocation().pathname)
   const [currentMonth, setCurrentMonth] = useState(() => getMonthKey(new Date()))
   const isCurrentMonth = currentMonth === getMonthKey(new Date())
   const [year, month] = currentMonth.split('-').map(Number)
 
   // View mode: single month vs. a date range
-  const [viewMode, setViewMode] = useState<'month' | 'range'>('month')
+  // 'flow' = 날짜순 자금 흐름(향후 6개월). 월별 합계만으로는 달 중간에 통장이
+  // 비는 것을 못 보기 때문에 기본으로 이 화면을 연다.
+  const [viewMode, setViewMode] = useState<'flow' | 'month' | 'range'>('flow')
   const [rangeFrom, setRangeFrom] = useState(() => getMonthKey(new Date()))
   const [rangeTo, setRangeTo] = useState(() => getMonthKey(new Date()))
   // Normalize so from <= to
@@ -357,6 +376,14 @@ export function CashflowPage() {
         {/* Mode toggle: 월별 / 기간 */}
         <div className="inline-flex items-center bg-muted rounded-lg p-0.5">
           <button
+            onClick={() => setViewMode('flow')}
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+              viewMode === 'flow' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            자금 흐름
+          </button>
+          <button
             onClick={() => setViewMode('month')}
             className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
               viewMode === 'month' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -374,7 +401,9 @@ export function CashflowPage() {
           </button>
         </div>
 
-        {viewMode === 'month' ? (
+        {viewMode === 'flow' ? (
+          <span className="text-xs text-muted-foreground">오늘부터 6개월</span>
+        ) : viewMode === 'month' ? (
           <>
             <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentMonth(m => shiftMonth(m, -1))}>
               <ChevronLeft className="size-4" />
@@ -412,6 +441,9 @@ export function CashflowPage() {
         )}
       </div>
 
+      {viewMode === 'flow' && <CashflowTimeline canEdit={canEdit} userId={user?.id} />}
+
+      {viewMode !== 'flow' && (<>
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Total Income */}
@@ -673,6 +705,8 @@ export function CashflowPage() {
           </Card>
         )}
       </div>
+
+      </>)}
 
       {/* Expense Dialog */}
       <ExpenseDialog open={dialogOpen} onOpenChange={setDialogOpen} expense={editExpense} canEdit={canEdit} />
