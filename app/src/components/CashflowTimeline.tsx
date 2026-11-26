@@ -37,7 +37,9 @@ const MONTHS_AHEAD = 6
 /** 달러 수금을 원화로 환산할 때 쓰는 기본값. 화면에서 바꿀 수 있다. */
 const DEFAULT_USD_RATE = 1340
 
-const KIND_OPTIONS: CashEventKind[] = ['loan_in', 'loan_out', 'onetime_in', 'onetime_out', 'other']
+// '기준 잔고'도 화면에서 넣을 수 있어야 한다 — 통장 잔고는 매주 바뀌는 값이라
+// 쓸 때마다 SQL 을 두드리게 할 수는 없다. 가장 최근 것 하나만 쓰인다.
+const KIND_OPTIONS: CashEventKind[] = ['opening', 'loan_in', 'loan_out', 'onetime_in', 'onetime_out', 'other']
 
 function won(n: number): string {
   return formatCurrency(Math.round(n))
@@ -169,6 +171,13 @@ function EventDialog({ open, onOpenChange, editing, canEdit, userId }: {
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
           </div>
 
+          {form.kind === 'opening' && (
+            <p className="rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-[11px] text-blue-800">
+              기준 잔고는 표의 출발점입니다. 가장 최근 날짜의 것 하나만 쓰이므로,
+              잔고가 바뀌면 오늘 날짜로 새로 넣으시면 됩니다.
+            </p>
+          )}
+
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <input type="checkbox" checked={form.settled}
               onChange={e => setForm(f => ({ ...f, settled: e.target.checked }))} />
@@ -228,6 +237,8 @@ export function CashflowTimeline({ canEdit, userId }: { canEdit: boolean; userId
       contractorName: i.contract?.contractorName,
       studentName: i.contract?.studentName,
       schoolName: i.contract?.schoolName,
+      contractStatus: i.contract?.status,
+      refundStatus: i.refundStatus,
     })),
     expenses: expenses.filter(e => e.isActive).map(e => ({
       id: e.id,
@@ -316,8 +327,8 @@ export function CashflowTimeline({ canEdit, userId }: { canEdit: boolean; userId
 
       {!opening && (
         <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          기준 잔고가 없어 0원에서 시작합니다. 아래 <b>＋ 자금 항목</b>에서 종류를 <b>일시 수입</b>으로
-          두고 ‘현재 통장 잔고’를 넣어 주세요.
+          기준 잔고가 없어 0원에서 시작합니다. 아래 <b>＋ 자금 항목</b>에서 종류를 <b>기준 잔고</b>로
+          두고 오늘 날짜의 통장 잔고를 넣어 주세요.
         </div>
       )}
 

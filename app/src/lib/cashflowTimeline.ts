@@ -44,6 +44,10 @@ export interface TimelineInstallment {
   contractorName?: string
   studentName?: string
   schoolName?: string
+  /** 계약 상태 — 'cancelled'·'terminated' 면 앞으로 들어올 돈이 아니다. */
+  contractStatus?: string
+  /** 환불 진행 상태 — 'requested'·'completed' 면 받을 돈이 아니라 돌려줄 돈이다. */
+  refundStatus?: string
 }
 
 export interface TimelineExpense {
@@ -175,6 +179,10 @@ export function buildTimeline(input: {
   // ── 수금 (계약관리 연동) ────────────────────────────────────────────────
   for (const it of installments) {
     if (it.status === 'paid') continue
+    // 해지·환불 건은 앞으로 들어올 돈이 아니다. 납기일이 남아 있다고 그대로 세면
+    // 자금이 있는 것처럼 보인다 — 실제로 그런 계약이 표에 끼어 있었다.
+    if (it.contractStatus === 'cancelled' || it.contractStatus === 'terminated') continue
+    if (it.refundStatus === 'requested' || it.refundStatus === 'completed') continue
     const remaining = (it.amount || 0) - (it.paidAmount || 0)
     if (remaining <= 0) continue
     const due = (it.dueDate || '').slice(0, 10)
