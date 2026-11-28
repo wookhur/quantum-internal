@@ -12,6 +12,7 @@ import { useContracts } from '@/hooks/useContracts'
 import { summarizeConversion, type ChannelStat } from '@/lib/leadConversion'
 import { channelGroupOf } from '@/lib/leadChannelGroup'
 import { todayKST, shiftDays } from '@/lib/date'
+import { getStageConfig, type PipelineStage } from '@/types'
 
 /**
  * 유입경로별 성공률.
@@ -50,7 +51,7 @@ export function LeadSourceConversion() {
   const [usdRate, setUsdRate] = useState(1340)
   const navigate = useNavigate()
   /** 계약자 목록을 띄울 대상 — 이름(묶음 또는 원래 경로)과 보여 줄 리드들 */
-  const [detail, setDetail] = useState<{ title: string; leadIds: string[] } | null>(null)
+  const [detail, setDetail] = useState<{ title: string; leadIds: string[]; onlyWon: boolean } | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const toggle = (k: string) => setOpen(p => {
     const n = new Set(p)
@@ -98,9 +99,12 @@ export function LeadSourceConversion() {
   /** 달러로 맺은 계약이 하나도 없으면 환율 칸은 쓸 데가 없다 — 보이지 않게 둔다. */
   const hasUsd = useMemo(() => contracts.some(c => c.currency === 'USD'), [contracts])
 
-  /** 기간 안에서 그 경로로 계약까지 간 리드들. 묶음이면 묶음 전체를 본다. */
-  const winnersOf = (name: string, isGroup: boolean) => leads.filter(l => {
-    if (l.pipelineStage !== 'contracted') return false
+  /**
+   * 기간 안에서 그 경로에 속한 리드들. 묶음이면 묶음 전체를 본다.
+   * onlyWon 이면 계약까지 간 건만 — '계약 3건' 을 눌렀을 때 쓴다.
+   */
+  const leadsOf = (name: string, isGroup: boolean, onlyWon: boolean) => leads.filter(l => {
+    if (onlyWon && l.pipelineStage !== 'contracted') return false
     const d = (l.leadDate || '').slice(0, 10)
     if (from && d && d < from) return false
     if (from && !d) return false
@@ -240,12 +244,22 @@ export function LeadSourceConversion() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{c.total.toLocaleString('ko-KR')}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {c.total > 0 ? (
+                        <button
+                          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                          onClick={() => setDetail({ title: c.channel, leadIds: leadsOf(c.channel, true, false), onlyWon: false })}
+                          title="이 경로의 리드 전체 보기"
+                        >
+                          {c.total.toLocaleString('ko-KR')}
+                        </button>
+                      ) : c.total.toLocaleString('ko-KR')}
+                    </td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">
                       {c.won > 0 ? (
                         <button
                           className="underline decoration-dotted underline-offset-2 hover:text-emerald-800"
-                          onClick={() => setDetail({ title: c.channel, leadIds: winnersOf(c.channel, true) })}
+                          onClick={() => setDetail({ title: c.channel, leadIds: leadsOf(c.channel, true, true), onlyWon: true })}
                           title="계약자 목록 보기"
                         >
                           {c.won.toLocaleString('ko-KR')}
@@ -280,13 +294,21 @@ export function LeadSourceConversion() {
                     <tr key={`${c.channel}/${k.channel}`} className="border-b bg-muted/20 text-[13px] last:border-0">
                       <td className="py-1.5 pl-9 pr-3 text-muted-foreground">{k.channel}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                        {k.total.toLocaleString('ko-KR')}
+                        {k.total > 0 ? (
+                          <button
+                            className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                            onClick={() => setDetail({ title: k.channel, leadIds: leadsOf(k.channel, false, false), onlyWon: false })}
+                            title="이 경로의 리드 전체 보기"
+                          >
+                            {k.total.toLocaleString('ko-KR')}
+                          </button>
+                        ) : k.total.toLocaleString('ko-KR')}
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-emerald-600">
                         {k.won ? (
                           <button
                             className="underline decoration-dotted underline-offset-2 hover:text-emerald-800"
-                            onClick={() => setDetail({ title: k.channel, leadIds: winnersOf(k.channel, false) })}
+                            onClick={() => setDetail({ title: k.channel, leadIds: leadsOf(k.channel, false, true), onlyWon: true })}
                             title="계약자 목록 보기"
                           >
                             {k.won}
@@ -348,7 +370,7 @@ export function LeadSourceConversion() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {detail?.title} · 계약 {detail?.leadIds.length ?? 0}건
+              {detail?.title} · {detail?.onlyWon ? '계약' : '리드'} {detail?.leadIds.length ?? 0}건
             </DialogTitle>
           </DialogHeader>
 
@@ -356,8 +378,9 @@ export function LeadSourceConversion() {
             <table className="w-full text-sm">
               <thead className="border-b text-[11px] text-gray-500">
                 <tr>
-                  <th className="py-1.5 pr-2 text-left font-medium">학생 · 계약자</th>
+                  <th className="py-1.5 pr-2 text-left font-medium">학생 · 학부모</th>
                   <th className="px-2 py-1.5 text-left font-medium">유입경로</th>
+                  {!detail?.onlyWon && <th className="px-2 py-1.5 text-left font-medium">단계</th>}
                   <th className="px-2 py-1.5 text-right font-medium">계약 금액</th>
                 </tr>
               </thead>
@@ -383,11 +406,20 @@ export function LeadSourceConversion() {
                         <span className="ml-1 text-xs text-muted-foreground">
                           {l?.parentName || c?.contractorName || ''}
                         </span>
-                        {!c && (
+                        {!c && l?.pipelineStage === 'contracted' && (
                           <span className="ml-1 text-[10px] text-amber-700">계약 연결 없음</span>
                         )}
                       </td>
-                      <td className="px-2 py-1.5 text-xs text-muted-foreground">{l?.sourceChannel || '—'}</td>
+                      <td className="px-2 py-1.5 text-xs text-muted-foreground">
+                        {(l?.sourceChannel || '').trim() || '(미입력)'}
+                      </td>
+                      {!detail?.onlyWon && (
+                        <td className="px-2 py-1.5 text-xs">
+                          {l?.pipelineStage
+                            ? getStageConfig(l.pipelineStage as PipelineStage).label
+                            : '—'}
+                        </td>
+                      )}
                       <td className="px-2 py-1.5 text-right tabular-nums">
                         {c ? won(c.currency === 'USD' ? (c.totalAmount || 0) * usdRate : (c.totalAmount || 0)) : '—'}
                       </td>
@@ -395,14 +427,16 @@ export function LeadSourceConversion() {
                   )
                 })}
                 {!detail?.leadIds.length && (
-                  <tr><td colSpan={3} className="py-6 text-center text-muted-foreground">계약이 없습니다.</td></tr>
+                  <tr><td colSpan={4} className="py-6 text-center text-muted-foreground">
+                    {detail?.onlyWon ? '계약이 없습니다.' : '리드가 없습니다.'}
+                  </td></tr>
                 )}
               </tbody>
             </table>
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            이름을 누르면 계약관리의 계약 상세로 넘어갑니다.
+            파란 이름을 누르면 계약관리의 계약 상세로 넘어갑니다. 계약이 없는 리드는 이름만 보입니다.
           </p>
         </DialogContent>
       </Dialog>
