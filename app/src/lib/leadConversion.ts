@@ -55,6 +55,8 @@ export interface ChannelStat {
   closedRate: number
   /** 그 경로에서 나온 계약 금액 합 (원) */
   revenue: number
+  /** 묶음 안에 들어 있는 원래 유입경로들 — 펼쳐 보면 어느 행사가 먹혔는지 나온다 */
+  children?: ChannelStat[]
   /** 계약 1건당 리드 몇 건이 필요한가 — 'N건 중 1건' */
   leadsPerWin: number | null
   /**
@@ -82,6 +84,11 @@ function channelOf(l: ConversionLead): string {
   return c || '미입력'
 }
 
+/** 'SNS - 하버드 EC' 처럼 접두사가 붙은 이름은 펼친 목록에서 접두사를 뗀다. */
+function shortName(n: string): string {
+  return n.replace(/^(SNS|세미나)\s*-\s*/i, '').trim() || n
+}
+
 export function summarizeConversion(input: {
   leads: ConversionLead[]
   contracts: ConversionContract[]
@@ -90,8 +97,10 @@ export function summarizeConversion(input: {
   to?: string
   /** 달러 계약을 원화로 환산할 때 */
   usdRate?: number
+  /** 유입경로 이름을 묶음으로 바꾸는 함수. 없으면 원래 이름 그대로 센다. */
+  groupBy?: (channel: string) => string
 }): ConversionSummary {
-  const { leads, contracts, from, to, usdRate = 1340 } = input
+  const { leads, contracts, from, to, usdRate = 1340, groupBy } = input
 
   // 계약 금액을 리드에 붙인다. 해지·취소된 계약은 성과로 세지 않는다.
   const revenueByLead = new Map<string, number>()
@@ -143,10 +152,38 @@ export function summarizeConversion(input: {
     atContract: v.atContract,
   })
 
-  const channels = [...acc.entries()]
+  const byName = [...acc.entries()]
     .map(([k, v]) => finish(k, v))
     // 계약을 많이 낸 경로부터. 같으면 리드가 많은 쪽.
     .sort((a, b) => (b.won - a.won) || (b.total - a.total))
+
+  // 묶음이 주어지면 원래 이름들을 접어 넣는다. 원본은 children 으로 남겨
+  // '웨비나 중 어느 행사가 먹혔나' 를 펼쳐 볼 수 있게 한다.
+  const channels = groupBy
+    ? (() => {
+        const g = new Map<string, ChannelStat[]>()
+        for (const c of byName) {
+          const k = groupBy(c.channel)
+          const arr = g.get(k)
+          if (arr) arr.push(c); else g.set(k, [c])
+        }
+        return [...g.entries()]
+          .map(([k, kids]) => {
+            const v = kids.reduce(
+              (a, c) => ({
+                total: a.total + c.total, won: a.won + c.won, lost: a.lost + c.lost,
+                revenue: a.revenue + c.revenue, atContract: a.atContract + c.atContract,
+              }),
+              { total: 0, won: 0, lost: 0, revenue: 0, atContract: 0 },
+            )
+            return {
+              ...finish(k, v),
+              children: kids.map(c => ({ ...c, channel: shortName(c.channel) })),
+            }
+          })
+          .sort((a, b) => (b.won - a.won) || (b.total - a.total))
+      })()
+    : byName
 
   const sum = channels.reduce(
     (s, c) => ({

@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, Trophy, Users, Percent } from 'lucide-react'
+import { Loader2, Trophy, Users, Percent, ChevronRight, ChevronDown } from 'lucide-react'
 import { useLeads } from '@/hooks/useLeads'
 import { useContracts } from '@/hooks/useContracts'
 import { summarizeConversion, type ChannelStat } from '@/lib/leadConversion'
+import { channelGroupOf } from '@/lib/leadChannelGroup'
 import { todayKST, shiftDays } from '@/lib/date'
 
 /**
@@ -43,6 +44,13 @@ function RateBar({ value, max }: { value: number; max: number }) {
 export function LeadSourceConversion() {
   const [range, setRange] = useState<(typeof RANGES)[number]['key']>('all')
   const [usdRate, setUsdRate] = useState(1340)
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const toggle = (k: string) => setOpen(p => {
+    const n = new Set(p)
+    if (n.has(k)) n.delete(k)
+    else n.add(k)
+    return n
+  })
 
   const { data: leads = [], isLoading: loadingLeads } = useLeads()
   const { data: contracts = [], isLoading: loadingContracts } = useContracts()
@@ -68,6 +76,9 @@ export function LeadSourceConversion() {
     })),
     from,
     usdRate,
+    // 유입경로 칸에 개별 행사명·콘텐츠명이 그대로 들어가 있어 100 가지로
+    // 흩어져 있다. 묶어서 보여 주고, 펼치면 원래 이름이 나온다.
+    groupBy: channelGroupOf,
   }), [leads, contracts, from, usdRate])
 
   const loading = loadingLeads || loadingContracts
@@ -147,6 +158,7 @@ export function LeadSourceConversion() {
             <p className="text-sm font-semibold">유입경로별 성공률</p>
             <p className="text-[11px] text-muted-foreground">
               리드관리의 유입채널과 계약관리의 리드 연결에서 자동 집계됩니다 · 해지·취소된 계약은 매출에서 제외
+              {' '}· <b>▸</b> 를 누르면 어느 행사·콘텐츠였는지 펼쳐집니다
             </p>
           </div>
 
@@ -167,10 +179,26 @@ export function LeadSourceConversion() {
                 </tr>
               </thead>
               <tbody>
-                {summary.channels.map((c: ChannelStat) => (
+                {summary.channels.flatMap((c: ChannelStat) => [
                   <tr key={c.channel} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="px-3 py-2 font-medium">
+                      {(c.children?.length ?? 0) > 1 ? (
+                        <button
+                          onClick={() => toggle(c.channel)}
+                          className="mr-1 align-middle text-gray-400 hover:text-gray-700"
+                          title={`${c.children!.length}개 항목 펼치기`}
+                        >
+                          {open.has(c.channel)
+                            ? <ChevronDown size={13} className="inline" />
+                            : <ChevronRight size={13} className="inline" />}
+                        </button>
+                      ) : <span className="mr-1 inline-block w-[13px]" />}
                       {c.channel}
+                      {(c.children?.length ?? 0) > 1 && (
+                        <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                          {c.children!.length}종
+                        </span>
+                      )}
                       {c.atContract > 0 && (
                         <span
                           className="ml-1.5 rounded border border-amber-300 bg-amber-50 px-1 py-px text-[10px] font-normal text-amber-700"
@@ -207,8 +235,32 @@ export function LeadSourceConversion() {
                     <td className="px-3 py-2 text-right tabular-nums">
                       {c.revenue > 0 ? won(c.revenue) : '—'}
                     </td>
-                  </tr>
-                ))}
+                  </tr>,
+                  ...(open.has(c.channel) ? (c.children || []) : []).map(k => (
+                    <tr key={`${c.channel}/${k.channel}`} className="border-b bg-muted/20 text-[13px] last:border-0">
+                      <td className="py-1.5 pl-9 pr-3 text-muted-foreground">{k.channel}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                        {k.total.toLocaleString('ko-KR')}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-emerald-600">
+                        {k.won || '—'}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                        {k.won ? `${k.rate}%` : '—'}
+                      </td>
+                      <td />
+                      <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                        {k.won + k.lost > 0 ? `${k.closedRate}%` : '—'}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                        {k.open.toLocaleString('ko-KR')}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                        {k.revenue > 0 ? won(k.revenue) : '—'}
+                      </td>
+                    </tr>
+                  )),
+                ])}
                 {!summary.channels.length && (
                   <tr><td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
                     이 기간에 유입된 리드가 없습니다.
