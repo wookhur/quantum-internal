@@ -122,6 +122,9 @@ export interface Lead {
   leadLevelReason?: string
   assignedTo?: string  // profile id
   assignedUser?: User  // joined
+  /** 계약관리에서 계약을 쓰면서 자동 생성된 리드 — 전환율 비교에서 제외한다.
+   *  만들어지는 순간 이미 '계약 완료' 라 분모(계약 안 된 건)가 없다. */
+  createdFromContract?: boolean
   contactChannel?: string  // 단톡방, 카카오 비즈, 전화
   googleMeetLink?: string
   createdAt: string
@@ -150,6 +153,11 @@ export const SOURCE_CHANNELS = [
   // Student360 에서 삭제하며 리드로 보관한 과거 서비스 학생.
   // 목록에 있어야 리드 수정 화면의 유입채널 드롭다운에서 값이 유지된다.
   '기존 서비스 학생',
+  // 리드 없이 바로 계약된 건(계약관리에서 자동 생성). 목록에 있어야 리드 수정
+  // 화면의 유입채널 드롭다운에서 값이 지워지지 않는다.
+  '외부소개',
+  '재계약',
+  '대표 직접',
   '기타',
 ] as const
 

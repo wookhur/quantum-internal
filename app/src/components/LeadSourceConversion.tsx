@@ -58,6 +58,7 @@ export function LeadSourceConversion() {
       sourceChannel: l.sourceChannel,
       pipelineStage: l.pipelineStage,
       leadDate: l.leadDate,
+      createdFromContract: l.createdFromContract,
     })),
     contracts: contracts.map(c => ({
       leadId: c.leadId,
@@ -168,18 +169,33 @@ export function LeadSourceConversion() {
               <tbody>
                 {summary.channels.map((c: ChannelStat) => (
                   <tr key={c.channel} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="px-3 py-2 font-medium">{c.channel}</td>
+                    <td className="px-3 py-2 font-medium">
+                      {c.channel}
+                      {c.atContract > 0 && (
+                        <span
+                          className="ml-1.5 rounded border border-amber-300 bg-amber-50 px-1 py-px text-[10px] font-normal text-amber-700"
+                          title={`${c.atContract}건이 계약을 쓰면서 만들어진 리드입니다. 계약 안 된 경우가 기록되지 않아 분모가 비어 있어, 다른 경로와 전환율을 나란히 비교할 수 없습니다.`}
+                        >
+                          계약 시점 {c.atContract}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums">{c.total.toLocaleString('ko-KR')}</td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">
                       {c.won.toLocaleString('ko-KR')}
                     </td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                      {c.rate}%
-                      {c.leadsPerWin && (
+                      {/* 계약 시점 등록이 절반을 넘으면 전환율 자체가 의미가 없다 */}
+                      <span className={c.atContract > c.total / 2 ? 'text-muted-foreground line-through' : ''}>
+                        {c.rate}%
+                      </span>
+                      {c.atContract > c.total / 2 ? (
+                        <span className="ml-1 text-[10px] font-normal text-amber-700">비교 불가</span>
+                      ) : c.leadsPerWin ? (
                         <span className="ml-1 text-[10px] font-normal text-muted-foreground">
                           {c.leadsPerWin}:1
                         </span>
-                      )}
+                      ) : null}
                     </td>
                     <td className="px-3 py-2"><RateBar value={c.rate} max={maxRate} /></td>
                     <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
@@ -220,6 +236,9 @@ export function LeadSourceConversion() {
             <b>전환율</b>은 계약 ÷ 전체 리드입니다. 최근에 들어온 리드는 아직 결판이 안 나서 낮게 나옵니다.
             {' '}<b>종결 기준</b>은 진행 중인 건을 뺀 값이라 경로끼리 비교할 때 더 공평합니다.
             {' '}<b>N:1</b> 은 계약 1건을 얻는 데 리드가 몇 건 필요한지입니다.
+            {' '}<b className="text-amber-700">계약 시점</b> 은 계약을 쓰면서 만들어진 리드입니다 —
+            계약 안 된 경우가 기록되지 않아 분모가 비어 있으므로, 절반을 넘으면 전환율을 가립니다.
+            문의가 올 때 리드부터 등록하시면 그때부터 비교 가능한 숫자가 쌓입니다.
           </div>
         </CardContent>
       </Card>

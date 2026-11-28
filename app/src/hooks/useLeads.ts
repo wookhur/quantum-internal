@@ -69,6 +69,7 @@ function mapLead(row: Record<string, unknown>): Lead {
     residenceCity: (row.residence_city as string) || undefined,
     interestArea: (row.interest_area as string) || '',
     sourceChannel: row.source_channel as string,
+    createdFromContract: !!row.created_from_contract,
     discoverySource: (row.discovery_source as string) || undefined,
     memo: (row.memo as string) || '',
     requiredAction: row.required_action as string | undefined,
@@ -131,6 +132,7 @@ function leadToRow(lead: Partial<Lead>): Record<string, unknown> {
   if (lead.residenceCity !== undefined) row.residence_city = lead.residenceCity || null
   if (lead.interestArea !== undefined) row.interest_area = lead.interestArea
   if (lead.sourceChannel !== undefined) row.source_channel = lead.sourceChannel
+  if (lead.createdFromContract !== undefined) row.created_from_contract = lead.createdFromContract
   if (lead.discoverySource !== undefined) row.discovery_source = lead.discoverySource
   if (lead.memo !== undefined) row.memo = lead.memo
   if (lead.requiredAction !== undefined) row.required_action = lead.requiredAction
@@ -525,7 +527,7 @@ export function useLeadStats() {
       while (true) {
         const { data, error } = await supabase
           .from('leads')
-          .select('pipeline_stage, source_channel, lead_date')
+          .select('pipeline_stage, source_channel, lead_date, created_from_contract')
           .range(from, from + PAGE_SIZE - 1)
         if (error) throw error
         const batch = data || []

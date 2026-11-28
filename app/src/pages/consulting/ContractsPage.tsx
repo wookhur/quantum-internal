@@ -221,6 +221,14 @@ async function exportContractsToExcel(contracts: ContractExportRow[]) {
   URL.revokeObjectURL(url)
 }
 
+/**
+ * 리드 없이 바로 계약된 건의 유입경로 선택지.
+ *
+ * 예전에는 '계약관리' 로 고정이었다. 그러면 '어디서 온 계약인지' 가 남지 않아,
+ * 소개로 들어온 계약 31건이 통째로 출처 불명으로 쌓였다.
+ */
+const DIRECT_SOURCE_OPTIONS = ['외부소개', '재계약', '대표 직접', '기타'] as const
+
 export function ContractsPage() {
   const navigate = useNavigate()
   const canEdit = useCanEdit(useLocation().pathname)
@@ -278,6 +286,8 @@ export function ContractsPage() {
     | { kind: 'none'; contractId?: string; snap: LeadPromptSnapshot }
     | null
   >(null)
+  // 리드를 거치지 않고 바로 계약된 건의 유입경로. 대부분 소개라 그것을 기본값으로 둔다.
+  const [leadSource, setLeadSource] = useState<string>(DIRECT_SOURCE_OPTIONS[0])
   const { data: allLeads = [] } = useLeads()
   const updateLead = useUpdateLead()
   const createLead = useCreateLead()
@@ -483,6 +493,32 @@ export function ContractsPage() {
                   계약서에 적은 내용으로 <b>계약 완료</b> 상태의 리드를 만듭니다.
                   안 만들어도 계약서에는 아무 영향이 없습니다.
                 </p>
+
+                {/* 유입경로를 여기서 고르지 않으면 '어디서 온 계약인지' 가 영영
+                    남지 않는다. 예전에는 '계약관리' 로 고정돼 있어, 소개로 들어온
+                    계약까지 출처 불명으로 쌓였다. */}
+                <div>
+                  <p className="mb-1 text-xs font-medium">어떻게 들어온 계약인가요?</p>
+                  <div className="flex flex-wrap gap-1">
+                    {DIRECT_SOURCE_OPTIONS.map(opt => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setLeadSource(opt)}
+                        className={`rounded border px-2 py-1 text-xs transition-colors ${
+                          leadSource === opt
+                            ? 'border-gray-900 bg-gray-900 text-white font-medium'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    유입경로별 성공률에서 이 값으로 집계됩니다.
+                  </p>
+                </div>
                 <div className="rounded-md border p-3 text-sm space-y-1">
                   <p className="font-medium">
                     {leadPrompt.snap.studentName || '—'}
@@ -522,8 +558,11 @@ export function ContractsPage() {
                           email: snap.email,
                           currentSchool: snap.schoolName,
                           grade: snap.gradeAtContract,
-                          sourceChannel: '계약관리',
+                          sourceChannel: leadSource,
                           pipelineStage: 'contracted',
+                          // 계약 시점에 만들어진 리드라는 표시. 이게 있어야 전환율
+                          // 화면에서 '분모가 없는 건' 으로 가려낼 수 있다.
+                          createdFromContract: true,
                           memo: '계약관리에서 계약을 쓰면서 만든 리드입니다.',
                         },
                         {

@@ -28,6 +28,8 @@ export interface ConversionLead {
   pipelineStage?: string
   /** 'YYYY-MM-DD' */
   leadDate?: string
+  /** 계약을 쓰면서 만들어진 리드 — 만들어지는 순간 이미 계약이라 분모가 없다 */
+  createdFromContract?: boolean
 }
 
 export interface ConversionContract {
@@ -55,6 +57,14 @@ export interface ChannelStat {
   revenue: number
   /** 계약 1건당 리드 몇 건이 필요한가 — 'N건 중 1건' */
   leadsPerWin: number | null
+  /**
+   * 그중 계약 시점에 만들어진 리드 수.
+   *
+   * 이 건들은 '계약 안 된 경우' 가 애초에 기록되지 않아 분모가 비어 있다.
+   * 전환율이 100% 에 가깝게 나오므로 다른 경로와 나란히 비교하면 안 된다.
+   * 숫자를 빼지는 않는다 — '소개로 31건 계약됐다' 는 알아야 할 사실이다.
+   */
+  atContract: number
 }
 
 export interface ConversionSummary {
@@ -92,10 +102,10 @@ export function summarizeConversion(input: {
     revenueByLead.set(c.leadId, (revenueByLead.get(c.leadId) || 0) + amt)
   }
 
-  const acc = new Map<string, { total: number; won: number; lost: number; revenue: number }>()
+  const acc = new Map<string, { total: number; won: number; lost: number; revenue: number; atContract: number }>()
   const bump = (k: string) => {
     let v = acc.get(k)
-    if (!v) { v = { total: 0, won: 0, lost: 0, revenue: 0 }; acc.set(k, v) }
+    if (!v) { v = { total: 0, won: 0, lost: 0, revenue: 0, atContract: 0 }; acc.set(k, v) }
     return v
   }
 
@@ -107,6 +117,7 @@ export function summarizeConversion(input: {
 
     const v = bump(channelOf(l))
     v.total += 1
+    if (l.createdFromContract) v.atContract += 1
     const stage = l.pipelineStage || ''
     if (WON_STAGES.has(stage)) {
       v.won += 1
@@ -116,7 +127,10 @@ export function summarizeConversion(input: {
     }
   }
 
-  const finish = (channel: string, v: { total: number; won: number; lost: number; revenue: number }): ChannelStat => ({
+  const finish = (
+    channel: string,
+    v: { total: number; won: number; lost: number; revenue: number; atContract: number },
+  ): ChannelStat => ({
     channel,
     total: v.total,
     won: v.won,
@@ -126,6 +140,7 @@ export function summarizeConversion(input: {
     closedRate: pct(v.won, v.won + v.lost),
     revenue: v.revenue,
     leadsPerWin: v.won > 0 ? Math.round((v.total / v.won) * 10) / 10 : null,
+    atContract: v.atContract,
   })
 
   const channels = [...acc.entries()]
@@ -134,8 +149,11 @@ export function summarizeConversion(input: {
     .sort((a, b) => (b.won - a.won) || (b.total - a.total))
 
   const sum = channels.reduce(
-    (s, c) => ({ total: s.total + c.total, won: s.won + c.won, lost: s.lost + c.lost, revenue: s.revenue + c.revenue }),
-    { total: 0, won: 0, lost: 0, revenue: 0 },
+    (s, c) => ({
+      total: s.total + c.total, won: s.won + c.won, lost: s.lost + c.lost,
+      revenue: s.revenue + c.revenue, atContract: s.atContract + c.atContract,
+    }),
+    { total: 0, won: 0, lost: 0, revenue: 0, atContract: 0 },
   )
 
   return { channels, total: finish('전체', sum) }
