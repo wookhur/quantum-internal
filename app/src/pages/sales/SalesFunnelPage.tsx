@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useT } from '@/i18n/LanguageContext'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table'
 import { Loader2, Users, Phone, Video, Handshake, TrendingUp } from 'lucide-react'
 import { useSalesEvents } from '@/hooks/useSalesEvents'
+import { LeadSourceConversion } from '@/components/LeadSourceConversion'
 import {
   BarChart,
   Bar,
@@ -35,6 +36,9 @@ function formatPercent(value: number) {
 
 export function SalesFunnelPage() {
   const t = useT()
+  // '유입경로별'은 리드·계약에서 자동 집계되고, '행사별'은 sales_events 에 손으로
+  // 적은 숫자다. 출처가 달라 섞으면 안 되므로 탭으로 나눈다. 기본은 자동 집계 쪽.
+  const [tab, setTab] = useState<'source' | 'event'>('source')
   const { data: events = [], isLoading, error } = useSalesEvents()
 
   // Aggregate stats
@@ -110,6 +114,29 @@ export function SalesFunnelPage() {
         </p>
       </div>
 
+      {/* 탭 */}
+      <div className="inline-flex items-center rounded-lg bg-muted p-0.5">
+        <button
+          onClick={() => setTab('source')}
+          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+            tab === 'source' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          유입경로별
+        </button>
+        <button
+          onClick={() => setTab('event')}
+          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+            tab === 'event' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          행사별
+        </button>
+      </div>
+
+      {tab === 'source' && <LeadSourceConversion />}
+
+      {tab === 'event' && (<>
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card>
@@ -350,6 +377,7 @@ export function SalesFunnelPage() {
           )}
         </CardContent>
       </Card>
+      </>)}
     </div>
   )
 }
