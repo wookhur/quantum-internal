@@ -30,8 +30,10 @@ export type ChannelGroup = (typeof CHANNEL_GROUPS)[number]
  */
 export function channelGroupOf(raw?: string): ChannelGroup {
   const n = (raw || '').trim()
-  if (!n) return '미입력'
-  if (n === '(미입력)') return '미입력'
+  // 빈 값은 집계 전에 '미입력' 이라는 이름으로 바뀌어 들어온다. 그 글자 자체를
+  // 여기서 알아보지 못하면 어느 규칙에도 안 걸려 '기타' 로 떨어진다 — 실제로
+  // 유입경로가 빈 리드 3건이 기타에 섞여 있었다.
+  if (!n || n === '미입력' || n === '(미입력)') return '미입력'
 
   if (/홈페이지/.test(n)) return '홈페이지 문의'
   if (/카카오/.test(n)) return '카카오톡'
