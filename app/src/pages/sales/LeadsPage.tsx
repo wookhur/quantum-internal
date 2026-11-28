@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { homepageOriginBadge, reinquiryBadge, homepageTouch, latestInquiryDate } from '@/lib/homepageInquiry'
 import { useT } from '@/i18n/LanguageContext'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useCanEdit } from '@/hooks/usePermissions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -137,14 +137,25 @@ function StatCard({
   label,
   value,
   accent,
+  onClick,
+  hint,
 }: {
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
   label: string
   value: string | number
   accent?: string
+  /** 누르면 갈 곳이 있는 카드만 넘긴다 — 없으면 평범한 카드로 남는다 */
+  onClick?: () => void
+  hint?: string
 }) {
+  const Wrapper = onClick ? 'button' : 'div'
   return (
-    <div className="monday-card flex items-center gap-3 px-4 py-3 min-w-0">
+    <Wrapper
+      {...(onClick ? { onClick, type: 'button' as const, title: hint } : {})}
+      className={`monday-card flex items-center gap-3 px-4 py-3 min-w-0 ${
+        onClick ? 'cursor-pointer text-left transition-colors hover:bg-muted/40' : ''
+      }`}
+    >
       <div
         className="flex items-center justify-center size-9 rounded-lg shrink-0"
         style={{ backgroundColor: accent ? `${accent}18` : '#F0F3FF' }}
@@ -155,10 +166,12 @@ function StatCard({
         />
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-muted-foreground truncate">{label}</p>
+        <p className="text-xs text-muted-foreground truncate">
+          {label}{onClick && <span className="ml-1 opacity-50">›</span>}
+        </p>
         <p className="text-lg font-bold text-foreground leading-tight">{value}</p>
       </div>
-    </div>
+    </Wrapper>
   )
 }
 
@@ -187,6 +200,7 @@ export function LeadsPage() {
 
 function LeadsTableView() {
   const t = useT()
+  const navigate = useNavigate()
   const canEdit = useCanEdit(useLocation().pathname)
 
   // -- 중복 병합 다이얼로그 대상 리드
@@ -689,6 +703,10 @@ function LeadsTableView() {
           label={t('dashboard.conversionRate')}
           value={stats ? `${stats.conversionRate}%` : '-'}
           accent="#FF158A"
+          // 같은 수(계약 ÷ 전체)를 퍼널에서 유입경로별로 쪼개 보여 준다.
+          // 같은 표를 여기에 또 그리면 정의가 두 곳으로 갈려 언젠가 어긋난다.
+          onClick={() => navigate('/sales/funnel')}
+          hint="유입경로별 성공률 보기"
         />
       </div>
 
