@@ -154,8 +154,8 @@ export function summarizeConversion(input: {
 
   const byName = [...acc.entries()]
     .map(([k, v]) => finish(k, v))
-    // 계약을 많이 낸 경로부터. 같으면 리드가 많은 쪽.
-    .sort((a, b) => (b.won - a.won) || (b.total - a.total))
+    // 전환율 높은 순. 같으면 계약이 많은 쪽, 그다음 리드가 많은 쪽.
+    .sort((a, b) => (b.rate - a.rate) || (b.won - a.won) || (b.total - a.total))
 
   // 묶음이 주어지면 원래 이름들을 접어 넣는다. 원본은 children 으로 남겨
   // '웨비나 중 어느 행사가 먹혔나' 를 펼쳐 볼 수 있게 한다.
@@ -181,7 +181,7 @@ export function summarizeConversion(input: {
               children: kids.map(c => ({ ...c, channel: shortName(c.channel) })),
             }
           })
-          .sort((a, b) => (b.won - a.won) || (b.total - a.total))
+          .sort((a, b) => (b.rate - a.rate) || (b.won - a.won) || (b.total - a.total))
       })()
     : byName
 

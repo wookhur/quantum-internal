@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, Trophy, Users, Percent, ChevronRight, ChevronDown } from 'lucide-react'
+import { Loader2, Trophy, Users, Percent, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 import { useLeads } from '@/hooks/useLeads'
 import { useContracts } from '@/hooks/useContracts'
 import { summarizeConversion, type ChannelStat } from '@/lib/leadConversion'
@@ -44,6 +48,9 @@ function RateBar({ value, max }: { value: number; max: number }) {
 export function LeadSourceConversion() {
   const [range, setRange] = useState<(typeof RANGES)[number]['key']>('all')
   const [usdRate, setUsdRate] = useState(1340)
+  const navigate = useNavigate()
+  /** 계약자 목록을 띄울 대상 — 이름(묶음 또는 원래 경로)과 보여 줄 리드들 */
+  const [detail, setDetail] = useState<{ title: string; leadIds: string[] } | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const toggle = (k: string) => setOpen(p => {
     const n = new Set(p)
@@ -81,6 +88,26 @@ export function LeadSourceConversion() {
     groupBy: channelGroupOf,
   }), [leads, contracts, from, usdRate])
 
+  /** 리드 → 그 리드로 맺어진 계약. 계약자 목록에서 계약관리로 넘어가는 데 쓴다. */
+  const contractByLead = useMemo(() => {
+    const m = new Map<string, (typeof contracts)[number]>()
+    for (const c of contracts) if (c.leadId) m.set(c.leadId, c)
+    return m
+  }, [contracts])
+
+  /** 달러로 맺은 계약이 하나도 없으면 환율 칸은 쓸 데가 없다 — 보이지 않게 둔다. */
+  const hasUsd = useMemo(() => contracts.some(c => c.currency === 'USD'), [contracts])
+
+  /** 기간 안에서 그 경로로 계약까지 간 리드들. 묶음이면 묶음 전체를 본다. */
+  const winnersOf = (name: string, isGroup: boolean) => leads.filter(l => {
+    if (l.pipelineStage !== 'contracted') return false
+    const d = (l.leadDate || '').slice(0, 10)
+    if (from && d && d < from) return false
+    if (from && !d) return false
+    const ch = (l.sourceChannel || '').trim() || '미입력'
+    return isGroup ? channelGroupOf(ch) === name : ch === name
+  }).map(l => l.id)
+
   const loading = loadingLeads || loadingContracts
   const maxRate = Math.max(...summary.channels.map(c => c.rate), 1)
 
@@ -111,11 +138,16 @@ export function LeadSourceConversion() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <Label className="text-[11px] text-muted-foreground">달러 환율</Label>
-          <Input className="h-7 w-24 text-xs" inputMode="numeric" value={usdRate}
-            onChange={e => setUsdRate(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />
-        </div>
+        {/* 달러 계약이 있을 때만 — 없으면 뜻 없는 칸이 하나 떠 있을 뿐이다 */}
+        {hasUsd && (
+          <div className="flex items-center gap-2">
+            <Label className="text-[11px] text-muted-foreground" title="달러로 맺은 계약을 원화로 환산해 계약 금액에 더합니다">
+              달러 환율
+            </Label>
+            <Input className="h-7 w-24 text-xs" inputMode="numeric" value={usdRate}
+              onChange={e => setUsdRate(Number(e.target.value.replace(/[^\d]/g, '')) || 0)} />
+          </div>
+        )}
       </div>
 
       {/* 전체 요약 */}
@@ -210,7 +242,15 @@ export function LeadSourceConversion() {
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{c.total.toLocaleString('ko-KR')}</td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-600">
-                      {c.won.toLocaleString('ko-KR')}
+                      {c.won > 0 ? (
+                        <button
+                          className="underline decoration-dotted underline-offset-2 hover:text-emerald-800"
+                          onClick={() => setDetail({ title: c.channel, leadIds: winnersOf(c.channel, true) })}
+                          title="계약자 목록 보기"
+                        >
+                          {c.won.toLocaleString('ko-KR')}
+                        </button>
+                      ) : c.won.toLocaleString('ko-KR')}
                     </td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums">
                       {/* 계약 시점 등록이 절반을 넘으면 전환율 자체가 의미가 없다 */}
@@ -243,7 +283,15 @@ export function LeadSourceConversion() {
                         {k.total.toLocaleString('ko-KR')}
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-emerald-600">
-                        {k.won || '—'}
+                        {k.won ? (
+                          <button
+                            className="underline decoration-dotted underline-offset-2 hover:text-emerald-800"
+                            onClick={() => setDetail({ title: k.channel, leadIds: winnersOf(k.channel, false) })}
+                            title="계약자 목록 보기"
+                          >
+                            {k.won}
+                          </button>
+                        ) : '—'}
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
                         {k.won ? `${k.rate}%` : '—'}
@@ -294,6 +342,70 @@ export function LeadSourceConversion() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 계약자 목록 — 이름을 누르면 계약관리로 넘어간다 */}
+      <Dialog open={!!detail} onOpenChange={v => !v && setDetail(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {detail?.title} · 계약 {detail?.leadIds.length ?? 0}건
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b text-[11px] text-gray-500">
+                <tr>
+                  <th className="py-1.5 pr-2 text-left font-medium">학생 · 계약자</th>
+                  <th className="px-2 py-1.5 text-left font-medium">유입경로</th>
+                  <th className="px-2 py-1.5 text-right font-medium">계약 금액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(detail?.leadIds || []).map(id => {
+                  const l = leads.find(x => x.id === id)
+                  const c = contractByLead.get(id)
+                  return (
+                    <tr key={id} className="border-b last:border-0">
+                      <td className="py-1.5 pr-2">
+                        {c ? (
+                          <button
+                            className="inline-flex items-center gap-1 font-medium text-blue-600 hover:underline"
+                            onClick={() => { setDetail(null); navigate(`/consulting/clients/${c.id}`) }}
+                            title="계약관리에서 열기"
+                          >
+                            {l?.studentName || c.studentName || '—'}
+                            <ExternalLink size={11} className="opacity-60" />
+                          </button>
+                        ) : (
+                          <span className="font-medium">{l?.studentName || '—'}</span>
+                        )}
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          {l?.parentName || c?.contractorName || ''}
+                        </span>
+                        {!c && (
+                          <span className="ml-1 text-[10px] text-amber-700">계약 연결 없음</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-muted-foreground">{l?.sourceChannel || '—'}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        {c ? won(c.currency === 'USD' ? (c.totalAmount || 0) * usdRate : (c.totalAmount || 0)) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+                {!detail?.leadIds.length && (
+                  <tr><td colSpan={3} className="py-6 text-center text-muted-foreground">계약이 없습니다.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            이름을 누르면 계약관리의 계약 상세로 넘어갑니다.
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
